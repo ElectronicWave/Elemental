@@ -55,7 +55,17 @@ pub struct PistonMetaData {
     pub id: String,
     #[serde(rename = "javaVersion")]
     pub java_version: PistonMetaJavaVersion,
-    //TODO pub libraries: ...
+    pub libraries: PistonMetaLibraries,
+    // TODO pub logging: ...
+    #[serde(rename = "mainClass")]
+    pub main_class: String,
+    #[serde(rename = "minimumLauncherVersion")]
+    pub minimum_launcher_version: usize,
+    #[serde(rename = "type")]
+    pub typo: String,
+    pub time: String,
+    #[serde(rename = "releaseTime")]
+    pub release_time: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -72,7 +82,7 @@ pub enum PistonMetaGenericArgument {
 #[derive(Debug, Deserialize)]
 pub struct PistonMetaRuleArgument {
     pub rules: Vec<PistonMetaRuleArgumentRules>,
-    pub value: ContinuousArgument,
+    pub value: Option<ContinuousArgument>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -116,4 +126,27 @@ pub struct PistonMetaJavaVersion {
     pub component: String,
     #[serde(rename = "majorVersion")]
     pub major_version: usize,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PistonMetaLibraries {
+    pub downloads: PistonMetaLibrariesDownloads,
+    pub name: String,
+    pub natives: Option<HashMap<String, String>>,
+    pub rules: Option<Vec<PistonMetaRuleArgument>>,
+    pub extract: Option<HashMap<String, String>>, // TODO
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PistonMetaLibrariesDownloads {
+    pub artifact: PistonMetaLibrariesDownloadsArtifact,
+    pub classifiers: Option<HashMap<String, PistonMetaLibrariesDownloadsArtifact>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PistonMetaLibrariesDownloadsArtifact {
+    pub sha1: String,
+    pub size: usize,
+    pub url: String,
+    pub path: String,
 }

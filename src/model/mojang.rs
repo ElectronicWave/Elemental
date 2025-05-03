@@ -8,6 +8,7 @@ pub struct MojangBaseUrl {
     pub pistonmeta: String,
 }
 
+
 impl Default for MojangBaseUrl {
     fn default() -> Self {
         Self {

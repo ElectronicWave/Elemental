@@ -1,4 +1,4 @@
-use crate::model::mojang::{LaunchMetaData, MojangBaseUrl};
+use crate::model::mojang::{LaunchMetaData, MojangBaseUrl, PistonMetaData};
 
 pub struct MojangService {
     pub baseurl: MojangBaseUrl,
@@ -33,6 +33,19 @@ impl MojangService {
         }
         // Use shortcut here because it wont call many times.
         reqwest::get(url).await?.json().await
+    }
+
+    pub async fn pistonmeta(
+        &self,
+        url: impl Into<String>,
+    ) -> Result<PistonMetaData, reqwest::Error> {
+        reqwest::get(
+            url.into()
+                .replace("piston-meta.mojang.com", &self.baseurl.pistonmeta),
+        )
+        .await?
+        .json()
+        .await
     }
 }
 

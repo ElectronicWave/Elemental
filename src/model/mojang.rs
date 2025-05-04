@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 
 use serde::Deserialize;
-
+#[derive(Debug)]
 pub struct MojangBaseUrl {
     pub launchermeta: String,
     pub launchermeta_https: bool,
     pub pistonmeta: String,
 }
-
 
 impl Default for MojangBaseUrl {
     fn default() -> Self {
@@ -56,8 +55,8 @@ pub struct PistonMetaData {
     pub id: String,
     #[serde(rename = "javaVersion")]
     pub java_version: PistonMetaJavaVersion,
-    pub libraries: PistonMetaLibraries,
-    // TODO pub logging: ...
+    pub libraries: Vec<PistonMetaLibraries>,
+    pub logging: PistonMetaLogging,
     #[serde(rename = "mainClass")]
     pub main_class: String,
     #[serde(rename = "minimumLauncherVersion")]
@@ -75,9 +74,20 @@ pub struct PistonMetaArguments {
     pub jvm: Vec<PistonMetaGenericArgument>,
 }
 #[derive(Debug, Deserialize)]
+#[serde(untagged)]
 pub enum PistonMetaGenericArgument {
     Plain(String),
     Rule(PistonMetaRuleArgument),
+}
+
+impl Into<String> for PistonMetaGenericArgument {
+    fn into(self) -> String {
+        // Rule here
+        match self {
+            PistonMetaGenericArgument::Plain(s) => s,
+            PistonMetaGenericArgument::Rule(_piston_meta_rule_argument) => todo!("parse rule here"),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -89,11 +99,12 @@ pub struct PistonMetaRuleArgument {
 #[derive(Debug, Deserialize)]
 pub struct PistonMetaRuleArgumentRules {
     pub action: String,
-    pub features: Option<HashMap<String, String>>,
+    pub features: Option<HashMap<String, bool>>,
     pub os: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(untagged)]
 pub enum ContinuousArgument {
     Single(String),
     Multi(Vec<String>),
@@ -134,7 +145,7 @@ pub struct PistonMetaLibraries {
     pub downloads: PistonMetaLibrariesDownloads,
     pub name: String,
     pub natives: Option<HashMap<String, String>>,
-    pub rules: Option<Vec<PistonMetaRuleArgument>>,
+    pub rules: Option<Vec<PistonMetaRuleArgumentRules>>,
     pub extract: Option<HashMap<String, String>>, // TODO
 }
 
@@ -150,4 +161,34 @@ pub struct PistonMetaLibrariesDownloadsArtifact {
     pub size: usize,
     pub url: String,
     pub path: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PistonMetaLogging {
+    pub client: PistonMetaLoggingSide,
+    // TODO?
+}
+#[derive(Debug, Deserialize)]
+pub struct PistonMetaLoggingSide {
+    pub argument: String,
+    pub file: PistonMetaLoggingSideFile,
+    #[serde(rename = "type")]
+    pub typo: String,
+}
+#[derive(Debug, Deserialize)]
+pub struct PistonMetaLoggingSideFile {
+    pub id: String,
+    pub sha1: String,
+    pub size: usize,
+    pub url: String,
+}
+#[derive(Debug, Deserialize)]
+pub struct PistonMetaAssetIndexObjects {
+    pub objects: HashMap<String, PistonMetaAssetIndexObject>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PistonMetaAssetIndexObject {
+    pub hash: String,
+    pub size: usize,
 }

@@ -18,7 +18,7 @@ impl ElementalDownloader {
         path: impl Into<String>,
         token: CancellationToken,
         callback: Option<fn(status: bool, url: String)>,
-    ) {
+    ) -> tokio::task::JoinHandle<()> {
         let client = self.client.clone();
         let url = url.into();
         let path = path.into();
@@ -50,7 +50,7 @@ impl ElementalDownloader {
                     }
                 }
             }
-        });
+        })
     }
 
     // the token will cancel all tasks
@@ -59,9 +59,25 @@ impl ElementalDownloader {
         tasks: Vec<(impl Into<String>, impl Into<String>)>,
         token: CancellationToken,
         callback: Option<fn(status: bool, url: String)>,
-    ) {
-        for (url, path) in tasks {
-            self.new_task(url, path, token.clone(), callback);
-        }
+    ) -> Vec<tokio::task::JoinHandle<()>> {
+        tasks
+            .into_iter()
+            .map(|(url, path)| self.new_task(url, path, token.clone(), callback))
+            .collect()
     }
+}
+
+#[tokio::test]
+async fn test() {
+    let downloader = ElementalDownloader::new();
+    println!("start");
+    let _ = downloader
+        .new_task(
+            "http://launchermeta.mojang.com/mc/game/version_manifest.json",
+            "version_manifest.json",
+            CancellationToken::new(),
+            None,
+        )
+        .await;
+    println!("end");
 }

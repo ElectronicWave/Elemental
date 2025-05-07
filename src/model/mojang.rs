@@ -6,6 +6,7 @@ pub struct MojangBaseUrl {
     pub launchermeta: String,
     pub launchermeta_https: bool,
     pub pistonmeta: String,
+    pub resources: String,
 }
 
 impl Default for MojangBaseUrl {
@@ -14,7 +15,18 @@ impl Default for MojangBaseUrl {
             launchermeta: "launchermeta.mojang.com".to_owned(),
             launchermeta_https: false,
             pistonmeta: "piston-meta.mojang.com".to_owned(),
+            resources: "resources.download.minecraft.net".to_owned(),
         }
+    }
+}
+
+impl MojangBaseUrl {
+    pub fn get_object_url(&self, hash: String) -> String {
+        format!(
+            "https://{}/{}/{hash}",
+            self.resources,
+            hash.get(0..2).unwrap()
+        )
     }
 }
 

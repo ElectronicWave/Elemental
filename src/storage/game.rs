@@ -29,6 +29,14 @@ impl GameStorage {
             .to_string()
     }
 
+    pub fn get_object_indexes_path(&self, version: String) -> String {
+        self.join("assets")
+            .join("indexes") // ensure it is created
+            .join(version)
+            .to_string_lossy()
+            .to_string()
+    }
+
     pub fn get_natives_path() -> String {
         todo!()
     }
@@ -39,5 +47,18 @@ impl GameStorage {
 
     pub fn join<P: AsRef<Path>>(&self, path: P) -> PathBuf {
         Path::new(&self.root).join(path)
+    }
+
+    pub fn download_version(&self) {
+        todo!()
+    }
+    pub fn download_objects(&self) {
+        todo!()
+    }
+    pub fn download_pistonmeta_all(&self) {
+        todo!()
+    }
+    pub fn validate_version() {
+        todo!()
     }
 }

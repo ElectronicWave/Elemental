@@ -1,14 +1,21 @@
+use std::sync::LazyLock;
 use tokio_util::sync::CancellationToken;
 
 pub struct ElementalDownloader {
     client: reqwest::Client,
 }
 
+static SHARED_DOWNLOADER: LazyLock<ElementalDownloader> = LazyLock::new(ElementalDownloader::new);
+
 impl ElementalDownloader {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             client: reqwest::Client::new(),
         }
+    }
+
+    pub fn shared() -> &'static LazyLock<ElementalDownloader> {
+        &SHARED_DOWNLOADER
     }
 
     // the token will cancel task

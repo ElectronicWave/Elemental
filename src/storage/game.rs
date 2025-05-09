@@ -1,6 +1,8 @@
 use std::fs::create_dir_all;
-use std::io::Result;
+use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf};
+
+use crate::model::mojang::PistonMetaLibrariesDownloadsArtifact;
 
 pub struct GameStorage {
     root: String, // ..../.minecraft
@@ -20,13 +22,17 @@ impl GameStorage {
         }
     }
 
-    pub fn get_object_path(&self, hash: String) -> String {
-        self.join("assets")
+    pub fn get_ensure_object_path(&self, hash: String) -> Result<String> {
+        let parent = self
+            .join("assets")
             .join("objects")
-            .join(hash.get(0..2).unwrap())
-            .join(hash)
-            .to_string_lossy()
-            .to_string()
+            .join(hash.get(0..2).unwrap());
+
+        if let Err(err) = create_dir_all(parent.clone()) {
+            Err(err)
+        } else {
+            Ok(parent.join(hash).to_string_lossy().to_string())
+        }
     }
 
     pub fn get_object_indexes_path(&self, version: String) -> String {
@@ -37,12 +43,26 @@ impl GameStorage {
             .to_string()
     }
 
-    pub fn get_natives_path() -> String {
+    pub fn get_natives_path(&self) -> String {
         todo!()
     }
 
-    pub fn get_library_path(&self) -> String {
-        todo!()
+    pub fn get_ensure_library_path(
+        &self,
+        library: PistonMetaLibrariesDownloadsArtifact,
+    ) -> Result<String> {
+        let path = self.join("libraries").join(&library.path);
+        let path_parent = path.parent();
+
+        if let None = path_parent {
+            return Err(Error::new(ErrorKind::Other, "No such directory"));
+        }
+
+        if let Err(err) = create_dir_all(path_parent.unwrap()) {
+            Err(err)
+        } else {
+            Ok(path.to_string_lossy().to_string())
+        }
     }
 
     pub fn join<P: AsRef<Path>>(&self, path: P) -> PathBuf {

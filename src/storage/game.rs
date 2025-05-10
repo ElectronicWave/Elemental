@@ -2,7 +2,12 @@ use std::fs::create_dir_all;
 use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf};
 
-use crate::model::mojang::PistonMetaLibrariesDownloadsArtifact;
+use tokio_util::sync::CancellationToken;
+
+use crate::model::mojang::{
+    MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaLibrariesDownloadsArtifact,
+};
+use crate::online::downloader::ElementalDownloader;
 
 pub struct GameStorage {
     root: String, // ..../.minecraft
@@ -35,12 +40,17 @@ impl GameStorage {
         }
     }
 
-    pub fn get_object_indexes_path(&self, version: String) -> String {
-        self.join("assets")
-            .join("indexes") // ensure it is created
-            .join(version)
-            .to_string_lossy()
-            .to_string()
+    pub fn get_ensure_object_indexes_path(&self, version_id: String) -> Result<String> {
+        let parent = self.join("assets").join("indexes");
+
+        if let Err(err) = create_dir_all(parent.clone()) {
+            Err(err)
+        } else {
+            Ok(parent
+                .join(format!("{version_id}.json"))
+                .to_string_lossy()
+                .to_string())
+        }
     }
 
     pub fn get_natives_path(&self) -> String {
@@ -72,13 +82,58 @@ impl GameStorage {
     pub fn download_version(&self) {
         todo!()
     }
-    pub fn download_objects(&self) {
-        todo!()
+
+    pub fn download_objects(
+        &self,
+        data: PistonMetaAssetIndexObjects,
+        baseurl: MojangBaseUrl,
+    ) -> CancellationToken {
+        let token = CancellationToken::new();
+        ElementalDownloader::shared().new_tasks(
+            data.objects
+                .into_iter()
+                .map(|(_, v)| {
+                    (
+                        baseurl.get_object_url(v.hash.clone()),
+                        self.get_ensure_object_path(v.hash).unwrap(),
+                    )
+                }) // TODO Remove unwrap here
+                .collect(),
+            token.clone(),
+            Some(|status, url| println!("{url}: {status}",)),
+        );
+
+        token
     }
+
     pub fn download_pistonmeta_all(&self) {
         todo!()
     }
     pub fn validate_version() {
         todo!()
+    }
+}
+
+#[cfg(test)]
+mod test_storage {
+    use crate::model::mojang::MojangBaseUrl;
+
+    use super::GameStorage;
+    #[tokio::test]
+    async fn test_storage() {
+        use crate::online::mojang::MojangService;
+        let service = MojangService::default();
+        let launchmeta = service.launchmeta().await.unwrap();
+        let pistonmeta = service
+            .pistonmeta(launchmeta.versions.first().unwrap().url.clone())
+            .await
+            .unwrap();
+        let objs = service
+            .pistonmeta_assetindex_objects(pistonmeta.asset_index.url.clone())
+            .await
+            .unwrap();
+        let storage = GameStorage::new_ensure_dir(".minecraft").unwrap();
+        storage.download_objects(objs, MojangBaseUrl::default());
+        loop {}
     }
 }

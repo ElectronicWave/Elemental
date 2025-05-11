@@ -74,6 +74,14 @@ impl ElementalDownloader {
     }
 }
 
+//TODO refactor task with stru
+pub struct DownloadTask {
+    pub url: String,
+    pub path: String,
+    pub size: Option<usize>
+
+}
+
 #[tokio::test]
 async fn test() {
     let downloader = ElementalDownloader::new();

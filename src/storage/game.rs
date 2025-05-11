@@ -130,4 +130,7 @@ impl GameStorage {
     pub fn validate_version() {
         todo!()
     }
+    pub fn get_versions() {
+        todo!()
+    }
 }

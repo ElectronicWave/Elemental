@@ -18,11 +18,11 @@ async fn main() {
     let objs = storage
         .get_and_save_objects_index(
             &service,
-            pistonmeta.asset_index.id,
+            pistonmeta.id,
             pistonmeta.asset_index.url,
         )
         .await
         .unwrap();
-    storage.download_objects(objs, MojangBaseUrl::default(), None);
-    loop {}
+   // storage.download_objects(objs, MojangBaseUrl::default(), None);
+    //loop {}
 }

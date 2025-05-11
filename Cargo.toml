@@ -10,6 +10,7 @@ serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["rt", "macros", "fs", "rt-multi-thread"] }
 tokio-util = "0.7.15"
 zip = { version = "2.6.1", default-features = false }
+sha1_smol = "1.0.1"
 
 [lib]
 crate-type = ["cdylib"]

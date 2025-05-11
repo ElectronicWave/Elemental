@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 #[derive(Debug)]
 pub struct MojangBaseUrl {
     pub launchermeta: String,
@@ -194,12 +194,12 @@ pub struct PistonMetaLoggingSideFile {
     pub size: usize,
     pub url: String,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaAssetIndexObjects {
     pub objects: HashMap<String, PistonMetaAssetIndexObject>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaAssetIndexObject {
     pub hash: String,
     pub size: usize,

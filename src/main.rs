@@ -13,11 +13,16 @@ async fn main() {
         .pistonmeta(launchmeta.versions.first().unwrap().url.clone())
         .await
         .unwrap();
-    let objs = service
-        .pistonmeta_assetindex_objects(pistonmeta.asset_index.url.clone())
+
+    let storage = GameStorage::new_ensure_dir(".minecraft").unwrap();
+    let objs = storage
+        .get_and_save_objects_index(
+            &service,
+            pistonmeta.asset_index.id,
+            pistonmeta.asset_index.url,
+        )
         .await
         .unwrap();
-    let storage = GameStorage::new_ensure_dir(".minecraft").unwrap();
-    storage.download_objects(objs, MojangBaseUrl::default());
+    storage.download_objects(objs, MojangBaseUrl::default(), None);
     loop {}
 }

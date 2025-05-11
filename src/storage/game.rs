@@ -1,4 +1,4 @@
-use std::fs::create_dir_all;
+use std::fs::{create_dir_all, write};
 use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf};
 
@@ -8,6 +8,7 @@ use crate::model::mojang::{
     MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaLibrariesDownloadsArtifact,
 };
 use crate::online::downloader::ElementalDownloader;
+use crate::online::mojang::MojangService;
 
 pub struct GameStorage {
     root: String, // ..../.minecraft
@@ -27,19 +28,6 @@ impl GameStorage {
         }
     }
 
-    pub fn get_ensure_object_path(&self, hash: String) -> Result<String> {
-        let parent = self
-            .join("assets")
-            .join("objects")
-            .join(hash.get(0..2).unwrap());
-
-        if let Err(err) = create_dir_all(parent.clone()) {
-            Err(err)
-        } else {
-            Ok(parent.join(hash).to_string_lossy().to_string())
-        }
-    }
-
     pub fn get_ensure_object_indexes_path(&self, version_id: String) -> Result<String> {
         let parent = self.join("assets").join("indexes");
 
@@ -50,6 +38,38 @@ impl GameStorage {
                 .join(format!("{version_id}.json"))
                 .to_string_lossy()
                 .to_string())
+        }
+    }
+
+    pub async fn get_and_save_objects_index(
+        &self,
+        service: &MojangService,
+        version_id: String,
+        asset_index_url: String,
+    ) -> Result<PistonMetaAssetIndexObjects> {
+        let objs = service
+            .pistonmeta_assetindex_objects(asset_index_url)
+            .await
+            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+
+        let path = self.get_ensure_object_indexes_path(version_id)?;
+        let data = serde_json::to_string(&objs)?;
+
+        write(path, data)?;
+
+        Ok(objs)
+    }
+
+    pub fn get_ensure_object_path(&self, hash: String) -> Result<String> {
+        let parent = self
+            .join("assets")
+            .join("objects")
+            .join(hash.get(0..2).unwrap());
+
+        if let Err(err) = create_dir_all(parent.clone()) {
+            Err(err)
+        } else {
+            Ok(parent.join(hash).to_string_lossy().to_string())
         }
     }
 
@@ -87,23 +107,21 @@ impl GameStorage {
         &self,
         data: PistonMetaAssetIndexObjects,
         baseurl: MojangBaseUrl,
-    ) -> CancellationToken {
+        callback: Option<fn(status: bool, url: String)>,
+    ) -> Result<CancellationToken> {
         let token = CancellationToken::new();
-        ElementalDownloader::shared().new_tasks(
-            data.objects
-                .into_iter()
-                .map(|(_, v)| {
-                    (
-                        baseurl.get_object_url(v.hash.clone()),
-                        self.get_ensure_object_path(v.hash).unwrap(),
-                    )
-                }) // TODO Remove unwrap here
-                .collect(),
-            token.clone(),
-            Some(|status, url| println!("{url}: {status}",)),
-        );
+        let mut tasks = vec![];
 
-        token
+        for (_, v) in data.objects {
+            tasks.push((
+                baseurl.get_object_url(v.hash.clone()),
+                self.get_ensure_object_path(v.hash)?,
+            ));
+        }
+
+        ElementalDownloader::shared().new_tasks(tasks, token.clone(), callback);
+
+        Ok(token)
     }
 
     pub fn download_pistonmeta_all(&self) {
@@ -111,29 +129,5 @@ impl GameStorage {
     }
     pub fn validate_version() {
         todo!()
-    }
-}
-
-#[cfg(test)]
-mod test_storage {
-    use crate::model::mojang::MojangBaseUrl;
-
-    use super::GameStorage;
-    #[tokio::test]
-    async fn test_storage() {
-        use crate::online::mojang::MojangService;
-        let service = MojangService::default();
-        let launchmeta = service.launchmeta().await.unwrap();
-        let pistonmeta = service
-            .pistonmeta(launchmeta.versions.first().unwrap().url.clone())
-            .await
-            .unwrap();
-        let objs = service
-            .pistonmeta_assetindex_objects(pistonmeta.asset_index.url.clone())
-            .await
-            .unwrap();
-        let storage = GameStorage::new_ensure_dir(".minecraft").unwrap();
-        storage.download_objects(objs, MojangBaseUrl::default());
-        loop {}
     }
 }

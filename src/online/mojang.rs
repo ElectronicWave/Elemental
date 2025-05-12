@@ -37,6 +37,10 @@ impl MojangService {
         reqwest::get(url).await?.json().await
     }
 
+    pub async fn launchmeta_v2(&self) {
+        todo!()
+    }
+
     pub async fn pistonmeta(
         &self,
         url: impl Into<String>,
@@ -48,6 +52,9 @@ impl MojangService {
         .await?
         .json()
         .await
+    }
+    pub async fn pistonmeta_v2(&self, url: impl Into<String>) {
+        todo!()
     }
 
     pub async fn pistonmeta_assetindex_objects(

@@ -5,7 +5,8 @@ use std::path::{Path, PathBuf};
 use tokio_util::sync::CancellationToken;
 
 use crate::model::mojang::{
-    MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaLibrariesDownloadsArtifact,
+    MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaLibraries,
+    PistonMetaLibrariesDownloadsArtifact,
 };
 use crate::online::downloader::ElementalDownloader;
 use crate::online::mojang::MojangService;
@@ -101,6 +102,12 @@ impl GameStorage {
 
     pub fn download_version(&self) {
         todo!()
+    }
+
+    pub fn download_library(&self, library: PistonMetaLibraries, baseurl: MojangBaseUrl) {
+        // 1. Check Ruler
+
+        let ruler = library.rules;
     }
 
     pub fn download_objects(

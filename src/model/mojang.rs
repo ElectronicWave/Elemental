@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    env::consts::{ARCH, OS},
+};
 
 use serde::{Deserialize, Serialize};
 #[derive(Debug)]
@@ -7,6 +10,7 @@ pub struct MojangBaseUrl {
     pub launchermeta_https: bool,
     pub pistonmeta: String,
     pub resources: String,
+    pub libraries: String,
 }
 
 impl Default for MojangBaseUrl {
@@ -16,6 +20,7 @@ impl Default for MojangBaseUrl {
             launchermeta_https: false,
             pistonmeta: "piston-meta.mojang.com".to_owned(),
             resources: "resources.download.minecraft.net".to_owned(),
+            libraries: "libraries.minecraft.net".to_owned(),
         }
     }
 }
@@ -111,8 +116,46 @@ pub struct PistonMetaRuleArgument {
 #[derive(Debug, Deserialize)]
 pub struct PistonMetaRuleArgumentRules {
     pub action: String,
-    pub features: Option<HashMap<String, bool>>,
-    pub os: Option<HashMap<String, String>>,
+    pub features: Option<HashMap<String, bool>>, //TODO impl features
+    pub os: Option<OperatingSystem>,
+}
+
+impl PistonMetaRuleArgumentRules {
+    pub fn is_allow(&self) -> bool {
+        let mut action = self.action == "allow";
+        if let Some(os) = &self.os {
+            if !os.is_fit() {
+                action = !action;
+            }
+        }
+
+        //TODO features here...
+
+        action
+    }
+}
+#[derive(Debug, Deserialize)]
+pub struct OperatingSystem {
+    pub arch: Option<String>,
+    pub name: Option<String>,
+}
+
+impl OperatingSystem {
+    pub fn is_fit(&self) -> bool {
+        if let Some(name) = &self.name {
+            if name != OS && (name == "osx" && OS != "macos") {
+                return false;
+            }
+        }
+
+        if let Some(arch) = &self.arch {
+            if arch != ARCH {
+                return false;
+            }
+        }
+
+        true
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -166,6 +209,8 @@ pub struct PistonMetaLibrariesDownloads {
     pub artifact: PistonMetaLibrariesDownloadsArtifact,
     pub classifiers: Option<HashMap<String, PistonMetaLibrariesDownloadsArtifact>>,
 }
+
+impl PistonMetaLibrariesDownloads {}
 
 #[derive(Debug, Deserialize)]
 pub struct PistonMetaLibrariesDownloadsArtifact {

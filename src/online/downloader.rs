@@ -78,8 +78,7 @@ impl ElementalDownloader {
 pub struct DownloadTask {
     pub url: String,
     pub path: String,
-    pub size: Option<usize>
-
+    pub size: Option<usize>,
 }
 
 #[tokio::test]

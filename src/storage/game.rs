@@ -68,13 +68,9 @@ impl GameStorage {
         Ok(parent.join(hash).to_string_lossy().to_string())
     }
 
-    pub fn get_natives_path(&self) -> String {
-        todo!()
-    }
-
     pub fn get_ensure_library_path(
         &self,
-        library: PistonMetaLibrariesDownloadsArtifact,
+        library: &PistonMetaLibrariesDownloadsArtifact,
     ) -> Result<String> {
         let path = self.join("libraries").join(&library.path);
         let parent = path
@@ -89,15 +85,36 @@ impl GameStorage {
         Path::new(&self.root).join(path)
     }
 
-    pub fn download_version(&self) {
-        todo!()
-    }
+    pub fn download_library(
+        &self,
+        library: PistonMetaLibraries,
+        baseurl: MojangBaseUrl,
+        token: CancellationToken,
+        callback: Option<fn(status: bool, url: String)>,
+    ) -> Result<()> {
+        // 1. Check Rules
+        if let Some(rules) = &library.rules {
+            if !rules.iter().all(|v| v.is_allow()) {
+                return Ok(());
+            }
+        }
 
-    pub fn download_library(&self, library: PistonMetaLibraries, baseurl: MojangBaseUrl) {
-        // 1. Check Ruler
+        // 2. Download Native Lib (Version)
+        if let Some(classifiers) = &library.downloads.classifiers {
+            todo!()
+        }
 
-        let ruler = library.rules;
+        // 3. Download Artifacts (.minecraft)
+        let artifact = &library.downloads.artifact;
+        let path = self.get_ensure_library_path(artifact)?;
+        let url = artifact
+            .url
+            .replace("libraries.minecraft.net", &baseurl.libraries);
+        ElementalDownloader::shared().new_task(url, path, token, callback);
+
+        Ok(())
     }
+    pub fn download_client(&self) {}
 
     pub fn download_objects(
         &self,
@@ -123,9 +140,11 @@ impl GameStorage {
     pub fn download_pistonmeta_all(&self) {
         todo!()
     }
+
     pub fn validate_version() {
         todo!()
     }
+
     pub fn get_versions() {
         todo!()
     }

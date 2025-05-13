@@ -143,7 +143,11 @@ pub struct OperatingSystem {
 impl OperatingSystem {
     pub fn is_fit(&self) -> bool {
         if let Some(name) = &self.name {
-            if name != OS && (name == "osx" && OS != "macos") {
+            if (name == "osx" || name == "macosx") && OS != "macos" {
+                return false;
+            }
+
+            if name != OS {
                 return false;
             }
         }

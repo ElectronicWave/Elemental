@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use tokio_util::sync::CancellationToken;
 
 use crate::model::mojang::{
-    MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaLibraries,
+    MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaDownload, PistonMetaLibraries,
     PistonMetaLibrariesDownloadsArtifact,
 };
 use crate::online::downloader::ElementalDownloader;
@@ -81,6 +81,15 @@ impl GameStorage {
         Ok(path.to_string_lossy().to_string())
     }
 
+    pub fn get_ensure_client_path(&self, version_name: String) -> Result<String> {
+        let path: PathBuf = self.join("versions").join(&version_name);
+        create_dir_all(&path)?;
+        Ok(path
+            .join(format!("{}.jar", version_name))
+            .to_string_lossy()
+            .to_string())
+    }
+
     pub fn join<P: AsRef<Path>>(&self, path: P) -> PathBuf {
         Path::new(&self.root).join(path)
     }
@@ -99,7 +108,7 @@ impl GameStorage {
             }
         }
 
-        // 2. Download Native Lib (Version)
+        // 2. Download Native Lib (Version) // TODO Extract
         if let Some(classifiers) = &library.downloads.classifiers {
             todo!()
         }
@@ -114,15 +123,33 @@ impl GameStorage {
 
         Ok(())
     }
-    pub fn download_client(&self) {}
+    pub fn download_client(
+        &self,
+        version_name: String,
+        download: PistonMetaDownload,
+        baseurl: MojangBaseUrl,
+        token: CancellationToken,
+        callback: Option<fn(status: bool, url: String)>,
+    ) -> Result<()> {
+        let path = self.get_ensure_client_path(version_name)?;
+        ElementalDownloader::shared().new_task(
+            download
+                .url
+                .replace("piston-data.mojang.com", &baseurl.pistondata),
+            path,
+            token,
+            callback,
+        );
+        Ok(())
+    }
 
     pub fn download_objects(
         &self,
         data: PistonMetaAssetIndexObjects,
         baseurl: MojangBaseUrl,
+        token: CancellationToken,
         callback: Option<fn(status: bool, url: String)>,
-    ) -> Result<CancellationToken> {
-        let token = CancellationToken::new();
+    ) -> Result<()> {
         let mut tasks = vec![];
 
         for (_, v) in data.objects {
@@ -134,18 +161,38 @@ impl GameStorage {
 
         ElementalDownloader::shared().new_tasks(tasks, token.clone(), callback);
 
-        Ok(token)
+        Ok(())
     }
 
     pub fn download_pistonmeta_all(&self) {
         todo!()
     }
 
-    pub fn validate_version() {
+    pub fn validate_version(&self) {
         todo!()
     }
 
-    pub fn get_versions() {
-        todo!()
+    pub fn exists_version(&self, version_name: String) -> bool {
+        self.join("versions").join(version_name).exists()
+    }
+
+    pub fn get_versions(&self) -> Result<Vec<String>> {
+        Ok(self
+            .join("versions")
+            .read_dir()?
+            .into_iter()
+            .filter_map(|e| {
+                if e.is_err() {
+                    return None;
+                }
+
+                let dir = e.as_ref().unwrap();
+                let name = dir.file_name().to_string_lossy().to_string();
+                if dir.path().join(format!("{}.jar", name)).exists() {
+                    return Some(name);
+                }
+                None
+            })
+            .collect())
     }
 }

@@ -9,6 +9,7 @@ pub struct MojangBaseUrl {
     pub launchermeta: String,
     pub launchermeta_https: bool,
     pub pistonmeta: String,
+    pub pistondata: String,
     pub resources: String,
     pub libraries: String,
 }
@@ -21,6 +22,7 @@ impl Default for MojangBaseUrl {
             pistonmeta: "piston-meta.mojang.com".to_owned(),
             resources: "resources.download.minecraft.net".to_owned(),
             libraries: "libraries.minecraft.net".to_owned(),
+            pistondata: "piston-data.mojang.com".to_owned(),
         }
     }
 }

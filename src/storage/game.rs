@@ -195,4 +195,6 @@ impl GameStorage {
             })
             .collect())
     }
+
+    pub fn get_version_launcherenv(&self) {}
 }

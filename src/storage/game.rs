@@ -2,6 +2,7 @@ use std::fs::{create_dir_all, write};
 use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf};
 
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::model::mojang::{
@@ -100,11 +101,11 @@ impl GameStorage {
         baseurl: MojangBaseUrl,
         token: CancellationToken,
         callback: Option<fn(status: bool, url: String)>,
-    ) -> Result<()> {
+    ) -> Result<Option<JoinHandle<()>>> {
         // 1. Check Rules
         if let Some(rules) = &library.rules {
             if !rules.iter().all(|v| v.is_allow()) {
-                return Ok(());
+                return Ok(None);
             }
         }
 
@@ -119,37 +120,37 @@ impl GameStorage {
         let url = artifact
             .url
             .replace("libraries.minecraft.net", &baseurl.libraries);
-        ElementalDownloader::shared().new_task(url, path, token, callback);
 
-        Ok(())
+        Ok(Some(
+            ElementalDownloader::shared().new_task(url, path, token, callback),
+        ))
     }
     pub fn download_client(
         &self,
         version_name: String,
         download: PistonMetaDownload,
-        baseurl: MojangBaseUrl,
+        baseurl: &MojangBaseUrl,
         token: CancellationToken,
         callback: Option<fn(status: bool, url: String)>,
-    ) -> Result<()> {
+    ) -> Result<JoinHandle<()>> {
         let path = self.get_ensure_client_path(version_name)?;
-        ElementalDownloader::shared().new_task(
+        Ok(ElementalDownloader::shared().new_task(
             download
                 .url
                 .replace("piston-data.mojang.com", &baseurl.pistondata),
             path,
             token,
             callback,
-        );
-        Ok(())
+        ))
     }
 
     pub fn download_objects(
         &self,
         data: PistonMetaAssetIndexObjects,
-        baseurl: MojangBaseUrl,
+        baseurl: &MojangBaseUrl,
         token: CancellationToken,
         callback: Option<fn(status: bool, url: String)>,
-    ) -> Result<()> {
+    ) -> Result<Vec<JoinHandle<()>>> {
         let mut tasks = vec![];
 
         for (_, v) in data.objects {
@@ -159,9 +160,7 @@ impl GameStorage {
             ));
         }
 
-        ElementalDownloader::shared().new_tasks(tasks, token.clone(), callback);
-
-        Ok(())
+        Ok(ElementalDownloader::shared().new_tasks(tasks, token.clone(), callback))
     }
 
     pub fn download_pistonmeta_all(&self) {

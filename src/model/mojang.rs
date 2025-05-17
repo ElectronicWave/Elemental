@@ -207,7 +207,12 @@ pub struct PistonMetaLibraries {
     pub name: String,
     pub natives: Option<HashMap<String, String>>,
     pub rules: Option<Vec<PistonMetaRuleArgumentRules>>,
-    pub extract: Option<HashMap<String, String>>, // TODO
+    pub extract: Option<PistonMetaLibrariesExtract>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PistonMetaLibrariesExtract {
+    pub exclude: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -254,4 +259,10 @@ pub struct PistonMetaAssetIndexObjects {
 pub struct PistonMetaAssetIndexObject {
     pub hash: String,
     pub size: usize,
+}
+
+#[test]
+fn test() {
+    use serde_json::from_str;
+    from_str::<PistonMetaData>(include_str!("../../1.16.5.json")).unwrap();
 }

@@ -11,6 +11,7 @@ tokio = { version = "1", features = ["rt", "macros", "fs", "rt-multi-thread"] }
 tokio-util = "0.7.15"
 zip = { version = "3.0.0", default-features = false }
 sha1_smol = "1.0.1"
+futures = "0.3.31"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55.0"

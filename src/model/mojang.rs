@@ -3,7 +3,7 @@ use std::{
     env::consts::{ARCH, OS},
 };
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::value};
 #[derive(Debug)]
 pub struct MojangBaseUrl {
     pub launchermeta: String,
@@ -99,12 +99,26 @@ pub enum PistonMetaGenericArgument {
     Rule(PistonMetaRuleArgument),
 }
 
-impl Into<String> for PistonMetaGenericArgument {
-    fn into(self) -> String {
+impl Into<Option<String>> for PistonMetaGenericArgument {
+    fn into(self) -> Option<String> {
         // Rule here
         match self {
-            PistonMetaGenericArgument::Plain(s) => s,
-            PistonMetaGenericArgument::Rule(_piston_meta_rule_argument) => todo!("parse rule here"), //TODO
+            PistonMetaGenericArgument::Plain(s) => Some(s),
+            PistonMetaGenericArgument::Rule(piston_meta_rule_argument) => {
+                if piston_meta_rule_argument
+                    .rules
+                    .iter()
+                    .all(|rule| rule.is_allow())
+                {
+                    if let Some(val) = piston_meta_rule_argument.value {
+                        return match val {
+                            ContinuousArgument::Single(value) => Some(value),
+                            ContinuousArgument::Multi(items) => Some(items.join(" ")),
+                        };
+                    }
+                }
+                None
+            }
         }
     }
 }
@@ -264,5 +278,5 @@ pub struct PistonMetaAssetIndexObject {
 #[test]
 fn test() {
     use serde_json::from_str;
-  //  from_str::<PistonMetaData>(include_str!("../../1.16.5.json")).unwrap();
+    //  from_str::<PistonMetaData>(include_str!("../../1.16.5.json")).unwrap();
 }

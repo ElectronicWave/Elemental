@@ -41,9 +41,7 @@ impl JavaDistrubtionReleaseInfo {
     }
 
     pub fn parse_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        Ok(JavaDistrubtionReleaseInfo::parse_from_string(
-            read_to_string(path)?,
-        ))
+        Ok(Self::parse_from_string(read_to_string(path)?))
     }
 }
 
@@ -60,13 +58,30 @@ impl JavaDistrubtion {
         let javahome = var("JAVA_HOME").ok();
         if let Some(path) = javahome {
             let releasefile = Path::new(&path.clone()).join("release");
-            return Some(JavaDistrubtion {
+            return Some(Self {
                 path,
                 info: JavaDistrubtionReleaseInfo::parse_from_file(releasefile),
             });
         }
 
         None
+    }
+
+    pub fn get_executable_file_path(&self) -> Option<String> {
+        let mut filename = "javaw".to_owned();
+
+        #[cfg(windows)]
+        {
+            filename = format!("{}.exe", filename);
+        };
+
+        let executable = Path::new(&self.path).join("bin").join(filename);
+
+        if executable.exists() {
+            Some(executable.to_string_lossy().to_string())
+        } else {
+            None
+        }
     }
 }
 

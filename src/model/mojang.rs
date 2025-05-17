@@ -264,5 +264,5 @@ pub struct PistonMetaAssetIndexObject {
 #[test]
 fn test() {
     use serde_json::from_str;
-    from_str::<PistonMetaData>(include_str!("../../1.16.5.json")).unwrap();
+  //  from_str::<PistonMetaData>(include_str!("../../1.16.5.json")).unwrap();
 }

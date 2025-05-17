@@ -1,7 +1,6 @@
 use std::fs::{create_dir_all, write};
 use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf};
-
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -9,7 +8,7 @@ use crate::model::mojang::{
     MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaDownload, PistonMetaLibraries,
     PistonMetaLibrariesDownloadsArtifact,
 };
-use crate::online::downloader::ElementalDownloader;
+use crate::online::downloader::{DownloadTask, ElementalDownloader};
 use crate::online::mojang::MojangService;
 
 pub struct GameStorage {
@@ -100,7 +99,7 @@ impl GameStorage {
         library: PistonMetaLibraries,
         baseurl: MojangBaseUrl,
         token: CancellationToken,
-        callback: Option<fn(status: bool, url: String)>,
+        callback: Option<fn(status: bool, task: DownloadTask)>,
     ) -> Result<Option<JoinHandle<()>>> {
         // 1. Check Rules
         if let Some(rules) = &library.rules {
@@ -121,9 +120,11 @@ impl GameStorage {
             .url
             .replace("libraries.minecraft.net", &baseurl.libraries);
 
-        Ok(Some(
-            ElementalDownloader::shared().new_task(url, path, token, callback),
-        ))
+        Ok(Some(ElementalDownloader::shared().new_task(
+            DownloadTask::new(url, path, Some(artifact.size)),
+            token,
+            callback,
+        )))
     }
     pub fn download_client(
         &self,
@@ -131,14 +132,17 @@ impl GameStorage {
         download: PistonMetaDownload,
         baseurl: &MojangBaseUrl,
         token: CancellationToken,
-        callback: Option<fn(status: bool, url: String)>,
+        callback: Option<fn(status: bool, task: DownloadTask)>,
     ) -> Result<JoinHandle<()>> {
         let path = self.get_ensure_client_path(version_name)?;
         Ok(ElementalDownloader::shared().new_task(
-            download
-                .url
-                .replace("piston-data.mojang.com", &baseurl.pistondata),
-            path,
+            DownloadTask::new(
+                download
+                    .url
+                    .replace("piston-data.mojang.com", &baseurl.pistondata),
+                path,
+                Some(download.size),
+            ),
             token,
             callback,
         ))
@@ -149,14 +153,15 @@ impl GameStorage {
         data: PistonMetaAssetIndexObjects,
         baseurl: &MojangBaseUrl,
         token: CancellationToken,
-        callback: Option<fn(status: bool, url: String)>,
+        callback: Option<fn(status: bool, task: DownloadTask)>,
     ) -> Result<Vec<JoinHandle<()>>> {
         let mut tasks = vec![];
 
         for (_, v) in data.objects {
-            tasks.push((
+            tasks.push(DownloadTask::new(
                 baseurl.get_object_url(v.hash.clone()),
                 self.get_ensure_object_path(v.hash)?,
+                Some(v.size),
             ));
         }
 

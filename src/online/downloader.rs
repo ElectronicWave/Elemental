@@ -21,14 +21,13 @@ impl ElementalDownloader {
     // the token will cancel task
     pub fn new_task(
         &self,
-        url: impl Into<String>,
-        path: impl Into<String>,
+        task: DownloadTask,
         token: CancellationToken,
-        callback: Option<fn(status: bool, url: String)>,
+        callback: Option<fn(status: bool, task: DownloadTask)>,
     ) -> tokio::task::JoinHandle<()> {
         let client = self.client.clone();
-        let url = url.into();
-        let path = path.into();
+        let url = task.url.clone();
+        let path = task.path.clone();
         tokio::spawn(async move {
             let executer = async {
                 let request = client.get(url.clone()).send().await;
@@ -51,7 +50,7 @@ impl ElementalDownloader {
                     }
                     val = executer => {
                         if let Some(func) = callback {
-                            func(val, url);
+                            func(val, task);
                         }
                         break;
                     }
@@ -63,22 +62,32 @@ impl ElementalDownloader {
     // the token will cancel all tasks
     pub fn new_tasks(
         &self,
-        tasks: Vec<(impl Into<String>, impl Into<String>)>,
+        tasks: Vec<DownloadTask>,
         token: CancellationToken,
-        callback: Option<fn(status: bool, url: String)>,
+        callback: Option<fn(status: bool, task: DownloadTask)>,
     ) -> Vec<tokio::task::JoinHandle<()>> {
         tasks
             .into_iter()
-            .map(|(url, path)| self.new_task(url, path, token.clone(), callback))
+            .map(|task| self.new_task(task, token.clone(), callback))
             .collect()
     }
 }
 
-//TODO refactor task with stru
+#[derive(Debug)]
 pub struct DownloadTask {
     pub url: String,
     pub path: String,
     pub size: Option<usize>,
+}
+
+impl DownloadTask {
+    pub fn new(url: impl Into<String>, path: impl Into<String>, size: Option<usize>) -> Self {
+        Self {
+            url: url.into(),
+            path: path.into(),
+            size,
+        }
+    }
 }
 
 #[tokio::test]
@@ -87,8 +96,11 @@ async fn test() {
     println!("start");
     let _ = downloader
         .new_task(
-            "http://launchermeta.mojang.com/mc/game/version_manifest.json",
-            "version_manifest.json",
+            DownloadTask::new(
+                "http://launchermeta.mojang.com/mc/game/version_manifest.json",
+                "version_manifest.json",
+                None,
+            ),
             CancellationToken::new(),
             None,
         )

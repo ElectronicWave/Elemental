@@ -3,7 +3,7 @@ use std::{
     env::consts::{ARCH, OS},
 };
 
-use serde::{Deserialize, Serialize, de::value};
+use serde::{Deserialize, Serialize};
 #[derive(Debug)]
 pub struct MojangBaseUrl {
     pub launchermeta: String,

@@ -4,7 +4,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MojangBaseUrl {
     pub launchermeta: String,
     pub launchermeta_https: bool,
@@ -273,10 +273,4 @@ pub struct PistonMetaAssetIndexObjects {
 pub struct PistonMetaAssetIndexObject {
     pub hash: String,
     pub size: usize,
-}
-
-#[test]
-fn test() {
-    use serde_json::from_str;
-    //  from_str::<PistonMetaData>(include_str!("../../1.16.5.json")).unwrap();
 }

@@ -1,3 +1,4 @@
+use std::env::consts::OS;
 use std::fs::{create_dir_all, write};
 use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf};
@@ -97,6 +98,7 @@ impl GameStorage {
     pub fn download_library(
         &self,
         library: PistonMetaLibraries,
+        version_name: String,
         baseurl: MojangBaseUrl,
         token: CancellationToken,
         callback: Option<fn(status: bool, task: DownloadTask)>,
@@ -108,9 +110,16 @@ impl GameStorage {
             }
         }
 
-        // 2. Download Native Lib (Version) // TODO Extract
+        // 2. Download Native Lib (Legacy)
         if let Some(classifiers) = &library.downloads.classifiers {
-            todo!()
+            if let Some(download) = classifiers.get(&format!("natives-{}", OS)) {
+                todo!()
+            }
+            if OS == "macos" {
+                if let Some(download) = classifiers.get("natives-osx") {
+                    todo!()
+                }
+            }
         }
 
         // 3. Download Artifacts (.minecraft)
@@ -119,6 +128,16 @@ impl GameStorage {
         let url = artifact
             .url
             .replace("libraries.minecraft.net", &baseurl.libraries);
+
+
+        // 4
+        if artifact.path.ends_with(&format!("-natives-{}.jar", OS)) {
+            //TODO
+        }
+
+        if OS == "macos" && artifact.path.ends_with("-natives-osx.jar") {
+            //TODO
+        }
 
         Ok(Some(ElementalDownloader::shared().new_task(
             DownloadTask::new(url, path, Some(artifact.size)),

@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap, env::var, fs::read_to_string, hash::RandomState, io::Result, path::Path,
+    process::Command,
 };
 
 #[derive(Debug)]
@@ -40,8 +41,52 @@ impl JavaDistrubtionReleaseInfo {
         }
     }
 
-    pub fn parse_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
+    pub fn parse_from_release_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         Ok(Self::parse_from_string(read_to_string(path)?))
+    }
+
+    pub fn parse_from_executable_cmdl(executable: String) -> Result<Self> {
+        let cmdl = Command::new(executable)
+            .arg("-XshowSettings:properties")
+            .arg("-version")
+            .output()?;
+        let output = String::from_utf8(cmdl.stderr)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        //TODO Adapt More Java Ver Here
+
+        // java.vm.version
+        // java.vm.vendor
+        // java.vendor.version
+        let mut implememtor = String::new();
+        let mut implememtor_version = String::new();
+        let mut java_runtime_version = String::new();
+
+        for line in output.lines() {
+            let trimed = line.trim();
+            if trimed.starts_with("java.vm.vendor = ") {
+                implememtor = trimed.trim_start_matches("java.vm.vendor = ").to_string();
+            } else if trimed.starts_with("java.vm.version = ") {
+                java_runtime_version = trimed.trim_start_matches("java.vm.version = ").to_string();
+            } else if trimed.starts_with("java.vendor.version") {
+                implememtor_version = trimed
+                    .trim_start_matches("java.vendor.version = ")
+                    .to_string();
+            }
+        }
+        Ok(Self {
+            implememtor,
+            implememtor_version,
+            java_runtime_version,
+        })
+    }
+
+    pub fn try_parse<P: AsRef<Path>>(release: P, executable: String) -> Result<Self> {
+        let result = Self::parse_from_release_file(release);
+        if result.is_ok() {
+            return result;
+        }
+
+        Self::parse_from_executable_cmdl(executable)
     }
 }
 
@@ -58,24 +103,29 @@ impl JavaDistrubtion {
         let javahome = var("JAVA_HOME").ok();
         if let Some(path) = javahome {
             let releasefile = Path::new(&path.clone()).join("release");
-            return Some(Self {
-                path,
-                info: JavaDistrubtionReleaseInfo::parse_from_file(releasefile),
-            });
+            let info = JavaDistrubtionReleaseInfo::try_parse(
+                releasefile,
+                Self::get_executable_file_path_from_path(&path)?,
+            );
+            return Some(Self { path, info });
         }
 
         None
     }
 
     pub fn get_executable_file_path(&self) -> Option<String> {
-        let mut filename = "javaw".to_owned();
+        Self::get_executable_file_path_from_path(&self.path)
+    }
+
+    pub(crate) fn get_executable_file_path_from_path(path: &str) -> Option<String> {
+        let mut filename = "java".to_owned();
 
         #[cfg(windows)]
         {
             filename = format!("{}.exe", filename);
         };
 
-        let executable = Path::new(&self.path).join("bin").join(filename);
+        let executable = Path::new(path).join("bin").join(filename);
 
         if executable.exists() {
             Some(executable.to_string_lossy().to_string())
@@ -88,5 +138,12 @@ impl JavaDistrubtion {
 #[test]
 fn javahome() {
     let p = JavaDistrubtion::get_javahome_java_distrubtion();
-    println!("{:?}", p)
+
+    println!(
+        "{:?}",
+        JavaDistrubtionReleaseInfo::parse_from_executable_cmdl(
+            p.unwrap().get_executable_file_path().unwrap(),
+        )
+        .unwrap()
+    );
 }

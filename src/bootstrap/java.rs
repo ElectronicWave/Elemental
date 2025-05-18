@@ -1,5 +1,10 @@
 use std::{
-    collections::HashMap, env::var, fs::read_to_string, hash::RandomState, io::Result, path::Path,
+    collections::HashMap,
+    env::{consts::EXE_SUFFIX, var},
+    fs::read_to_string,
+    hash::RandomState,
+    io::Result,
+    path::Path,
     process::Command,
 };
 
@@ -118,13 +123,7 @@ impl JavaDistrubtion {
     }
 
     pub(crate) fn get_executable_file_path_from_path(path: &str) -> Option<String> {
-        let mut filename = "java".to_owned();
-
-        #[cfg(windows)]
-        {
-            filename = format!("{}.exe", filename);
-        };
-
+        let filename = format!("java{}", EXE_SUFFIX);
         let executable = Path::new(path).join("bin").join(filename);
 
         if executable.exists() {

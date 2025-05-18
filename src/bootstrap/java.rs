@@ -1,3 +1,5 @@
+use log::error;
+use std::path::PathBuf;
 use std::{
     collections::HashMap,
     env::{consts::EXE_SUFFIX, var},
@@ -7,20 +9,36 @@ use std::{
     path::Path,
     process::Command,
 };
+use windows_sys::Win32::Foundation::ERROR_FILE_NOT_FOUND;
+use winreg::RegKey;
+use winreg::enums::{
+    HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_ENUMERATE_SUB_KEYS, KEY_READ, KEY_WOW64_32KEY,
+    KEY_WOW64_64KEY,
+};
 
 #[derive(Debug)]
 pub struct JavaDistrubtion {
-    pub path: String,
-    pub info: Result<JavaDistrubtionReleaseInfo>,
+    pub install: JavaInstall,
+    pub arch: u16,// EM_386, etc.
+    pub release_info: Option<JavaReleaseInfo>,// It should exist
 }
 
+// The additional data
 #[derive(Debug)]
-pub struct JavaDistrubtionReleaseInfo {
-    pub implememtor: String,
-    pub implememtor_version: String,
-    pub java_runtime_version: String,
+pub struct JavaReleaseInfo {
+    pub implememtor: Option<String>,
+    pub implememtor_version: Option<String>,
+    pub java_runtime_version: Option<String>,
 }
-impl JavaDistrubtionReleaseInfo {
+
+// The minium info to start the jvm
+#[derive(Debug)]
+pub struct JavaInstall {
+    id: String,
+    path: PathBuf,
+}
+
+impl JavaReleaseInfo {
     pub fn parse_from_string(source: String) -> Self {
         let data: HashMap<&str, &str, RandomState> =
             HashMap::from_iter(source.lines().filter_map(|e| {
@@ -31,18 +49,9 @@ impl JavaDistrubtionReleaseInfo {
             }));
 
         Self {
-            implememtor: data
-                .get("IMPLEMENTOR")
-                .unwrap_or(&"IMPLEMEMTOR")
-                .to_string(),
-            implememtor_version: data
-                .get("IMPLEMENTOR_VERSION")
-                .unwrap_or(&"IMPLEMENTOR_VERSION")
-                .to_string(),
-            java_runtime_version: data
-                .get("JAVA_RUNTIME_VERSION")
-                .unwrap_or(&"JAVA_RUNTIME_VERSION")
-                .to_string(),
+            implememtor: data.get("IMPLEMENTOR").map(|s| s.to_string()),
+            implememtor_version: data.get("IMPLEMENTOR_VERSION").map(|s| s.to_string()),
+            java_runtime_version: data.get("JAVA_RUNTIME_VERSION").map(|s| s.to_string()),
         }
     }
 
@@ -95,11 +104,101 @@ impl JavaDistrubtionReleaseInfo {
     }
 }
 
-impl JavaDistrubtion {
+impl JavaInstall {
     pub fn get_all_java_distrubtion() -> Vec<Self> {
         vec![]
     }
 
+    #[cfg(windows)]
+    pub fn get_platform_java_distriubtion() -> Vec<Self> {
+        let mut javas = Vec::new();
+        // Oracle
+        Self::get_java_distribution_from_registry(
+            &mut javas,
+            "SOFTWARE\\JavaSoft\\Java Runtime Environment",
+            "JavaHome",
+            "",
+        );
+        Self::get_java_distribution_from_registry(
+            &mut javas,
+            "SOFTWARE\\JavaSoft\\Java Development Kit",
+            "JavaHome",
+            "",
+        );
+        // Oracle for Java 9 and newer
+        Self::get_java_distribution_from_registry(
+            &mut javas,
+            "SOFTWARE\\JavaSoft\\JRE",
+            "JavaHome",
+            "",
+        );
+        Self::get_java_distribution_from_registry(
+            &mut javas,
+            "SOFTWARE\\JavaSoft\\JDK",
+            "JavaHome",
+            "",
+        );
+        // AdoptOpenJDK
+        todo!("Copy more")
+    }
+
+    #[cfg(windows)]
+    fn get_java_distribution_from_registry(
+        javas: &mut Vec<JavaInstall>,
+        key_name: &str,
+        key_java_dir: &str,
+        subkey_suffix: &str,
+    ) {
+        for key_type in [KEY_WOW64_64KEY, KEY_WOW64_32KEY] {
+            for root in [
+                RegKey::predef(HKEY_CURRENT_USER),
+                RegKey::predef(HKEY_LOCAL_MACHINE),
+            ] {
+                let flags = KEY_READ | key_type | KEY_ENUMERATE_SUB_KEYS;
+                let base = match root.open_subkey_with_flags(key_name, flags) {
+                    Ok(k) => k,
+                    Err(e) => {
+                        if e.raw_os_error().unwrap_or(0) as u32 != ERROR_FILE_NOT_FOUND {
+                            error!(
+                            "Failed to open registry key {} : {}",
+                            key_name, e
+                        );
+                        }
+                        continue;
+                    }
+                };
+
+                for sub in base.enum_keys().filter_map(Result::ok) {
+                    let full_path = format!("{}\\{}{}", key_name, sub, subkey_suffix);
+
+                    let version = match root.open_subkey_with_flags(&full_path, KEY_READ | key_type) {
+                        Ok(k) => k,
+                        Err(_) => continue,
+                    };
+
+                    match version.get_value::<String, _>(key_java_dir) {
+                        Ok(dir) => {
+                            let mut exe = PathBuf::from(dir);
+                            exe.push("bin");
+                            exe.push("javaw.exe");
+                            javas.push(JavaInstall {
+                                id: sub.clone(),
+                                path: exe,
+                            });
+                        }
+                        Err(_) => continue,
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn get_platform_java_distrubtion() -> Vec<Self> {
+        todo!()
+    }
+
+    #[cfg(target_os = "macos")]
     pub fn get_platform_java_distrubtion() -> Vec<Self> {
         todo!()
     }
@@ -107,12 +206,10 @@ impl JavaDistrubtion {
     pub fn get_javahome_java_distrubtion() -> Option<Self> {
         let javahome = var("JAVA_HOME").ok();
         if let Some(path) = javahome {
-            let releasefile = Path::new(&path.clone()).join("release");
-            let info = JavaDistrubtionReleaseInfo::try_parse(
-                releasefile,
-                Self::get_executable_file_path_from_path(&path)?,
-            );
-            return Some(Self { path, info });
+            return Some(Self {
+                id: "".to_string(),
+                path: todo!(""),
+            });
         }
 
         None
@@ -136,13 +233,5 @@ impl JavaDistrubtion {
 
 #[test]
 fn javahome() {
-    let p = JavaDistrubtion::get_javahome_java_distrubtion();
-
-    println!(
-        "{:?}",
-        JavaDistrubtionReleaseInfo::parse_from_executable_cmdl(
-            p.unwrap().get_executable_file_path().unwrap(),
-        )
-        .unwrap()
-    );
+    todo!()
 }

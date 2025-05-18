@@ -9,18 +9,12 @@ use std::{
     path::Path,
     process::Command,
 };
-use windows_sys::Win32::Foundation::ERROR_FILE_NOT_FOUND;
-use winreg::RegKey;
-use winreg::enums::{
-    HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_ENUMERATE_SUB_KEYS, KEY_READ, KEY_WOW64_32KEY,
-    KEY_WOW64_64KEY,
-};
 
 #[derive(Debug)]
-pub struct JavaDistrubtion {
+pub struct JavaDistribution {
     pub install: JavaInstall,
-    pub arch: u16,// EM_386, etc.
-    pub release_info: Option<JavaReleaseInfo>,// It should exist
+    pub arch: u16,                             // EM_386, etc.
+    pub release_info: Option<JavaReleaseInfo>, // It should exist
 }
 
 // The additional data
@@ -88,9 +82,9 @@ impl JavaReleaseInfo {
             }
         }
         Ok(Self {
-            implememtor,
-            implememtor_version,
-            java_runtime_version,
+            implememtor: Some(implememtor),
+            implememtor_version: Some(implememtor_version),
+            java_runtime_version: Some(java_runtime_version),
         })
     }
 
@@ -105,50 +99,54 @@ impl JavaReleaseInfo {
 }
 
 impl JavaInstall {
-    pub fn get_all_java_distrubtion() -> Vec<Self> {
+    pub fn get_all_java_distribution() -> Vec<Self> {
         vec![]
     }
 
     #[cfg(windows)]
-    pub fn get_platform_java_distriubtion() -> Vec<Self> {
-        let mut javas = Vec::new();
+    pub fn get_platform_java_distribution() -> Vec<Self> {
+        let mut javas = vec![];
         // Oracle
-        Self::get_java_distribution_from_registry(
-            &mut javas,
+        javas.extend(Self::get_java_distribution_from_registry(
             "SOFTWARE\\JavaSoft\\Java Runtime Environment",
             "JavaHome",
             "",
-        );
-        Self::get_java_distribution_from_registry(
-            &mut javas,
+        ));
+        javas.extend(Self::get_java_distribution_from_registry(
             "SOFTWARE\\JavaSoft\\Java Development Kit",
             "JavaHome",
             "",
-        );
+        ));
         // Oracle for Java 9 and newer
-        Self::get_java_distribution_from_registry(
-            &mut javas,
+        javas.extend(Self::get_java_distribution_from_registry(
             "SOFTWARE\\JavaSoft\\JRE",
             "JavaHome",
             "",
-        );
-        Self::get_java_distribution_from_registry(
-            &mut javas,
+        ));
+        javas.extend(Self::get_java_distribution_from_registry(
             "SOFTWARE\\JavaSoft\\JDK",
             "JavaHome",
             "",
-        );
+        ));
         // AdoptOpenJDK
+
         todo!("Copy more")
     }
 
     #[cfg(windows)]
     fn get_java_distribution_from_registry(
-        javas: &mut Vec<JavaInstall>,
         key_name: &str,
         key_java_dir: &str,
         subkey_suffix: &str,
-    ) {
+    ) -> Vec<JavaInstall> {
+        use windows_sys::Win32::Foundation::ERROR_FILE_NOT_FOUND;
+        use winreg::RegKey;
+        use winreg::enums::{
+            HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_ENUMERATE_SUB_KEYS, KEY_READ,
+            KEY_WOW64_32KEY, KEY_WOW64_64KEY,
+        };
+
+        let mut javas = vec![];
         for key_type in [KEY_WOW64_64KEY, KEY_WOW64_32KEY] {
             for root in [
                 RegKey::predef(HKEY_CURRENT_USER),
@@ -159,10 +157,7 @@ impl JavaInstall {
                     Ok(k) => k,
                     Err(e) => {
                         if e.raw_os_error().unwrap_or(0) as u32 != ERROR_FILE_NOT_FOUND {
-                            error!(
-                            "Failed to open registry key {} : {}",
-                            key_name, e
-                        );
+                            error!("Failed to open registry key {} : {}", key_name, e);
                         }
                         continue;
                     }
@@ -171,7 +166,8 @@ impl JavaInstall {
                 for sub in base.enum_keys().filter_map(Result::ok) {
                     let full_path = format!("{}\\{}{}", key_name, sub, subkey_suffix);
 
-                    let version = match root.open_subkey_with_flags(&full_path, KEY_READ | key_type) {
+                    let version = match root.open_subkey_with_flags(&full_path, KEY_READ | key_type)
+                    {
                         Ok(k) => k,
                         Err(_) => continue,
                     };
@@ -191,37 +187,33 @@ impl JavaInstall {
                 }
             }
         }
+        javas
     }
 
     #[cfg(target_os = "linux")]
-    pub fn get_platform_java_distrubtion() -> Vec<Self> {
+    pub fn get_platform_java_distribution() -> Vec<Self> {
         todo!()
     }
 
     #[cfg(target_os = "macos")]
-    pub fn get_platform_java_distrubtion() -> Vec<Self> {
+    pub fn get_platform_java_distribution() -> Vec<Self> {
         todo!()
     }
 
-    pub fn get_javahome_java_distrubtion() -> Option<Self> {
-        let javahome = var("JAVA_HOME").ok();
-        if let Some(path) = javahome {
-            return Some(Self {
-                id: "".to_string(),
-                path: todo!(""),
-            });
-        }
-
-        None
+    pub fn get_javahome_java_distribution() -> Option<Self> {
+        var("JAVA_HOME").ok().map(|path| Self {
+            id: "".to_string(),
+            path: Path::new(&path).to_path_buf(),
+        })
     }
 
     pub fn get_executable_file_path(&self) -> Option<String> {
         Self::get_executable_file_path_from_path(&self.path)
     }
 
-    pub(crate) fn get_executable_file_path_from_path(path: &str) -> Option<String> {
+    pub(crate) fn get_executable_file_path_from_path<P: AsRef<Path>>(path: P) -> Option<String> {
         let filename = format!("java{}", EXE_SUFFIX);
-        let executable = Path::new(path).join("bin").join(filename);
+        let executable = path.as_ref().join("bin").join(filename);
 
         if executable.exists() {
             Some(executable.to_string_lossy().to_string())

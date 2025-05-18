@@ -130,7 +130,7 @@ impl GameStorage {
             .replace("libraries.minecraft.net", &baseurl.libraries);
 
 
-        // 4
+        // 4。 Latest Natives File
         if artifact.path.ends_with(&format!("-natives-{}.jar", OS)) {
             //TODO
         }

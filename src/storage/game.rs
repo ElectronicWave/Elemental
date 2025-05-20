@@ -101,7 +101,6 @@ impl GameStorage {
         version_name: String,
         baseurl: MojangBaseUrl,
         token: CancellationToken,
-        callback: Option<fn(status: bool, task: DownloadTask)>,
     ) -> Result<Option<JoinHandle<()>>> {
         // 1. Check Rules
         if let Some(rules) = &library.rules {
@@ -113,7 +112,8 @@ impl GameStorage {
         // 2. Download Native Lib (Legacy)
         if let Some(classifiers) = &library.downloads.classifiers {
             if let Some(download) = classifiers.get(&format!("natives-{}", OS)) {
-                todo!()
+                ElementalDownloader::shared()
+                    .new_task(DownloadTask::new("url", " path", None), token.clone());
             }
             if OS == "macos" {
                 if let Some(download) = classifiers.get("natives-osx") {
@@ -129,7 +129,6 @@ impl GameStorage {
             .url
             .replace("libraries.minecraft.net", &baseurl.libraries);
 
-
         // 4。 Latest Natives File
         if artifact.path.ends_with(&format!("-natives-{}.jar", OS)) {
             //TODO
@@ -139,11 +138,9 @@ impl GameStorage {
             //TODO
         }
 
-        Ok(Some(ElementalDownloader::shared().new_task(
-            DownloadTask::new(url, path, Some(artifact.size)),
-            token,
-            callback,
-        )))
+        Ok(Some(
+            ElementalDownloader::shared().new_task(DownloadTask::new(url, path, None), token),
+        ))
     }
     pub fn download_client(
         &self,
@@ -151,7 +148,6 @@ impl GameStorage {
         download: PistonMetaDownload,
         baseurl: &MojangBaseUrl,
         token: CancellationToken,
-        callback: Option<fn(status: bool, task: DownloadTask)>,
     ) -> Result<JoinHandle<()>> {
         let path = self.get_ensure_client_path(version_name)?;
         Ok(ElementalDownloader::shared().new_task(
@@ -160,10 +156,9 @@ impl GameStorage {
                     .url
                     .replace("piston-data.mojang.com", &baseurl.pistondata),
                 path,
-                Some(download.size),
+                None,
             ),
             token,
-            callback,
         ))
     }
 
@@ -172,7 +167,6 @@ impl GameStorage {
         data: PistonMetaAssetIndexObjects,
         baseurl: &MojangBaseUrl,
         token: CancellationToken,
-        callback: Option<fn(status: bool, task: DownloadTask)>,
     ) -> Result<Vec<JoinHandle<()>>> {
         let mut tasks = vec![];
 
@@ -180,11 +174,11 @@ impl GameStorage {
             tasks.push(DownloadTask::new(
                 baseurl.get_object_url(v.hash.clone()),
                 self.get_ensure_object_path(v.hash)?,
-                Some(v.size),
+                None,
             ));
         }
 
-        Ok(ElementalDownloader::shared().new_tasks(tasks, token.clone(), callback))
+        Ok(ElementalDownloader::shared().new_tasks(tasks, token.clone()))
     }
 
     pub fn download_pistonmeta_all(&self) {

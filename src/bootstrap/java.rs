@@ -1,5 +1,4 @@
 use log::error;
-use std::path::PathBuf;
 use std::{
     collections::HashMap,
     env::{consts::EXE_SUFFIX, var},
@@ -7,6 +6,7 @@ use std::{
     hash::RandomState,
     io::Result,
     path::Path,
+    path::PathBuf,
     process::Command,
 };
 
@@ -174,12 +174,9 @@ impl JavaInstall {
 
                     match version.get_value::<String, _>(key_java_dir) {
                         Ok(dir) => {
-                            let mut exe = PathBuf::from(dir);
-                            exe.push("bin");
-                            exe.push("javaw.exe");
                             javas.push(JavaInstall {
                                 id: sub.clone(),
-                                path: exe,
+                                path: Path::new(&dir).join("bin").join("javaw.exe"),
                             });
                         }
                         Err(_) => continue,
@@ -225,5 +222,10 @@ impl JavaInstall {
 
 #[test]
 fn javahome() {
-    todo!()
+    println!(
+        "{:?}",
+        JavaInstall::get_javahome_java_distribution()
+            .unwrap()
+            .get_executable_file_path()
+    );
 }

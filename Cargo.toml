@@ -14,6 +14,7 @@ serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["rt", "macros", "fs", "rt-multi-thread"] }
 tokio-util = "0.7.15"
 zip = { version = "4.0.0", default-features = false, features = ["deflate"] }
+toml = "0.8.22"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59.0", features = [] }

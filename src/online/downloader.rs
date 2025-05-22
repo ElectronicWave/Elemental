@@ -1,9 +1,13 @@
+use std::fs::{File, create_dir_all};
+use std::io::{self, Result};
+use std::path::Path;
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, LazyLock},
 };
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
+use zip::ZipArchive;
 
 pub struct ElementalDownloader {
     client: reqwest::Client,
@@ -67,13 +71,59 @@ impl ElementalDownloaderTracer {
         match status {
             TaskStatus::OK => match task.callback {
                 DownloadTaskCallback::DEFAULT => todo!(),
-                DownloadTaskCallback::NATIVELIB(target) => todo!(),
-                DownloadTaskCallback::NONE => todo!(),
+                DownloadTaskCallback::NATIVELIB(src, dest, exclude) => {}
+                DownloadTaskCallback::NONE => (),
             },
-            TaskStatus::ERR(msg) => (),
+            TaskStatus::ERR(msg) => log::error!("task err: {}", msg),
             TaskStatus::CANCEL => (),
         }
     }
+}
+
+fn unzip_file(src: String, dest: String, exclude: Vec<String>) -> Result<()> {
+    let file = File::open(src)?;
+    let mut archive = ZipArchive::new(file)?;
+
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i)?;
+
+        let outpath = match file.enclosed_name() {
+            Some(path) => path,
+            None => continue,
+        };
+        // Ignore `META-INF`
+        if outpath.starts_with("META-INF") {
+            continue;
+        }
+
+        //TODO Filter by exclude
+
+        let outpath = Path::new(&dest).join(outpath);
+
+        if file.is_dir() {
+            create_dir_all(&outpath)?;
+        } else {
+            if let Some(p) = outpath.parent() {
+                if !p.exists() {
+                    create_dir_all(p)?;
+                }
+            }
+            let mut outfile = File::create(&outpath).unwrap();
+            //TODO It could be slow, May need Async Optimize?
+            io::copy(&mut file, &mut outfile).unwrap();
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_unzip() {
+    unzip_file(
+        "lwjgl-tinyfd-3.2.2-natives-windows.jar".to_owned(),
+        "output".to_owned(),
+        vec![],
+    )
+    .unwrap();
 }
 
 static SHARED_DOWNLOADER: LazyLock<ElementalDownloader> = LazyLock::new(ElementalDownloader::new);
@@ -158,7 +208,7 @@ pub struct DownloadTask {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum DownloadTaskCallback {
     DEFAULT,
-    NATIVELIB(String), // unzip to path
+    NATIVELIB(String, String, Vec<String>), // src, dest, exclude
     NONE,
 }
 

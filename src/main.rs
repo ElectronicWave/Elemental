@@ -35,7 +35,7 @@ async fn main() {
     println!("download objs");
     join_all(
         storage
-            .download_objects(objs, &baseurl, token.clone(), None)
+            .download_objects(objs, &baseurl, token.clone())
             .unwrap(),
     )
     .await;
@@ -46,7 +46,7 @@ async fn main() {
             pistonmeta.downloads.client,
             &baseurl,
             token,
-            None,
+       
         )
         .unwrap()
         .await

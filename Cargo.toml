@@ -26,7 +26,6 @@ uuid =  "1.17.0"
 zip = { version = "4.0.0", default-features = false, features = ["deflate"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = "0.59.0"
 winreg = "0.55.0"
 
 # https://github.com/microsoft/edit/blob/main/Cargo.toml

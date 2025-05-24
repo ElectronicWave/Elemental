@@ -186,7 +186,7 @@ impl JavaInstall {
             "InstallationPath",
             "",
         ));
-        
+
         javas
     }
 
@@ -196,7 +196,7 @@ impl JavaInstall {
         key_java_dir: &str,
         subkey_suffix: &str,
     ) -> Vec<JavaInstall> {
-        use windows_sys::Win32::Foundation::ERROR_FILE_NOT_FOUND; // FIXME!: Unfortunately it's not in winreg so we need to manually import from windows_sys
+        pub const ERROR_FILE_NOT_FOUND: u32 = 2u32;
         use winreg::RegKey;
         use winreg::enums::{
             HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_ENUMERATE_SUB_KEYS, KEY_READ,

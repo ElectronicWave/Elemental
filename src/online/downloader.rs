@@ -5,6 +5,8 @@ use std::{
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
+use crate::storage::jar::JarFile;
+
 pub struct ElementalDownloader {
     client: reqwest::Client,
     pub tracer: Arc<ElementalDownloaderTracer>,
@@ -67,7 +69,9 @@ impl ElementalDownloaderTracer {
         match status {
             TaskStatus::OK => match task.callback {
                 DownloadTaskCallback::DEFAULT => todo!(),
-                DownloadTaskCallback::NATIVELIB(src, dest, exclude) => {}
+                DownloadTaskCallback::NATIVELIB(src, dest, exclude) => {
+                    JarFile::new(src).extract_blocking(dest).unwrap(); // TODO Remove unwrap here.
+                }
                 DownloadTaskCallback::NONE => (),
             },
             TaskStatus::ERR(msg) => log::error!("task err: {}", msg),
@@ -173,6 +177,19 @@ impl DownloadTask {
             path: path.into(),
             task_group_name: task_group_name.map(|v| v.into()),
             callback: DownloadTaskCallback::NONE,
+        }
+    }
+    pub fn new_callback(
+        url: impl Into<String>,
+        path: impl Into<String>,
+        task_group_name: Option<String>,
+        callback: DownloadTaskCallback,
+    ) -> Self {
+        Self {
+            url: url.into(),
+            path: path.into(),
+            task_group_name: task_group_name.map(|v| v.into()),
+            callback,
         }
     }
 }

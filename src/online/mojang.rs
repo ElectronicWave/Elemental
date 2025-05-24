@@ -1,3 +1,5 @@
+use std::io::ErrorKind;
+
 use crate::model::mojang::{
     LaunchMetaData, MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaData,
 };
@@ -53,6 +55,7 @@ impl MojangService {
         .json()
         .await
     }
+
     pub async fn pistonmeta_v2(&self, url: impl Into<String>) {
         todo!()
     }

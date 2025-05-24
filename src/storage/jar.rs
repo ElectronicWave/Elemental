@@ -28,6 +28,7 @@ impl JarFile {
                 Some(path) => path,
                 None => continue,
             };
+            
             // Ignore `META-INF`
             if outpath.starts_with("META-INF") {
                 continue;

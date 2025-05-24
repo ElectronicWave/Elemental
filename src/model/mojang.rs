@@ -38,19 +38,19 @@ impl MojangBaseUrl {
 }
 
 /// http://launchermeta.mojang.com/mc/game/version_manifest.json
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct LaunchMetaData {
     pub latest: LaunchMetaLatestData,
     pub versions: Vec<LaunchMetaVersionData>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct LaunchMetaLatestData {
     pub release: String,
     pub snapshot: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct LaunchMetaVersionData {
     pub id: String,
     #[serde(rename = "type")]
@@ -62,7 +62,7 @@ pub struct LaunchMetaVersionData {
 }
 
 /// https://piston-meta.mojang.com/v1/packages/<->/<->.json
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaData {
     pub arguments: PistonMetaArguments,
     #[serde(rename = "assetIndex")]
@@ -87,12 +87,12 @@ pub struct PistonMetaData {
     pub release_time: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaArguments {
     pub game: Vec<PistonMetaGenericArgument>,
     pub jvm: Vec<PistonMetaGenericArgument>,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum PistonMetaGenericArgument {
     Plain(String),
@@ -123,13 +123,13 @@ impl Into<Option<String>> for PistonMetaGenericArgument {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaRuleArgument {
     pub rules: Vec<PistonMetaRuleArgumentRules>,
     pub value: Option<ContinuousArgument>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaRuleArgumentRules {
     pub action: String,
     pub features: Option<HashMap<String, bool>>, //TODO impl features
@@ -150,7 +150,7 @@ impl PistonMetaRuleArgumentRules {
         action
     }
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct OperatingSystem {
     pub arch: Option<String>,
     pub name: Option<String>,
@@ -178,14 +178,14 @@ impl OperatingSystem {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum ContinuousArgument {
     Single(String),
     Multi(Vec<String>),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaAssetIndex {
     pub id: String,
     pub sha1: String,
@@ -196,26 +196,26 @@ pub struct PistonMetaAssetIndex {
     pub url: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaDownloads {
     pub client: PistonMetaDownload,
     pub server: PistonMetaDownload,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaDownload {
     pub sha1: String,
     pub size: usize,
     pub url: String,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaJavaVersion {
     pub component: String,
     #[serde(rename = "majorVersion")]
     pub major_version: usize,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaLibraries {
     pub downloads: PistonMetaLibrariesDownloads,
     pub name: String,
@@ -224,12 +224,12 @@ pub struct PistonMetaLibraries {
     pub extract: Option<PistonMetaLibrariesExtract>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaLibrariesExtract {
     pub exclude: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaLibrariesDownloads {
     pub artifact: PistonMetaLibrariesDownloadsArtifact,
     pub classifiers: Option<HashMap<String, PistonMetaLibrariesDownloadsArtifact>>,
@@ -237,7 +237,7 @@ pub struct PistonMetaLibrariesDownloads {
 
 impl PistonMetaLibrariesDownloads {}
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaLibrariesDownloadsArtifact {
     pub sha1: String,
     pub size: usize,
@@ -245,19 +245,19 @@ pub struct PistonMetaLibrariesDownloadsArtifact {
     pub path: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaLogging {
     pub client: PistonMetaLoggingSide,
     // TODO?
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaLoggingSide {
     pub argument: String,
     pub file: PistonMetaLoggingSideFile,
     #[serde(rename = "type")]
     pub typo: String,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaLoggingSideFile {
     pub id: String,
     pub sha1: String,

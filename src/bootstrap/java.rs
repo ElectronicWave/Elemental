@@ -106,6 +106,7 @@ impl JavaInstall {
     #[cfg(windows)]
     pub fn get_platform_java_distribution() -> Vec<Self> {
         let mut javas = vec![];
+
         // Oracle
         javas.extend(Self::get_java_distribution_from_registry(
             "SOFTWARE\\JavaSoft\\Java Runtime Environment",
@@ -129,8 +130,64 @@ impl JavaInstall {
             "",
         ));
         // AdoptOpenJDK
-
-        todo!("Copy more")
+        javas.extend(Self::get_java_distribution_from_registry(
+            "SOFTWARE\\AdoptOpenJDK\\JRE",
+            "Path",
+            "\\hotspot\\MSI",
+        ));
+        javas.extend(Self::get_java_distribution_from_registry(
+            "SOFTWARE\\AdoptOpenJDK\\JDK",
+            "Path",
+            "\\hotspot\\MSI",
+        ));
+        // Eclipse Foundation
+        javas.extend(Self::get_java_distribution_from_registry(
+            "SOFTWARE\\Eclipse Foundation\\JDK",
+            "Path",
+            "\\hotspot\\MSI",
+        ));
+        // Eclipse Adoptium
+        javas.extend(Self::get_java_distribution_from_registry(
+            "SOFTWARE\\Eclipse Adoptium\\JRE",
+            "Path",
+            "\\hotspot\\MSI",
+        ));
+        javas.extend(Self::get_java_distribution_from_registry(
+            "SOFTWARE\\Eclipse Adoptium\\JDK",
+            "Path",
+            "\\hotspot\\MSI",
+        ));
+        // IBM Semeru
+        javas.extend(Self::get_java_distribution_from_registry(
+            "SOFTWARE\\Semeru\\JRE",
+            "Path",
+            "\\openj9\\MSI",
+        ));
+        javas.extend(Self::get_java_distribution_from_registry(
+            "SOFTWARE\\Semeru\\JDK",
+            "Path",
+            "\\openj9\\MSI",
+        ));
+        // Microsoft JDK
+        javas.extend(Self::get_java_distribution_from_registry(
+            "SOFTWARE\\Microsoft\\JDK",
+            "Path",
+            "\\hotspot\\MSI",
+        ));
+        // Azul Zulu
+        javas.extend(Self::get_java_distribution_from_registry(
+            "SOFTWARE\\Azul Systems\\Zulu",
+            "InstallationPath",
+            "",
+        ));
+        // BellSoft Liberica
+        javas.extend(Self::get_java_distribution_from_registry(
+            "SOFTWARE\\BellSoft\\Liberica",
+            "InstallationPath",
+            "",
+        ));
+        
+        javas
     }
 
     #[cfg(windows)]
@@ -139,7 +196,7 @@ impl JavaInstall {
         key_java_dir: &str,
         subkey_suffix: &str,
     ) -> Vec<JavaInstall> {
-        use windows_sys::Win32::Foundation::ERROR_FILE_NOT_FOUND;
+        use windows_sys::Win32::Foundation::ERROR_FILE_NOT_FOUND; // FIXME!: Unfortunately it's not in winreg so we need to manually import from windows_sys
         use winreg::RegKey;
         use winreg::enums::{
             HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_ENUMERATE_SUB_KEYS, KEY_READ,

@@ -1,3 +1,7 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize, Serialize)]
+#[serde(untagged)]
 pub enum ModLoader {
     Forge,
     NeoForge,
@@ -5,30 +9,34 @@ pub enum ModLoader {
     Quilt,
     LiteLoader,
     Cleanroom,
-    Datapack
+    Datapack,
+    Unknown,
 }
 
-pub fn to_loader(name: String) -> ModLoader {
-    match name.to_lowercase().as_str() {
-        "forge" => ModLoader::Forge,
-        "neoforge" => ModLoader::NeoForge,
-        "fabric" => ModLoader::Fabric,
-        "quilt" => ModLoader::Quilt,
-        "liteloader" => ModLoader::LiteLoader,
-        "cleanroom" => ModLoader::Cleanroom,
-        "datapack" => ModLoader::Datapack,
-        _ => panic!("Unknown mod loader: {}", name)
+impl ModLoader {
+    pub fn from_name(name: String) -> Self {
+        match name.to_lowercase().as_str() {
+            "forge" => ModLoader::Forge,
+            "neoforge" => ModLoader::NeoForge,
+            "fabric" => ModLoader::Fabric,
+            "quilt" => ModLoader::Quilt,
+            "liteloader" => ModLoader::LiteLoader,
+            "cleanroom" => ModLoader::Cleanroom,
+            "datapack" => ModLoader::Datapack,
+            _ => ModLoader::Unknown,
+        }
     }
-}
 
-pub fn to_name(loader: ModLoader) -> String {
-    match loader {
-        ModLoader::Forge => "forge".to_string(),
-        ModLoader::NeoForge => "neoforge".to_string(),
-        ModLoader::Fabric => "fabric".to_string(),
-        ModLoader::Quilt => "quilt".to_string(),
-        ModLoader::LiteLoader => "liteloader".to_string(),
-        ModLoader::Cleanroom => "cleanroom".to_string(),
-        ModLoader::Datapack => "datapack".to_string()
+    pub fn name(&self) -> String {
+        match self {
+            ModLoader::Forge => "forge".to_owned(),
+            ModLoader::NeoForge => "neoforge".to_owned(),
+            ModLoader::Fabric => "fabric".to_owned(),
+            ModLoader::Quilt => "quilt".to_owned(),
+            ModLoader::LiteLoader => "liteloader".to_owned(),
+            ModLoader::Cleanroom => "cleanroom".to_owned(),
+            ModLoader::Datapack => "datapack".to_owned(),
+            ModLoader::Unknown => "unknown".to_owned(),
+        }
     }
 }

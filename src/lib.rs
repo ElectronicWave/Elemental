@@ -1,4 +1,5 @@
 pub mod bootstrap;
+pub mod error;
 pub mod meta;
 pub mod model;
 pub mod offline;

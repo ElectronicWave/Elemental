@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
+use crate::error::unification::UnifiedResult;
 use crate::model::mojang::{
     MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaDownload,
     PistonMetaLibraries, PistonMetaLibrariesDownloadsArtifact,
@@ -48,7 +49,7 @@ impl GameStorage {
         let objs = service
             .pistonmeta_assetindex_objects(asset_index_url)
             .await
-            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+            .to_stdio()?;
 
         let path = self.get_ensure_object_indexes_path(version_id)?;
         let data = serde_json::to_string(&objs)?;

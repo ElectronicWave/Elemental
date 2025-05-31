@@ -10,6 +10,8 @@ use std::{
     process::Command,
 };
 
+use crate::error::unification::UnifiedResult;
+
 #[derive(Debug)]
 pub struct JavaDistribution {
     pub install: JavaInstall,
@@ -58,8 +60,7 @@ impl JavaReleaseInfo {
             .arg("-XshowSettings:properties")
             .arg("-version")
             .output()?;
-        let output = String::from_utf8(cmdl.stderr)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        let output = String::from_utf8(cmdl.stderr).to_stdio()?;
         //TODO Adapt More Java Ver Here
 
         // java.vm.version

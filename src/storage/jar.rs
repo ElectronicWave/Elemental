@@ -5,6 +5,8 @@ use std::{
 };
 use zip::ZipArchive;
 
+use crate::error::unification::UnifiedResult;
+
 // Support `Deflate/Stored` Now
 #[derive(Debug, Clone)]
 pub struct JarFile {
@@ -28,7 +30,7 @@ impl JarFile {
                 Some(path) => path,
                 None => continue,
             };
-            
+
             // Ignore `META-INF`
             if outpath.starts_with("META-INF") {
                 continue;
@@ -63,8 +65,7 @@ impl JarFile {
     }
 
     pub fn by_name_string(&self, name: &str) -> Result<String> {
-        String::from_utf8(self.by_name_bytes(name)?)
-            .map_err(|err| Error::new(ErrorKind::Other, err.to_string()))
+        String::from_utf8(self.by_name_bytes(name)?).to_stdio()
     }
 }
 

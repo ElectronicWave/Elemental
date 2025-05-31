@@ -1,8 +1,8 @@
 #![allow(dead_code)]
+mod error;
 mod model;
 mod offline;
 mod online;
-mod error;
 mod storage;
 
 use futures::future::join_all;

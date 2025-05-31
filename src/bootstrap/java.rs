@@ -1,12 +1,10 @@
 use crate::error::unification::UnifiedResult;
 use log::{error, warn};
-use std::{
-    env::{consts::EXE_SUFFIX, var},
-    io::Result,
-    path::Path,
-    process::Command,
-};
-use std::string::ToString;
+use std::env::consts::EXE_SUFFIX;
+use std::env::var;
+use std::io::Result as IoResult;
+use std::path::Path;
+use std::process::Command;
 
 #[derive(Debug)]
 pub struct JavaDistribution {
@@ -27,7 +25,7 @@ pub struct JavaInfo {
 #[derive(Debug)]
 pub struct JavaInstall {
     source: JavaSource, // For display usage
-    path: String,        // the bin folder, does not contain the java executable
+    path: String,       // the bin folder, does not contain the java executable
 }
 
 #[derive(Debug)]
@@ -80,7 +78,7 @@ impl JavaDistribution {
 }
 
 impl JavaInfo {
-    fn parse_from_executable_cmdl(executable: &String) -> Result<Self> {
+    fn parse_from_executable_cmdl(executable: &String) -> IoResult<Self> {
         let cmdl = Command::new(executable)
             .arg("-XshowSettings:properties")
             .arg("-version")

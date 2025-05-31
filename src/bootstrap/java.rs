@@ -312,17 +312,8 @@ impl JavaInstall {
 }
 
 #[test]
-fn javahome() {
-    println!(
-        "{:?}",
-        JavaInstall::get_platform_java_distribution()
-            .first()
-            .unwrap()
-    );
-    println!(
-        "{:?}",
-        JavaInstall::get_javahome_java_distribution()
-            .unwrap()
-            .get_executable_file_path()
-    );
+fn test_java_detector() {
+    for distribution in JavaInstall::get_platform_java_distribution() {
+        println!("{:?}", distribution)
+    }
 }

@@ -1,9 +1,6 @@
-use log::error;
+use log::{error, warn};
 use std::{
-    collections::HashMap,
     env::{consts::EXE_SUFFIX, var},
-    fs::read_to_string,
-    hash::RandomState,
     io::Result,
     path::Path,
     path::PathBuf,
@@ -15,93 +12,128 @@ use crate::error::unification::UnifiedResult;
 #[derive(Debug)]
 pub struct JavaDistribution {
     pub install: JavaInstall,
-    pub arch: u16,                             // EM_386, etc.
-    pub release_info: Option<JavaReleaseInfo>, // It should exist
+    pub info: JavaInfo,
 }
 
-// The additional data
 #[derive(Debug)]
-pub struct JavaReleaseInfo {
-    pub implememtor: Option<String>,
-    pub implememtor_version: Option<String>,
-    pub java_runtime_version: Option<String>,
+pub struct JavaInfo {
+    pub java_major_version: String, // java.specification.version e.g. 1.8
+    pub jre_version: String,        // java.version e.g. 1.8.0_452
+    pub implememtor: String,        // java.vm.vendor e.g. Eclipse Adoptium
+    pub java_runtime_version: String, // java.vm.version e.g. 24.0.1+9
+    pub arch: String,               // os.arch e.g. x86
 }
 
 // The minium info to start the jvm
 #[derive(Debug)]
 pub struct JavaInstall {
-    id: String,
-    path: PathBuf,
+    java_type: JavaType, // For display usage
+    path: PathBuf,       // the bin folder, does not contain the java executable
 }
 
-impl JavaReleaseInfo {
-    pub fn parse_from_string(source: String) -> Self {
-        let data: HashMap<&str, &str, RandomState> =
-            HashMap::from_iter(source.lines().filter_map(|e| {
-                if let Some((k, v)) = e.split_once("=") {
-                    return Some((k, v.trim_start_matches('"').trim_end_matches('"')));
+#[derive(Debug)]
+pub enum JavaType {
+    JavaHome,
+    PackageManager,
+    Registry,
+}
+
+fn default_info_string() -> String {
+    "unknown".to_string()
+}
+
+impl JavaDistribution {
+    pub fn from_installs(installs: Vec<JavaInstall>) -> Vec<JavaDistribution> {
+        installs
+            .into_iter()
+            .filter_map(|install| {
+                let executable = install.path.join(format!("java{}", EXE_SUFFIX));
+                if let Err(e) = Command::new(&executable).arg("-version").output() {
+                    warn!(
+                        "Invalid java install located at {}! Error: {}",
+                        install.path.display(),
+                        e
+                    );
+                    return None;
                 }
-                None
-            }));
+                let info = match JavaInfo::parse_from_executable_cmdl(&executable) {
+                    Ok(info) => info,
+                    Err(e) => {
+                        warn!(
+                            "Can not get the information of the java located at {}. Error: {}",
+                            install.path.display(),
+                            e
+                        );
+                        return Some(JavaDistribution {
+                            install,
+                            info: JavaInfo {
+                                java_major_version: default_info_string(),
+                                jre_version: default_info_string(),
+                                implememtor: default_info_string(),
+                                java_runtime_version: default_info_string(),
+                                arch: default_info_string(),
+                            },
+                        });
+                    }
+                };
 
-        Self {
-            implememtor: data.get("IMPLEMENTOR").map(|s| s.to_string()),
-            implememtor_version: data.get("IMPLEMENTOR_VERSION").map(|s| s.to_string()),
-            java_runtime_version: data.get("JAVA_RUNTIME_VERSION").map(|s| s.to_string()),
-        }
+                Some(JavaDistribution {
+                    install,
+                    info,
+                })
+            })
+            .collect()
     }
+}
 
-    pub fn parse_from_release_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        Ok(Self::parse_from_string(read_to_string(path)?))
-    }
-
-    pub fn parse_from_executable_cmdl(executable: String) -> Result<Self> {
+impl JavaInfo {
+    fn parse_from_executable_cmdl(executable: &PathBuf) -> Result<Self> {
         let cmdl = Command::new(executable)
             .arg("-XshowSettings:properties")
             .arg("-version")
             .output()?;
+        // FIXME!: -version return in stderr... and earlier java versions does not have --version option so we had to use the crappy -version
         let output = String::from_utf8(cmdl.stderr).to_stdio()?;
-        //TODO Adapt More Java Ver Here
 
-        // java.vm.version
-        // java.vm.vendor
-        // java.vendor.version
-        let mut implememtor = String::new();
-        let mut implememtor_version = String::new();
-        let mut java_runtime_version = String::new();
+        let mut java_major_version = default_info_string();
+        let mut jre_version = default_info_string();
+        let mut implememtor = default_info_string();
+        let mut java_runtime_version = default_info_string();
+        let mut arch = default_info_string();
 
         for line in output.lines() {
             let trimed = line.trim();
-            if trimed.starts_with("java.vm.vendor = ") {
+            if trimed.starts_with("java.specification.version = ") {
+                java_major_version = trimed
+                    .trim_start_matches("java.specification.version = ")
+                    .to_string();
+            } else if trimed.starts_with("java.version = ") {
+                jre_version = trimed.trim_start_matches("java.version = ").to_string();
+            } else if trimed.starts_with("java.vm.vendor = ") {
                 implememtor = trimed.trim_start_matches("java.vm.vendor = ").to_string();
             } else if trimed.starts_with("java.vm.version = ") {
                 java_runtime_version = trimed.trim_start_matches("java.vm.version = ").to_string();
-            } else if trimed.starts_with("java.vendor.version") {
-                implememtor_version = trimed
-                    .trim_start_matches("java.vendor.version = ")
-                    .to_string();
+            } else if trimed.starts_with("os.arch = ") {
+                arch = trimed.trim_start_matches("os.arch = ").to_string();
             }
         }
         Ok(Self {
-            implememtor: Some(implememtor),
-            implememtor_version: Some(implememtor_version),
-            java_runtime_version: Some(java_runtime_version),
+            java_major_version,
+            jre_version,
+            implememtor,
+            java_runtime_version,
+            arch,
         })
-    }
-
-    pub fn try_parse<P: AsRef<Path>>(release: P, executable: String) -> Result<Self> {
-        let result = Self::parse_from_release_file(release);
-        if result.is_ok() {
-            return result;
-        }
-
-        Self::parse_from_executable_cmdl(executable)
     }
 }
 
 impl JavaInstall {
     pub fn get_all_java_distribution() -> Vec<Self> {
-        vec![]
+        let mut javas = Self::get_platform_java_distribution();
+        if let Some(install) = Self::get_javahome_java_distribution() {
+            javas.push(install);
+        }
+        javas
     }
 
     #[cfg(windows)]
@@ -233,8 +265,8 @@ impl JavaInstall {
                     match version.get_value::<String, _>(key_java_dir) {
                         Ok(dir) => {
                             javas.push(JavaInstall {
-                                id: sub.clone(),
-                                path: Path::new(&dir).join("bin").join("javaw.exe"),
+                                java_type: JavaType::Registry,
+                                path: Path::new(&dir).join("bin"),
                             });
                         }
                         Err(_) => continue,
@@ -257,8 +289,8 @@ impl JavaInstall {
 
     pub fn get_javahome_java_distribution() -> Option<Self> {
         var("JAVA_HOME").ok().map(|path| Self {
-            id: "".to_string(),
-            path: Path::new(&path).to_path_buf(),
+            java_type: JavaType::Registry,
+            path: Path::new(&path).join("bin"),
         })
     }
 
@@ -267,8 +299,9 @@ impl JavaInstall {
     }
 
     pub(crate) fn get_executable_file_path_from_path<P: AsRef<Path>>(path: P) -> Option<String> {
+        // todo We may prefer javaw?
         let filename = format!("java{}", EXE_SUFFIX);
-        let executable = path.as_ref().join("bin").join(filename);
+        let executable = path.as_ref().join(filename);
 
         if executable.exists() {
             Some(executable.to_string_lossy().to_string())
@@ -280,6 +313,12 @@ impl JavaInstall {
 
 #[test]
 fn javahome() {
+    println!(
+        "{:?}",
+        JavaInstall::get_platform_java_distribution()
+            .first()
+            .unwrap()
+    );
     println!(
         "{:?}",
         JavaInstall::get_javahome_java_distribution()

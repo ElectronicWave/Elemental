@@ -26,15 +26,16 @@ pub struct JavaInfo {
 // The minium info to start the jvm
 #[derive(Debug)]
 pub struct JavaInstall {
-    source: JavaType, // For display usage
+    source: JavaSource, // For display usage
     path: String,        // the bin folder, does not contain the java executable
 }
 
 #[derive(Debug)]
-pub enum JavaType {
+pub enum JavaSource {
     JavaHome,
     PackageManager,
     Registry,
+    User,
 }
 
 const DEFAULT_INFO_STRING: &str = "unknown";
@@ -257,7 +258,7 @@ impl JavaInstall {
                     match version.get_value::<String, _>(key_java_dir) {
                         Ok(dir) => {
                             javas.push(JavaInstall {
-                                source: JavaType::Registry,
+                                source: JavaSource::Registry,
                                 path: dir + "/bin",
                             });
                         }
@@ -281,7 +282,7 @@ impl JavaInstall {
 
     pub fn get_javahome_java_distribution() -> Option<Self> {
         var("JAVA_HOME").ok().map(|path| Self {
-            source: JavaType::Registry,
+            source: JavaSource::Registry,
             path: path + "/bin",
         })
     }

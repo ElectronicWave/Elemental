@@ -27,8 +27,8 @@ pub struct JavaInfo {
 // The minium info to start the jvm
 #[derive(Debug)]
 pub struct JavaInstall {
-    path: PathBuf,       // the bin folder, does not contain the java executable
     source: JavaType, // For display usage
+    path: String,        // the bin folder, does not contain the java executable
 }
 
 #[derive(Debug)]
@@ -47,12 +47,11 @@ impl JavaDistribution {
         installs
             .into_iter()
             .filter_map(|install| {
-                let executable = install.path.join(format!("java{}", EXE_SUFFIX));
+                let executable = format!("{}java{}", install.path, EXE_SUFFIX);
                 if let Err(e) = Command::new(&executable).arg("-version").output() {
                     warn!(
                         "Invalid java install located at {}! Error: {}",
-                        install.path.display(),
-                        e
+                        install.path, e
                     );
                     return None;
                 }
@@ -61,8 +60,7 @@ impl JavaDistribution {
                     Err(e) => {
                         warn!(
                             "Can not get the information of the java located at {}. Error: {}",
-                            install.path.display(),
-                            e
+                            install.path, e
                         );
                         return Some(JavaDistribution {
                             install,
@@ -87,7 +85,7 @@ impl JavaDistribution {
 }
 
 impl JavaInfo {
-    fn parse_from_executable_cmdl(executable: &PathBuf) -> Result<Self> {
+    fn parse_from_executable_cmdl(executable: &String) -> Result<Self> {
         let cmdl = Command::new(executable)
             .arg("-XshowSettings:properties")
             .arg("-version")
@@ -265,8 +263,8 @@ impl JavaInstall {
                     match version.get_value::<String, _>(key_java_dir) {
                         Ok(dir) => {
                             javas.push(JavaInstall {
-                                path: Path::new(&dir).join("bin"),
                                 source: JavaType::Registry,
+                                path: dir + "/bin",
                             });
                         }
                         Err(_) => continue,
@@ -289,8 +287,8 @@ impl JavaInstall {
 
     pub fn get_javahome_java_distribution() -> Option<Self> {
         var("JAVA_HOME").ok().map(|path| Self {
-            path: Path::new(&path).join("bin"),
             source: JavaType::Registry,
+            path: path + "/bin",
         })
     }
 

@@ -1,13 +1,12 @@
+use crate::error::unification::UnifiedResult;
 use log::{error, warn};
 use std::{
     env::{consts::EXE_SUFFIX, var},
     io::Result,
     path::Path,
-    path::PathBuf,
     process::Command,
 };
-
-use crate::error::unification::UnifiedResult;
+use std::string::ToString;
 
 #[derive(Debug)]
 pub struct JavaDistribution {
@@ -38,9 +37,7 @@ pub enum JavaType {
     Registry,
 }
 
-fn default_info_string() -> String {
-    "unknown".to_string()
-}
+const DEFAULT_INFO_STRING: &str = "unknown";
 
 impl JavaDistribution {
     pub fn from_installs(installs: Vec<JavaInstall>) -> Vec<JavaDistribution> {
@@ -65,20 +62,17 @@ impl JavaDistribution {
                         return Some(JavaDistribution {
                             install,
                             info: JavaInfo {
-                                java_major_version: default_info_string(),
-                                jre_version: default_info_string(),
-                                implememtor: default_info_string(),
-                                java_runtime_version: default_info_string(),
-                                arch: default_info_string(),
+                                java_major_version: DEFAULT_INFO_STRING.to_string(),
+                                jre_version: DEFAULT_INFO_STRING.to_string(),
+                                implememtor: DEFAULT_INFO_STRING.to_string(),
+                                java_runtime_version: DEFAULT_INFO_STRING.to_string(),
+                                arch: DEFAULT_INFO_STRING.to_string(),
                             },
                         });
                     }
                 };
 
-                Some(JavaDistribution {
-                    install,
-                    info,
-                })
+                Some(JavaDistribution { install, info })
             })
             .collect()
     }
@@ -93,11 +87,11 @@ impl JavaInfo {
         // FIXME!: -version return in stderr... and earlier java versions does not have --version option so we had to use the crappy -version
         let output = String::from_utf8(cmdl.stderr).to_stdio()?;
 
-        let mut java_major_version = default_info_string();
-        let mut jre_version = default_info_string();
-        let mut implememtor = default_info_string();
-        let mut java_runtime_version = default_info_string();
-        let mut arch = default_info_string();
+        let mut java_major_version = DEFAULT_INFO_STRING.to_string();
+        let mut jre_version = DEFAULT_INFO_STRING.to_string();
+        let mut implememtor = DEFAULT_INFO_STRING.to_string();
+        let mut java_runtime_version = DEFAULT_INFO_STRING.to_string();
+        let mut arch = DEFAULT_INFO_STRING.to_string();
 
         for line in output.lines() {
             let trimed = line.trim();

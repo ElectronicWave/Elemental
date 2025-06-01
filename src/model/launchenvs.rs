@@ -1,10 +1,15 @@
 use crate::{error::unification::UnifiedResult, offline};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::{
     collections::HashMap,
+    env::consts::{ARCH, OS},
     io::{Error, ErrorKind, Result},
+    path::{Path, absolute},
 };
+
+use super::mojang::PistonMetaData;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LaunchEnvs {
@@ -92,36 +97,106 @@ impl LaunchEnvs {
         }
     }
 
-    pub fn offline_player(player_name: String) -> Self {
-        Self {
+    pub fn offline_player(
+        player_name: String,
+        storage_root_dir: String,
+        version_dir: String,
+        version_data: &PistonMetaData,
+    ) -> Result<Self> {
+        let version_path = absolute(Path::new(&version_dir))?;
+        let storage_root = absolute(Path::new(&storage_root_dir))?;
+        let version_name = version_path
+            .file_name()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or("unknown".to_owned());
+        let classpath = version_data
+            .libraries
+            .iter()
+            .filter_map(|e| {
+                if e.downloads.artifact.path.contains("natives") {
+                    return None;
+                }
+
+                Some(
+                    storage_root
+                        .join("libraries")
+                        .join(&e.downloads.artifact.path)
+                        .to_string_lossy()
+                        .to_string(),
+                )
+            })
+            .collect::<Vec<String>>()
+            .join(";")
+            + ";"
+            + &version_path
+                .join(format!("{}.jar", version_name))
+                .to_string_lossy()
+                .to_string();
+
+        Ok(Self {
             auth_xuid: "${auth_xuid}".to_owned(),
             auth_uuid: offline::uuid::player_uuid(&player_name),
             auth_player_name: player_name,
-            version_name: "todo!()".to_owned(),
-            game_directory: "todo!()".to_owned(),
-            assets_root: "todo!()".to_owned(),
-            assets_index_name: "todo!()".to_owned(),
-            auth_access_token: "todo!()".to_owned(),
+            version_name: version_name,
+            game_directory: storage_root.to_string_lossy().to_string(),
+            assets_root: storage_root.join("assets").to_string_lossy().to_string(),
+            assets_index_name: version_data.assets.clone(),
+            auth_access_token: "${auth_access_token}".to_owned(), // TODO
             clientid: "${clientid}".to_owned(),
             user_type: "msa".to_owned(),
-            version_type: "Elemental".to_owned(),
+            version_type: format!("Elemental {}", env!("CARGO_PKG_VERSION")),
             resolution_width: "854".to_owned(),
             resolution_height: "480".to_owned(),
             quick_play_path: None,
             quick_play_singleplayer: None,
             quick_play_multiplayer: None,
             quick_play_realms: None,
-            natives_directory: "msa".to_owned(),
-            launcher_name: "todo!()".to_owned(),
-            launcher_version: "todo!()".to_owned(),
-            classpath: "todo!()".to_owned(),
-        }
+            natives_directory: version_path
+                .join(format!("natives-{}-{}", OS, ARCH))
+                .to_string_lossy()
+                .to_string(),
+            launcher_name: "Elemental".to_owned(),
+            launcher_version: env!("CARGO_PKG_VERSION").to_owned(),
+            classpath: classpath.replace("/", "\\"),
+        })
     }
-}
 
-#[test]
-fn test_useability() {
-    let _ = LaunchEnvs::offline_player("Elemental".to_owned())
-        .hashmap()
-        .unwrap();
+    pub fn apply_launchenvs_mut(&self, args: &mut Vec<String>) -> Result<()> {
+        let data = self.map()?;
+        //TODO Build a algorithm instead of using regex
+        let regex = Regex::new(r#"\$\{(.*?)\}"#).to_stdio()?;
+        for (index, mut copied) in args.clone().into_iter().enumerate() {
+            let value = copied.clone();
+            for var in regex.captures_iter(&value) {
+                if let Some(key) = var.get(1).map(|e| e.as_str()) {
+                    if let Some(Value::String(val)) = data.get(key) {
+                        copied = copied.replace(&format!("${{{}}}", key), val)
+                    }
+                }
+            }
+
+            args[index] = copied;
+        }
+
+        Ok(())
+    }
+
+    pub fn apply_launchenvs(&self, args: Vec<String>) -> Result<Vec<String>> {
+        let mut result = vec![];
+        let data = self.map()?;
+        //TODO Build a algorithm instead of using regex
+        let regex = Regex::new(r#"\$\{(.*?)\}"#).to_stdio()?;
+        for value in args.iter() {
+            let mut copied = value.clone();
+            for var in regex.captures_iter(value) {
+                if let Some(key) = var.get(1).map(|e| e.as_str()) {
+                    if let Some(Value::String(val)) = data.get(key) {
+                        copied = copied.replace(&format!("${{{key}}}"), val)
+                    }
+                }
+            }
+            result.push(copied);
+        }
+        Ok(result)
+    }
 }

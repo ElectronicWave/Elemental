@@ -24,8 +24,8 @@ pub struct JavaInfo {
 // The minium info to start the jvm
 #[derive(Debug)]
 pub struct JavaInstall {
-    source: JavaSource, // For display usage
-    path: String,       // the bin folder, does not contain the java executable
+    pub source: JavaSource, // For display usage
+    pub path: String,       // the bin folder, does not contain the java executable
 }
 
 #[derive(Debug)]
@@ -226,7 +226,7 @@ impl JavaInstall {
             HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_ENUMERATE_SUB_KEYS, KEY_READ,
             KEY_WOW64_32KEY, KEY_WOW64_64KEY,
         };
-
+        
         let mut javas = vec![];
         for key_type in [KEY_WOW64_64KEY, KEY_WOW64_32KEY] {
             for root in [
@@ -257,7 +257,7 @@ impl JavaInstall {
                         Ok(dir) => {
                             javas.push(JavaInstall {
                                 source: JavaSource::Registry,
-                                path: dir + "/bin",
+                                path: Path::new(&dir).join("bin").to_string_lossy().to_string(),
                             });
                         }
                         Err(_) => continue,
@@ -293,7 +293,7 @@ impl JavaInstall {
         // todo We may prefer javaw?
         let filename = format!("java{}", EXE_SUFFIX);
         let executable = path.as_ref().join(filename);
-
+        //TODO May be we should prove this file always exists.
         if executable.exists() {
             Some(executable.to_string_lossy().to_string())
         } else {

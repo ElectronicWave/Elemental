@@ -14,7 +14,7 @@ use crate::online::downloader::{DownloadTask, DownloadTaskCallback, ElementalDow
 use crate::online::mojang::MojangService;
 
 pub struct GameStorage {
-    root: String, // ..../.minecraft
+    pub root: String, // ..../.minecraft
 }
 
 impl GameStorage {
@@ -121,7 +121,7 @@ impl GameStorage {
     }
     pub fn download_libraries(
         &self,
-        libraries: Vec<PistonMetaLibraries>,
+        libraries: &Vec<PistonMetaLibraries>,
         version_name: &str,
         baseurl: &MojangBaseUrl,
         token: &CancellationToken,
@@ -274,10 +274,11 @@ impl GameStorage {
     }
 
     pub fn save_pistonmeta_data(&self, version_name: &str, data: &PistonMetaData) -> Result<()> {
+        let parent = self.join("versions").join(version_name);
+        create_dir_all(&parent)?;
+
         write(
-            self.join("versions")
-                .join(version_name)
-                .join(format!("{version_name}.json")),
+            parent.join(format!("{version_name}.json")),
             serde_json::to_string(data)?,
         )
     }

@@ -99,27 +99,49 @@ pub enum PistonMetaGenericArgument {
     Rule(PistonMetaRuleArgument),
 }
 
-impl Into<Option<String>> for PistonMetaGenericArgument {
-    fn into(self) -> Option<String> {
-        // Rule here
-        match self {
-            PistonMetaGenericArgument::Plain(s) => Some(s),
-            PistonMetaGenericArgument::Rule(piston_meta_rule_argument) => {
-                if piston_meta_rule_argument
-                    .rules
-                    .iter()
-                    .all(|rule| rule.is_allow())
-                {
-                    if let Some(val) = piston_meta_rule_argument.value {
-                        return match val {
-                            ContinuousArgument::Single(value) => Some(value),
-                            ContinuousArgument::Multi(items) => Some(items.join(" ")),
-                        };
+impl PistonMetaArguments {
+    pub fn get_all_arguments(&self) -> Vec<String> {
+        let mut arguments = vec![];
+        arguments.extend(Self::concat_generic_arguments(&self.jvm));
+        arguments.extend(Self::concat_generic_arguments(&self.game));
+        arguments
+    }
+    pub fn get_jvm_arguments(&self) -> Vec<String> {
+        Self::concat_generic_arguments(&self.jvm)
+    }
+
+    pub fn get_game_arguments(&self) -> Vec<String> {
+        Self::concat_generic_arguments(&self.game)
+    }
+    pub fn concat_generic_arguments(arguments: &Vec<PistonMetaGenericArgument>) -> Vec<String> {
+        let mut result = vec![];
+
+        for arg in arguments {
+            match arg {
+                PistonMetaGenericArgument::Plain(s) => {
+                    result.push(s.clone());
+                }
+                PistonMetaGenericArgument::Rule(piston_meta_rule_argument) => {
+                    if piston_meta_rule_argument
+                        .rules
+                        .iter()
+                        .all(|rule| rule.is_allow())
+                    {
+                        if let Some(val) = &piston_meta_rule_argument.value {
+                            match val {
+                                ContinuousArgument::Single(value) => {
+                                    result.push(value.clone());
+                                }
+                                ContinuousArgument::Multi(items) => {
+                                    result.extend(items.clone());
+                                }
+                            };
+                        }
                     }
                 }
-                None
-            }
+            };
         }
+        result
     }
 }
 

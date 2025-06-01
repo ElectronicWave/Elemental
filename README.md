@@ -4,7 +4,6 @@
 [![Stargazers][stars-shield]][stars-url]
 [![Issues][issues-shield]][issues-url]
 [![License][license-shield]][license-url]
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ElectronicWave/Elemental)
 
 **Elemental is a Core of Minecraft launcher written in Rust**
 
@@ -19,3 +18,7 @@
 [issues-url]: https://github.com/ElectronicWave/Elemental/issues
 [license-shield]: https://img.shields.io/github/license/ElectronicWave/Elemental.svg?style=for-the-badge
 [license-url]: https://github.com/ElectronicWave/Elemental/blob/master/LICENSE
+
+## Wiki
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ElectronicWave/Elemental)

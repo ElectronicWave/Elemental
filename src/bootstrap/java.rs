@@ -226,7 +226,7 @@ impl JavaInstall {
             HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_ENUMERATE_SUB_KEYS, KEY_READ,
             KEY_WOW64_32KEY, KEY_WOW64_64KEY,
         };
-        
+
         let mut javas = vec![];
         for key_type in [KEY_WOW64_64KEY, KEY_WOW64_32KEY] {
             for root in [

@@ -138,13 +138,13 @@ impl LaunchEnvs {
             auth_uuid: offline::uuid::player_uuid(&player_name),
             auth_player_name: player_name,
             version_name: version_name,
-            game_directory: storage_root.to_string_lossy().to_string(),
+            game_directory: version_path.to_string_lossy().to_string(),
             assets_root: storage_root.join("assets").to_string_lossy().to_string(),
             assets_index_name: version_data.assets.clone(),
-            auth_access_token: "${auth_access_token}".to_owned(), // TODO
+            auth_access_token: "${auth_access_token}".to_owned(),
             clientid: "${clientid}".to_owned(),
             user_type: "msa".to_owned(),
-            version_type: format!("Elemental {}", env!("CARGO_PKG_VERSION")),
+            version_type: format!("Elemental {}", env!("CARGO_PKG_VERSION")), //TODO use include_str!() to optimize it
             resolution_width: "854".to_owned(),
             resolution_height: "480".to_owned(),
             quick_play_path: None,
@@ -157,7 +157,7 @@ impl LaunchEnvs {
                 .to_string(),
             launcher_name: "Elemental".to_owned(),
             launcher_version: env!("CARGO_PKG_VERSION").to_owned(),
-            classpath: classpath.replace("/", "\\"),
+            classpath: classpath,
         })
     }
 

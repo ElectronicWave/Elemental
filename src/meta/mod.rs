@@ -1,2 +1,2 @@
-pub mod metadata;
 pub mod loader;
+pub mod metadata;

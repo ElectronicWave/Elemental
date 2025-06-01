@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::meta::loader::ModLoader;
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
 pub struct Metadata {
@@ -14,17 +14,23 @@ pub struct Metadata {
 pub struct MetaLink {
     pub platform: String,
     pub url: String,
-    pub version: String
+    pub version: String,
 }
 
 impl Metadata {
-    pub fn new(filename: String, name: String, side: String, loader: Option<ModLoader>, links: Option<Vec<MetaLink>>) -> Self {
+    pub fn new(
+        filename: String,
+        name: String,
+        side: String,
+        loader: Option<ModLoader>,
+        links: Option<Vec<MetaLink>>,
+    ) -> Self {
         Metadata {
             filename,
             name,
             side,
             loader,
-            links
+            links,
         }
     }
 

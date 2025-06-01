@@ -1,6 +1,6 @@
 use std::{
     fs::{File, create_dir_all},
-    io::{self, Error, ErrorKind, Read, Result},
+    io::{self, Read, Result},
     path::Path,
 };
 use zip::ZipArchive;

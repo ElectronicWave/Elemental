@@ -1,5 +1,3 @@
-use std::io::ErrorKind;
-
 use crate::model::mojang::{
     LaunchMetaData, MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaData,
 };

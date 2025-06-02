@@ -1,10 +1,17 @@
 use crate::error::unification::UnifiedResult;
+use futures::future::join_all;
+use log::__private_api::loc;
 use log::{error, warn};
 use std::env::consts::EXE_SUFFIX;
-use std::env::var;
+use std::env::{home_dir, var};
+use std::io::Error as IoError;
 use std::io::Result as IoResult;
-use std::path::Path;
-use std::process::Command;
+use std::path::{Path, PathBuf};
+use std::string::FromUtf8Error;
+use tokio::fs::{canonicalize, read_dir};
+use tokio::process::Command;
+use tokio::task;
+use tokio::time::{Duration, timeout};
 
 #[derive(Debug)]
 pub struct JavaDistribution {
@@ -16,7 +23,7 @@ pub struct JavaDistribution {
 pub struct JavaInfo {
     pub java_major_version: String, // java.specification.version e.g. 1.8
     pub jre_version: String,        // java.version e.g. 1.8.0_452
-    pub implememtor: String,        // java.vm.vendor e.g. Eclipse Adoptium
+    pub implementor: String,        // java.vm.vendor e.g. Eclipse Adoptium
     pub java_runtime_version: String, // java.vm.version e.g. 24.0.1+9
     pub arch: String,               // os.arch e.g. x86
 }
@@ -34,92 +41,122 @@ pub enum JavaSource {
     PackageManager,
     Registry,
     User,
+    Bundle,
 }
 
 const DEFAULT_INFO_STRING: &str = "unknown";
+const JAVA_EXECUTION_TIMEOUT: u64 = 5; // in seconds
+
+#[derive(Debug)]
+pub enum JavaInfoError {
+    Io(IoError),
+    Parse(String),
+    Timeout,
+    Utf8Conversion(FromUtf8Error),
+}
+
+impl From<IoError> for JavaInfoError {
+    fn from(err: IoError) -> Self {
+        JavaInfoError::Io(err)
+    }
+}
+
+impl From<FromUtf8Error> for JavaInfoError {
+    fn from(err: FromUtf8Error) -> Self {
+        JavaInfoError::Utf8Conversion(err)
+    }
+}
 
 impl JavaDistribution {
-    pub fn from_installs(installs: Vec<JavaInstall>) -> Vec<JavaDistribution> {
-        installs
-            .into_iter()
-            .filter_map(|install| {
-                let executable = format!("{}java{}", install.path, EXE_SUFFIX);
-                if let Err(e) = Command::new(&executable).arg("-version").output() {
-                    warn!(
-                        "Invalid java install located at {}! Error: {}",
-                        install.path, e
-                    );
-                    return None;
-                }
-                let info = match JavaInfo::parse_from_executable_cmdl(&executable) {
-                    Ok(info) => info,
-                    Err(e) => {
-                        warn!(
-                            "Can not get the information of the java located at {}. Error: {}",
-                            install.path, e
-                        );
-                        return Some(JavaDistribution {
-                            install,
-                            info: JavaInfo {
-                                java_major_version: DEFAULT_INFO_STRING.to_string(),
-                                jre_version: DEFAULT_INFO_STRING.to_string(),
-                                implememtor: DEFAULT_INFO_STRING.to_string(),
-                                java_runtime_version: DEFAULT_INFO_STRING.to_string(),
-                                arch: DEFAULT_INFO_STRING.to_string(),
-                            },
-                        });
-                    }
-                };
+    pub async fn get() -> Vec<JavaDistribution> {
+        Self::from_installs(JavaInstall::get_all_java_installs()).await
+    }
 
-                Some(JavaDistribution { install, info })
-            })
-            .collect()
+    async fn from_installs(installs: Vec<JavaInstall>) -> Vec<JavaDistribution> {
+        let futures = installs.into_iter().map(|install| async {
+            let executable = format!("{}java{}", install.path, EXE_SUFFIX);
+            let info = match JavaInfo::parse_from_executable(&executable).await {
+                Ok(info) => info,
+                Err(e) => {
+                    warn!("Failed to get Java info at {}: {:?}", install.path, e);
+                    JavaInfo::default()
+                }
+            };
+
+            JavaDistribution { install, info }
+        });
+
+        join_all(futures).await
+    }
+}
+
+impl Default for JavaInfo {
+    fn default() -> Self {
+        Self {
+            java_major_version: DEFAULT_INFO_STRING.to_string(),
+            jre_version: DEFAULT_INFO_STRING.to_string(),
+            implementor: DEFAULT_INFO_STRING.to_string(),
+            java_runtime_version: DEFAULT_INFO_STRING.to_string(),
+            arch: DEFAULT_INFO_STRING.to_string(),
+        }
     }
 }
 
 impl JavaInfo {
-    fn parse_from_executable_cmdl(executable: &String) -> IoResult<Self> {
-        let cmdl = Command::new(executable)
-            .arg("-XshowSettings:properties")
-            .arg("-version")
-            .output()?;
-        // FIXME!: -version return in stderr... and earlier java versions does not have --version option so we had to use the crappy -version
-        let output = String::from_utf8(cmdl.stderr).to_stdio()?;
+    async fn parse_from_executable(executable: &str) -> Result<Self, JavaInfoError> {
+        let mut cmd = Command::new(executable);
+        cmd.arg("-XshowSettings:properties");
 
+        let output = timeout(Duration::from_secs(JAVA_EXECUTION_TIMEOUT), cmd.output())
+            .await
+            .map_err(|_| JavaInfoError::Timeout)??;
+
+        let output_str = String::from_utf8(output.stderr)?;
+
+        Self::parse_properties(&output_str)
+    }
+
+    fn parse_properties(output: &str) -> Result<Self, JavaInfoError> {
         let mut java_major_version = DEFAULT_INFO_STRING.to_string();
         let mut jre_version = DEFAULT_INFO_STRING.to_string();
-        let mut implememtor = DEFAULT_INFO_STRING.to_string();
+        let mut implementor = DEFAULT_INFO_STRING.to_string();
         let mut java_runtime_version = DEFAULT_INFO_STRING.to_string();
         let mut arch = DEFAULT_INFO_STRING.to_string();
 
         for line in output.lines() {
-            let trimed = line.trim();
-            if trimed.starts_with("java.specification.version = ") {
-                java_major_version = trimed
-                    .trim_start_matches("java.specification.version = ")
-                    .to_string();
-            } else if trimed.starts_with("java.version = ") {
-                jre_version = trimed.trim_start_matches("java.version = ").to_string();
-            } else if trimed.starts_with("java.vm.vendor = ") {
-                implememtor = trimed.trim_start_matches("java.vm.vendor = ").to_string();
-            } else if trimed.starts_with("java.vm.version = ") {
-                java_runtime_version = trimed.trim_start_matches("java.vm.version = ").to_string();
-            } else if trimed.starts_with("os.arch = ") {
-                arch = trimed.trim_start_matches("os.arch = ").to_string();
+            let trimmed = line.trim();
+            if let Some(value) = trimmed.strip_prefix("java.specification.version") {
+                java_major_version = parse_property_value(value);
+            } else if let Some(value) = trimmed.strip_prefix("java.version") {
+                jre_version = parse_property_value(value);
+            } else if let Some(value) = trimmed.strip_prefix("java.vm.vendor") {
+                implementor = parse_property_value(value);
+            } else if let Some(value) = trimmed.strip_prefix("java.vm.version") {
+                java_runtime_version = parse_property_value(value);
+            } else if let Some(value) = trimmed.strip_prefix("os.arch") {
+                arch = parse_property_value(value);
             }
         }
+
         Ok(Self {
             java_major_version,
             jre_version,
-            implememtor,
+            implementor,
             java_runtime_version,
             arch,
         })
     }
 }
 
+fn parse_property_value(s: &str) -> String {
+    s.split_once('=')
+        .map(|(_, v)| v.trim())
+        .unwrap_or("")
+        .to_string()
+}
+
 impl JavaInstall {
-    pub fn get_all_java_distribution() -> Vec<Self> {
+    fn get_all_java_installs() -> Vec<Self> {
         let mut javas = Self::get_platform_java_distribution();
         if let Some(install) = Self::get_javahome_java_distribution() {
             javas.push(install);
@@ -128,113 +165,81 @@ impl JavaInstall {
     }
 
     #[cfg(windows)]
-    pub fn get_platform_java_distribution() -> Vec<Self> {
+    fn get_platform_java_distribution() -> Vec<Self> {
+        const DISTRIBUTION_REGISRY_LOCATIONS: &[(&str, &str, &str)] = &[
+            // Oracle JRE/JDK
+            (
+                "SOFTWARE\\JavaSoft\\Java Runtime Environment",
+                "JavaHome",
+                "",
+            ),
+            ("SOFTWARE\\JavaSoft\\Java Development Kit", "JavaHome", ""),
+            // Oracle Java 9+
+            ("SOFTWARE\\JavaSoft\\JRE", "JavaHome", ""),
+            ("SOFTWARE\\JavaSoft\\JDK", "JavaHome", ""),
+            // AdoptOpenJDK
+            ("SOFTWARE\\AdoptOpenJDK\\JRE", "Path", "\\hotspot\\MSI"),
+            ("SOFTWARE\\AdoptOpenJDK\\JDK", "Path", "\\hotspot\\MSI"),
+            // Eclipse Foundation
+            (
+                "SOFTWARE\\Eclipse Foundation\\JDK",
+                "Path",
+                "\\hotspot\\MSI",
+            ),
+            // Eclipse Adoptium
+            ("SOFTWARE\\Eclipse Adoptium\\JRE", "Path", "\\hotspot\\MSI"),
+            ("SOFTWARE\\Eclipse Adoptium\\JDK", "Path", "\\hotspot\\MSI"),
+            // IBM Semeru
+            ("SOFTWARE\\Semeru\\JRE", "Path", "\\openj9\\MSI"),
+            ("SOFTWARE\\Semeru\\JDK", "Path", "\\openj9\\MSI"),
+            // Microsoft JDK
+            ("SOFTWARE\\Microsoft\\JDK", "Path", "\\hotspot\\MSI"),
+            // Azul Zulu
+            ("SOFTWARE\\Azul Systems\\Zulu", "InstallationPath", ""),
+            // BellSoft Liberica
+            ("SOFTWARE\\BellSoft\\Liberica", "InstallationPath", ""),
+        ];
+
         let mut javas = vec![];
+        for &location in DISTRIBUTION_REGISRY_LOCATIONS {
+            javas.extend(Self::get_java_distribution_from_registry(location));
+        }
 
-        // Oracle
-        javas.extend(Self::get_java_distribution_from_registry(
-            "SOFTWARE\\JavaSoft\\Java Runtime Environment",
-            "JavaHome",
-            "",
-        ));
-        javas.extend(Self::get_java_distribution_from_registry(
-            "SOFTWARE\\JavaSoft\\Java Development Kit",
-            "JavaHome",
-            "",
-        ));
-        // Oracle for Java 9 and newer
-        javas.extend(Self::get_java_distribution_from_registry(
-            "SOFTWARE\\JavaSoft\\JRE",
-            "JavaHome",
-            "",
-        ));
-        javas.extend(Self::get_java_distribution_from_registry(
-            "SOFTWARE\\JavaSoft\\JDK",
-            "JavaHome",
-            "",
-        ));
-        // AdoptOpenJDK
-        javas.extend(Self::get_java_distribution_from_registry(
-            "SOFTWARE\\AdoptOpenJDK\\JRE",
-            "Path",
-            "\\hotspot\\MSI",
-        ));
-        javas.extend(Self::get_java_distribution_from_registry(
-            "SOFTWARE\\AdoptOpenJDK\\JDK",
-            "Path",
-            "\\hotspot\\MSI",
-        ));
-        // Eclipse Foundation
-        javas.extend(Self::get_java_distribution_from_registry(
-            "SOFTWARE\\Eclipse Foundation\\JDK",
-            "Path",
-            "\\hotspot\\MSI",
-        ));
-        // Eclipse Adoptium
-        javas.extend(Self::get_java_distribution_from_registry(
-            "SOFTWARE\\Eclipse Adoptium\\JRE",
-            "Path",
-            "\\hotspot\\MSI",
-        ));
-        javas.extend(Self::get_java_distribution_from_registry(
-            "SOFTWARE\\Eclipse Adoptium\\JDK",
-            "Path",
-            "\\hotspot\\MSI",
-        ));
-        // IBM Semeru
-        javas.extend(Self::get_java_distribution_from_registry(
-            "SOFTWARE\\Semeru\\JRE",
-            "Path",
-            "\\openj9\\MSI",
-        ));
-        javas.extend(Self::get_java_distribution_from_registry(
-            "SOFTWARE\\Semeru\\JDK",
-            "Path",
-            "\\openj9\\MSI",
-        ));
-        // Microsoft JDK
-        javas.extend(Self::get_java_distribution_from_registry(
-            "SOFTWARE\\Microsoft\\JDK",
-            "Path",
-            "\\hotspot\\MSI",
-        ));
-        // Azul Zulu
-        javas.extend(Self::get_java_distribution_from_registry(
-            "SOFTWARE\\Azul Systems\\Zulu",
-            "InstallationPath",
-            "",
-        ));
-        // BellSoft Liberica
-        javas.extend(Self::get_java_distribution_from_registry(
-            "SOFTWARE\\BellSoft\\Liberica",
-            "InstallationPath",
-            "",
-        ));
-
+        javas.extend(Self::get_official_java_distribution_bundles(vec![
+            dirs_sys::known_folder_roaming_app_data()
+                .unwrap()
+                .join(".minecraft")
+                .join("runtime"),
+            dirs_sys::known_folder_local_app_data()
+                .unwrap()
+                .join("Packages")
+                .join("Microsoft.4297127D64EC6_8wekyb3d8bbwe")
+                .join("LocalCache")
+                .join("Local")
+                .join("runtime"),
+        ]));
         javas
     }
 
     #[cfg(windows)]
-    fn get_java_distribution_from_registry(
-        key_name: &str,
-        key_java_dir: &str,
-        subkey_suffix: &str,
-    ) -> Vec<JavaInstall> {
+    fn get_java_distribution_from_registry(location: (&str, &str, &str)) -> Vec<JavaInstall> {
         pub const ERROR_FILE_NOT_FOUND: u32 = 2u32;
         use winreg::RegKey;
         use winreg::enums::{
             HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_ENUMERATE_SUB_KEYS, KEY_READ,
             KEY_WOW64_32KEY, KEY_WOW64_64KEY,
         };
+        let key_name = location.0;
+        let value_name = location.1;
+        let subkey_suffix = location.2;
 
         let mut javas = vec![];
-        for key_type in [KEY_WOW64_64KEY, KEY_WOW64_32KEY] {
-            for root in [
-                RegKey::predef(HKEY_CURRENT_USER),
-                RegKey::predef(HKEY_LOCAL_MACHINE),
-            ] {
-                let flags = KEY_READ | key_type | KEY_ENUMERATE_SUB_KEYS;
-                let base = match root.open_subkey_with_flags(key_name, flags) {
+        for hive in [HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER] {
+            for access in [KEY_WOW64_64KEY, KEY_WOW64_32KEY] {
+                let flags = KEY_READ | access | KEY_ENUMERATE_SUB_KEYS;
+                let root = RegKey::predef(hive);
+
+                let base_key = match root.open_subkey_with_flags(key_name, flags) {
                     Ok(k) => k,
                     Err(e) => {
                         if e.raw_os_error().unwrap_or(0) as u32 != ERROR_FILE_NOT_FOUND {
@@ -244,23 +249,18 @@ impl JavaInstall {
                     }
                 };
 
-                for sub in base.enum_keys().filter_map(Result::ok) {
-                    let full_path = format!("{}\\{}{}", key_name, sub, subkey_suffix);
-
-                    let version = match root.open_subkey_with_flags(&full_path, KEY_READ | key_type)
-                    {
+                for subkey in base_key.enum_keys().filter_map(Result::ok) {
+                    let full_key = format!("{}\\{}{}", key_name, subkey, subkey_suffix);
+                    let key = match root.open_subkey_with_flags(&full_key, flags) {
                         Ok(k) => k,
                         Err(_) => continue,
                     };
 
-                    match version.get_value::<String, _>(key_java_dir) {
-                        Ok(dir) => {
-                            javas.push(JavaInstall {
-                                source: JavaSource::Registry,
-                                path: Path::new(&dir).join("bin").to_string_lossy().to_string(),
-                            });
-                        }
-                        Err(_) => continue,
+                    if let Ok(dir) = key.get_value::<String, _>(value_name) {
+                        javas.push(JavaInstall {
+                            source: JavaSource::Registry,
+                            path: Path::new(&dir).join("bin").to_string_lossy().to_string(),
+                        });
                     }
                 }
             }
@@ -269,27 +269,55 @@ impl JavaInstall {
     }
 
     #[cfg(target_os = "linux")]
-    pub fn get_platform_java_distribution() -> Vec<Self> {
+    fn get_platform_java_distribution() -> Vec<Self> {
         todo!()
     }
 
     #[cfg(target_os = "macos")]
-    pub fn get_platform_java_distribution() -> Vec<Self> {
+    fn get_platform_java_distribution() -> Vec<Self> {
         todo!()
     }
 
-    pub fn get_javahome_java_distribution() -> Option<Self> {
+    fn get_official_java_distribution_bundles(search_locations: Vec<PathBuf>) -> Vec<Self> {
+        let mut javas = vec![];
+        for location in search_locations {
+            if !location.exists() {
+                continue;
+            }
+            let Ok(read_dir) = location.read_dir() else {
+                continue;
+            };
+            for sub in read_dir {
+                let Ok(sub_dir) = sub else {
+                    continue;
+                };
+                let sub_dir_path = sub_dir.path();
+                if sub_dir_path.is_dir() {
+                    let bin_path = sub_dir_path.join("bin");
+                    if bin_path.exists() && bin_path.is_dir() {
+                        javas.push(JavaInstall {
+                            source: JavaSource::Bundle,
+                            path: bin_path.to_string_lossy().to_string(),
+                        });
+                    }
+                }
+            }
+        }
+        javas
+    }
+
+    fn get_javahome_java_distribution() -> Option<Self> {
         var("JAVA_HOME").ok().map(|path| Self {
-            source: JavaSource::Registry,
+            source: JavaSource::JavaHome,
             path: path + "/bin",
         })
     }
 
-    pub fn get_executable_file_path(&self) -> Option<String> {
+    fn get_executable_file_path(&self) -> Option<String> {
         Self::get_executable_file_path_from_path(&self.path)
     }
 
-    pub(crate) fn get_executable_file_path_from_path<P: AsRef<Path>>(path: P) -> Option<String> {
+    fn get_executable_file_path_from_path<P: AsRef<Path>>(path: P) -> Option<String> {
         // todo We may prefer javaw?
         let filename = format!("java{}", EXE_SUFFIX);
         let executable = path.as_ref().join(filename);
@@ -302,9 +330,22 @@ impl JavaInstall {
     }
 }
 
-#[test]
-fn test_java_detector() {
-    for distribution in JavaInstall::get_platform_java_distribution() {
-        println!("{:?}", distribution)
+#[tokio::test]
+async fn test_java_detector() {
+    // Test with timeout
+    let test_java = JavaInstall {
+        source: JavaSource::User,
+        path: "invalid/path".to_string(),
+    };
+
+    match JavaInfo::parse_from_executable(&test_java.get_executable_file_path().unwrap()).await {
+        Err(JavaInfoError::Timeout) => println!("Timeout handled correctly"),
+        other => panic!("Unexpected result: {:?}", other),
+    }
+    if let Some(java_home) = var("JAVA_HOME").ok() {
+        let path = format!("{}/bin/java", java_home);
+        if let Ok(info) = JavaInfo::parse_from_executable(&path).await {
+            assert!(!info.java_major_version.contains("unknown"));
+        }
     }
 }

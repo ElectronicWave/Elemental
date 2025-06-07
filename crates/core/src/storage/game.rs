@@ -1,7 +1,7 @@
 use std::env::consts::{ARCH, OS};
 use std::fs::{create_dir_all, write};
 use std::io::{Error, ErrorKind, Result};
-use std::path::{Path, PathBuf};
+use std::path::{Path, PathBuf, absolute};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -13,17 +13,21 @@ use crate::model::mojang::{
 use crate::online::downloader::{DownloadTask, DownloadTaskCallback, ElementalDownloader};
 use crate::online::mojang::MojangService;
 
+use super::version::VersionStorage;
+
 pub struct GameStorage {
     pub root: String, // ..../.minecraft
 }
 
 impl GameStorage {
-    pub fn new(root: impl Into<String>) -> Self {
-        Self { root: root.into() }
+    pub fn new(root: impl Into<String>) -> Result<Self> {
+        Ok(Self {
+            root: absolute(root.into())?.to_string_lossy().to_string(),
+        })
     }
 
     pub fn new_ensure_dir(root: impl Into<String>) -> Result<Self> {
-        let root = root.into();
+        let root = absolute(root.into())?.to_string_lossy().to_string();
         create_dir_all(&root)?;
 
         Ok(Self { root })
@@ -273,6 +277,10 @@ impl GameStorage {
             .collect())
     }
 
+    pub fn version_exist() -> bool {
+        todo!()
+    }
+
     pub fn save_pistonmeta_data(&self, version_name: &str, data: &PistonMetaData) -> Result<()> {
         let parent = self.join("versions").join(version_name);
         create_dir_all(&parent)?;
@@ -281,6 +289,10 @@ impl GameStorage {
             parent.join(format!("{version_name}.json")),
             serde_json::to_string(data)?,
         )
+    }
+
+    pub fn get_version(version_name: impl Into<String>) -> Result<VersionStorage> {
+        todo!()
     }
 
     pub fn get_version_launcherenv(&self) {}

@@ -1,11 +1,4 @@
-#![allow(dead_code)]
-mod bootstrap;
-mod error;
-mod model;
-mod offline;
-mod online;
-mod storage;
-
+#FIXME FIX
 use futures::future::join_all;
 use model::mojang::MojangBaseUrl;
 use online::mojang::MojangService;
@@ -95,8 +88,6 @@ fn test_game_run() {
     let selected = installs.iter().find(|e| e.path.contains("jdk-8")).unwrap();
     let jvm = pistonmeta.arguments.get_jvm_arguments();
     let game = pistonmeta.arguments.get_game_arguments();
-
-    //TODO Apply launchenvs to args
 
     let mut launchargs = vec![];
     //TODO Launcher extra arg here.

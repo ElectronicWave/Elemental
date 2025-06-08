@@ -2,6 +2,4 @@ pub struct VersionStorage {
     pub root: String,
 }
 
-impl VersionStorage {
-    
-}
+impl VersionStorage {}

@@ -1,8 +1,9 @@
-#FIXME FIX
+//TODO REFACTOR ME WITH TUI/CLI
+
+use elemental::model::mojang::MojangBaseUrl;
+use elemental::online::mojang::MojangService;
+use elemental::storage::game::GameStorage;
 use futures::future::join_all;
-use model::mojang::MojangBaseUrl;
-use online::mojang::MojangService;
-use storage::game::GameStorage;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -62,11 +63,11 @@ async fn main() {
     .await;
 }
 
-#[test]
-fn test_game_run() {
-    use bootstrap::java::JavaInstall;
-    use model::launchenvs::LaunchEnvs;
-    use model::mojang::PistonMetaData;
+#[tokio::test]
+async fn test_game_run() {
+    use elemental::bootstrap::java::JavaDistribution;
+    use elemental::model::launchenvs::LaunchEnvs;
+    use elemental::model::mojang::PistonMetaData;
     use std::fs::File;
 
     let storage = GameStorage::new_ensure_dir(".minecraft").unwrap();
@@ -84,8 +85,11 @@ fn test_game_run() {
     )
     .unwrap();
 
-    let installs = JavaInstall::get_all_java_distribution();
-    let selected = installs.iter().find(|e| e.path.contains("jdk-8")).unwrap();
+    let installs = JavaDistribution::get().await;
+    let selected = installs
+        .iter()
+        .find(|e| e.install.path.contains("jdk-8"))
+        .unwrap();
     let jvm = pistonmeta.arguments.get_jvm_arguments();
     let game = pistonmeta.arguments.get_game_arguments();
 
@@ -100,7 +104,7 @@ fn test_game_run() {
     launchargs.extend(launchenvs.apply_launchenvs(jvm).unwrap());
     launchargs.push(pistonmeta.main_class.clone());
     launchargs.extend(launchenvs.apply_launchenvs(game).unwrap());
-    let mut cmd = std::process::Command::new(selected.get_executable_file_path().unwrap());
+    let mut cmd = std::process::Command::new(&selected.install.path); // FIXME NOT A EXECUTABLE
     cmd.args(launchargs);
     let out = cmd.output().unwrap();
     println!("{}", String::from_utf8(out.stderr).unwrap());

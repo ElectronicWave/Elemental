@@ -1,0 +1,12 @@
+[package]
+name = "demo"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+elemental = { path = "../core" }
+# Mark * to use the same ver of elemental
+tokio = { version = "*" }
+tokio-util = { version = "*" }
+futures = { version = "*" }
+serde_json = { version = "*" }

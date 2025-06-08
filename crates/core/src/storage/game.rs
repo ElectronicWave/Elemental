@@ -247,10 +247,6 @@ impl GameStorage {
         todo!()
     }
 
-    pub fn validate_version(&self) {
-        todo!()
-    }
-
     pub fn exists_version(&self, version_name: String) -> bool {
         self.join("versions").join(version_name).exists()
     }
@@ -277,8 +273,11 @@ impl GameStorage {
             .collect())
     }
 
-    pub fn version_exist() -> bool {
-        todo!()
+    pub fn version_exist(&self, version_name: impl Into<String>) -> bool {
+        let name = version_name.into();
+        let dir = self.join("versions").join(&name);
+
+        dir.join(format!("{}.jar", &name)).exists() && dir.join(format!("{}.json", name)).exists()
     }
 
     pub fn save_pistonmeta_data(&self, version_name: &str, data: &PistonMetaData) -> Result<()> {
@@ -291,9 +290,21 @@ impl GameStorage {
         )
     }
 
-    pub fn get_version(version_name: impl Into<String>) -> Result<VersionStorage> {
-        todo!()
+    pub fn get_version(&self, version_name: impl Into<String>) -> Result<VersionStorage> {
+        let name = version_name.into();
+        if self.version_exist(&name) {
+            Ok(VersionStorage {
+                root: self
+                    .join("versions")
+                    .join(name)
+                    .to_string_lossy()
+                    .to_string(),
+            })
+        } else {
+            Err(Error::new(
+                ErrorKind::NotFound,
+                format!("Can't find a vaild version named '{name}'"),
+            ))
+        }
     }
-
-    pub fn get_version_launcherenv(&self) {}
 }

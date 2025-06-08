@@ -146,6 +146,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "demo"
+version = "0.1.0"
+dependencies = [
+ "elemental",
+ "futures",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "derive_arbitrary"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

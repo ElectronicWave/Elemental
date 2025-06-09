@@ -23,7 +23,7 @@ tokio = { version = "1.45.1", features = [
     "process",
 ] }
 tokio-util = "0.7.15"
-toml = "0.8.22"
+toml = "0.8.23"
 uuid = "1.17.0"
 zip = { version = "4.0.0", default-features = false, features = ["deflate"] }
 const_format = { version = "0.2.34" }

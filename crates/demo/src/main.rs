@@ -39,7 +39,12 @@ async fn main() {
     let baseurl = MojangBaseUrl::default();
 
     println!("download objs");
-    join_all(storage.download_objects(objs, &baseurl, &token).unwrap()).await;
+    join_all(
+        storage
+            .download_objects("1.16.5", objs, &baseurl, &token)
+            .unwrap(),
+    )
+    .await;
     println!("download client");
     storage
         .download_client("1.16.5", &pistonmeta.downloads.client, &baseurl, &token)
@@ -49,7 +54,7 @@ async fn main() {
     println!("download libs");
     join_all(
         storage
-            .download_libraries(&pistonmeta.libraries, "1.16.5", &baseurl, &token)
+            .download_libraries("1.16.5", &pistonmeta.libraries, &baseurl, &token)
             .into_iter()
             .filter_map(|e| {
                 if let Ok(Some(handle)) = e {

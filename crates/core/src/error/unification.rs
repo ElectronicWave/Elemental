@@ -1,5 +1,5 @@
 use std::io::{self, Error, ErrorKind};
-
+// why not use this
 pub trait UnifiedResult<T> {
     fn to_stdio(self) -> io::Result<T>;
 }

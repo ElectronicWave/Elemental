@@ -12,11 +12,11 @@ Funciton should be clear and easy to use.
 
 Avoid making `panic!`, use `std::io::Result<T>` or just log and ignore.
 
-Use `cargo format` to sort your code.
+Use `format` to sort your code.
 
 ## Dependencies
 
-Use `cargo-sort` to sort the `Cargo.toml` once you make changes to it.
+Use `format` to sort the `Cargo.toml` once you make changes to it.
 
 ```sh
 cargo install cargo-sort

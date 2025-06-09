@@ -5,8 +5,6 @@ use std::{
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
-use crate::storage::jar::JarFile;
-
 pub struct ElementalDownloader {
     client: reqwest::Client,
     pub tracer: Arc<ElementalDownloaderTracer>,
@@ -15,6 +13,7 @@ pub struct ElementalDownloader {
 pub struct ElementalDownloaderTracer {
     group_counter: Mutex<HashMap<String, usize>>,
     active_tasks: Mutex<HashSet<DownloadTask>>,
+    failed_tasks: Mutex<HashSet<(DownloadTask, String)>>, // TODO Maybe should not use stru like this
 }
 
 pub enum TaskStatus {
@@ -28,6 +27,7 @@ impl ElementalDownloaderTracer {
         Self {
             group_counter: Mutex::new(HashMap::new()),
             active_tasks: Mutex::new(HashSet::new()),
+            failed_tasks: Mutex::new(HashSet::new()),
         }
     }
 
@@ -69,12 +69,9 @@ impl ElementalDownloaderTracer {
         match status {
             TaskStatus::OK => match task.callback {
                 DownloadTaskCallback::DEFAULT => todo!(),
-                DownloadTaskCallback::NATIVELIB(src, dest, exclude) => {
-                    JarFile::new(src).extract_blocking(dest).unwrap(); // TODO Remove unwrap here.
-                }
                 DownloadTaskCallback::NONE => (),
             },
-            TaskStatus::ERR(msg) => log::error!("task err: {}", msg),
+            TaskStatus::ERR(msg) => log::error!("task err: {}", msg), //TODO Dev may need trace the error and store them in a hashset (maybe it could be a option?)
             TaskStatus::CANCEL => (),
         }
     }
@@ -162,7 +159,6 @@ pub struct DownloadTask {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum DownloadTaskCallback {
     DEFAULT,
-    NATIVELIB(String, String, Vec<String>), // src, dest, exclude
     NONE,
 }
 

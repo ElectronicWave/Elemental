@@ -19,6 +19,8 @@ impl JarFile {
 
         Self { path }
     }
+
+    //TODO May need extract more efficient
     pub fn extract_blocking(&self, dest: String) -> Result<()> {
         let file = File::open(&self.path)?;
         let mut archive = ZipArchive::new(file)?;
@@ -36,7 +38,7 @@ impl JarFile {
                 continue;
             }
 
-            //TODO Filter by exclude
+            //? Ignore `.sha1`
 
             let outpath = Path::new(&dest).join(outpath);
 
@@ -48,9 +50,8 @@ impl JarFile {
                         create_dir_all(p)?;
                     }
                 }
-                let mut outfile = File::create(&outpath).unwrap();
-                //TODO It could be slow, May need Async Optimize?
-                io::copy(&mut file, &mut outfile).unwrap();
+                let mut outfile = File::create(&outpath)?;
+                io::copy(&mut file, &mut outfile)?;
             }
         }
         Ok(())

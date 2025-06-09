@@ -1,10 +1,9 @@
-use crate::{error::unification::UnifiedResult, offline};
+use crate::{consts::PLATFORM_NATIVES_DIR_NAME, error::unification::UnifiedResult, offline};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::{
     collections::HashMap,
-    env::consts::{ARCH, OS},
     io::{Error, ErrorKind, Result},
     path::{Path, absolute},
 };
@@ -152,7 +151,7 @@ impl LaunchEnvs {
             quick_play_multiplayer: None,
             quick_play_realms: None,
             natives_directory: version_path
-                .join(format!("natives-{}-{}", OS, ARCH))
+                .join(PLATFORM_NATIVES_DIR_NAME)
                 .to_string_lossy()
                 .to_string(),
             launcher_name: "Elemental".to_owned(),

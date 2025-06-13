@@ -30,3 +30,6 @@ const_format = { version = "0.2.34" }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55.0"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rs-release = "0.1.11"

@@ -1,7 +1,10 @@
 use crate::error::unification::UnifiedResult;
 use futures::future::join_all;
 use log::__private_api::loc;
+use log::kv::Source;
 use log::{error, warn};
+use std::borrow::Cow;
+use std::collections::HashMap;
 use std::env::consts::EXE_SUFFIX;
 use std::env::{home_dir, var};
 use std::io::Error as IoError;
@@ -35,7 +38,7 @@ pub struct JavaInstall {
     pub path: String,       // the bin folder, does not contain the java executable
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum JavaSource {
     JavaHome,
     PackageManager,
@@ -46,6 +49,9 @@ pub enum JavaSource {
 
 const DEFAULT_INFO_STRING: &str = "unknown";
 const JAVA_EXECUTION_TIMEOUT: u64 = 5; // in seconds
+fn get_java_executable_name() -> String {
+    format!("java{}", EXE_SUFFIX)
+}
 
 #[derive(Debug)]
 pub enum JavaInfoError {
@@ -268,8 +274,64 @@ impl JavaInstall {
         javas
     }
 
+    // RustRover is stupid
+    //noinspection RsBorrowChecker
+    //noinspection RsTypeCheck
     #[cfg(target_os = "linux")]
     fn get_platform_java_distribution() -> Vec<Self> {
+        use crate::os::linux::get_os_release;
+        let mut javas = vec![];
+        fn scan_dir(path: &Path, mut javas: Vec<JavaInstall>, filter: fn(String) -> bool) {
+            if !path.exists() || !path.is_dir() {
+                return;
+            }
+            let Ok(read_dir) = path.read_dir() else {
+                return;
+            };
+            for sub in read_dir {
+                let Ok(sub_dir) = sub else {
+                    continue;
+                };
+                if (!filter(sub_dir.file_name().to_string_lossy().to_string())) {
+                    continue;
+                }
+                let sub_dir_path = sub_dir.path();
+                if sub_dir_path.is_dir() {
+                    let bin_path = sub_dir_path.join("bin");
+                    if bin_path.exists()
+                        && bin_path.is_dir()
+                        && bin_path.join(get_java_executable_name()).exists()
+                    {
+                        javas.push(JavaInstall {
+                            source: JavaSource::PackageManager,
+                            path: bin_path.to_string_lossy().to_string(),
+                        });
+                    }
+                }
+            }
+        }
+        let empty_filter = [("", |_: &str| false)];
+        let filter = get_os_release()
+            .and_then(|os_release| os_release.get("ID").map(|s| s.as_str()))
+            .map_or(empty_filter, |os_id| match os_id {
+                "debian" | "ubuntu" => [("/usr/lib/jvm", |_: &str| true)], // /usr/lib/jvm/java-<major>-openjdk-<arch>
+                "fedora" => [("/usr/lib/jvm", |_: &str| true)], // /usr/lib/jvm/java-<major>-openjdk-<full_ver>.<fedora_major>.<arch>
+                "gentoo" => [
+                    ("/usr/lib64", |dir_name: &str| {
+                        dir_name.starts_with("openjdk-")
+                    }), // /usr/lib64/openjdk-<major>
+                    ("/usr/lib", |dir_name: &str| {
+                        dir_name.starts_with("openjdk-")
+                    }), // /usr/lib/openjdk-<major>
+                    ("/opt", |dir_name: &str| {
+                        dir_name.starts_with("openjdk-bin-")
+                    }), // /opt/openjdk-bin-<ver>
+                ],
+                "Deepin" | "deepin" => todo!("deepin implementation"),
+                "aosc" => todo!("aosc implementation"),
+                _ => empty_filter,
+            });
+        println!("{:?}", filter);
         todo!()
     }
 
@@ -281,25 +343,34 @@ impl JavaInstall {
     fn get_official_java_distribution_bundles(search_locations: Vec<PathBuf>) -> Vec<Self> {
         let mut javas = vec![];
         for location in search_locations {
-            if !location.exists() {
-                continue;
-            }
-            let Ok(read_dir) = location.read_dir() else {
+            javas.extend(Self::find_java_in_dir(&location, JavaSource::Bundle))
+        }
+        javas
+    }
+
+    fn find_java_in_dir(path: &Path, java_source: JavaSource) -> Vec<Self> {
+        let mut javas = vec![];
+        if !path.exists() || !path.is_dir() {
+            return javas;
+        }
+        let Ok(read_dir) = path.read_dir() else {
+            return javas;
+        };
+        for sub in read_dir {
+            let Ok(sub_dir) = sub else {
                 continue;
             };
-            for sub in read_dir {
-                let Ok(sub_dir) = sub else {
-                    continue;
-                };
-                let sub_dir_path = sub_dir.path();
-                if sub_dir_path.is_dir() {
-                    let bin_path = sub_dir_path.join("bin");
-                    if bin_path.exists() && bin_path.is_dir() {
-                        javas.push(JavaInstall {
-                            source: JavaSource::Bundle,
-                            path: bin_path.to_string_lossy().to_string(),
-                        });
-                    }
+            let sub_dir_path = sub_dir.path();
+            if sub_dir_path.is_dir() {
+                let bin_path = sub_dir_path.join("bin");
+                if bin_path.exists()
+                    && bin_path.is_dir()
+                    && bin_path.join(get_java_executable_name()).exists()
+                {
+                    javas.push(JavaInstall {
+                        source: java_source.clone(),
+                        path: bin_path.to_string_lossy().to_string(),
+                    });
                 }
             }
         }
@@ -319,8 +390,7 @@ impl JavaInstall {
 
     fn get_executable_file_path_from_path<P: AsRef<Path>>(path: P) -> Option<String> {
         // todo We may prefer javaw?
-        let filename = format!("java{}", EXE_SUFFIX);
-        let executable = path.as_ref().join(filename);
+        let executable = path.as_ref().join(get_java_executable_name());
         //TODO May be we should prove this file always exists.
         if executable.exists() {
             Some(executable.to_string_lossy().to_string())
@@ -332,6 +402,7 @@ impl JavaInstall {
 
 #[tokio::test]
 async fn test_java_detector() {
+    JavaInstall::get_platform_java_distribution();
     // Test with timeout
     let test_java = JavaInstall {
         source: JavaSource::User,

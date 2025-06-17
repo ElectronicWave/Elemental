@@ -3,9 +3,6 @@
 use elemental::model::mojang::MojangBaseUrl;
 use elemental::online::mojang::MojangService;
 use elemental::storage::game::GameStorage;
-use futures::future::join_all;
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
 
 #[tokio::main]
 async fn main() {
@@ -26,8 +23,6 @@ async fn main() {
         .unwrap();
     let storage = GameStorage::new_ensure_dir(".minecraft").unwrap();
     storage.save_pistonmeta_data("1.16.5", &pistonmeta).unwrap();
-
-    let token = CancellationToken::new();
     let objs = storage
         .get_and_save_objects_index(
             &service,
@@ -39,33 +34,13 @@ async fn main() {
     let baseurl = MojangBaseUrl::default();
 
     println!("download objs");
-    join_all(
-        storage
-            .download_objects("1.16.5", objs, &baseurl, &token)
-            .unwrap(),
-    )
-    .await;
+    storage.download_objects("1.16.5", objs, &baseurl).unwrap();
+
     println!("download client");
-    storage
-        .download_client("1.16.5", &pistonmeta.downloads.client, &baseurl, &token)
-        .unwrap()
-        .await
-        .unwrap();
+    let _ = storage.download_client("1.16.5", &pistonmeta.downloads.client, &baseurl);
     println!("download libs");
-    join_all(
-        storage
-            .download_libraries("1.16.5", &pistonmeta.libraries, &baseurl, &token)
-            .into_iter()
-            .filter_map(|e| {
-                if let Ok(Some(handle)) = e {
-                    Some(handle)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<JoinHandle<()>>>(),
-    )
-    .await;
+
+    storage.download_libraries("1.16.5", &pistonmeta.libraries, &baseurl);
 }
 
 #[tokio::test]

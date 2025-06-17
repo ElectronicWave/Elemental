@@ -1,89 +1,24 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::{Arc, LazyLock},
+use dashmap::{
+    DashMap,
+    mapref::one::{Ref, RefMut},
 };
-use tokio::sync::Mutex;
-use tokio_util::sync::CancellationToken;
+use futures::StreamExt;
+use std::{io::Result, sync::LazyLock};
+use tokio::task::JoinSet;
+
+use crate::error::unification::UnifiedResult;
 
 pub struct ElementalDownloader {
     client: reqwest::Client,
-    pub tracer: Arc<ElementalDownloaderTracer>,
+    handler: DashMap<String, JoinSet<()>>,
 }
-
-pub struct ElementalDownloaderTracer {
-    group_counter: Mutex<HashMap<String, usize>>,
-    active_tasks: Mutex<HashSet<DownloadTask>>,
-    failed_tasks: Mutex<HashSet<(DownloadTask, String)>>, // TODO Maybe should not use stru like this
-}
-
-pub enum TaskStatus {
-    OK,
-    ERR(String),
-    CANCEL,
-}
-
-impl ElementalDownloaderTracer {
-    pub fn new() -> Self {
-        Self {
-            group_counter: Mutex::new(HashMap::new()),
-            active_tasks: Mutex::new(HashSet::new()),
-            failed_tasks: Mutex::new(HashSet::new()),
-        }
-    }
-
-    pub async fn trace_task(&self, task: DownloadTask) {
-        if let Some(task_group_name) = &task.task_group_name {
-            let mut gurad = self.group_counter.lock().await;
-            if let Some(count) = gurad.get(&task_group_name.clone()) {
-                let count = count.clone();
-                gurad.insert(task_group_name.clone(), count + 1);
-            } else {
-                gurad.insert(task_group_name.clone(), 1);
-            }
-            drop(gurad);
-        }
-
-        let mut gurad = self.active_tasks.lock().await;
-        gurad.insert(task);
-        drop(gurad);
-    }
-
-    pub async fn stop_trace_task(&self, task: DownloadTask, status: TaskStatus) {
-        if let Some(task_group_name) = &task.task_group_name {
-            let mut gurad = self.group_counter.lock().await;
-            if let Some(count) = gurad.get(&task_group_name.clone()) {
-                let count = count.clone();
-                if count.clone() == 1 {
-                    gurad.remove(task_group_name);
-                } else {
-                    gurad.insert(task_group_name.clone(), count - 1);
-                }
-            }
-            drop(gurad);
-        }
-
-        let mut gurad = self.active_tasks.lock().await;
-        gurad.remove(&task);
-        drop(gurad);
-
-        match status {
-            TaskStatus::OK => match task.callback {
-                DownloadTaskCallback::DEFAULT => todo!(),
-                DownloadTaskCallback::NONE => (),
-            },
-            TaskStatus::ERR(msg) => log::error!("task err: {}", msg), //TODO Dev may need trace the error and store them in a hashset (maybe it could be a option?)
-            TaskStatus::CANCEL => (),
-        }
-    }
-}
-
 static SHARED_DOWNLOADER: LazyLock<ElementalDownloader> = LazyLock::new(ElementalDownloader::new);
 
 impl ElementalDownloader {
     fn new() -> Self {
         Self {
             client: reqwest::Client::new(),
-            tracer: Arc::new(ElementalDownloaderTracer::new()),
+            handler: DashMap::new(),
         }
     }
 
@@ -91,60 +26,62 @@ impl ElementalDownloader {
         &SHARED_DOWNLOADER
     }
 
-    // the token will cancel task
-    pub fn new_task(
+    pub fn create_task_group(&self, group: impl Into<String>) -> Option<JoinSet<()>> {
+        self.handler.insert(group.into(), JoinSet::new())
+    }
+
+    pub fn remove_task_group(&self, group: impl Into<String>) {
+        self.handler.remove(&group.into()).map(|(_, mut handler)| {
+            handler.abort_all();
+            drop(handler)
+        });
+    }
+
+    pub fn get_task_group(&self, group: impl Into<String>) -> Option<Ref<'_, String, JoinSet<()>>> {
+        self.handler.get(&group.into())
+    }
+
+    pub fn get_task_group_mut(
         &self,
-        task: DownloadTask,
-        token: CancellationToken,
-    ) -> tokio::task::JoinHandle<()> {
+        group: impl Into<String>,
+    ) -> Option<RefMut<'_, String, JoinSet<()>>> {
+        self.handler.get_mut(&group.into())
+    }
+
+    pub fn add_task(&self, task: DownloadTask) -> Option<()> {
         let client = self.client.clone();
         let url = task.url.clone();
         let path = task.path.clone();
-        let tracer = self.tracer.clone();
-        tokio::spawn(async move {
-            tracer.trace_task(task.clone()).await;
-            let executer = async {
-                let request = client.get(url.clone()).send().await;
-                match request {
-                    Ok(response) => {
-                        let data = response.bytes().await;
-                        match data {
-                            Ok(contents) => match tokio::fs::write(path, contents).await {
-                                Ok(_) => TaskStatus::OK,
-                                Err(err) => TaskStatus::ERR(err.to_string()),
-                            },
-                            Err(err) => TaskStatus::ERR(err.to_string()),
-                        }
+        self.handler.get_mut(&task.group).map(|mut handler| {
+            handler.value_mut().spawn(async move {
+                let executer: Result<()> = async move {
+                    let mut stream = client
+                        .get(url.clone())
+                        .send()
+                        .await
+                        .to_stdio()?
+                        .bytes_stream();
+                    let mut output = tokio::fs::File::create(path).await?;
+                    let mut size = 0; // TODO Trace progress here
+                    while let Some(item) = stream.next().await {
+                        let data = item.to_stdio()?;
+                        size += data.len();
+                        tokio::io::copy(&mut data.as_ref(), &mut output).await?;
                     }
-                    Err(err) => TaskStatus::ERR(err.to_string()),
+                    Ok(())
                 }
-            };
+                .await;
 
-            loop {
-                tokio::select! {
-                    _ = token.cancelled() => {
-                        tracer.stop_trace_task(task, TaskStatus::CANCEL).await;
-                        break;
-                    }
-                    status = executer => {
-                        tracer.stop_trace_task(task, status).await;
-                        break;
-                    }
+                match executer {
+                    Ok(_) => (),
+                    Err(error) => (), // TODO Trace error here
                 }
-            }
+            });
         })
     }
 
-    // the token will cancel all tasks
-    pub fn new_tasks(
-        &self,
-        tasks: Vec<DownloadTask>,
-        token: CancellationToken,
-    ) -> Vec<tokio::task::JoinHandle<()>> {
-        tasks
-            .into_iter()
-            .map(|task| self.new_task(task, token.clone()))
-            .collect()
+    pub fn add_tasks(&self, tasks: Vec<DownloadTask>) -> Vec<Option<()>> {
+        tasks.into_iter().map(|task| self.add_task(task)).collect()
     }
 }
 
@@ -152,57 +89,16 @@ impl ElementalDownloader {
 pub struct DownloadTask {
     pub url: String,
     pub path: String,
-    pub task_group_name: Option<String>,
-    pub callback: DownloadTaskCallback,
-}
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub enum DownloadTaskCallback {
-    DEFAULT,
-    NONE,
+    pub group: String,
 }
 
 impl DownloadTask {
-    pub fn new(
-        url: impl Into<String>,
-        path: impl Into<String>,
-        task_group_name: Option<String>,
-    ) -> Self {
+    // usually use `version_name` as task_group_name.
+    pub fn new(url: impl Into<String>, path: impl Into<String>, group: impl Into<String>) -> Self {
         Self {
             url: url.into(),
             path: path.into(),
-            task_group_name: task_group_name.map(|v| v.into()),
-            callback: DownloadTaskCallback::NONE,
+            group: group.into(),
         }
     }
-    pub fn new_callback(
-        url: impl Into<String>,
-        path: impl Into<String>,
-        task_group_name: Option<String>,
-        callback: DownloadTaskCallback,
-    ) -> Self {
-        Self {
-            url: url.into(),
-            path: path.into(),
-            task_group_name: task_group_name.map(|v| v.into()),
-            callback,
-        }
-    }
-}
-
-#[tokio::test]
-async fn test() {
-    let downloader = ElementalDownloader::new();
-    println!("start");
-    let _ = downloader
-        .new_task(
-            DownloadTask::new(
-                "http://launchermeta.mojang.com/mc/game/version_manifest.json",
-                "version_manifest.json",
-                None,
-            ),
-            CancellationToken::new(),
-        )
-        .await;
-    println!("end");
 }

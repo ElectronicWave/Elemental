@@ -246,6 +246,38 @@ pub struct PistonMetaLibraries {
     pub extract: Option<PistonMetaLibrariesExtract>,
 }
 
+impl PistonMetaLibraries {
+    // classifiers
+    pub fn try_get_classifiers_native_artifact(
+        &self,
+    ) -> Option<&PistonMetaLibrariesDownloadsArtifact> {
+        if let Some(classifiers) = &self.downloads.classifiers {
+            if let Some(keys) = &self.natives {
+                if let Some(key) = keys.get(OS) {
+                    return classifiers.get(key);
+                } else if OS == "macos" {
+                    if let Some(key) = keys.get("osx") {
+                        return classifiers.get(key);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    // Latest Version
+    pub fn try_get_native_artifact(&self) -> Option<&PistonMetaLibrariesDownloadsArtifact> {
+        let artifact = &self.downloads.artifact;
+        if artifact.path.ends_with(&format!("-natives-{}.jar", OS))
+            || OS == "macos" && artifact.path.ends_with("-natives-osx.jar")
+        {
+            return Some(artifact);
+        }
+        None
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaLibrariesExtract {
     pub exclude: Vec<String>,
@@ -256,8 +288,6 @@ pub struct PistonMetaLibrariesDownloads {
     pub artifact: PistonMetaLibrariesDownloadsArtifact,
     pub classifiers: Option<HashMap<String, PistonMetaLibrariesDownloadsArtifact>>,
 }
-
-impl PistonMetaLibrariesDownloads {}
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaLibrariesDownloadsArtifact {
@@ -270,7 +300,7 @@ pub struct PistonMetaLibrariesDownloadsArtifact {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaLogging {
     pub client: PistonMetaLoggingSide,
-    // TODO?
+    // TODO? server: ...
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaLoggingSide {

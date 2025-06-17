@@ -1,9 +1,6 @@
-use std::env::consts::OS;
 use std::fs::{create_dir_all, write};
 use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf, absolute};
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
 
 use super::version::VersionStorage;
 use crate::consts::PLATFORM_NATIVES_DIR_NAME;
@@ -87,14 +84,16 @@ impl GameStorage {
         Ok(path.to_string_lossy().to_string())
     }
 
-    pub fn get_ensure_client_path(&self, version_name: &str) -> Result<String> {
-        let path: PathBuf = self.join("versions").join(version_name);
+    pub fn get_ensure_client_path(&self, version_name: impl Into<String>) -> Result<String> {
+        let name = version_name.into();
+        let path: PathBuf = self.join("versions").join(&name);
         create_dir_all(&path)?;
         Ok(path
-            .join(format!("{}.jar", version_name))
+            .join(format!("{}.jar", name))
             .to_string_lossy()
             .to_string())
     }
+
     pub fn get_ensure_version_natives_path<P: AsRef<Path>>(
         &self,
         version_name: P,
@@ -116,11 +115,10 @@ impl GameStorage {
         version_name: &str,
         libraries: &Vec<PistonMetaLibraries>,
         baseurl: &MojangBaseUrl,
-        token: &CancellationToken,
-    ) -> Vec<Result<Option<JoinHandle<()>>>> {
+    ) -> Vec<Result<()>> {
         libraries
             .iter()
-            .map(|library| self.download_library(version_name, library, baseurl, &token.clone()))
+            .map(|library| self.download_library(version_name, library, baseurl))
             .collect()
     }
 
@@ -129,85 +127,58 @@ impl GameStorage {
         version_name: &str,
         library: &PistonMetaLibraries,
         baseurl: &MojangBaseUrl,
-        token: &CancellationToken,
-    ) -> Result<Option<JoinHandle<()>>> {
+    ) -> Result<()> {
         // 1. Check Rules
         if let Some(rules) = &library.rules {
             if !rules.iter().all(|v| v.is_allow()) {
-                return Ok(None);
+                return Ok(());
             }
         }
 
-        // 2. Download Native Lib (Legacy)
-        if let Some(classifiers) = &library.downloads.classifiers {
-            if let Some(download) = classifiers.get(&format!("natives-{}", OS)) {
-                ElementalDownloader::shared().new_task(
-                    DownloadTask::new(
-                        &download.url,
-                        self.get_ensure_library_path(download)?,
-                        Some(version_name.to_string()),
-                    ),
-                    token.clone(),
-                );
-            }
-            if OS == "macos" {
-                if let Some(download) = classifiers.get("natives-osx") {
-                    ElementalDownloader::shared().new_task(
-                        DownloadTask::new(
-                            &download.url,
-                            self.get_ensure_library_path(download)?,
-                            Some(version_name.to_string()),
-                        ),
-                        token.clone(),
-                    );
-                }
-            }
-        }
+        // TODO 2. Check Feats
 
-        // 3. Download Artifacts (.minecraft)
+        // 3. Download Artifact
         let artifact = &library.downloads.artifact;
         let path = self.get_ensure_library_path(artifact)?;
         let url = artifact
             .url
             .replace("libraries.minecraft.net", &baseurl.libraries);
 
-        // 4。 Latest Natives File
-        if artifact.path.ends_with(&format!("-natives-{}.jar", OS))
-            || OS == "macos" && artifact.path.ends_with("-natives-osx.jar")
-        {
-            ElementalDownloader::shared().new_task(
-                DownloadTask::new(
-                    &url,
-                    self.get_ensure_library_path(artifact)?,
-                    Some(version_name.to_string()),
-                ),
-                token.clone(),
-            );
+        ElementalDownloader::shared().add_task(DownloadTask::new(
+            url,
+            path,
+            version_name.to_string(),
+        ));
+
+        // 4. Download Native Lib (Legacy)
+        if let Some(download) = library.try_get_classifiers_native_artifact() {
+            ElementalDownloader::shared().add_task(DownloadTask::new(
+                &download
+                    .url
+                    .replace("libraries.minecraft.net", &baseurl.libraries),
+                self.get_ensure_library_path(download)?,
+                version_name.to_string(),
+            ));
         }
 
-        Ok(Some(ElementalDownloader::shared().new_task(
-            DownloadTask::new(url, path, Some(version_name.to_string())),
-            token.clone(),
-        )))
+        Ok(())
     }
+
     pub fn download_client(
         &self,
         version_name: &str,
         download: &PistonMetaDownload,
         baseurl: &MojangBaseUrl,
-        token: &CancellationToken,
-    ) -> Result<JoinHandle<()>> {
+    ) -> Result<()> {
         let path = self.get_ensure_client_path(version_name)?;
-        Ok(ElementalDownloader::shared().new_task(
-            DownloadTask::new(
-                download
-                    .url
-                    .replace("piston-data.mojang.com", &baseurl.pistondata),
-                path,
-                None,
-            ),
-            token.clone(),
-        ))
+        ElementalDownloader::shared().add_task(DownloadTask::new(
+            download
+                .url
+                .replace("piston-data.mojang.com", &baseurl.pistondata),
+            path,
+            version_name.to_string(),
+        ));
+        Ok(())
     }
 
     pub fn download_objects(
@@ -215,18 +186,18 @@ impl GameStorage {
         version_name: &str,
         data: PistonMetaAssetIndexObjects,
         baseurl: &MojangBaseUrl,
-        token: &CancellationToken,
-    ) -> Result<Vec<JoinHandle<()>>> {
+    ) -> Result<()> {
         let mut tasks = vec![];
         for (_, v) in data.objects {
             tasks.push(DownloadTask::new(
                 baseurl.get_object_url(v.hash.clone()),
                 self.get_ensure_object_path(v.hash)?,
-                Some(version_name.to_string()),
+                version_name.to_string(),
             ));
         }
 
-        Ok(ElementalDownloader::shared().new_tasks(tasks, token.clone()))
+        ElementalDownloader::shared().add_tasks(tasks);
+        Ok(())
     }
 
     pub fn download_pistonmeta_all(&self) {
@@ -282,9 +253,10 @@ impl GameStorage {
             Ok(VersionStorage {
                 root: self //It can be proved to be absolute path
                     .join("versions")
-                    .join(name)
+                    .join(&name)
                     .to_string_lossy()
                     .to_string(),
+                name,
             })
         } else {
             Err(Error::new(
@@ -294,7 +266,22 @@ impl GameStorage {
         }
     }
 
-    pub fn extract_version_natives(&self, version_name: &str) -> Result<()> { 
-        todo!()
+    pub fn extract_version_natives(&self, version_name: impl Into<String>) -> Result<()> {
+        let data = self.get_version(version_name)?.pistonmeta()?.libraries;
+
+        for library in data {
+            if let Some(rules) = &library.rules {
+                if !rules.iter().all(|v| v.is_allow()) {
+                    continue;
+                }
+            }
+
+            library.downloads.artifact;
+        }
+
+        //? Check / Validate
+
+        //TODO extract
+        Ok(())
     }
 }

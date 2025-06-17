@@ -7,6 +7,5 @@ edition = "2024"
 elemental = { path = "../core" }
 # Mark * to use the same ver of elemental
 tokio = { version = "*" }
-tokio-util = { version = "*" }
 futures = { version = "*" }
 serde_json = { version = "*" }

@@ -188,3 +188,22 @@ impl DownloadTask {
         }
     }
 }
+
+#[tokio::test]
+async fn test_downloader() {
+    let downloader = ElementalDownloader::shared();
+    let group_name = "test";
+
+    downloader.create_task_group(group_name);
+    let task = DownloadTask::new("https://example.com/file1.txt", "file1.txt", group_name);
+
+    downloader.add_task(task);
+    // Wait for the task to complete
+    if let Some(mut t) = downloader.get_task_group_mut(group_name) {
+        while let Some(res) = t.value_mut().join_next().await {
+            println!("{:?}", res);
+        }
+    }
+
+    println!("group: {:?}", downloader.tracker.tasks);
+}

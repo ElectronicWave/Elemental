@@ -37,9 +37,11 @@ impl ElementalTaskTracker {
     pub fn create_track_group(&self, group: impl Into<String>) {
         self.tasks.insert(group.into(), DashMap::new());
     }
+
     pub fn remove_track_group(&self, group: impl Into<String>) {
         self.tasks.remove(&group.into());
     }
+
     pub fn has_track_group(&self, group: impl Into<String>) -> bool {
         self.tasks.contains_key(&group.into())
     }
@@ -68,11 +70,11 @@ impl ElementalDownloader {
 
     pub fn remove_task_group(&self, group: impl Into<String>) {
         let group = group.into();
-        self.tracker.remove_track_group(&group);
         self.handler.remove(&group).map(|(_, mut handler)| {
             handler.abort_all();
             drop(handler)
         });
+        self.tracker.remove_track_group(&group);
     }
 
     pub fn has_task_group(&self, group: impl Into<String>) -> bool {

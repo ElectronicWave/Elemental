@@ -6,8 +6,9 @@ use futures::StreamExt;
 use std::{
     io::Result,
     sync::{Arc, LazyLock},
+    vec,
 };
-use tokio::task::JoinSet;
+use tokio::task::{JoinError, JoinSet};
 
 use crate::error::unification::UnifiedResult;
 
@@ -151,6 +152,20 @@ impl ElementalDownloader {
     pub fn add_tasks(&self, tasks: Vec<DownloadTask>) -> Vec<Option<()>> {
         tasks.into_iter().map(|task| self.add_task(task)).collect()
     }
+
+    pub async fn wait_group_tasks(
+        &self,
+        group: impl Into<String>,
+    ) -> Vec<core::result::Result<(), JoinError>> {
+        let mut result = vec![];
+        if let Some(mut tasks) = self.get_task_group_mut(group) {
+            while let Some(res) = tasks.value_mut().join_next().await {
+                result.push(res);
+            }
+        }
+
+        result
+    }
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -201,11 +216,7 @@ async fn test_downloader() {
 
     downloader.add_task(task);
     // Wait for the task to complete
-    if let Some(mut t) = downloader.get_task_group_mut(group_name) {
-        while let Some(res) = t.value_mut().join_next().await {
-            println!("{:?}", res);
-        }
-    }
+    downloader.wait_group_tasks(group_name).await;
 
     println!("group: {:?}", downloader.tracker.tasks);
 }

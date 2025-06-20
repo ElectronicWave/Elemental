@@ -3,7 +3,6 @@ use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf, absolute};
 
 use super::version::VersionStorage;
-use crate::consts::PLATFORM_NATIVES_DIR_NAME;
 use crate::error::unification::UnifiedResult;
 use crate::model::mojang::{
     MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaDownload,
@@ -11,6 +10,7 @@ use crate::model::mojang::{
 };
 use crate::online::downloader::{DownloadTask, ElementalDownloader};
 use crate::online::mojang::MojangService;
+use crate::storage::jar::JarFile;
 
 pub struct GameStorage {
     pub root: String, // ..../.minecraft
@@ -92,18 +92,6 @@ impl GameStorage {
             .join(format!("{}.jar", name))
             .to_string_lossy()
             .to_string())
-    }
-
-    pub fn get_ensure_version_natives_path<P: AsRef<Path>>(
-        &self,
-        version_name: P,
-    ) -> Result<String> {
-        let path = self
-            .join("versions")
-            .join(version_name)
-            .join(PLATFORM_NATIVES_DIR_NAME);
-        create_dir_all(&path)?;
-        Ok(path.to_string_lossy().to_string())
     }
 
     pub fn join<P: AsRef<Path>>(&self, path: P) -> PathBuf {
@@ -267,7 +255,11 @@ impl GameStorage {
     }
 
     pub fn extract_version_natives(&self, version_name: impl Into<String>) -> Result<()> {
-        let data = self.get_version(version_name)?.pistonmeta()?.libraries;
+        let version_name = version_name.into();
+        let libraries = self.join("libraries");
+        let version = self.get_version(&version_name)?;
+        let dest = version.get_ensure_natives_path()?;
+        let data = version.pistonmeta()?.libraries;
 
         for library in data {
             if let Some(rules) = &library.rules {
@@ -275,13 +267,18 @@ impl GameStorage {
                     continue;
                 }
             }
-
-            library.downloads.artifact;
+            if let Some(artifact) = library.try_get_classifiers_native_artifact() {
+                let src = libraries.join(&artifact.path);
+                JarFile::new(src).extract_blocking(&dest)?;
+            }
+            if let Some(artifact) = library.try_get_native_artifact() {
+                let src = libraries.join(&artifact.path);
+                JarFile::new(src).extract_blocking(&dest)?;
+            }
         }
 
         //? Check / Validate
 
-        //TODO extract
         Ok(())
     }
 }

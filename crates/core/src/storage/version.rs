@@ -1,7 +1,8 @@
-use std::fs::File;
+use std::fs::{File, create_dir_all};
 use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf, absolute};
 
+use crate::consts::PLATFORM_NATIVES_DIR_NAME;
 use crate::error::unification::UnifiedResult;
 use crate::model::mojang::PistonMetaData;
 
@@ -53,5 +54,11 @@ impl VersionStorage {
 
     pub fn pistonmeta(&self) -> Result<PistonMetaData> {
         serde_json::from_reader(File::open(self.join(format!("{}.json", self.name)))?).to_stdio()
+    }
+
+    pub fn get_ensure_natives_path(&self) -> Result<String> {
+        let path = self.join(PLATFORM_NATIVES_DIR_NAME);
+        create_dir_all(&path)?;
+        Ok(path.to_string_lossy().to_string())
     }
 }

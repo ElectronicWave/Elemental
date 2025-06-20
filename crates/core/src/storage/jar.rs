@@ -1,4 +1,5 @@
 use std::{
+    ffi::OsStr,
     fs::{File, create_dir_all},
     io::{self, Read, Result},
     path::Path,
@@ -9,19 +10,17 @@ use crate::error::unification::UnifiedResult;
 
 // Support `Deflate/Stored` Now
 #[derive(Debug, Clone)]
-pub struct JarFile {
-    path: String,
+pub struct JarFile<P: AsRef<Path>> {
+    path: P,
 }
 
-impl JarFile {
-    pub fn new<S: Into<String>>(path: S) -> Self {
-        let path = path.into();
-
+impl<P: AsRef<Path>> JarFile<P> {
+    pub fn new(path: P) -> Self {
         Self { path }
     }
 
     //TODO May need extract more efficient
-    pub fn extract_blocking(&self, dest: String) -> Result<()> {
+    pub fn extract_blocking<S: AsRef<OsStr> + ?Sized>(&self, dest: &S) -> Result<()> {
         let file = File::open(&self.path)?;
         let mut archive = ZipArchive::new(file)?;
 
@@ -40,7 +39,7 @@ impl JarFile {
 
             //? Ignore `.sha1`
 
-            let outpath = Path::new(&dest).join(outpath);
+            let outpath = Path::new(dest).join(outpath);
 
             if file.is_dir() {
                 create_dir_all(&outpath)?;
@@ -53,6 +52,8 @@ impl JarFile {
                 let mut outfile = File::create(&outpath)?;
                 io::copy(&mut file, &mut outfile)?;
             }
+
+            //TODO sha1 check
         }
         Ok(())
     }
@@ -73,7 +74,7 @@ impl JarFile {
 #[test]
 fn test_extract() {
     JarFile::new("lwjgl-tinyfd-3.2.2-natives-windows.jar")
-        .extract_blocking("output".to_owned())
+        .extract_blocking("output")
         .unwrap();
 }
 

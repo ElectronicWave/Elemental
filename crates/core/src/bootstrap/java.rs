@@ -310,28 +310,45 @@ impl JavaInstall {
                 }
             }
         }
-        let empty_filter = [("", |_: &str| false)];
-        let filter = get_os_release()
+        #[derive(Debug)]
+        struct Filter {
+            path: &'static str,
+            path_prefix: &'static str,
+        }
+        let empty_filter = Filter {
+            path: "",
+            path_prefix: "",
+        };
+        let filters: Vec<Filter> = get_os_release()
             .and_then(|os_release| os_release.get("ID").map(|s| s.as_str()))
             .map_or(empty_filter, |os_id| match os_id {
-                "debian" | "ubuntu" => [("/usr/lib/jvm", |_: &str| true)], // /usr/lib/jvm/java-<major>-openjdk-<arch>
-                "fedora" => [("/usr/lib/jvm", |_: &str| true)], // /usr/lib/jvm/java-<major>-openjdk-<full_ver>.<fedora_major>.<arch>
-                "gentoo" => [
-                    ("/usr/lib64", |dir_name: &str| {
-                        dir_name.starts_with("openjdk-")
-                    }), // /usr/lib64/openjdk-<major>
-                    ("/usr/lib", |dir_name: &str| {
-                        dir_name.starts_with("openjdk-")
-                    }), // /usr/lib/openjdk-<major>
-                    ("/opt", |dir_name: &str| {
-                        dir_name.starts_with("openjdk-bin-")
-                    }), // /opt/openjdk-bin-<ver>
+                "debian" | "ubuntu" => vec![Filter {
+                    path: "/usr/lib/jvm",
+                    path_prefix: "",
+                }], // /usr/lib/jvm/java-<major>-openjdk-<arch>
+                "fedora" => vec![Filter {
+                    path: "/usr/lib/jvm",
+                    path_prefix: "",
+                }], // /usr/lib/jvm/java-<major>-openjdk-<full_ver>.<fedora_major>.<arch>
+                "gentoo" => vec![
+                    Filter {
+                        path: "/usr/lib64",
+                        path_prefix: "openjdk-",
+                    }, // /usr/lib64/openjdk-<major>
+                    Filter {
+                        path: "/usr/lib64",
+                        path_prefix: "openjdk-",
+                    }, // /usr/lib/openjdk-<major>
+                    Filter {
+                        path: "/opt",
+                        path_prefix: "openjdk-bin-",
+                    }, // /opt/openjdk-bin-<ver>
                 ],
                 "Deepin" | "deepin" => todo!("deepin implementation"),
                 "aosc" => todo!("aosc implementation"),
                 _ => empty_filter,
             });
-        println!("{:?}", filter);
+        println!("{:?}", filters);
         todo!()
     }
 

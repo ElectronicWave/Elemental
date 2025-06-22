@@ -280,7 +280,7 @@ impl JavaInstall {
     #[cfg(target_os = "linux")]
     fn get_platform_java_distribution() -> Vec<Self> {
         use crate::os::linux::get_os_release;
-        let mut javas = vec![];
+        let mut javas: Vec<JavaInstall> = vec![];
         fn scan_dir(path: &Path, mut javas: Vec<JavaInstall>, filter: fn(String) -> bool) {
             if !path.exists() || !path.is_dir() {
                 return;

@@ -319,7 +319,7 @@ impl JavaInstall {
             Filter {
                 path: "",
                 path_prefix: "",
-            };
+            }
         }
         let filters: Vec<Filter> = get_os_release()
             .and_then(|os_release| &os_release.get("ID").map(|s| s.as_str()))

@@ -322,7 +322,7 @@ impl JavaInstall {
             };
         }
         let filters: Vec<Filter> = get_os_release()
-            .and_then(|os_release| os_release.get("ID").map(|s| s.as_str()))
+            .and_then(|os_release| &os_release.get("ID").map(|s| s.as_str()))
             .map_or(vec![empty_filter()], |os_id| match os_id {
                 "debian" | "ubuntu" => vec![Filter {
                     path: "/usr/lib/jvm",

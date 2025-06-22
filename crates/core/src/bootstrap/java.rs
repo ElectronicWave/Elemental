@@ -315,13 +315,15 @@ impl JavaInstall {
             path: &'static str,
             path_prefix: &'static str,
         }
-        let empty_filter = Filter {
-            path: "",
-            path_prefix: "",
-        };
+        fn empty_filter() -> Filter {
+            Filter {
+                path: "",
+                path_prefix: "",
+            };
+        }
         let filters: Vec<Filter> = get_os_release()
             .and_then(|os_release| os_release.get("ID").map(|s| s.as_str()))
-            .map_or(vec![empty_filter], |os_id| match os_id {
+            .map_or(vec![empty_filter()], |os_id| match os_id {
                 "debian" | "ubuntu" => vec![Filter {
                     path: "/usr/lib/jvm",
                     path_prefix: "",
@@ -346,7 +348,7 @@ impl JavaInstall {
                 ],
                 "Deepin" | "deepin" => todo!("deepin implementation"),
                 "aosc" => todo!("aosc implementation"),
-                _ => vec![empty_filter],
+                _ => vec![empty_filter()],
             });
         println!("{:?}", filters);
         todo!()

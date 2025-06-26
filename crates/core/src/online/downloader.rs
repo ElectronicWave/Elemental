@@ -86,6 +86,18 @@ impl ElementalDownloader {
         self.handler.get(&group.into())
     }
 
+    pub async fn task_group_context<F: Future<Output = Result<()>> + Send + 'static>(
+        &self,
+        group: impl Into<String>,
+        future: fn(group: String) -> F,
+    ) -> Result<()> {
+        let group = group.into();
+        self.create_task_group(group.clone());
+        future(group.clone()).await?;
+        self.remove_task_group(group);
+        Ok(())
+    }
+
     pub fn get_task_group_mut(
         &self,
         group: impl Into<String>,
@@ -211,12 +223,16 @@ async fn test_downloader() {
     let downloader = ElementalDownloader::shared();
     let group_name = "test";
 
-    downloader.create_task_group(group_name);
-    let task = DownloadTask::new("https://example.com/file1.txt", "file1.txt", group_name);
-
-    downloader.add_task(task);
-    // Wait for the task to complete
-    downloader.wait_group_tasks(group_name).await;
-
+    let result = downloader
+        .task_group_context(group_name, |group| async {
+            let task =
+                DownloadTask::new("https://example.com/file1.txt", "file1.txt", "group_name");
+            let downloader = ElementalDownloader::shared();
+            downloader.add_task(task);
+            downloader.wait_group_tasks(group).await;
+            Ok(())
+        })
+        .await;
+    println!("{:?}", result);
     println!("group: {:?}", downloader.tracker.tasks);
 }

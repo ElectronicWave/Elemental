@@ -97,6 +97,53 @@ impl GameStorage {
     pub fn join<P: AsRef<Path>>(&self, path: P) -> PathBuf {
         Path::new(&self.root).join(path)
     }
+    /// Use [crate::online::downloader::ElementalDownloader::shared] to download file
+    ///
+    /// you can provide `version_name` and wait all tasks via [crate::online::downloader::ElementalDownloader::wait_group_tasks]
+    ///
+    /// if there has no task group named `version_name` in downloader, this function will create task group automatically.
+    pub async fn download_version_all(
+        &self,
+        service: &MojangService,
+        version_id: impl Into<String>,
+        version_name: impl Into<String>,
+    ) -> Result<()> {
+        let version_name = version_name.into();
+        let version_id = version_id.into();
+        let launchmeta = service.launchmeta().await.unwrap();
+        let pistonmeta = service
+            .pistonmeta(
+                launchmeta
+                    .versions
+                    .iter()
+                    .find(|data| data.id == version_id)
+                    .ok_or(Error::new(
+                        ErrorKind::Other,
+                        format!("Can't find version named `{}`", version_id),
+                    ))?
+                    .url
+                    .clone(),
+            )
+            .await?;
+
+        self.save_pistonmeta_data(&version_name, &pistonmeta)?;
+        let objs = self
+            .get_and_save_objects_index(
+                &service,
+                pistonmeta.id.clone(),
+                pistonmeta.asset_index.url.clone(),
+            )
+            .await?;
+        let baseurl = &service.baseurl;
+        let downloader = ElementalDownloader::shared();
+        if !downloader.has_task_group(&version_name) {
+            downloader.create_task_group(&version_name);
+        }
+        self.download_objects(&version_name, objs, baseurl)?;
+        self.download_client(&version_name, &pistonmeta.downloads.client, baseurl)?;
+        self.download_libraries(&version_name, &pistonmeta.libraries, baseurl);
+        Ok(())
+    }
 
     pub fn download_libraries(
         &self,
@@ -225,8 +272,13 @@ impl GameStorage {
         dir.join(format!("{}.jar", &name)).exists() && dir.join(format!("{}.json", name)).exists()
     }
 
-    pub fn save_pistonmeta_data(&self, version_name: &str, data: &PistonMetaData) -> Result<()> {
-        let parent = self.join("versions").join(version_name);
+    pub fn save_pistonmeta_data(
+        &self,
+        version_name: impl Into<String>,
+        data: &PistonMetaData,
+    ) -> Result<()> {
+        let version_name = version_name.into();
+        let parent = self.join("versions").join(&version_name);
         create_dir_all(&parent)?;
 
         write(

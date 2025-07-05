@@ -1,6 +1,6 @@
 //TODO REFACTOR ME WITH TUI/CLI
 
-use elemental::model::mojang::MojangBaseUrl;
+use elemental::online::downloader::ElementalDownloader;
 use elemental::online::mojang::MojangService;
 use elemental::storage::game::GameStorage;
 
@@ -8,39 +8,17 @@ use elemental::storage::game::GameStorage;
 async fn main() {
     // Test Download
     let service = MojangService::default();
-    let launchmeta = service.launchmeta().await.unwrap();
-    let pistonmeta = service
-        .pistonmeta(
-            launchmeta
-                .versions
-                .iter()
-                .find(|data| data.id == "1.16.5")
-                .unwrap()
-                .url
-                .clone(),
-        )
+    let version_name = "MyGame-1.16.5";
+    GameStorage::new_ensure_dir(".minecraft")
+        .unwrap()
+        .download_version_all(&service, "1.16.5", version_name)
         .await
         .unwrap();
-    let storage = GameStorage::new_ensure_dir(".minecraft").unwrap();
-    storage.save_pistonmeta_data("1.16.5", &pistonmeta).unwrap();
-    let objs = storage
-        .get_and_save_objects_index(
-            &service,
-            pistonmeta.id.clone(),
-            pistonmeta.asset_index.url.clone(),
-        )
-        .await
-        .unwrap();
-    let baseurl = MojangBaseUrl::default();
 
-    println!("download objs");
-    storage.download_objects("1.16.5", objs, &baseurl).unwrap();
-
-    println!("download client");
-    let _ = storage.download_client("1.16.5", &pistonmeta.downloads.client, &baseurl);
-    println!("download libs");
-
-    storage.download_libraries("1.16.5", &pistonmeta.libraries, &baseurl);
+    ElementalDownloader::shared()
+        .wait_group_tasks(version_name)
+        .await;
+    ElementalDownloader::shared().remove_task_group(version_name);
 }
 
 #[tokio::test]

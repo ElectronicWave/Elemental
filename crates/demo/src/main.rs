@@ -1,5 +1,7 @@
 //TODO REFACTOR ME WITH TUI/CLI
 
+use std::time::Duration;
+
 use elemental::online::downloader::ElementalDownloader;
 use elemental::online::mojang::MojangService;
 use elemental::storage::game::GameStorage;
@@ -14,7 +16,12 @@ async fn main() {
         .download_version_all(&service, "1.16.5", version_name)
         .await
         .unwrap();
-
+    tokio::spawn(async {
+        loop {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            println!("{:?}", ElementalDownloader::shared().tracker.bps)
+        }
+    });
     ElementalDownloader::shared()
         .wait_group_tasks(version_name)
         .await;

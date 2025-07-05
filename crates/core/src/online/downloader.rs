@@ -6,6 +6,7 @@ use futures::StreamExt;
 use std::{
     io::Result,
     sync::{Arc, LazyLock},
+    time::SystemTime,
     vec,
 };
 use tokio::task::{JoinError, JoinSet};
@@ -17,15 +18,32 @@ pub struct ElementalDownloader {
     handler: DashMap<String, JoinSet<()>>, // Group name : JoinSet()
     pub tracker: Arc<ElementalTaskTracker>,
 }
-
+#[derive(Debug)]
 pub struct ElementalTaskTracker {
-    pub tasks: DashMap<String, DashMap<DownloadTask, TrackedInfo>>,
+    pub tasks: DashMap<String, DashMap<DownloadTask, TrackedInfo>>, // Group: {task: info}
+    pub bps: DashMap<String, DownloadBitsPerSecond>,
+}
+#[derive(Debug)]
+pub struct DownloadBitsPerSecond {
+    pub lasttime: SystemTime,
+    pub counter: usize,
+    pub bps: usize,
+}
+impl Default for DownloadBitsPerSecond {
+    fn default() -> Self {
+        Self {
+            lasttime: SystemTime::now(),
+            counter: 0,
+            bps: 0,
+        }
+    }
 }
 
 impl ElementalTaskTracker {
     pub fn new() -> Self {
         Self {
             tasks: DashMap::new(),
+            bps: DashMap::new(),
         }
     }
 
@@ -36,11 +54,16 @@ impl ElementalTaskTracker {
     }
 
     pub fn create_track_group(&self, group: impl Into<String>) {
+        let group = group.into();
+        self.bps
+            .insert(group.clone(), DownloadBitsPerSecond::default());
         self.tasks.insert(group.into(), DashMap::new());
     }
 
     pub fn remove_track_group(&self, group: impl Into<String>) {
-        self.tasks.remove(&group.into());
+        let group = group.into();
+        self.bps.remove(&group);
+        self.tasks.remove(&group);
     }
 
     pub fn has_track_group(&self, group: impl Into<String>) -> bool {
@@ -127,6 +150,7 @@ impl ElementalDownloader {
                         .to_stdio()?
                         .bytes_stream();
                     let mut output = tokio::fs::File::create(path).await?;
+
                     while let Some(item) = stream.next().await {
                         let data = item.to_stdio()?;
 
@@ -135,10 +159,20 @@ impl ElementalDownloader {
                             .get_mut(&group_cloned)
                             .map(|mut tasks| {
                                 tasks.value_mut().get_mut(&task.clone()).map(|mut tracked| {
-                                    tracked.value_mut().recv += data.len();
+                                    tracked.recv += data.len();
                                 })
                             });
 
+                        tracker_cloned.bps.get_mut(&group_cloned).map(|mut bps| {
+                            let current = SystemTime::now();
+                            if current.duration_since(bps.lasttime).unwrap().as_secs() >= 1 {
+                                bps.bps = bps.value_mut().counter + data.len();
+                                bps.counter = 0;
+                                bps.lasttime = current;
+                            } else {
+                                bps.counter += data.len();
+                            }
+                        });
                         tokio::io::copy(&mut data.as_ref(), &mut output).await?;
                     }
                     Ok(())
@@ -185,12 +219,14 @@ pub struct DownloadTask {
     pub url: String,
     pub path: String,
     pub group: String,
+    pub total: Option<usize>,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct TrackedInfo {
     pub recv: usize,
     pub status: TrackedTaskStatus,
+    pub bps: usize,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -202,11 +238,17 @@ pub enum TrackedTaskStatus {
 
 impl DownloadTask {
     // usually use `version_name` as task_group_name.
-    pub fn new(url: impl Into<String>, path: impl Into<String>, group: impl Into<String>) -> Self {
+    pub fn new(
+        url: impl Into<String>,
+        path: impl Into<String>,
+        group: impl Into<String>,
+        total: Option<usize>,
+    ) -> Self {
         Self {
             url: url.into(),
             path: path.into(),
             group: group.into(),
+            total,
         }
     }
 
@@ -214,6 +256,7 @@ impl DownloadTask {
         TrackedInfo {
             recv: 0,
             status: TrackedTaskStatus::ACTIVE,
+            bps: 0,
         }
     }
 }
@@ -225,8 +268,12 @@ async fn test_downloader() {
 
     let result = downloader
         .task_group_context(group_name, |group| async {
-            let task =
-                DownloadTask::new("https://example.com/file1.txt", "file1.txt", "group_name");
+            let task = DownloadTask::new(
+                "https://example.com/file1.txt",
+                "file1.txt",
+                "group_name",
+                None,
+            );
             let downloader = ElementalDownloader::shared();
             downloader.add_task(task);
             downloader.wait_group_tasks(group).await;

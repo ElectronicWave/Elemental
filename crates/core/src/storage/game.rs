@@ -183,6 +183,7 @@ impl GameStorage {
             url,
             path,
             version_name.to_string(),
+            Some(artifact.size),
         ));
 
         // 4. Download Native Lib (Legacy)
@@ -193,6 +194,7 @@ impl GameStorage {
                     .replace("libraries.minecraft.net", &baseurl.libraries),
                 self.get_ensure_library_path(download)?,
                 version_name.to_string(),
+                Some(artifact.size),
             ));
         }
 
@@ -212,6 +214,7 @@ impl GameStorage {
                 .replace("piston-data.mojang.com", &baseurl.pistondata),
             path,
             version_name.to_string(),
+            Some(download.size),
         ));
         Ok(())
     }
@@ -228,6 +231,7 @@ impl GameStorage {
                 baseurl.get_object_url(v.hash.clone()),
                 self.get_ensure_object_path(v.hash)?,
                 version_name.to_string(),
+                Some(v.size),
             ));
         }
 

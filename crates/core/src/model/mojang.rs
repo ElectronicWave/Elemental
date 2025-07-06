@@ -161,13 +161,17 @@ pub struct PistonMetaRuleArgumentRules {
 impl PistonMetaRuleArgumentRules {
     pub fn is_allow(&self) -> bool {
         let mut action = self.action == "allow";
+
+        //TODO features here...
+        if let Some(_) = self.features {
+            return false;
+        }
+
         if let Some(os) = &self.os {
             if !os.is_fit() {
                 action = !action;
             }
         }
-
-        //TODO features here...
 
         action
     }

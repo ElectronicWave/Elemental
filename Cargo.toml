@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/demo"]
+members = ["crates/core", "crates/demo", "crates/meta"]
 
 # https://github.com/microsoft/edit/blob/main/Cargo.toml
 # We use `opt-level = "s"` as it significantly reduces binary size.

@@ -11,8 +11,8 @@ async fn main() {
     // Test Download
     let service = MojangService::default();
     let version_name = "MyGame-1.16.5";
-    GameStorage::new_ensure_dir(".minecraft")
-        .unwrap()
+    let stroage = GameStorage::new_ensure_dir(".minecraft").unwrap();
+    stroage
         .download_version_all(&service, "1.16.5", version_name)
         .await
         .unwrap();
@@ -26,6 +26,7 @@ async fn main() {
         .wait_group_tasks(version_name)
         .await;
     ElementalDownloader::shared().remove_task_group(version_name);
+    stroage.extract_version_natives(version_name).unwrap();
 }
 
 #[tokio::test]
@@ -34,16 +35,22 @@ async fn test_game_run() {
     use elemental::model::launchenvs::LaunchEnvs;
     use elemental::model::mojang::PistonMetaData;
     use std::fs::File;
-
-    let storage = GameStorage::new_ensure_dir(".minecraft").unwrap();
-    let file = File::open(storage.join("versions").join("1.16.5").join("1.16.5.json")).unwrap();
+    let game = "MyGame-1.16.5";
+    let storage = GameStorage::new_ensure_dir("../../.minecraft").unwrap();
+    let file = File::open(
+        storage
+            .join("versions")
+            .join(game)
+            .join(format!("{game}.json")),
+    )
+    .unwrap();
     let pistonmeta: PistonMetaData = serde_json::from_reader(file).unwrap();
     let launchenvs = LaunchEnvs::offline_player(
         "Elemental".to_owned(),
         storage.root.clone(),
         storage
             .join("versions")
-            .join("1.16.5")
+            .join(game)
             .to_string_lossy()
             .to_string(),
         &pistonmeta,
@@ -53,7 +60,7 @@ async fn test_game_run() {
     let installs = JavaDistribution::get().await;
     let selected = installs
         .iter()
-        .find(|e| e.install.path.contains("jdk-8"))
+        .find(|e| e.install.path.contains("8"))
         .unwrap();
     let jvm = pistonmeta.arguments.get_jvm_arguments();
     let game = pistonmeta.arguments.get_game_arguments();
@@ -69,7 +76,7 @@ async fn test_game_run() {
     launchargs.extend(launchenvs.apply_launchenvs(jvm).unwrap());
     launchargs.push(pistonmeta.main_class.clone());
     launchargs.extend(launchenvs.apply_launchenvs(game).unwrap());
-    let mut cmd = std::process::Command::new(&selected.install.path); // FIXME NOT A EXECUTABLE
+    let mut cmd = std::process::Command::new(format!("{}/java.exe", selected.install.path)); // FIXME NOT A EXECUTABLE
     cmd.args(launchargs);
     let out = cmd.output().unwrap();
     println!("{}", String::from_utf8(out.stderr).unwrap());

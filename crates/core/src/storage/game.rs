@@ -44,18 +44,22 @@ impl GameStorage {
     pub async fn get_and_save_objects_index(
         &self,
         service: &MojangService,
-        version_id: String,
         asset_index_url: String,
     ) -> Result<PistonMetaAssetIndexObjects> {
         let objs = service
-            .pistonmeta_assetindex_objects(asset_index_url)
+            .pistonmeta_assetindex_objects(&asset_index_url)
             .await
             .to_stdio()?;
-
-        let path = self.get_ensure_object_indexes_path(version_id)?;
+        let parent = self.join("assets").join("indexes");
         let data = serde_json::to_string(&objs)?;
 
-        write(path, data)?;
+        write(
+            parent.join(asset_index_url.split("/").last().ok_or(Error::new(
+                ErrorKind::Other,
+                "Split asset index url failed!",
+            ))?),
+            data,
+        )?;
 
         Ok(objs)
     }
@@ -128,12 +132,9 @@ impl GameStorage {
 
         self.save_pistonmeta_data(&version_name, &pistonmeta)?;
         let objs = self
-            .get_and_save_objects_index(
-                &service,
-                pistonmeta.id.clone(),
-                pistonmeta.asset_index.url.clone(),
-            )
+            .get_and_save_objects_index(&service, pistonmeta.asset_index.url.clone())
             .await?;
+
         let baseurl = &service.baseurl;
         let downloader = ElementalDownloader::shared();
         if !downloader.has_task_group(&version_name) {

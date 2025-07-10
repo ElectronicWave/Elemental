@@ -6,36 +6,32 @@ use futures::StreamExt;
 use std::{
     io::Result,
     sync::{Arc, LazyLock},
-    time::SystemTime,
     vec,
 };
-use tokio::task::{JoinError, JoinSet};
+use tokio::task::{JoinError, JoinHandle, JoinSet};
 
 use crate::error::unification::UnifiedResult;
 
 pub struct ElementalDownloader {
     client: reqwest::Client,
     handler: DashMap<String, JoinSet<()>>, // Group name : JoinSet()
+    waiting: DashMap<String, Vec<DownloadTask>>,
     pub tracker: Arc<ElementalTaskTracker>,
 }
 #[derive(Debug)]
 pub struct ElementalTaskTracker {
     pub tasks: DashMap<String, DashMap<DownloadTask, TrackedInfo>>, // Group: {task: info}
     pub bps: DashMap<String, DownloadBitsPerSecond>,
+    counter: DashMap<String, JoinHandle<()>>,
 }
 #[derive(Debug)]
 pub struct DownloadBitsPerSecond {
-    pub lasttime: SystemTime,
     pub counter: usize,
     pub bps: usize,
 }
 impl Default for DownloadBitsPerSecond {
     fn default() -> Self {
-        Self {
-            lasttime: SystemTime::now(),
-            counter: 0,
-            bps: 0,
-        }
+        Self { counter: 0, bps: 0 }
     }
 }
 
@@ -44,6 +40,7 @@ impl ElementalTaskTracker {
         Self {
             tasks: DashMap::new(),
             bps: DashMap::new(),
+            counter: DashMap::new(),
         }
     }
 
@@ -57,12 +54,30 @@ impl ElementalTaskTracker {
         let group = group.into();
         self.bps
             .insert(group.clone(), DownloadBitsPerSecond::default());
-        self.tasks.insert(group.into(), DashMap::new());
+        let group_moved = group.clone();
+        self.counter.insert(
+            group.clone(),
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                    if let Some(mut bps) = SHARED_DOWNLOADER.tracker.bps.get_mut(&group_moved) {
+                        bps.value_mut().bps = bps.value().counter;
+                        bps.value_mut().counter = 0;
+                    } else {
+                        break;
+                    }
+                }
+            }),
+        );
+        self.tasks.insert(group, DashMap::new());
     }
 
     pub fn remove_track_group(&self, group: impl Into<String>) {
         let group = group.into();
         self.bps.remove(&group);
+        self.counter.remove(&group).map(|(_, handle)| {
+            handle.abort();
+        });
         self.tasks.remove(&group);
     }
 
@@ -78,6 +93,7 @@ impl ElementalDownloader {
         Self {
             client: reqwest::Client::new(),
             handler: DashMap::new(),
+            waiting: DashMap::new(),
             tracker: Arc::new(ElementalTaskTracker::new()),
         }
     }
@@ -164,14 +180,7 @@ impl ElementalDownloader {
                             });
 
                         tracker_cloned.bps.get_mut(&group_cloned).map(|mut bps| {
-                            let current = SystemTime::now();
-                            if current.duration_since(bps.lasttime).unwrap().as_secs() >= 1 {
-                                bps.bps = bps.value_mut().counter + data.len();
-                                bps.counter = 0;
-                                bps.lasttime = current;
-                            } else {
-                                bps.counter += data.len();
-                            }
+                            bps.counter += data.len();
                         });
                         tokio::io::copy(&mut data.as_ref(), &mut output).await?;
                     }
@@ -226,7 +235,6 @@ pub struct DownloadTask {
 pub struct TrackedInfo {
     pub recv: usize,
     pub status: TrackedTaskStatus,
-    pub bps: usize,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -234,6 +242,7 @@ pub enum TrackedTaskStatus {
     ERR(String),
     ACTIVE,
     DONE,
+    // WAITING
 }
 
 impl DownloadTask {
@@ -256,7 +265,6 @@ impl DownloadTask {
         TrackedInfo {
             recv: 0,
             status: TrackedTaskStatus::ACTIVE,
-            bps: 0,
         }
     }
 }

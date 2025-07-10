@@ -251,6 +251,7 @@ dependencies = [
  "md-5",
  "regex",
  "reqwest",
+ "rs-release",
  "serde",
  "serde_json",
  "sha1_smol",
@@ -1135,6 +1136,12 @@ dependencies = [
  "untrusted",
  "windows-sys 0.52.0",
 ]
+
+[[package]]
+name = "rs-release"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33046892e4d999dc17e3790cb23ade37b8308f4bd2f3b05ed51bc5351762c94b"
 
 [[package]]
 name = "rustc-demangle"

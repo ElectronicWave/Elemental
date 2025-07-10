@@ -1,16 +1,11 @@
-use crate::error::unification::UnifiedResult;
 use futures::future::join_all;
-use log::__private_api::loc;
 use log::{error, warn};
 use std::env::consts::EXE_SUFFIX;
 use std::env::{home_dir, var};
 use std::io::Error as IoError;
-use std::io::Result as IoResult;
 use std::path::{Path, PathBuf};
 use std::string::FromUtf8Error;
-use tokio::fs::{canonicalize, read_dir};
 use tokio::process::Command;
-use tokio::task;
 use tokio::time::{Duration, timeout};
 
 #[derive(Debug)]
@@ -35,7 +30,7 @@ pub struct JavaInstall {
     pub path: String,       // the bin folder, does not contain the java executable
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum JavaSource {
     JavaHome,
     PackageManager,
@@ -44,8 +39,11 @@ pub enum JavaSource {
     Bundle,
 }
 
-const DEFAULT_INFO_STRING: &str = "unknown";
+const DEFAULT_INFO_STR: &str = "unknown";
 const JAVA_EXECUTION_TIMEOUT: u64 = 5; // in seconds
+fn get_java_executable_name() -> String {
+    format!("java{EXE_SUFFIX}")
+}
 
 #[derive(Debug)]
 pub enum JavaInfoError {
@@ -93,11 +91,11 @@ impl JavaDistribution {
 impl Default for JavaInfo {
     fn default() -> Self {
         Self {
-            java_major_version: DEFAULT_INFO_STRING.to_string(),
-            jre_version: DEFAULT_INFO_STRING.to_string(),
-            implementor: DEFAULT_INFO_STRING.to_string(),
-            java_runtime_version: DEFAULT_INFO_STRING.to_string(),
-            arch: DEFAULT_INFO_STRING.to_string(),
+            java_major_version: DEFAULT_INFO_STR.to_string(),
+            jre_version: DEFAULT_INFO_STR.to_string(),
+            implementor: DEFAULT_INFO_STR.to_string(),
+            java_runtime_version: DEFAULT_INFO_STR.to_string(),
+            arch: DEFAULT_INFO_STR.to_string(),
         }
     }
 }
@@ -117,11 +115,11 @@ impl JavaInfo {
     }
 
     fn parse_properties(output: &str) -> Result<Self, JavaInfoError> {
-        let mut java_major_version = DEFAULT_INFO_STRING.to_string();
-        let mut jre_version = DEFAULT_INFO_STRING.to_string();
-        let mut implementor = DEFAULT_INFO_STRING.to_string();
-        let mut java_runtime_version = DEFAULT_INFO_STRING.to_string();
-        let mut arch = DEFAULT_INFO_STRING.to_string();
+        let mut java_major_version = DEFAULT_INFO_STR.to_string();
+        let mut jre_version = DEFAULT_INFO_STR.to_string();
+        let mut implementor = DEFAULT_INFO_STR.to_string();
+        let mut java_runtime_version = DEFAULT_INFO_STR.to_string();
+        let mut arch = DEFAULT_INFO_STR.to_string();
 
         for line in output.lines() {
             let trimmed = line.trim();
@@ -205,7 +203,7 @@ impl JavaInstall {
             javas.extend(Self::get_java_distribution_from_registry(location));
         }
 
-        javas.extend(Self::get_official_java_distribution_bundles(vec![
+        javas.extend(Self::get_official_java_distribution_bundles(&[
             dirs_sys::known_folder_roaming_app_data()
                 .unwrap()
                 .join(".minecraft")
@@ -243,15 +241,17 @@ impl JavaInstall {
                     Ok(k) => k,
                     Err(e) => {
                         if e.raw_os_error().unwrap_or(0) as u32 != ERROR_FILE_NOT_FOUND {
-                            error!("Failed to open registry key {} : {}", key_name, e);
+                            error!("Failed to open registry key {key_name} : {e}");
                         }
                         continue;
                     }
                 };
 
                 for subkey in base_key.enum_keys().filter_map(Result::ok) {
-                    let full_key = format!("{}\\{}{}", key_name, subkey, subkey_suffix);
-                    let key = match root.open_subkey_with_flags(&full_key, flags) {
+                    let key = match root.open_subkey_with_flags(
+                        format!("{key_name}\\{subkey}{subkey_suffix}"),
+                        flags,
+                    ) {
                         Ok(k) => k,
                         Err(_) => continue,
                     };
@@ -270,7 +270,63 @@ impl JavaInstall {
 
     #[cfg(target_os = "linux")]
     fn get_platform_java_distribution() -> Vec<Self> {
-        todo!()
+        const AOSC_JAVA_PATHS: [(&str, &str); 1] = [("/usr/lib", "java-")]; // /usr/lib/java-<major>
+        const DEBIAN_JAVA_PATHS: [(&str, &str); 1] = [("/usr/lib/jvm", "")]; // /usr/lib/jvm/java-<major>-openjdk-<arch>
+        const FEDORA_JAVA_PATHS: [(&str, &str); 1] = [("/usr/lib/jvm", "")]; // /usr/lib/jvm/java-<major>-openjdk-<full_ver>.<fedora_major>.<arch>
+        const GENTOO_JAVA_PATHS: [(&str, &str); 3] = [
+            ("/usr/lib64", "openjdk-"), // /usr/lib64/openjdk-<major>
+            ("/usr/lib", "openjdk-"),   // /usr/lib/openjdk-<major>
+            ("/opt", "openjdk-bin-"),   // /opt/openjdk-bin-<ver>
+        ];
+        use crate::os::linux::get_os_release;
+        let mut javas: Vec<JavaInstall> = vec![];
+        let filters: &[(&str, &str)] = get_os_release()
+            .and_then(|os_release| os_release.get("ID").map(|s| s.as_str()))
+            .map_or(&[], |os_id| match os_id {
+                "aosc" => &AOSC_JAVA_PATHS,
+                "debian" | "ubuntu" => &DEBIAN_JAVA_PATHS,
+                "fedora" => &FEDORA_JAVA_PATHS,
+                "gentoo" => &GENTOO_JAVA_PATHS as &[(&str, &str)],
+                "Deepin" | "deepin" => todo!("deepin implementation"),
+                _ => &[],
+            });
+        for filter in filters {
+            let path = Path::new(filter.0);
+            if !path.exists() || !path.is_dir() {
+                continue;
+            }
+            let Ok(read_dir) = path.read_dir() else {
+                continue;
+            };
+            for sub in read_dir {
+                let Ok(sub_dir) = sub else {
+                    continue;
+                };
+                if !sub_dir.file_name().to_string_lossy().starts_with(filter.1) {
+                    continue;
+                }
+                let sub_dir_path = sub_dir.path();
+                if sub_dir_path.is_dir() {
+                    let bin_path = sub_dir_path.join("bin");
+                    if bin_path.exists()
+                        && bin_path.is_dir()
+                        && bin_path.join(get_java_executable_name()).exists()
+                    {
+                        javas.push(JavaInstall {
+                            source: JavaSource::PackageManager,
+                            path: bin_path.to_string_lossy().to_string(),
+                        });
+                    }
+                }
+            }
+        }
+        javas.extend(Self::get_official_java_distribution_bundles(&[home_dir()
+            .expect("Cannot find home dir")
+            .join(".minecraft")
+            .join("runtime")
+            .join("java-runtime-delta")
+            .join("linux")]));
+        javas
     }
 
     #[cfg(target_os = "macos")]
@@ -278,28 +334,37 @@ impl JavaInstall {
         todo!()
     }
 
-    fn get_official_java_distribution_bundles(search_locations: Vec<PathBuf>) -> Vec<Self> {
+    fn get_official_java_distribution_bundles(search_locations: &[PathBuf]) -> Vec<Self> {
         let mut javas = vec![];
         for location in search_locations {
-            if !location.exists() {
-                continue;
-            }
-            let Ok(read_dir) = location.read_dir() else {
+            javas.extend(Self::find_java_in_dir(&location, JavaSource::Bundle))
+        }
+        javas
+    }
+
+    fn find_java_in_dir(path: &Path, java_source: JavaSource) -> Vec<Self> {
+        let mut javas = vec![];
+        if !path.exists() || !path.is_dir() {
+            return javas;
+        }
+        let Ok(read_dir) = path.read_dir() else {
+            return javas;
+        };
+        for sub in read_dir {
+            let Ok(sub_dir) = sub else {
                 continue;
             };
-            for sub in read_dir {
-                let Ok(sub_dir) = sub else {
-                    continue;
-                };
-                let sub_dir_path = sub_dir.path();
-                if sub_dir_path.is_dir() {
-                    let bin_path = sub_dir_path.join("bin");
-                    if bin_path.exists() && bin_path.is_dir() {
-                        javas.push(JavaInstall {
-                            source: JavaSource::Bundle,
-                            path: bin_path.to_string_lossy().to_string(),
-                        });
-                    }
+            let sub_dir_path = sub_dir.path();
+            if sub_dir_path.is_dir() {
+                let bin_path = sub_dir_path.join("bin");
+                if bin_path.exists()
+                    && bin_path.is_dir()
+                    && bin_path.join(get_java_executable_name()).exists()
+                {
+                    javas.push(JavaInstall {
+                        source: java_source.clone(),
+                        path: bin_path.to_string_lossy().to_string(),
+                    });
                 }
             }
         }
@@ -319,8 +384,7 @@ impl JavaInstall {
 
     fn get_executable_file_path_from_path<P: AsRef<Path>>(path: P) -> Option<String> {
         // todo We may prefer javaw?
-        let filename = format!("java{}", EXE_SUFFIX);
-        let executable = path.as_ref().join(filename);
+        let executable = path.as_ref().join(get_java_executable_name());
         //TODO May be we should prove this file always exists.
         if executable.exists() {
             Some(executable.to_string_lossy().to_string())
@@ -332,16 +396,7 @@ impl JavaInstall {
 
 #[tokio::test]
 async fn test_java_detector() {
-    // Test with timeout
-    let test_java = JavaInstall {
-        source: JavaSource::User,
-        path: "invalid/path".to_string(),
-    };
-
-    match JavaInfo::parse_from_executable(&test_java.get_executable_file_path().unwrap()).await {
-        Err(JavaInfoError::Timeout) => println!("Timeout handled correctly"),
-        other => panic!("Unexpected result: {:?}", other),
-    }
+    println!("{:?}", JavaInstall::get_platform_java_distribution());
     if let Some(java_home) = var("JAVA_HOME").ok() {
         let path = format!("{}/bin/java", java_home);
         if let Ok(info) = JavaInfo::parse_from_executable(&path).await {

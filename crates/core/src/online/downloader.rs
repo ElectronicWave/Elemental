@@ -16,7 +16,7 @@ pub struct ElementalDownloader {
     client: reqwest::Client,
     handler: DashMap<String, JoinSet<()>>, // Group name : JoinSet()
     waiting: DashMap<String, VecDeque<DownloadTask>>,
-    pub tracker: ElementalTaskTracker, // TODO Remove Arc
+    pub tracker: ElementalTaskTracker,
     connection_count: RwLock<usize>,
     pub configs: RwLock<ElementalDownloaderConfigs>,
 }
@@ -24,6 +24,7 @@ pub struct ElementalDownloader {
 pub struct ElementalDownloaderConfigs {
     pub max_connections: usize, // Maximum number of concurrent connections, default is 8, higher will help download small files faster.
 }
+
 #[derive(Debug)]
 pub struct ElementalTaskTracker {
     pub tasks: DashMap<String, DashMap<DownloadTask, TrackedInfo>>, // Group: {task: info}
@@ -32,12 +33,13 @@ pub struct ElementalTaskTracker {
 }
 #[derive(Debug)]
 pub struct DownloadBytesPerSecond {
-    pub counter: usize,
-    pub bps: usize,
+    pub count: usize,
+    pub value: usize,
 }
+
 impl Default for DownloadBytesPerSecond {
     fn default() -> Self {
-        Self { counter: 0, bps: 0 }
+        Self { count: 0, value: 0 }
     }
 }
 
@@ -75,8 +77,8 @@ impl ElementalTaskTracker {
                 loop {
                     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                     if let Some(mut bps) = SHARED_DOWNLOADER.tracker.bps.get_mut(&group_moved) {
-                        bps.value_mut().bps = bps.value().counter;
-                        bps.value_mut().counter = 0;
+                        bps.value_mut().value = bps.value().count;
+                        bps.value_mut().count = 0;
                     } else {
                         break;
                     }
@@ -215,7 +217,7 @@ impl ElementalDownloader {
                             .bps
                             .get_mut(&group_cloned)
                             .map(|mut bps| {
-                                bps.counter += data.len();
+                                bps.count += data.len();
                             });
                         tokio::io::copy(&mut data.as_ref(), &mut output).await?;
                     }

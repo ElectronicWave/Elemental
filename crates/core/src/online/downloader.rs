@@ -10,7 +10,7 @@ use std::{
 };
 use tokio::task::{JoinError, JoinHandle, JoinSet};
 
-use crate::error::unification::UnifiedResult;
+use crate::{error::unification::UnifiedResult, storage::validate::file_sha1};
 // Please use `ElementalDownloader::shared()` to access the shared downloader instance.
 pub struct ElementalDownloader {
     client: reqwest::Client,
@@ -167,6 +167,13 @@ impl ElementalDownloader {
     }
 
     pub fn add_task(&self, task: DownloadTask) -> Option<()> {
+        // validate file exist
+        if let Some(sha1) = &task.sha1 {
+            if file_sha1(&task.path).map_or(false, |hash| hash == *sha1) {
+                return None;
+            }
+        }
+
         let client = self.client.clone();
         let url = task.url.clone();
         let path = task.path.clone();
@@ -297,6 +304,7 @@ pub struct DownloadTask {
     pub path: String,
     pub group: String,
     pub total: Option<usize>,
+    pub sha1: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -320,12 +328,14 @@ impl DownloadTask {
         path: impl Into<String>,
         group: impl Into<String>,
         total: Option<usize>,
+        sha1: Option<String>,
     ) -> Self {
         Self {
             url: url.into(),
             path: path.into(),
             group: group.into(),
             total,
+            sha1,
         }
     }
 
@@ -348,6 +358,7 @@ async fn test_downloader() {
                 "https://example.com/file1.txt",
                 "file1.txt",
                 "group_name",
+                None,
                 None,
             );
             let downloader = ElementalDownloader::shared();

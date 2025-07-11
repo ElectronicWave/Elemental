@@ -185,6 +185,7 @@ impl GameStorage {
             path,
             version_name.to_string(),
             Some(artifact.size),
+            Some(artifact.sha1.clone()),
         ));
 
         // 4. Download Native Lib (Legacy)
@@ -195,7 +196,8 @@ impl GameStorage {
                     .replace("libraries.minecraft.net", &baseurl.libraries),
                 self.get_ensure_library_path(download)?,
                 version_name.to_string(),
-                Some(artifact.size),
+                Some(download.size),
+                Some(download.sha1.clone()),
             ));
         }
 
@@ -216,6 +218,7 @@ impl GameStorage {
             path,
             version_name.to_string(),
             Some(download.size),
+            Some(download.sha1.clone()),
         ));
         Ok(())
     }
@@ -230,9 +233,10 @@ impl GameStorage {
         for (_, v) in data.objects {
             tasks.push(DownloadTask::new(
                 baseurl.get_object_url(v.hash.clone()),
-                self.get_ensure_object_path(v.hash)?,
+                self.get_ensure_object_path(v.hash.clone())?,
                 version_name.to_string(),
                 Some(v.size),
+                Some(v.hash),
             ));
         }
 

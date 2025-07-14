@@ -2,6 +2,8 @@ use std::fs::{create_dir_all, write};
 use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf, absolute};
 
+use tokio::process::Child;
+
 use super::version::VersionStorage;
 use crate::error::unification::UnifiedResult;
 use crate::model::mojang::{
@@ -171,9 +173,7 @@ impl GameStorage {
             }
         }
 
-        // TODO 2. Check Feats
-
-        // 3. Download Artifact
+        // 2. Download Artifact
         let artifact = &library.downloads.artifact;
         let path = self.get_ensure_library_path(artifact)?;
         let url = artifact
@@ -188,7 +188,7 @@ impl GameStorage {
             Some(artifact.sha1.clone()),
         ));
 
-        // 4. Download Native Lib (Legacy)
+        // 3. Download Native Lib (Legacy)
         if let Some(download) = library.try_get_classifiers_native_artifact() {
             ElementalDownloader::shared().add_task(DownloadTask::new(
                 &download
@@ -341,5 +341,16 @@ impl GameStorage {
         //? Check / Validate
 
         Ok(())
+    }
+
+    pub fn launch_version(
+        &self,
+        version_name: impl Into<String>,
+        executable: impl Into<String>,
+        extra_args: impl IntoIterator<Item = String>,
+    ) -> Result<Child> {
+        Ok(self
+            .get_version(version_name)?
+            .launch(&self, executable, extra_args)?)
     }
 }

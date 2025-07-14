@@ -57,7 +57,7 @@ impl<P: AsRef<Path>> JarFile<P> {
         }
         Ok(())
     }
-    // TODO Use this to get toml bytes
+
     pub fn by_name_bytes(&self, name: &str) -> Result<Vec<u8>> {
         let file = File::open(&self.path)?;
         let mut archive = ZipArchive::new(file)?;

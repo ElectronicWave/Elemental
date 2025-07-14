@@ -2,9 +2,13 @@ use std::fs::{File, create_dir_all};
 use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf, absolute};
 
+use tokio::process::{Child, Command};
+
 use crate::consts::PLATFORM_NATIVES_DIR_NAME;
 use crate::error::unification::UnifiedResult;
+use crate::model::launchenvs::LaunchEnvs;
 use crate::model::mojang::PistonMetaData;
+use crate::storage::game::GameStorage;
 
 pub struct VersionStorage {
     pub root: String,
@@ -61,4 +65,34 @@ impl VersionStorage {
         create_dir_all(&path)?;
         Ok(path.to_string_lossy().to_string())
     }
+
+    pub fn validate_version_data(&self) {
+        //TODO validate version
+    }
+
+    pub fn launch(
+        &self,
+        storage: &GameStorage,
+        executable: impl Into<String>,
+        extra_args: impl IntoIterator<Item = String>,
+    ) -> Result<Child> {
+        let envs = LaunchEnvs::offline_player(
+            "Test".to_owned(), //TODO
+            storage.root.clone(),
+            self.root.clone(),
+            &self.pistonmeta()?,
+        )?;
+        let pistonmeta = self.pistonmeta()?;
+        let mut args = vec![];
+        args.extend(extra_args);
+        args.extend(envs.apply_launchenvs(pistonmeta.arguments.get_jvm_arguments())?);
+        args.push(pistonmeta.main_class.clone());
+        args.extend(envs.apply_launchenvs(pistonmeta.arguments.get_game_arguments())?);
+        //TODO Customize Output
+        Ok(Command::new(executable.into()).args(args).spawn()?)
+    }
+}
+
+pub enum VersionLaunchMode {
+    Offline,
 }

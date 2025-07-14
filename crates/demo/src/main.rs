@@ -32,53 +32,23 @@ async fn main() {
 #[tokio::test]
 async fn test_game_run() {
     use elemental::bootstrap::java::JavaDistribution;
-    use elemental::model::launchenvs::LaunchEnvs;
-    use elemental::model::mojang::PistonMetaData;
-    use std::fs::File;
-    let game = "MyGame-1.16.5";
     let storage = GameStorage::new_ensure_dir("../../.minecraft").unwrap();
-    let file = File::open(
-        storage
-            .join("versions")
-            .join(game)
-            .join(format!("{game}.json")),
-    )
-    .unwrap();
-    let pistonmeta: PistonMetaData = serde_json::from_reader(file).unwrap();
-    let launchenvs = LaunchEnvs::offline_player(
-        "Elemental".to_owned(),
-        storage.root.clone(),
-        storage
-            .join("versions")
-            .join(game)
-            .to_string_lossy()
-            .to_string(),
-        &pistonmeta,
-    )
-    .unwrap();
-
     let installs = JavaDistribution::get().await;
     let selected = installs
         .iter()
         .find(|e| e.install.path.contains("8"))
         .unwrap();
-    let jvm = pistonmeta.arguments.get_jvm_arguments();
-    let game = pistonmeta.arguments.get_game_arguments();
 
-    let mut launchargs = vec![];
-    //TODO Launcher extra arg here.
-    launchargs.extend(vec![
-        "-Dfile.encoding=utf-8".to_owned(),
-        "-Dsun.stdout.encoding=utf-8".to_owned(),
-        "-Dsun.stderr.encoding=utf-8".to_owned(),
-    ]);
-
-    launchargs.extend(launchenvs.apply_launchenvs(jvm).unwrap());
-    launchargs.push(pistonmeta.main_class.clone());
-    launchargs.extend(launchenvs.apply_launchenvs(game).unwrap());
-    let mut cmd = std::process::Command::new(format!("{}/java.exe", selected.install.path)); // FIXME NOT A EXECUTABLE
-    cmd.args(launchargs);
-    let out = cmd.output().unwrap();
-    println!("{}", String::from_utf8(out.stderr).unwrap());
-    println!("{}", String::from_utf8(out.stdout).unwrap());
+    let mut child = storage
+        .launch_version(
+            "MyGame-1.16.5",
+            format!("{}/java.exe", selected.install.path),
+            vec![
+                "-Dfile.encoding=utf-8".to_owned(),
+                "-Dsun.stdout.encoding=utf-8".to_owned(),
+                "-Dsun.stderr.encoding=utf-8".to_owned(),
+            ],
+        )
+        .unwrap();
+    child.wait().await.unwrap();
 }

@@ -143,7 +143,7 @@ impl LaunchEnvs {
             auth_access_token: "${auth_access_token}".to_owned(),
             clientid: "${clientid}".to_owned(),
             user_type: "msa".to_owned(),
-            version_type: format!("Elemental {}", env!("CARGO_PKG_VERSION")), //TODO use include_str!() to optimize it
+            version_type: format!("Elemental (Core {})", env!("CARGO_PKG_VERSION")),
             resolution_width: "854".to_owned(),
             resolution_height: "480".to_owned(),
             quick_play_path: None,
@@ -154,7 +154,7 @@ impl LaunchEnvs {
                 .join(PLATFORM_NATIVES_DIR_NAME)
                 .to_string_lossy()
                 .to_string(),
-            launcher_name: "Elemental".to_owned(),
+            launcher_name: "Elemental".to_owned(), // Let it can be customized
             launcher_version: env!("CARGO_PKG_VERSION").to_owned(),
             classpath: classpath,
         })

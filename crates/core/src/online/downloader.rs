@@ -168,6 +168,7 @@ impl ElementalDownloader {
 
     pub fn add_task(&self, task: DownloadTask) -> Option<()> {
         // validate file exist
+
         if let Some(sha1) = &task.sha1 {
             if file_sha1(&task.path).map_or(false, |hash| hash == *sha1) {
                 return None;

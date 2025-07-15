@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone)]
 pub struct MojangBaseUrl {
     pub launchermeta: String,
-    pub launchermeta_https: bool,
     pub pistonmeta: String,
     pub pistondata: String,
     pub resources: String,
@@ -18,7 +17,6 @@ impl Default for MojangBaseUrl {
     fn default() -> Self {
         Self {
             launchermeta: "launchermeta.mojang.com".to_owned(),
-            launchermeta_https: false,
             pistonmeta: "piston-meta.mojang.com".to_owned(),
             resources: "resources.download.minecraft.net".to_owned(),
             libraries: "libraries.minecraft.net".to_owned(),

@@ -22,21 +22,16 @@ impl MojangService {
     }
 
     pub async fn launchmeta(&self) -> Result<LaunchMetaData> {
-        let url: String;
-
-        if self.baseurl.launchermeta_https {
-            url = format!(
-                "https://{}/mc/game/version_manifest.json",
-                self.baseurl.launchermeta
-            );
-        } else {
-            url = format!(
-                "http://{}/mc/game/version_manifest.json",
-                self.baseurl.launchermeta
-            );
-        }
         // Use shortcut here because it wont call many times.
-        reqwest::get(url).await.to_stdio()?.json().await.to_stdio()
+        reqwest::get(format!(
+            "https://{}/mc/game/version_manifest.json",
+            self.baseurl.launchermeta
+        ))
+        .await
+        .to_stdio()?
+        .json()
+        .await
+        .to_stdio()
     }
 
     pub async fn launchmeta_v2(&self) {

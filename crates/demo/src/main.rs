@@ -2,9 +2,9 @@
 
 use std::time::Duration;
 
-use elemental::online::downloader::ElementalDownloader;
-use elemental::online::mojang::MojangService;
-use elemental::storage::game::GameStorage;
+use elemental_core::online::downloader::ElementalDownloader;
+use elemental_core::online::mojang::MojangService;
+use elemental_core::storage::game::GameStorage;
 
 #[tokio::main]
 async fn main() {
@@ -31,7 +31,7 @@ async fn main() {
 
 #[tokio::test]
 async fn test_game_run() {
-    use elemental::bootstrap::java::JavaDistribution;
+    use elemental_core::bootstrap::java::JavaDistribution;
     let storage = GameStorage::new_ensure_dir("../../.minecraft").unwrap();
     let installs = JavaDistribution::get().await;
     let selected = installs

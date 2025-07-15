@@ -6,6 +6,8 @@
 version: 2
 updates:
   - package-ecosystem: "cargo" # See documentation for possible values
-    directory: "/crates/core" # Location of package manifests
+    directories : 
+      - "/crates/core"
+      - "/"
     schedule:
       interval: "weekly"

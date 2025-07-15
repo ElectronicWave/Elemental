@@ -1,5 +1,5 @@
 [package]
-name = "elemental-modloader"
+name = "elemental-loader"
 version = "0.1.0"
 edition = "2024"
 

@@ -32,15 +32,12 @@ impl GameStorage {
         Ok(Self { root })
     }
 
-    pub fn get_ensure_object_indexes_path(&self, version_id: String) -> Result<String> {
+    pub fn get_ensure_object_indexes_path(&self, version_id: String) -> Result<PathBuf> {
         let parent = self.join("assets").join("indexes");
 
         create_dir_all(&parent)?;
 
-        Ok(parent
-            .join(format!("{version_id}.json"))
-            .to_string_lossy()
-            .to_string())
+        Ok(parent.join(format!("{version_id}.json")))
     }
 
     pub async fn get_and_save_objects_index(
@@ -66,7 +63,7 @@ impl GameStorage {
         Ok(objs)
     }
 
-    pub fn get_ensure_object_path(&self, hash: String) -> Result<String> {
+    pub fn get_ensure_object_path(&self, hash: String) -> Result<PathBuf> {
         let parent = self
             .join("assets")
             .join("objects")
@@ -74,35 +71,33 @@ impl GameStorage {
 
         create_dir_all(&parent)?;
 
-        Ok(parent.join(hash).to_string_lossy().to_string())
+        Ok(parent.join(hash))
     }
 
     pub fn get_ensure_library_path(
         &self,
         library: &PistonMetaLibrariesDownloadsArtifact,
-    ) -> Result<String> {
+    ) -> Result<PathBuf> {
         let path = self.join("libraries").join(&library.path);
         let parent = path
             .parent()
             .ok_or(Error::new(ErrorKind::Other, "No such directory"))?;
 
         create_dir_all(parent)?;
-        Ok(path.to_string_lossy().to_string())
+        Ok(path)
     }
 
-    pub fn get_ensure_client_path(&self, version_name: impl Into<String>) -> Result<String> {
+    pub fn get_ensure_client_path(&self, version_name: impl Into<String>) -> Result<PathBuf> {
         let name = version_name.into();
         let path: PathBuf = self.join("versions").join(&name);
         create_dir_all(&path)?;
-        Ok(path
-            .join(format!("{}.jar", name))
-            .to_string_lossy()
-            .to_string())
+        Ok(path.join(format!("{}.jar", name)))
     }
 
     pub fn join<P: AsRef<Path>>(&self, path: P) -> PathBuf {
         Path::new(&self.root).join(path)
     }
+
     /// Use [crate::online::downloader::ElementalDownloader::shared] to download file
     ///
     /// you can provide `version_name` and wait all tasks via [crate::online::downloader::ElementalDownloader::wait_group_tasks]
@@ -182,7 +177,7 @@ impl GameStorage {
 
         ElementalDownloader::shared().add_task(DownloadTask::new(
             url,
-            path,
+            path.to_string_lossy().to_string(),
             version_name.to_string(),
             Some(artifact.size),
             Some(artifact.sha1.clone()),
@@ -194,7 +189,9 @@ impl GameStorage {
                 &download
                     .url
                     .replace("libraries.minecraft.net", &baseurl.libraries),
-                self.get_ensure_library_path(download)?,
+                self.get_ensure_library_path(download)?
+                    .to_string_lossy()
+                    .to_string(),
                 version_name.to_string(),
                 Some(download.size),
                 Some(download.sha1.clone()),
@@ -215,7 +212,7 @@ impl GameStorage {
             download
                 .url
                 .replace("piston-data.mojang.com", &baseurl.pistondata),
-            path,
+            path.to_string_lossy().to_string(),
             version_name.to_string(),
             Some(download.size),
             Some(download.sha1.clone()),
@@ -233,7 +230,9 @@ impl GameStorage {
         for (_, v) in data.objects {
             tasks.push(DownloadTask::new(
                 baseurl.get_object_url(v.hash.clone()),
-                self.get_ensure_object_path(v.hash.clone())?,
+                self.get_ensure_object_path(v.hash.clone())?
+                    .to_string_lossy()
+                    .to_string(),
                 version_name.to_string(),
                 Some(v.size),
                 Some(v.hash),

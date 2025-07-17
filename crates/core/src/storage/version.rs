@@ -60,14 +60,20 @@ impl VersionStorage {
         serde_json::from_reader(File::open(self.join(format!("{}.json", self.name)))?).to_stdio()
     }
 
-    pub fn get_ensure_natives_path(&self) -> Result<String> {
+    pub fn get_ensure_natives_path(&self) -> Result<PathBuf> {
         let path = self.join(PLATFORM_NATIVES_DIR_NAME);
         create_dir_all(&path)?;
-        Ok(path.to_string_lossy().to_string())
+        Ok(path)
     }
 
     pub fn validate_version_data(&self) {
         //TODO validate version
+    }
+
+    pub fn get_ensure_subpath<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf> {
+        let subpath = self.join(path);
+        create_dir_all(&subpath)?;
+        Ok(subpath)
     }
 
     pub fn launch(

@@ -1,3 +1,4 @@
+use std::io::{stdout, Write};
 use std::string::ToString;
 use std::time::Duration;
 use curl::easy::{Easy, List};
@@ -5,10 +6,10 @@ use curl::easy::{Easy, List};
 pub mod curseforge;
 pub mod modrinth;
 
-static CF_API: &str = "https://api.curseforge.com/v1/";
-static MR_API: &str = "https://api.modrinth.com/";
-static CF_API_SPECIAL: &str = "https://mod.mcimirror.top/curseforge/";
-static MR_API_SPECIAL: &str = "https://mod.mcimirror.top/modrinth/";
+static CF_API: &str = "https://api.curseforge.com/v1";
+static MR_API: &str = "https://api.modrinth.com";
+static CF_API_SPECIAL: &str = "https://mod.mcimirror.top/curseforge";
+static MR_API_SPECIAL: &str = "https://mod.mcimirror.top/modrinth";
 
 #[derive(Debug)]
 pub struct Discover {
@@ -21,28 +22,24 @@ impl Discover {
         easy_client.follow_location(true).unwrap();
         easy_client.timeout(Duration::from_secs(10)).unwrap();
         easy_client.url(url).unwrap();
+        easy_client.custom_request("GET").unwrap();
         Discover { easy_client }
     }
 
-    pub fn set_json_header(&mut self) {
-        self.set_header("Accept", "application/json");
-    }
-
     pub fn set_curse_key(&mut self, api_key: &str) {
-        self.set_header("x-api-key", api_key);
-    }
-
-    pub fn set_rinth_key(&mut self, api_key: &str) {
-        self.set_header("Authorization", api_key);
-    }
-
-    fn set_header(&mut self, header: &str, value: &str) {
         let mut headers = List::new();
-        headers.append(&format!("{}: {}", header, value)).unwrap();
+        headers.append(&format!("{}: {}", "Accept", "application/json")).unwrap();
+        headers.append(&format!("{}: {}", "x-api-key", api_key)).unwrap();
         self.easy_client.http_headers(headers).unwrap();
     }
 
+    pub fn set_rinth_key(&mut self, api_key: &str) {
+        let mut headers = List::new();
+        headers.append(&format!("{}: {}", "Authorization", api_key)).unwrap();
+    }
+
     pub fn respond(&mut self) -> u32 {
+        self.easy_client.perform().unwrap();
         self.easy_client.response_code().unwrap()
     }
 

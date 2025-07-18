@@ -1,5 +1,6 @@
+use std::io::stdout;
 use crate::curseforge::serialize::{Desc, GetMod, GetModFile, GetModFiles, SearchMods};
-use crate::{Discover, UrlBuilder, CF_API, CF_API_SPECIAL, MR_API};
+use crate::{Discover, UrlBuilder, CF_API, CF_API_SPECIAL};
 
 pub mod serialize;
 
@@ -101,7 +102,6 @@ impl Curse {
     fn get_discover(&self, url: &str) -> Discover{
         let mut discover = Discover::new(url);
         discover.set_curse_key(&self.api_key);
-        discover.set_json_header();
         if self.special_mode {
             discover.easy_client.useragent("Packust/1.0.0").unwrap();
         }

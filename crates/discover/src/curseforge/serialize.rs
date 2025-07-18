@@ -117,7 +117,6 @@ pub struct Category {
     pub is_class: bool,
     pub class_id: i64,
     pub parent_category_id: i64,
-    pub display_index: i64,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

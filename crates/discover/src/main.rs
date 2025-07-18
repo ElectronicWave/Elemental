@@ -1,7 +1,8 @@
-use std::io::{stdout, Write};
-use curl::easy::{Easy, List};
+use curl::easy::{Easy};
 use elemental_discover::curseforge::Curse;
-use elemental_discover::Discover;
 
 fn main() {
+    let curse = Curse::new_with_default_key(false);
+    //curse.get_mod(238222);
+    println!("{:?}", curse.get_mod(238222))
 }

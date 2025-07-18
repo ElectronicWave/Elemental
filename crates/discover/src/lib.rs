@@ -1,6 +1,5 @@
-use std::io::{stdout, Write};
+use std::io::{Write};
 use std::string::ToString;
-use std::time::Duration;
 use curl::easy::{Easy, List};
 
 pub mod curseforge;
@@ -19,8 +18,6 @@ pub struct Discover {
 impl Discover {
     pub fn new(url: &str) -> Self {
         let mut easy_client = Easy::new();
-        easy_client.follow_location(true).unwrap();
-        easy_client.timeout(Duration::from_secs(10)).unwrap();
         easy_client.url(url).unwrap();
         easy_client.custom_request("GET").unwrap();
         Discover { easy_client }
@@ -28,8 +25,8 @@ impl Discover {
 
     pub fn set_curse_key(&mut self, api_key: &str) {
         let mut headers = List::new();
-        headers.append(&format!("{}: {}", "Accept", "application/json")).unwrap();
-        headers.append(&format!("{}: {}", "x-api-key", api_key)).unwrap();
+        headers.append("Accept: application/json").unwrap();
+        headers.append(&format!("x-api-key: {}", api_key)).unwrap();
         self.easy_client.http_headers(headers).unwrap();
     }
 
@@ -47,7 +44,7 @@ impl Discover {
         self.respond() == 200
     }
 
-    pub fn get(&mut self) -> String {
+    pub fn get(&mut self) -> Vec<u8> {
         let mut data = Vec::new();
         {
             let mut transfer = self.easy_client.transfer();
@@ -57,7 +54,7 @@ impl Discover {
             }).unwrap();
             transfer.perform().unwrap();
         }
-        String::from_utf8(data).unwrap()
+        data
     }
 }
 

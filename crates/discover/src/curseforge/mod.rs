@@ -52,28 +52,30 @@ impl Curse {
     {
         let url = UrlBuilder::new(format!("{}/search", self.base_url).as_str()).add_param("gameId", "432");
         let mut discover = self.get_discover(builder(url).url.as_str());
-        serde_json::from_str(&*discover.get()).unwrap()
+        serde_json::from_str(str::from_utf8(&*discover.get()).unwrap()).unwrap()
     }
 
     // Get Mod Info
     pub fn get_mod(&self, mod_id: i32) -> GetMod {
         let url = format!("{}/mods/{}", self.base_url, mod_id);
         let mut discover = self.get_discover(&*url);
-        serde_json::from_str(&*discover.get()).unwrap()
+        println!("{:?}", str::from_utf8(&*discover.get()));
+        GetMod::default()
+        //serde_json::from_str(str::from_utf8(&*discover.get()).unwrap()).unwrap()
     }
 
     // Get Mod Descriptions
     pub fn get_mod_desc(&self, mod_id: i32) -> Desc {
         let url = format!("{}/mods/{}/description", self.base_url, mod_id);
         let mut discover = self.get_discover(&*url);
-        serde_json::from_str(&*discover.get()).unwrap()
+        serde_json::from_str(str::from_utf8(&*discover.get()).unwrap()).unwrap()
     }
 
     // Get Mod File
     pub fn get_mod_file(&self, mod_id: i32, file_id: i32) -> GetModFile {
         let url = format!("{}/mods/{}/files/{}", self.base_url, mod_id, file_id);
         let mut discover = self.get_discover(&*url);
-        serde_json::from_str(&*discover.get()).unwrap()
+        serde_json::from_str(str::from_utf8(&*discover.get()).unwrap()).unwrap()
     }
 
     // Get Mod Files params: https://docs.curseforge.com/rest-api/?shell#get-mod-files
@@ -82,21 +84,21 @@ impl Curse {
     {
         let url = UrlBuilder::new(format!("{}/mods/{}/files", self.base_url, mod_id).as_str());
         let mut discover = self.get_discover(builder(url).url.as_str());
-        serde_json::from_str(&*discover.get()).unwrap()
+        serde_json::from_str(str::from_utf8(&*discover.get()).unwrap()).unwrap()
     }
 
     // Get Mod File Changelog
     pub fn get_mod_file_changelog(&self, mod_id: i32, file_id: i32) -> Desc {
         let url = format!("{}/mods/{}/files/{}/changelog", self.base_url, mod_id, file_id);
         let mut discover = self.get_discover(&*url);
-        serde_json::from_str(&*discover.get()).unwrap()
+        serde_json::from_str(str::from_utf8(&*discover.get()).unwrap()).unwrap()
     }
 
     // Get Mod File Link
     pub fn get_mod_file_link(&self, mod_id: i32, file_id: i32) -> Desc {
         let url = format!("{}/mods/{}/files/{}/download-url", self.base_url, mod_id, file_id);
         let mut discover = self.get_discover(&*url);
-        serde_json::from_str(&*discover.get()).unwrap()
+        serde_json::from_str(str::from_utf8(&*discover.get()).unwrap()).unwrap()
     }
 
     fn get_discover(&self, url: &str) -> Discover{

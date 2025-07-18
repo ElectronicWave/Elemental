@@ -1,5 +1,5 @@
 use crate::curseforge::serialize::{Desc, GetMod, GetModFile, GetModFiles, SearchMods};
-use crate::{Discover, UrlBuilder};
+use crate::{Discover, UrlBuilder, CF_API, CF_API_SPECIAL, MR_API};
 
 pub mod serialize;
 
@@ -7,7 +7,7 @@ pub mod serialize;
 pub struct Curse {
     base_url: String,
     api_key: String,
-    special_mode: bool,
+    special_mode: bool
 }
 
 /* Minecraft Game ID = 432
@@ -23,17 +23,25 @@ pub struct Curse {
 impl Curse {
     pub fn new_with_default_key(special_mode: bool) -> Self {
         Self {
-            base_url: "https://api.curseforge.com/v1/".to_string(),
+            base_url: if special_mode {
+                CF_API_SPECIAL.to_string()
+            } else {
+                CF_API.to_string()
+            },
             api_key: "$2a$10$m.XJaH.ysAKZ3VzWIfnlP.RXkN54zQSYIUxBM8/H5riHQ2cUx3koy".to_string(), // Default API key
-            special_mode,
+            special_mode
         }
     }
 
     pub fn new(api_key: String, special_mode: bool) -> Self {
         Self {
-            base_url: "https://api.curseforge.com/v1/".to_string(),
+            base_url: if special_mode {
+                CF_API_SPECIAL.to_string()
+            } else {
+                CF_API.to_string()
+            },
             api_key,
-            special_mode,
+            special_mode
         }
     }
 
@@ -42,36 +50,28 @@ impl Curse {
     where T: FnMut(UrlBuilder) -> UrlBuilder
     {
         let url = UrlBuilder::new(format!("{}/search", self.base_url).as_str()).add_param("gameId", "432");
-        let mut discover = Discover::new(builder(url).url.as_str());
-        discover.set_curse_key(&self.api_key);
-        discover.set_json_header();
+        let mut discover = self.get_discover(builder(url).url.as_str());
         serde_json::from_str(&*discover.get()).unwrap()
     }
 
     // Get Mod Info
     pub fn get_mod(&self, mod_id: i32) -> GetMod {
         let url = format!("{}/mods/{}", self.base_url, mod_id);
-        let mut discover = Discover::new(&*url);
-        discover.set_curse_key(&self.api_key);
-        discover.set_json_header();
+        let mut discover = self.get_discover(&*url);
         serde_json::from_str(&*discover.get()).unwrap()
     }
 
     // Get Mod Descriptions
     pub fn get_mod_desc(&self, mod_id: i32) -> Desc {
         let url = format!("{}/mods/{}/description", self.base_url, mod_id);
-        let mut discover = Discover::new(&*url);
-        discover.set_curse_key(&self.api_key);
-        discover.set_json_header();
+        let mut discover = self.get_discover(&*url);
         serde_json::from_str(&*discover.get()).unwrap()
     }
 
     // Get Mod File
     pub fn get_mod_file(&self, mod_id: i32, file_id: i32) -> GetModFile {
         let url = format!("{}/mods/{}/files/{}", self.base_url, mod_id, file_id);
-        let mut discover = Discover::new(&*url);
-        discover.set_curse_key(&self.api_key);
-        discover.set_json_header();
+        let mut discover = self.get_discover(&*url);
         serde_json::from_str(&*discover.get()).unwrap()
     }
 
@@ -80,28 +80,32 @@ impl Curse {
     where T: FnMut(UrlBuilder) -> UrlBuilder
     {
         let url = UrlBuilder::new(format!("{}/mods/{}/files", self.base_url, mod_id).as_str());
-        let mut discover = Discover::new(builder(url).url.as_str());
-        discover.set_curse_key(&self.api_key);
-        discover.set_json_header();
+        let mut discover = self.get_discover(builder(url).url.as_str());
         serde_json::from_str(&*discover.get()).unwrap()
     }
 
     // Get Mod File Changelog
     pub fn get_mod_file_changelog(&self, mod_id: i32, file_id: i32) -> Desc {
         let url = format!("{}/mods/{}/files/{}/changelog", self.base_url, mod_id, file_id);
-        let mut discover = Discover::new(&*url);
-        discover.set_curse_key(&self.api_key);
-        discover.set_json_header();
+        let mut discover = self.get_discover(&*url);
         serde_json::from_str(&*discover.get()).unwrap()
     }
 
     // Get Mod File Link
     pub fn get_mod_file_link(&self, mod_id: i32, file_id: i32) -> Desc {
         let url = format!("{}/mods/{}/files/{}/download-url", self.base_url, mod_id, file_id);
-        let mut discover = Discover::new(&*url);
+        let mut discover = self.get_discover(&*url);
+        serde_json::from_str(&*discover.get()).unwrap()
+    }
+
+    fn get_discover(&self, url: &str) -> Discover{
+        let mut discover = Discover::new(url);
         discover.set_curse_key(&self.api_key);
         discover.set_json_header();
-        serde_json::from_str(&*discover.get()).unwrap()
+        if self.special_mode {
+            discover.easy_client.useragent("Packust/1.0.0").unwrap();
+        }
+        discover
     }
 }
 

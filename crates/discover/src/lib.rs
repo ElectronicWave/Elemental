@@ -1,8 +1,14 @@
+use std::string::ToString;
 use std::time::Duration;
 use curl::easy::{Easy, List};
 
 pub mod curseforge;
 pub mod modrinth;
+
+static CF_API: &str = "https://api.curseforge.com/v1/";
+static MR_API: &str = "https://api.modrinth.com/";
+static CF_API_SPECIAL: &str = "https://mod.mcimirror.top/curseforge/";
+static MR_API_SPECIAL: &str = "https://mod.mcimirror.top/modrinth/";
 
 #[derive(Debug)]
 pub struct Discover {

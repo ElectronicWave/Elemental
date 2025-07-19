@@ -6,7 +6,7 @@ Please try to follow the advice below before coding.
 
 ## API Design
 
-Funciton should be clear and easy to use.
+Function should be clear and easy to use.
 
 ## Code Style
 

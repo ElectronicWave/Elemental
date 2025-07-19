@@ -280,6 +280,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "elemental"
+version = "0.1.0"
+dependencies = [
+ "elemental-core",
+ "elemental-loader",
+]
+
+[[package]]
 name = "elemental-core"
 version = "0.1.0"
 dependencies = [

@@ -2,13 +2,14 @@ use dashmap::{
     DashMap,
     mapref::one::{Ref, RefMut},
 };
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
+use reqwest::header::HeaderMap;
 use std::{
     collections::VecDeque,
     io::Result,
     sync::{LazyLock, RwLock},
 };
-use tokio::task::{JoinError, JoinHandle, JoinSet};
+use tokio::task::{JoinHandle, JoinSet, unconstrained};
 
 use crate::{error::unification::UnifiedResult, storage::validate::file_sha1};
 // Please use `ElementalDownloader::shared()` to access the shared downloader instance.
@@ -165,13 +166,16 @@ impl ElementalDownloader {
     ) -> Option<RefMut<'_, String, JoinSet<()>>> {
         self.handler.get_mut(&group.into())
     }
+    pub fn add_task(&self, task: DownloadTask) {
+        self.add_task_headers(task, None);
+    }
 
-    pub fn add_task(&self, task: DownloadTask) -> Option<()> {
+    pub fn add_task_headers(&self, task: DownloadTask, headers: Option<HeaderMap>) {
         // validate file exist
 
         if let Some(sha1) = &task.sha1 {
             if file_sha1(&task.path).map_or(false, |hash| hash == *sha1) {
-                return None;
+                return;
             }
         }
 
@@ -198,13 +202,13 @@ impl ElementalDownloader {
 
             let task_cloned = task.clone();
             let group_cloned = group.clone();
-
             handler.value_mut().spawn(async move {
                 let tracker = &SHARED_DOWNLOADER.tracker;
                 tracker.active_task(&task);
                 let executer: Result<()> = async move {
                     let mut stream = client
                         .get(url.clone())
+                        .headers(headers.unwrap_or_default())
                         .send()
                         .await
                         .to_stdio()?
@@ -249,9 +253,9 @@ impl ElementalDownloader {
                         .tasks
                         .get_mut(&group)
                         .map(|mut tasks| {
-                            tasks.value_mut().get_mut(&task_cloned).map(|mut tracked| {
-                                tracked.value_mut().status = TrackedTaskStatus::DONE;
-                            })
+                            // Remove this task to clean up
+                            tasks.value_mut().remove(&task_cloned);
+                            Some(())
                         }),
                     Err(error) => {
                         SHARED_DOWNLOADER
@@ -267,35 +271,30 @@ impl ElementalDownloader {
                     }
                 };
             });
-        })
+        });
     }
 
-    pub fn add_tasks(&self, tasks: Vec<DownloadTask>) -> Vec<Option<()>> {
-        tasks.into_iter().map(|task| self.add_task(task)).collect()
+    pub fn add_tasks(&self, tasks: Vec<DownloadTask>) {
+        for task in tasks {
+            self.add_task(task);
+        }
     }
 
-    pub async fn wait_group_tasks(
-        &self,
-        group: impl Into<String>,
-    ) -> Vec<core::result::Result<(), JoinError>> {
+    // It will also cleanup joinset.
+    pub async fn wait_group_tasks(&self, group: impl Into<String>) {
         let group = group.into();
         // ensure all tasks are not in waiting state
         while let Some(waiting) = self.waiting.get_mut(&group) {
             if waiting.is_empty() {
-                println!("waiting tasks are empty.");
+                // Clean up it self
                 break;
             }
         }
 
-        let mut result = vec![];
         // wait for all tasks in the group to finish
         if let Some(mut tasks) = self.get_task_group_mut(group) {
-            while let Some(res) = tasks.value_mut().join_next().await {
-                result.push(res);
-            }
+            while let Some(Some(_)) = unconstrained(tasks.value_mut().join_next()).now_or_never() {}
         }
-
-        result
     }
 }
 
@@ -318,7 +317,6 @@ pub struct TrackedInfo {
 pub enum TrackedTaskStatus {
     ERR(String),
     ACTIVE,
-    DONE,
     WAITING,
 }
 

@@ -1,6 +1,6 @@
 //TODO REFACTOR ME WITH TUI/CLI
 
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use elemental_core::online::downloader::ElementalDownloader;
 use elemental_core::online::mojang::MojangService;
@@ -12,20 +12,28 @@ async fn main() {
     let service = MojangService::default();
     let version_name = "MyGame-1.16.5";
     let stroage = GameStorage::new_ensure_dir(".minecraft").unwrap();
-    stroage
-        .download_version_all(&service, "1.16.5", version_name)
-        .await
-        .unwrap();
+    let s = SystemTime::now();
     tokio::spawn(async {
         loop {
             tokio::time::sleep(Duration::from_millis(500)).await;
             println!("{:?}", ElementalDownloader::shared().tracker.bps)
         }
     });
+    // if all file exists, it will cost 5-8s to vaildate sha1.
+    stroage
+        .download_version_all(&service, "1.16.5", version_name)
+        .await
+        .unwrap();
+
     ElementalDownloader::shared()
         .wait_group_tasks(version_name)
         .await;
+    println!(
+        "costs {}ms",
+        SystemTime::now().duration_since(s).unwrap().as_millis()
+    );
     ElementalDownloader::shared().remove_task_group(version_name);
+    println!("start extract");
     stroage.extract_version_natives(version_name).unwrap();
 }
 

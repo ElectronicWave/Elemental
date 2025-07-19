@@ -1,0 +1,14 @@
+[package]
+name = "elemental"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+elemental-core = { path = "../core" }
+elemental-loader = { path = "../loader" }
+
+
+[features]
+loader = []
+full = ["loader"]
+default = ["full"]

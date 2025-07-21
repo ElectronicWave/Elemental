@@ -33,7 +33,9 @@ async fn main() {
         SystemTime::now().duration_since(s).unwrap().as_millis()
     );
     ElementalDownloader::shared().remove_task_group(version_name);
+    println!("{:?}", ElementalDownloader::shared().tracker.bps);
     println!("start extract");
+
     stroage.extract_version_natives(version_name).unwrap();
 }
 

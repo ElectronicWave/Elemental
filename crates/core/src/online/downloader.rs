@@ -148,14 +148,14 @@ impl ElementalDownloader {
         self.handler.get(&group.into())
     }
 
-    pub async fn task_group_context<F: Future<Output = Result<()>> + Send + 'static>(
+    pub async fn group_context<F: Future<Output = Result<()>> + Send + 'static>(
         &self,
         group: impl Into<String>,
-        future: fn(group: String) -> F,
+        future: fn(downloader: &'static LazyLock<ElementalDownloader>, group: String) -> F,
     ) -> Result<()> {
         let group = group.into();
         self.create_task_group(group.clone());
-        future(group.clone()).await?;
+        future(&SHARED_DOWNLOADER, group.clone()).await?;
         self.remove_task_group(group);
         Ok(())
     }
@@ -166,11 +166,12 @@ impl ElementalDownloader {
     ) -> Option<RefMut<'_, String, JoinSet<()>>> {
         self.handler.get_mut(&group.into())
     }
+
     pub fn add_task(&self, task: DownloadTask) {
-        self.add_task_headers(task, None);
+        self.add_task_with_headers(task, None);
     }
 
-    pub fn add_task_headers(&self, task: DownloadTask, headers: Option<HeaderMap>) {
+    pub fn add_task_with_headers(&self, task: DownloadTask, headers: Option<HeaderMap>) {
         // validate file exist
 
         if let Some(sha1) = &task.sha1 {
@@ -187,7 +188,6 @@ impl ElementalDownloader {
         self.handler.get_mut(&task.group).map(|mut handler| {
             // Initialize the task tracking
             SHARED_DOWNLOADER.tracker.track_task(&task);
-            // This num should be configurable
             if self.connection_count.read().unwrap().clone()
                 > self.configs.read().unwrap().max_connections.clone()
             {
@@ -280,7 +280,7 @@ impl ElementalDownloader {
         }
     }
 
-    // It will also cleanup joinset.
+    /// waiting will also cleanup joinset.
     pub async fn wait_group_tasks(&self, group: impl Into<String>) {
         let group = group.into();
         // ensure all tasks are not in waiting state
@@ -352,7 +352,7 @@ async fn test_downloader() {
     let group_name = "test";
 
     let result = downloader
-        .task_group_context(group_name, |group| async {
+        .group_context(group_name, |downloader, group| async {
             let task = DownloadTask::new(
                 "https://example.com/file1.txt",
                 "file1.txt",
@@ -360,7 +360,6 @@ async fn test_downloader() {
                 None,
                 None,
             );
-            let downloader = ElementalDownloader::shared();
             downloader.add_task(task);
             downloader.wait_group_tasks(group).await;
             Ok(())

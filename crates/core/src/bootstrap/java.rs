@@ -41,6 +41,7 @@ pub enum JavaSource {
 
 const DEFAULT_INFO_STR: &str = "unknown";
 const JAVA_EXECUTION_TIMEOUT: u64 = 5; // in seconds
+const LTS_VERSIONS: [&str; 5] = ["1.8", "11", "17", "21", "25"];// Though java 25 is not released yet, it will be a lts so we put it here
 fn get_java_executable_name() -> String {
     format!("java{EXE_SUFFIX}")
 }
@@ -68,6 +69,14 @@ impl From<FromUtf8Error> for JavaInfoError {
 impl JavaDistribution {
     pub async fn get() -> Vec<JavaDistribution> {
         Self::from_installs(JavaInstall::get_all_java_installs()).await
+    }
+
+    pub async fn is_lts(&self) -> bool {
+        LTS_VERSIONS.contains(&self.info.java_major_version.as_str())
+    }
+
+    pub async fn is_major(&self, required: String) -> bool {
+        self.info.java_major_version == required
     }
 
     async fn from_installs(installs: Vec<JavaInstall>) -> Vec<JavaDistribution> {

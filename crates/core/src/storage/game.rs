@@ -7,7 +7,7 @@ use tokio::process::Child;
 use super::version::VersionStorage;
 use crate::error::unification::UnifiedResult;
 use crate::model::mojang::{
-    MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaDownload,
+    MojangBaseUrl, PistonMetaAssetIndexObjects, VersionData, PistonMetaDownload,
     PistonMetaLibraries, PistonMetaLibrariesDownloadsArtifact,
 };
 use crate::online::downloader::{DownloadTask, ElementalDownloader};
@@ -211,7 +211,7 @@ impl GameStorage {
         ElementalDownloader::shared().add_task(DownloadTask::new(
             download
                 .url
-                .replace("piston-data.mojang.com", &baseurl.pistondata),
+                .replace("piston-data.mojang.com", &baseurl.data),
             path.to_string_lossy().to_string(),
             version_name.to_string(),
             Some(download.size),
@@ -283,7 +283,7 @@ impl GameStorage {
     pub fn save_pistonmeta_data(
         &self,
         version_name: impl Into<String>,
-        data: &PistonMetaData,
+        data: &VersionData,
     ) -> Result<()> {
         let version_name = version_name.into();
         let parent = self.join("versions").join(&version_name);

@@ -8,7 +8,7 @@ use std::{
     path::{Path, absolute},
 };
 
-use super::mojang::PistonMetaData;
+use super::mojang::VersionData;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LaunchEnvs {
@@ -100,7 +100,7 @@ impl LaunchEnvs {
         player_name: String,
         storage_root_dir: String,
         version_dir: String,
-        version_data: &PistonMetaData,
+        version_data: &VersionData,
     ) -> Result<Self> {
         let version_path = absolute(Path::new(&version_dir))?;
         let storage_root = absolute(Path::new(&storage_root_dir))?;

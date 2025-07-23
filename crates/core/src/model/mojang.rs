@@ -6,10 +6,19 @@ use std::{
 use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone)]
 pub struct MojangBaseUrl {
+    // It seems still being used by the official launcher, but all known endpoints can be replaced by piston-meta
+    // launchermeta may be just exist for compatibility reason
+    // Maybe we should remove it?
+    // FIXME: More research required
+    #[deprecated]
     pub launchermeta: String,
-    pub pistonmeta: String,
-    pub pistondata: String,
+    // For `meta` stuff, e.g. Client.json, version manifest, assets index, etc.
+    pub meta: String,
+    // For `data` stuff, e.g. client.jar
+    pub data: String,
+    // For assets. e.g. lang files, icons
     pub resources: String,
+    // Mojang maven, for libraries
     pub libraries: String,
 }
 
@@ -17,10 +26,10 @@ impl Default for MojangBaseUrl {
     fn default() -> Self {
         Self {
             launchermeta: "launchermeta.mojang.com".to_owned(),
-            pistonmeta: "piston-meta.mojang.com".to_owned(),
+            meta: "piston-meta.mojang.com".to_owned(),
             resources: "resources.download.minecraft.net".to_owned(),
             libraries: "libraries.minecraft.net".to_owned(),
-            pistondata: "piston-data.mojang.com".to_owned(),
+            data: "piston-data.mojang.com".to_owned(),
         }
     }
 }
@@ -36,20 +45,24 @@ impl MojangBaseUrl {
 }
 
 /// https://piston-meta.mojang.com/mc/game/version_manifest_v2.json
+// Note this mojang does not provide every version
+// For instance, experimental snapshots, 2.0 April fool versions...
+// We may need to add extra source or hardcode
 #[derive(Debug, Deserialize, Serialize)]
-pub struct LaunchMetaData {
-    pub latest: LaunchMetaLatestData,
-    pub versions: Vec<LaunchMetaVersionData>,
+pub struct VersionManifestData {
+    pub latest: LatestVersionData,
+    pub versions: Vec<VersionMetaData>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct LaunchMetaLatestData {
+pub struct LatestVersionData {
     pub release: String,
     pub snapshot: String,
 }
 
+// This provides where to download the client.json and its version id
 #[derive(Debug, Deserialize, Serialize)]
-pub struct LaunchMetaVersionData {
+pub struct VersionMetaData {
     pub id: String,
     #[serde(rename = "type")]
     pub release_type: String,
@@ -64,21 +77,21 @@ pub struct LaunchMetaVersionData {
 
 /// https://piston-meta.mojang.com/v1/packages/<sha1>/<id>.json
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PistonMetaData {
-    pub arguments: PistonMetaArguments, // Only exist on >1.12.2, so maybe should be set to Option?
+pub struct VersionData {
+    pub arguments: MinecraftArguments, // FIXME: Only exist on >1.12.2, so maybe should be set to Option?
     #[serde(rename = "minecraftArguments")]
     pub minecraft_arguments: Option<String>, // <=1.12.2
     #[serde(rename = "assetIndex")]
-    pub asset_index: PistonMetaAssetIndex,
-    pub assets: String,
+    pub asset_index: AssetIndex,
+    pub assets: String, // It seems same as assetIndex.id
     #[serde(rename = "complianceLevel")]
-    pub compliance_level: usize,//FIXME: may not exist
+    pub compliance_level: usize,// FIXME: may not exist
     pub downloads: PistonMetaDownloads,
     pub id: String,
     #[serde(rename = "javaVersion")]
     pub java_version: PistonMetaJavaVersion,
     pub libraries: Vec<PistonMetaLibraries>,
-    pub logging: PistonMetaLogging,//FIXME: may not exist
+    pub logging: PistonMetaLogging,// FIXME: may not exist
     #[serde(rename = "mainClass")]
     pub main_class: String,
     #[serde(rename = "minimumLauncherVersion")]
@@ -91,7 +104,7 @@ pub struct PistonMetaData {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PistonMetaArguments {
+pub struct MinecraftArguments {
     pub game: Vec<PistonMetaGenericArgument>,
     pub jvm: Vec<PistonMetaGenericArgument>,
 }
@@ -102,7 +115,7 @@ pub enum PistonMetaGenericArgument {
     Rule(PistonMetaRuleArgument),
 }
 
-impl PistonMetaArguments {
+impl MinecraftArguments {
     pub fn get_all_arguments(&self) -> Vec<String> {
         let mut arguments = vec![];
         arguments.extend(Self::concat_generic_arguments(&self.jvm));
@@ -221,7 +234,7 @@ pub enum ContinuousArgument {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PistonMetaAssetIndex {
+pub struct AssetIndex {
     pub id: String,
     pub sha1: String,
     // size may be too small

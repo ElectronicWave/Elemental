@@ -1,6 +1,6 @@
 use crate::{
     error::unification::UnifiedResult,
-    model::mojang::{LaunchMetaData, MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaData},
+    model::mojang::{VersionManifestData, MojangBaseUrl, PistonMetaAssetIndexObjects, VersionData},
 };
 use std::io::Result;
 #[derive(Debug)]
@@ -21,7 +21,7 @@ impl MojangService {
         Self { baseurl }
     }
 
-    pub async fn launchmeta(&self) -> Result<LaunchMetaData> {
+    pub async fn launchmeta(&self) -> Result<VersionManifestData> {
         // Use shortcut here because it wont call many times.
         reqwest::get(format!(
             "https://{}/mc/game/version_manifest_v2.json",
@@ -38,10 +38,10 @@ impl MojangService {
         todo!()
     }
 
-    pub async fn pistonmeta(&self, url: impl Into<String>) -> Result<PistonMetaData> {
+    pub async fn pistonmeta(&self, url: impl Into<String>) -> Result<VersionData> {
         reqwest::get(
             url.into()
-                .replace("piston-meta.mojang.com", &self.baseurl.pistonmeta),
+                .replace("piston-meta.mojang.com", &self.baseurl.meta),
         )
         .await
         .to_stdio()?
@@ -60,7 +60,7 @@ impl MojangService {
     ) -> Result<PistonMetaAssetIndexObjects> {
         reqwest::get(
             url.into()
-                .replace("piston-meta.mojang.com", &self.baseurl.pistonmeta),
+                .replace("piston-meta.mojang.com", &self.baseurl.meta),
         )
         .await
         .to_stdio()?

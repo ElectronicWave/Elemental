@@ -24,7 +24,7 @@ impl MojangService {
     pub async fn launchmeta(&self) -> Result<LaunchMetaData> {
         // Use shortcut here because it wont call many times.
         reqwest::get(format!(
-            "https://{}/mc/game/version_manifest.json",
+            "https://{}/mc/game/version_manifest_v2.json",
             self.baseurl.launchermeta
         ))
         .await

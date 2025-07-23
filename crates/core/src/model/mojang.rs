@@ -35,7 +35,7 @@ impl MojangBaseUrl {
     }
 }
 
-/// http://launchermeta.mojang.com/mc/game/version_manifest.json
+/// https://piston-meta.mojang.com/mc/game/version_manifest_v2.json
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LaunchMetaData {
     pub latest: LaunchMetaLatestData,
@@ -52,34 +52,39 @@ pub struct LaunchMetaLatestData {
 pub struct LaunchMetaVersionData {
     pub id: String,
     #[serde(rename = "type")]
-    pub typo: String,
+    pub release_type: String,
     pub url: String,
     pub time: String,
     #[serde(rename = "releaseTime")]
     pub release_time: String,
+    pub sha1: String,
+    #[serde(rename = "complianceLevel")]
+    pub compliance_level: usize,
 }
 
-/// https://piston-meta.mojang.com/v1/packages/<->/<->.json
+/// https://piston-meta.mojang.com/v1/packages/<sha1>/<id>.json
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaData {
-    pub arguments: PistonMetaArguments,
+    pub arguments: PistonMetaArguments, // Only exist on >1.12.2, so maybe should be set to Option?
+    #[serde(rename = "minecraftArguments")]
+    pub minecraft_arguments: Option<String>, // <=1.12.2
     #[serde(rename = "assetIndex")]
     pub asset_index: PistonMetaAssetIndex,
     pub assets: String,
     #[serde(rename = "complianceLevel")]
-    pub compliance_level: usize,
+    pub compliance_level: usize,//FIXME: may not exist
     pub downloads: PistonMetaDownloads,
     pub id: String,
     #[serde(rename = "javaVersion")]
     pub java_version: PistonMetaJavaVersion,
     pub libraries: Vec<PistonMetaLibraries>,
-    pub logging: PistonMetaLogging,
+    pub logging: PistonMetaLogging,//FIXME: may not exist
     #[serde(rename = "mainClass")]
     pub main_class: String,
     #[serde(rename = "minimumLauncherVersion")]
     pub minimum_launcher_version: usize,
     #[serde(rename = "type")]
-    pub typo: String,
+    pub release_type: String,
     pub time: String,
     #[serde(rename = "releaseTime")]
     pub release_time: String,
@@ -145,14 +150,19 @@ impl PistonMetaArguments {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaRuleArgument {
-    pub rules: Vec<PistonMetaRuleArgumentRules>,
+    pub rules: Vec<PistonMetaRuleArgumentRules>,// FIXME: May not exist
     pub value: Option<ContinuousArgument>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaRuleArgumentRules {
     pub action: String,
+    // is_demo_user, has_custom_resolution, has_quick_plays_support, is_quick_play_singleplayer, is_quick_play_multiplayer, is_quick_play_realms
+    // Note: not Optional when for game args
+    // Note: only exist on game arg rules
     pub features: Option<HashMap<String, bool>>, //TODO impl features
+    // Note: not Optional when for jvm args
+    // Note: only exist on jvm rules & libraries download rules
     pub os: Option<OperatingSystem>,
 }
 
@@ -176,8 +186,9 @@ impl PistonMetaRuleArgumentRules {
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct OperatingSystem {
-    pub arch: Option<String>,
-    pub name: Option<String>,
+    pub arch: Option<String>,// Note: not exist for libraries download rules
+    pub name: Option<String>,// Note: must exist for libraries download rules
+    pub version: Option<String>,
 }
 
 impl OperatingSystem {
@@ -223,7 +234,6 @@ pub struct PistonMetaAssetIndex {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaDownloads {
     pub client: PistonMetaDownload,
-    pub server: PistonMetaDownload,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -243,6 +253,7 @@ pub struct PistonMetaJavaVersion {
 pub struct PistonMetaLibraries {
     pub downloads: PistonMetaLibrariesDownloads,
     pub name: String,
+    // linux, osx, windows (All optional)
     pub natives: Option<HashMap<String, String>>,
     pub rules: Option<Vec<PistonMetaRuleArgumentRules>>,
     pub extract: Option<PistonMetaLibrariesExtract>,
@@ -287,7 +298,8 @@ pub struct PistonMetaLibrariesExtract {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaLibrariesDownloads {
-    pub artifact: PistonMetaLibrariesDownloadsArtifact,
+    pub artifact: PistonMetaLibrariesDownloadsArtifact,//FIXME: may not exist
+    // linux-x86_64, natives-linux, natives-macos, natives-windows, natives-osx, natives-windows-32, natives-windows-64
     pub classifiers: Option<HashMap<String, PistonMetaLibrariesDownloadsArtifact>>,
 }
 
@@ -302,7 +314,6 @@ pub struct PistonMetaLibrariesDownloadsArtifact {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaLogging {
     pub client: PistonMetaLoggingSide,
-    // TODO? server: ...
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaLoggingSide {

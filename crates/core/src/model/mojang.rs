@@ -320,7 +320,7 @@ pub struct PistonMetaLoggingSide {
     pub argument: String,
     pub file: PistonMetaLoggingSideFile,
     #[serde(rename = "type")]
-    pub typo: String,
+    pub logging_type: String,// Only `log4j2-xml`
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaLoggingSideFile {

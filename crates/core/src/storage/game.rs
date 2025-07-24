@@ -7,8 +7,8 @@ use tokio::process::Child;
 use super::version::VersionStorage;
 use crate::error::unification::UnifiedResult;
 use crate::model::mojang::{
-    MojangBaseUrl, PistonMetaAssetIndexObjects, VersionData, PistonMetaDownload,
-    PistonMetaLibraries, PistonMetaLibrariesDownloadsArtifact,
+    MojangBaseUrl, PistonMetaAssetIndexObjects, VersionData, Artifact,
+    Library, MavenArtifact,
 };
 use crate::online::downloader::{DownloadTask, ElementalDownloader};
 use crate::online::mojang::MojangService;
@@ -76,7 +76,7 @@ impl GameStorage {
 
     pub fn get_ensure_library_path(
         &self,
-        library: &PistonMetaLibrariesDownloadsArtifact,
+        library: &MavenArtifact,
     ) -> Result<PathBuf> {
         let path = self.join("libraries").join(&library.path);
         let parent = path
@@ -111,7 +111,7 @@ impl GameStorage {
     ) -> Result<()> {
         let version_name = version_name.into();
         let version_id = version_id.into();
-        let launchmeta = service.launchmeta().await.unwrap();
+        let launchmeta = service.get_version_manifest().await.unwrap();
         let pistonmeta = service
             .pistonmeta(
                 launchmeta
@@ -146,7 +146,7 @@ impl GameStorage {
     pub fn download_libraries(
         &self,
         version_name: &str,
-        libraries: &Vec<PistonMetaLibraries>,
+        libraries: &Vec<Library>,
         baseurl: &MojangBaseUrl,
     ) -> Vec<Result<()>> {
         libraries
@@ -158,7 +158,7 @@ impl GameStorage {
     pub fn download_library(
         &self,
         version_name: &str,
-        library: &PistonMetaLibraries,
+        library: &Library,
         baseurl: &MojangBaseUrl,
     ) -> Result<()> {
         // 1. Check Rules
@@ -204,7 +204,7 @@ impl GameStorage {
     pub fn download_client(
         &self,
         version_name: &str,
-        download: &PistonMetaDownload,
+        download: &Artifact,
         baseurl: &MojangBaseUrl,
     ) -> Result<()> {
         let path = self.get_ensure_client_path(version_name)?;

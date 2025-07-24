@@ -1,6 +1,6 @@
 use crate::{
     error::unification::UnifiedResult,
-    model::mojang::{VersionManifestData, MojangBaseUrl, PistonMetaAssetIndexObjects, VersionData},
+    model::mojang::{VersionManifest, MojangBaseUrl, PistonMetaAssetIndexObjects, VersionData},
 };
 use std::io::Result;
 #[derive(Debug)]
@@ -21,21 +21,17 @@ impl MojangService {
         Self { baseurl }
     }
 
-    pub async fn launchmeta(&self) -> Result<VersionManifestData> {
+    pub async fn get_version_manifest(&self) -> Result<VersionManifest> {
         // Use shortcut here because it wont call many times.
         reqwest::get(format!(
             "https://{}/mc/game/version_manifest_v2.json",
-            self.baseurl.launchermeta
+            self.baseurl.meta
         ))
         .await
         .to_stdio()?
         .json()
         .await
         .to_stdio()
-    }
-
-    pub async fn launchmeta_v2(&self) {
-        todo!()
     }
 
     pub async fn pistonmeta(&self, url: impl Into<String>) -> Result<VersionData> {
@@ -73,7 +69,7 @@ impl MojangService {
 #[tokio::test]
 async fn test_service() {
     let service = MojangService::default();
-    let launch_meta = service.launchmeta().await.unwrap();
+    let launch_meta = service.get_version_manifest().await.unwrap();
     let launch_meta_version_data = launch_meta.versions.first().unwrap();
     let pistonmeta = service
         .pistonmeta(launch_meta_version_data.url.clone())

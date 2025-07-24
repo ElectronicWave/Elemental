@@ -6,12 +6,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone)]
 pub struct MojangBaseUrl {
-    // It seems still being used by the official launcher, but all known endpoints can be replaced by piston-meta
-    // launchermeta may be just exist for compatibility reason
-    // Maybe we should remove it?
-    // FIXME: More research required
-    #[deprecated]
-    pub launchermeta: String,
+    // If you are finding launchermeta.mojang.com, Please use piston-meta instead
     // For `meta` stuff, e.g. Client.json, version manifest, assets index, etc.
     pub meta: String,
     // For `data` stuff, e.g. client.jar
@@ -25,7 +20,6 @@ pub struct MojangBaseUrl {
 impl Default for MojangBaseUrl {
     fn default() -> Self {
         Self {
-            launchermeta: "launchermeta.mojang.com".to_owned(),
             meta: "piston-meta.mojang.com".to_owned(),
             resources: "resources.download.minecraft.net".to_owned(),
             libraries: "libraries.minecraft.net".to_owned(),
@@ -49,20 +43,20 @@ impl MojangBaseUrl {
 // For instance, experimental snapshots, 2.0 April fool versions...
 // We may need to add extra source or hardcode
 #[derive(Debug, Deserialize, Serialize)]
-pub struct VersionManifestData {
-    pub latest: LatestVersionData,
-    pub versions: Vec<VersionMetaData>,
+pub struct VersionManifest {
+    pub latest: LatestVersions,
+    pub versions: Vec<VersionMetadata>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct LatestVersionData {
+pub struct LatestVersions {
     pub release: String,
     pub snapshot: String,
 }
 
 // This provides where to download the client.json and its version id
 #[derive(Debug, Deserialize, Serialize)]
-pub struct VersionMetaData {
+pub struct VersionMetadata {
     pub id: String,
     #[serde(rename = "type")]
     pub release_type: String,
@@ -78,7 +72,7 @@ pub struct VersionMetaData {
 /// https://piston-meta.mojang.com/v1/packages/<sha1>/<id>.json
 #[derive(Debug, Deserialize, Serialize)]
 pub struct VersionData {
-    pub arguments: MinecraftArguments, // FIXME: Only exist on >1.12.2, so maybe should be set to Option?
+    pub arguments: Arguments, // FIXME: Only exist on >1.12.2, so maybe should be set to Option?
     #[serde(rename = "minecraftArguments")]
     pub minecraft_arguments: Option<String>, // <=1.12.2
     #[serde(rename = "assetIndex")]
@@ -86,12 +80,12 @@ pub struct VersionData {
     pub assets: String, // It seems same as assetIndex.id
     #[serde(rename = "complianceLevel")]
     pub compliance_level: usize,// FIXME: may not exist
-    pub downloads: PistonMetaDownloads,
+    pub downloads: Downloads,
     pub id: String,
     #[serde(rename = "javaVersion")]
-    pub java_version: PistonMetaJavaVersion,
-    pub libraries: Vec<PistonMetaLibraries>,
-    pub logging: PistonMetaLogging,// FIXME: may not exist
+    pub java_version: SatisfiedJavaInfo,
+    pub libraries: Vec<Library>,
+    pub logging: Logging,// FIXME: may not exist
     #[serde(rename = "mainClass")]
     pub main_class: String,
     #[serde(rename = "minimumLauncherVersion")]
@@ -104,18 +98,18 @@ pub struct VersionData {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct MinecraftArguments {
-    pub game: Vec<PistonMetaGenericArgument>,
-    pub jvm: Vec<PistonMetaGenericArgument>,
+pub struct Arguments {
+    pub game: Vec<Argument>,
+    pub jvm: Vec<Argument>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(untagged)]
-pub enum PistonMetaGenericArgument {
+pub enum Argument {
     Plain(String),
-    Rule(PistonMetaRuleArgument),
+    Rule(ConditionalArgument),
 }
 
-impl MinecraftArguments {
+impl Arguments {
     pub fn get_all_arguments(&self) -> Vec<String> {
         let mut arguments = vec![];
         arguments.extend(Self::concat_generic_arguments(&self.jvm));
@@ -129,15 +123,15 @@ impl MinecraftArguments {
     pub fn get_game_arguments(&self) -> Vec<String> {
         Self::concat_generic_arguments(&self.game)
     }
-    pub fn concat_generic_arguments(arguments: &Vec<PistonMetaGenericArgument>) -> Vec<String> {
+    pub fn concat_generic_arguments(arguments: &Vec<Argument>) -> Vec<String> {
         let mut result = vec![];
 
         for arg in arguments {
             match arg {
-                PistonMetaGenericArgument::Plain(s) => {
+                Argument::Plain(s) => {
                     result.push(s.clone());
                 }
-                PistonMetaGenericArgument::Rule(piston_meta_rule_argument) => {
+                Argument::Rule(piston_meta_rule_argument) => {
                     if piston_meta_rule_argument
                         .rules
                         .iter()
@@ -145,10 +139,10 @@ impl MinecraftArguments {
                     {
                         if let Some(val) = &piston_meta_rule_argument.value {
                             match val {
-                                ContinuousArgument::Single(value) => {
+                                ArgumentValue::Single(value) => {
                                     result.push(value.clone());
                                 }
-                                ContinuousArgument::Multi(items) => {
+                                ArgumentValue::Multi(items) => {
                                     result.extend(items.clone());
                                 }
                             };
@@ -162,13 +156,13 @@ impl MinecraftArguments {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PistonMetaRuleArgument {
-    pub rules: Vec<PistonMetaRuleArgumentRules>,// FIXME: May not exist
-    pub value: Option<ContinuousArgument>,
+pub struct ConditionalArgument {
+    pub rules: Vec<Rule>,// FIXME: May not exist
+    pub value: Option<ArgumentValue>, // TODO: I don't think it's a good name
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PistonMetaRuleArgumentRules {
+pub struct Rule {
     pub action: String,
     // is_demo_user, has_custom_resolution, has_quick_plays_support, is_quick_play_singleplayer, is_quick_play_multiplayer, is_quick_play_realms
     // Note: not Optional when for game args
@@ -179,7 +173,7 @@ pub struct PistonMetaRuleArgumentRules {
     pub os: Option<OperatingSystem>,
 }
 
-impl PistonMetaRuleArgumentRules {
+impl Rule {
     pub fn is_allow(&self) -> bool {
         let mut action = self.action == "allow";
 
@@ -228,7 +222,7 @@ impl OperatingSystem {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(untagged)]
-pub enum ContinuousArgument {
+pub enum ArgumentValue {
     Single(String),
     Multi(Vec<String>),
 }
@@ -245,38 +239,38 @@ pub struct AssetIndex {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PistonMetaDownloads {
-    pub client: PistonMetaDownload,
+pub struct Downloads {
+    pub client: Artifact,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PistonMetaDownload {
+pub struct Artifact {
     pub sha1: String,
     pub size: usize,
     pub url: String,
 }
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PistonMetaJavaVersion {
+pub struct SatisfiedJavaInfo {
     pub component: String,
     #[serde(rename = "majorVersion")]
     pub major_version: usize,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PistonMetaLibraries {
-    pub downloads: PistonMetaLibrariesDownloads,
+pub struct Library {
+    pub downloads: LibraryDownloadData,
     pub name: String,
     // linux, osx, windows (All optional)
     pub natives: Option<HashMap<String, String>>,
-    pub rules: Option<Vec<PistonMetaRuleArgumentRules>>,
-    pub extract: Option<PistonMetaLibrariesExtract>,
+    pub rules: Option<Vec<Rule>>,
+    pub extract: Option<LibraryExtractRules>,
 }
 
-impl PistonMetaLibraries {
+impl Library {
     // classifiers
     pub fn try_get_classifiers_native_artifact(
         &self,
-    ) -> Option<&PistonMetaLibrariesDownloadsArtifact> {
+    ) -> Option<&MavenArtifact> {
         if let Some(classifiers) = &self.downloads.classifiers {
             if let Some(keys) = &self.natives {
                 if let Some(key) = keys.get(OS) {
@@ -293,7 +287,7 @@ impl PistonMetaLibraries {
     }
 
     // Latest Version
-    pub fn try_get_native_artifact(&self) -> Option<&PistonMetaLibrariesDownloadsArtifact> {
+    pub fn try_get_native_artifact(&self) -> Option<&MavenArtifact> {
         let artifact = &self.downloads.artifact;
         if artifact.path.ends_with(&format!("-natives-{}.jar", OS))
             || OS == "macos" && artifact.path.ends_with("-natives-osx.jar")
@@ -305,19 +299,19 @@ impl PistonMetaLibraries {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PistonMetaLibrariesExtract {
+pub struct LibraryExtractRules {
     pub exclude: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PistonMetaLibrariesDownloads {
-    pub artifact: PistonMetaLibrariesDownloadsArtifact,//FIXME: may not exist
+pub struct LibraryDownloadData {
+    pub artifact: MavenArtifact,//FIXME: may not exist
     // linux-x86_64, natives-linux, natives-macos, natives-windows, natives-osx, natives-windows-32, natives-windows-64
-    pub classifiers: Option<HashMap<String, PistonMetaLibrariesDownloadsArtifact>>,
+    pub classifiers: Option<HashMap<String, MavenArtifact>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PistonMetaLibrariesDownloadsArtifact {
+pub struct MavenArtifact {
     pub sha1: String,
     pub size: usize,
     pub url: String,
@@ -325,18 +319,18 @@ pub struct PistonMetaLibrariesDownloadsArtifact {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PistonMetaLogging {
-    pub client: PistonMetaLoggingSide,
+pub struct Logging {
+    pub client: LoggingConfiguration,
 }
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PistonMetaLoggingSide {
+pub struct LoggingConfiguration {
     pub argument: String,
-    pub file: PistonMetaLoggingSideFile,
+    pub file: LoggingConfigurationFile,
     #[serde(rename = "type")]
     pub logging_type: String,// Only `log4j2-xml`
 }
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PistonMetaLoggingSideFile {
+pub struct LoggingConfigurationFile {
     pub id: String,
     pub sha1: String,
     pub size: usize,

@@ -7,7 +7,7 @@ use tokio::process::{Child, Command};
 use crate::consts::PLATFORM_NATIVES_DIR_NAME;
 use crate::error::unification::UnifiedResult;
 use crate::model::launchenvs::LaunchEnvs;
-use crate::model::mojang::PistonMetaData;
+use crate::model::mojang::VersionData;
 use crate::storage::game::GameStorage;
 
 pub struct VersionStorage {
@@ -56,7 +56,7 @@ impl VersionStorage {
         Path::new(&self.root).join(path)
     }
 
-    pub fn pistonmeta(&self) -> Result<PistonMetaData> {
+    pub fn pistonmeta(&self) -> Result<VersionData> {
         serde_json::from_reader(File::open(self.join(format!("{}.json", self.name)))?).to_stdio()
     }
 

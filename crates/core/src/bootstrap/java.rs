@@ -1,5 +1,4 @@
 use futures::future::join_all;
-use log::{error, warn};
 use std::env::consts::EXE_SUFFIX;
 use std::env::{home_dir, var};
 use std::io::Error as IoError;
@@ -76,7 +75,7 @@ impl JavaDistribution {
             let info = match JavaInfo::parse_from_executable(&executable).await {
                 Ok(info) => info,
                 Err(e) => {
-                    warn!("Failed to get Java info at {}: {:?}", install.path, e);
+                    tracing::warn!("Failed to get Java info at {}: {:?}", install.path, e);
                     JavaInfo::default()
                 }
             };
@@ -241,7 +240,7 @@ impl JavaInstall {
                     Ok(k) => k,
                     Err(e) => {
                         if e.raw_os_error().unwrap_or(0) as u32 != ERROR_FILE_NOT_FOUND {
-                            error!("Failed to open registry key {key_name} : {e}");
+                            tracing::error!("Failed to open registry key {key_name} : {e}");
                         }
                         continue;
                     }

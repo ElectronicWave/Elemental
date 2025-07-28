@@ -8,6 +8,7 @@ use crate::consts::PLATFORM_NATIVES_DIR_NAME;
 use crate::error::unification::UnifiedResult;
 use crate::model::launchenvs::LaunchEnvs;
 use crate::model::mojang::PistonMetaData;
+use crate::online::downloader::DownloadTask;
 use crate::storage::game::GameStorage;
 
 pub struct VersionStorage {
@@ -66,8 +67,21 @@ impl VersionStorage {
         Ok(path)
     }
 
-    pub fn validate_version_data(&self) {
-        //TODO validate version
+    pub fn validate_version_data(&self, storage: &GameStorage) -> Result<Vec<DownloadTask>> {
+        let pistonmeta = self.pistonmeta()?;
+        let requires = Vec::new();
+        // Validate Client
+
+        // Validate Object Indexs
+        for obj in storage
+            .get_object_index(pistonmeta.asset_index.id)?
+            .objects
+            .values()
+        {}
+
+        // Validate Libraries
+
+        Ok(requires)
     }
 
     pub fn get_ensure_subpath<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf> {
@@ -78,12 +92,13 @@ impl VersionStorage {
 
     pub fn launch(
         &self,
+        player_name: impl Into<String>,
         storage: &GameStorage,
         executable: impl Into<String>,
         extra_args: impl IntoIterator<Item = String>,
     ) -> Result<Child> {
         let envs = LaunchEnvs::offline_player(
-            "Test".to_owned(), //TODO
+            player_name.into(),
             storage.root.clone(),
             self.root.clone(),
             &self.pistonmeta()?,

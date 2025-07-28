@@ -1,6 +1,13 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/demo", "crates/loader", "crates/discover", "crates/elemental", "crates/meta"]
+members = [
+    "crates/core",
+    "crates/demo",
+    "crates/loader",
+    "crates/discover",
+    "crates/elemental",
+    "crates/meta",
+]
 
 [workspace.dependencies]
 reqwest = { version = "0.12.22", features = ["json", "stream"] }
@@ -13,3 +20,5 @@ tokio = { version = "1.46.1", features = [
     "rt-multi-thread",
     "process",
 ] }
+tracing = { version = "0.1.41" }
+tracing-subscriber = { version = "0.3" }

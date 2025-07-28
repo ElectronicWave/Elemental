@@ -7,7 +7,6 @@ edition = "2024"
 [dependencies]
 dirs-sys = "=0.5.0"
 futures = "0.3.31"
-log = { version = "0.4.27", features = ["kv_std"] }
 md-5 = "0.10.6"
 regex = "1.11.1"
 reqwest = { workspace = true }
@@ -15,12 +14,14 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 sha1_smol = "1.0.1"
-
 toml = "0.9.2"
 uuid = "1.17.0"
 zip = { version = "4.3.0", default-features = false, features = ["deflate"] }
 const_format = { version = "0.2.34" }
 dashmap = "6.1.0"
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55.0"

@@ -51,6 +51,7 @@ async fn test_game_run() {
 
     let mut child = storage
         .launch_version(
+            "IAMPlayer",
             "MyGame-1.16.5",
             format!("{}/java.exe", selected.install.path),
             vec![

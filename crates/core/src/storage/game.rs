@@ -1,4 +1,4 @@
-use std::fs::{create_dir_all, write};
+use std::fs::{File, create_dir_all, write};
 use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf, absolute};
 
@@ -40,6 +40,18 @@ impl GameStorage {
         Ok(parent.join(format!("{version_id}.json")))
     }
 
+    pub fn get_object_index(
+        &self,
+        index_id: impl Into<String>,
+    ) -> Result<PistonMetaAssetIndexObjects> {
+        let path = self
+            .join("assets")
+            .join("indexes")
+            .join(format!("{}.json", index_id.into()));
+
+        Ok(serde_json::from_reader(File::open(path)?)?)
+    }
+
     pub async fn get_and_save_objects_index(
         &self,
         service: &MojangService,
@@ -61,6 +73,14 @@ impl GameStorage {
         )?;
 
         Ok(objs)
+    }
+    pub fn get_object_path(&self, hash: String) -> Option<PathBuf> {
+        let path = self
+            .join("assets")
+            .join("objects")
+            .join(hash.get(0..2).unwrap())
+            .join(hash);
+        if path.exists() { Some(path) } else { None }
     }
 
     pub fn get_ensure_object_path(&self, hash: String) -> Result<PathBuf> {
@@ -344,12 +364,13 @@ impl GameStorage {
 
     pub fn launch_version(
         &self,
+        player_name: impl Into<String>,
         version_name: impl Into<String>,
         executable: impl Into<String>,
         extra_args: impl IntoIterator<Item = String>,
     ) -> Result<Child> {
         Ok(self
             .get_version(version_name)?
-            .launch(&self, executable, extra_args)?)
+            .launch(player_name, &self, executable, extra_args)?)
     }
 }

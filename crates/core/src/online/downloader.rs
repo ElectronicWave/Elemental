@@ -280,13 +280,14 @@ impl ElementalDownloader {
         }
     }
 
-    /// waiting will also cleanup joinset.
+    /// waiting will also cleanup joinset & waiting deque.
     pub async fn wait_group_tasks(&self, group: impl Into<String>) {
         let group = group.into();
         // ensure all tasks are not in waiting state
-        while let Some(waiting) = self.waiting.get_mut(&group) {
+        while let Some(mut waiting) = self.waiting.get_mut(&group) {
             if waiting.is_empty() {
                 // Clean up it self
+                waiting.value_mut().shrink_to_fit();
                 break;
             }
         }

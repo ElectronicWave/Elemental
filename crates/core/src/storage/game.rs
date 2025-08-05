@@ -7,7 +7,7 @@ use tokio::process::Child;
 use super::version::VersionStorage;
 use crate::error::unification::UnifiedResult;
 use crate::model::mojang::{
-    MojangBaseUrl, PistonMetaAssetIndexObjects, VersionData, Artifact,
+    MojangBaseUrl, AssetIndex, VersionData, Artifact,
     Library, MavenArtifact,
 };
 use crate::online::downloader::{DownloadTask, ElementalDownloader};
@@ -44,7 +44,7 @@ impl GameStorage {
         &self,
         service: &MojangService,
         asset_index_url: String,
-    ) -> Result<PistonMetaAssetIndexObjects> {
+    ) -> Result<AssetIndex> {
         let objs = service
             .pistonmeta_assetindex_objects(&asset_index_url)
             .await
@@ -223,7 +223,7 @@ impl GameStorage {
     pub fn download_objects(
         &self,
         version_name: &str,
-        data: PistonMetaAssetIndexObjects,
+        data: AssetIndex,
         baseurl: &MojangBaseUrl,
     ) -> Result<()> {
         let mut tasks = vec![];

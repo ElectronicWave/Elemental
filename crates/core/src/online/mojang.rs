@@ -1,6 +1,6 @@
 use crate::{
     error::unification::UnifiedResult,
-    model::mojang::{VersionManifest, MojangBaseUrl, PistonMetaAssetIndexObjects, VersionData},
+    model::mojang::{VersionManifest, MojangBaseUrl, AssetIndex, VersionData},
 };
 use std::io::Result;
 #[derive(Debug)]
@@ -53,7 +53,7 @@ impl MojangService {
     pub async fn pistonmeta_assetindex_objects(
         &self,
         url: impl Into<String>,
-    ) -> Result<PistonMetaAssetIndexObjects> {
+    ) -> Result<AssetIndex> {
         reqwest::get(
             url.into()
                 .replace("piston-meta.mojang.com", &self.baseurl.meta),

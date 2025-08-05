@@ -76,7 +76,7 @@ pub struct VersionData {
     #[serde(rename = "minecraftArguments")]
     pub minecraft_arguments: Option<String>, // <=1.12.2
     #[serde(rename = "assetIndex")]
-    pub asset_index: AssetIndex,
+    pub asset_index: AssetIndexMetadata,
     pub assets: String, // It seems same as assetIndex.id
     #[serde(rename = "complianceLevel")]
     pub compliance_level: usize,// FIXME: may not exist
@@ -228,7 +228,7 @@ pub enum ArgumentValue {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct AssetIndex {
+pub struct AssetIndexMetadata {
     pub id: String,
     pub sha1: String,
     // size may be too small
@@ -337,12 +337,12 @@ pub struct LoggingConfigurationFile {
     pub url: String,
 }
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PistonMetaAssetIndexObjects {
-    pub objects: HashMap<String, PistonMetaAssetIndexObject>,
+pub struct AssetIndex {
+    pub objects: HashMap<String, AssetIndexObject>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct PistonMetaAssetIndexObject {
+pub struct AssetIndexObject {
     pub hash: String,
     pub size: usize,
 }

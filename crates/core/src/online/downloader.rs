@@ -19,7 +19,6 @@ use tokio::{
 pub struct ElementalDownloader {
     client: reqwest::Client,
     handler: DashMap<String, JoinSet<()>>, // Group name : JoinSet()
-    waiting: DashMap<String, VecDeque<DownloadTask>>,
     pub tracker: ElementalTaskTracker,
     connections: Arc<Semaphore>,
 }
@@ -30,6 +29,7 @@ pub struct ElementalTaskTracker {
     pub bps: DashMap<String, DownloadBytesPerSecond>,
     counter: DashMap<String, JoinHandle<()>>,
 }
+
 #[derive(Debug)]
 pub struct DownloadBytesPerSecond {
     pub count: usize,
@@ -108,7 +108,6 @@ impl ElementalDownloader {
         Self {
             client: reqwest::Client::new(),
             handler: DashMap::new(),
-            waiting: DashMap::new(),
             tracker: ElementalTaskTracker::new(),
             connections: Arc::new(Semaphore::new(8)), // Default max connections
         }
@@ -121,7 +120,6 @@ impl ElementalDownloader {
     pub fn create_task_group(&self, group: impl Into<String>) -> Option<JoinSet<()>> {
         let group = group.into();
         self.tracker.create_track_group(&group);
-        self.waiting.insert(group.clone(), VecDeque::new());
         self.handler.insert(group, JoinSet::new())
     }
 
@@ -131,7 +129,6 @@ impl ElementalDownloader {
             handler.abort_all();
             drop(handler)
         });
-        self.waiting.remove(&group);
         self.tracker.remove_track_group(&group);
     }
 
@@ -186,9 +183,7 @@ impl ElementalDownloader {
             let task_cloned = task.clone();
             let group_cloned = group.clone();
             handler.value_mut().spawn(async move {
-                println!("Waiting for semaphore: {:?} in group: {}", task, group);
                 let _permit = semaphore.acquire_owned().await.expect("semaphore closed");
-                println!("Started task: {:?} in group: {}", task, group);
                 let tracker = &SHARED_DOWNLOADER.tracker;
                 tracker.active_task(&task);
                 let executer: Result<()> = async move {
@@ -224,13 +219,6 @@ impl ElementalDownloader {
 
                 // release the semaphore permit
                 drop(_permit);
-
-                // active another task if available
-                if let Some(mut waiting) = SHARED_DOWNLOADER.waiting.get_mut(&task_cloned.group) {
-                    if let Some(task) = waiting.pop_front() {
-                        SHARED_DOWNLOADER.add_task(task);
-                    }
-                }
 
                 match executer {
                     Ok(_) => SHARED_DOWNLOADER
@@ -268,15 +256,6 @@ impl ElementalDownloader {
     /// waiting will also cleanup joinset & waiting deque.
     pub async fn wait_group_tasks_unconstrained(&self, group: impl Into<String>) {
         let group = group.into();
-        // ensure all tasks are not in waiting state
-        while let Some(mut waiting) = self.waiting.get_mut(&group) {
-            if waiting.is_empty() {
-                // Clean up it self
-                waiting.value_mut().shrink_to_fit();
-                break;
-            }
-        }
-
         // wait for all tasks in the group to finish
         if let Some(mut tasks) = self.get_task_group_mut(group) {
             while let Some(Some(_)) = unconstrained(tasks.value_mut().join_next()).now_or_never() {}
@@ -285,14 +264,6 @@ impl ElementalDownloader {
 
     pub async fn wait_group_tasks(&self, group: impl Into<String>) {
         let group = group.into();
-        // ensure all tasks are not in waiting state
-        while let Some(mut waiting) = self.waiting.get_mut(&group) {
-            if waiting.is_empty() {
-                // Clean up it self
-                waiting.value_mut().shrink_to_fit();
-                break;
-            }
-        }
 
         // wait for all tasks in the group to finish
         if let Some(mut tasks) = self.get_task_group_mut(group) {

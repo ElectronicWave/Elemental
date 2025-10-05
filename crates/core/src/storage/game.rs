@@ -60,6 +60,8 @@ impl GameStorage {
             .pistonmeta_assetindex_objects(&asset_index_url)
             .await?;
         let parent = self.join("assets").join("indexes");
+        create_dir_all(&parent)?;
+        
         let data = serde_json::to_string(&objs)?;
 
         write(

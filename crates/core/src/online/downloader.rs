@@ -8,21 +8,20 @@ use futures::{FutureExt, StreamExt};
 use reqwest::header::HeaderMap;
 use std::{
     collections::VecDeque,
-    sync::{LazyLock, RwLock},
+    sync::{Arc, LazyLock},
 };
-use tokio::task::{JoinHandle, JoinSet, unconstrained};
+use tokio::{
+    io::AsyncWriteExt,
+    sync::Semaphore,
+    task::{JoinHandle, JoinSet, unconstrained},
+};
 // Please use `ElementalDownloader::shared()` to access the shared downloader instance.
 pub struct ElementalDownloader {
     client: reqwest::Client,
     handler: DashMap<String, JoinSet<()>>, // Group name : JoinSet()
     waiting: DashMap<String, VecDeque<DownloadTask>>,
     pub tracker: ElementalTaskTracker,
-    connection_count: RwLock<usize>,
-    pub configs: RwLock<ElementalDownloaderConfigs>,
-}
-
-pub struct ElementalDownloaderConfigs {
-    pub max_connections: usize, // Maximum number of concurrent connections, default is 8, higher will help download small files faster.
+    connections: Arc<Semaphore>,
 }
 
 #[derive(Debug)]
@@ -111,10 +110,7 @@ impl ElementalDownloader {
             handler: DashMap::new(),
             waiting: DashMap::new(),
             tracker: ElementalTaskTracker::new(),
-            connection_count: RwLock::new(0),
-            configs: RwLock::new(ElementalDownloaderConfigs {
-                max_connections: 8, // Default max connections
-            }),
+            connections: Arc::new(Semaphore::new(8)), // Default max connections
         }
     }
 
@@ -172,7 +168,6 @@ impl ElementalDownloader {
 
     pub fn add_task_with_headers(&self, task: DownloadTask, headers: Option<HeaderMap>) {
         // validate file exist
-
         if let Some(sha1) = &task.sha1 {
             if file_sha1(&task.path).map_or(false, |hash| hash == *sha1) {
                 return;
@@ -187,21 +182,13 @@ impl ElementalDownloader {
         self.handler.get_mut(&task.group).map(|mut handler| {
             // Initialize the task tracking
             SHARED_DOWNLOADER.tracker.track_task(&task);
-            if self.connection_count.read().unwrap().clone()
-                > self.configs.read().unwrap().max_connections.clone()
-            {
-                self.waiting.get_mut(&task.group).map(|mut waiting| {
-                    waiting.push_back(task);
-                });
-                return;
-            } else {
-                // println!("add task: {}", task.url);
-                *self.connection_count.write().unwrap() += 1;
-            }
-
+            let semaphore = SHARED_DOWNLOADER.connections.clone();
             let task_cloned = task.clone();
             let group_cloned = group.clone();
             handler.value_mut().spawn(async move {
+                println!("Waiting for semaphore: {:?} in group: {}", task, group);
+                let _permit = semaphore.acquire_owned().await.expect("semaphore closed");
+                println!("Started task: {:?} in group: {}", task, group);
                 let tracker = &SHARED_DOWNLOADER.tracker;
                 tracker.active_task(&task);
                 let executer: Result<()> = async move {
@@ -229,14 +216,14 @@ impl ElementalDownloader {
                             .map(|mut bps| {
                                 bps.count += data.len();
                             });
-                        tokio::io::copy(&mut data.as_ref(), &mut output).await?;
+                        output.write_all(&data).await?;
                     }
                     Ok(())
                 }
                 .await;
 
-                // shrink the connection count
-                *SHARED_DOWNLOADER.connection_count.write().unwrap() -= 1;
+                // release the semaphore permit
+                drop(_permit);
 
                 // active another task if available
                 if let Some(mut waiting) = SHARED_DOWNLOADER.waiting.get_mut(&task_cloned.group) {
@@ -279,7 +266,7 @@ impl ElementalDownloader {
     }
 
     /// waiting will also cleanup joinset & waiting deque.
-    pub async fn wait_group_tasks(&self, group: impl Into<String>) {
+    pub async fn wait_group_tasks_unconstrained(&self, group: impl Into<String>) {
         let group = group.into();
         // ensure all tasks are not in waiting state
         while let Some(mut waiting) = self.waiting.get_mut(&group) {
@@ -293,6 +280,23 @@ impl ElementalDownloader {
         // wait for all tasks in the group to finish
         if let Some(mut tasks) = self.get_task_group_mut(group) {
             while let Some(Some(_)) = unconstrained(tasks.value_mut().join_next()).now_or_never() {}
+        }
+    }
+
+    pub async fn wait_group_tasks(&self, group: impl Into<String>) {
+        let group = group.into();
+        // ensure all tasks are not in waiting state
+        while let Some(mut waiting) = self.waiting.get_mut(&group) {
+            if waiting.is_empty() {
+                // Clean up it self
+                waiting.value_mut().shrink_to_fit();
+                break;
+            }
+        }
+
+        // wait for all tasks in the group to finish
+        if let Some(mut tasks) = self.get_task_group_mut(group) {
+            while let Some(_) = tasks.value_mut().join_next().await {}
         }
     }
 }
@@ -355,7 +359,7 @@ async fn test_downloader() {
             let task = DownloadTask::new(
                 "https://example.com/file1.txt",
                 "file1.txt",
-                "group_name",
+                &group,
                 None,
                 None,
             );

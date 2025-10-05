@@ -5,7 +5,6 @@ use reqwest::header::HeaderMap;
 use scc::{HashMap, hash_map::OccupiedEntry};
 use std::sync::{Arc, Weak};
 use tokio::{
-    io::AsyncWriteExt,
     sync::Semaphore,
     task::{JoinHandle, JoinSet, unconstrained},
 };
@@ -214,7 +213,7 @@ impl ElementalDownloader {
                             .map(|mut bps| {
                                 bps.count += data.len();
                             });
-                        output.write_all(&data).await?;
+                        tokio::io::copy(&mut data.as_ref(), &mut output).await?;
                     }
                     Ok(())
                 }

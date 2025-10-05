@@ -21,7 +21,7 @@ async fn main() {
 
             downloader_cloned
                 .tracker
-                .tasks
+                .groups
                 .get_async(version_name)
                 .await
                 .map(|state| println!("{:?}", state.bps));

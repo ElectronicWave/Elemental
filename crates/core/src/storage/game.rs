@@ -1,5 +1,6 @@
 use std::fs::{File, create_dir_all, write};
 use std::path::{Path, PathBuf, absolute};
+use std::sync::Arc;
 
 use tokio::process::Child;
 
@@ -61,7 +62,7 @@ impl GameStorage {
             .await?;
         let parent = self.join("assets").join("indexes");
         create_dir_all(&parent)?;
-        
+
         let data = serde_json::to_string(&objs)?;
 
         write(
@@ -127,6 +128,7 @@ impl GameStorage {
     /// if there has no task group named `version_name` in downloader, this function will create task group automatically.
     pub async fn download_version_all(
         &self,
+        downloader: &Arc<ElementalDownloader>,
         service: &MojangService,
         version_id: impl Into<String>,
         version_name: impl Into<String>,
@@ -152,30 +154,40 @@ impl GameStorage {
             .await?;
 
         let baseurl = &service.baseurl;
-        let downloader = ElementalDownloader::shared();
-        if !downloader.has_task_group(&version_name) {
-            downloader.create_task_group(&version_name);
+        if !downloader.has_task_group(&version_name).await {
+            downloader.create_task_group(&version_name).await?;
         }
-        self.download_objects(&version_name, objs, baseurl)?;
-        self.download_client(&version_name, &pistonmeta.downloads.client, baseurl)?;
-        self.download_libraries(&version_name, &pistonmeta.libraries, baseurl);
+        self.download_objects(&downloader, &version_name, objs, baseurl)
+            .await?;
+        self.download_client(
+            &downloader,
+            &version_name,
+            &pistonmeta.downloads.client,
+            baseurl,
+        )
+        .await?;
+        self.download_libraries(&downloader, &version_name, &pistonmeta.libraries, baseurl)
+            .await?;
         Ok(())
     }
 
-    pub fn download_libraries(
+    pub async fn download_libraries(
         &self,
+        downloader: &Arc<ElementalDownloader>,
         version_name: &str,
         libraries: &Vec<PistonMetaLibraries>,
         baseurl: &MojangBaseUrl,
-    ) -> Vec<Result<()>> {
-        libraries
-            .iter()
-            .map(|library| self.download_library(version_name, library, baseurl))
-            .collect()
+    ) -> Result<()> {
+        for library in libraries {
+            self.download_library(downloader.clone(), version_name, library, baseurl)
+                .await?;
+        }
+        Ok(())
     }
 
-    pub fn download_library(
+    pub async fn download_library(
         &self,
+        downloader: Arc<ElementalDownloader>,
         version_name: &str,
         library: &PistonMetaLibraries,
         baseurl: &MojangBaseUrl,
@@ -194,53 +206,61 @@ impl GameStorage {
             .url
             .replace("libraries.minecraft.net", &baseurl.libraries);
 
-        ElementalDownloader::shared().add_task(DownloadTask::new(
-            url,
-            path.to_string_lossy().to_string(),
-            version_name.to_string(),
-            Some(artifact.size),
-            Some(artifact.sha1.clone()),
-        ));
+        downloader
+            .add_task(DownloadTask::new(
+                url,
+                path.to_string_lossy().to_string(),
+                version_name.to_string(),
+                Some(artifact.size),
+                Some(artifact.sha1.clone()),
+            ))
+            .await?;
 
         // 3. Download Native Lib (Legacy)
         if let Some(download) = library.try_get_classifiers_native_artifact() {
-            ElementalDownloader::shared().add_task(DownloadTask::new(
-                &download
-                    .url
-                    .replace("libraries.minecraft.net", &baseurl.libraries),
-                self.get_ensure_library_path(download)?
-                    .to_string_lossy()
-                    .to_string(),
-                version_name.to_string(),
-                Some(download.size),
-                Some(download.sha1.clone()),
-            ));
+            downloader
+                .add_task(DownloadTask::new(
+                    &download
+                        .url
+                        .replace("libraries.minecraft.net", &baseurl.libraries),
+                    self.get_ensure_library_path(download)?
+                        .to_string_lossy()
+                        .to_string(),
+                    version_name.to_string(),
+                    Some(download.size),
+                    Some(download.sha1.clone()),
+                ))
+                .await?;
         }
 
         Ok(())
     }
 
-    pub fn download_client(
+    pub async fn download_client(
         &self,
+        downloader: &Arc<ElementalDownloader>,
         version_name: &str,
         download: &PistonMetaDownload,
         baseurl: &MojangBaseUrl,
     ) -> Result<()> {
         let path = self.get_ensure_client_path(version_name)?;
-        ElementalDownloader::shared().add_task(DownloadTask::new(
-            download
-                .url
-                .replace("piston-data.mojang.com", &baseurl.pistondata),
-            path.to_string_lossy().to_string(),
-            version_name.to_string(),
-            Some(download.size),
-            Some(download.sha1.clone()),
-        ));
+        downloader
+            .add_task(DownloadTask::new(
+                download
+                    .url
+                    .replace("piston-data.mojang.com", &baseurl.pistondata),
+                path.to_string_lossy().to_string(),
+                version_name.to_string(),
+                Some(download.size),
+                Some(download.sha1.clone()),
+            ))
+            .await?;
         Ok(())
     }
 
-    pub fn download_objects(
+    pub async fn download_objects(
         &self,
+        downloader: &Arc<ElementalDownloader>,
         version_name: &str,
         data: PistonMetaAssetIndexObjects,
         baseurl: &MojangBaseUrl,
@@ -258,7 +278,7 @@ impl GameStorage {
             ));
         }
 
-        ElementalDownloader::shared().add_tasks(tasks);
+        downloader.add_tasks(tasks).await?;
         Ok(())
     }
 

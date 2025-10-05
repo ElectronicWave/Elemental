@@ -1,33 +1,30 @@
-use crate::storage::validate::file_sha1;
-use anyhow::Result;
-use dashmap::{
-    DashMap,
-    mapref::one::{Ref, RefMut},
-};
+use crate::storage::validate::async_file_sha1;
+use anyhow::{Context, Result};
 use futures::{FutureExt, StreamExt};
 use reqwest::header::HeaderMap;
-use std::{
-    collections::VecDeque,
-    sync::{Arc, LazyLock},
-};
+use scc::{HashMap, hash_map::OccupiedEntry};
+use std::sync::{Arc, Weak};
 use tokio::{
     io::AsyncWriteExt,
     sync::Semaphore,
     task::{JoinHandle, JoinSet, unconstrained},
 };
-// Please use `ElementalDownloader::shared()` to access the shared downloader instance.
+
+#[derive(Debug)]
 pub struct ElementalDownloader {
     client: reqwest::Client,
-    handler: DashMap<String, JoinSet<()>>, // Group name : JoinSet()
-    pub tracker: ElementalTaskTracker,
-    connections: Arc<Semaphore>,
+    handler: HashMap<String, JoinSet<()>>, // Group name : JoinSet()
+    pub tracker: Arc<ElementalTaskTracker>,
+    connections: Arc<Semaphore>, //TODO It should be configurable
+    me: Weak<Self>,
 }
 
 #[derive(Debug)]
 pub struct ElementalTaskTracker {
-    pub tasks: DashMap<String, DashMap<DownloadTask, TrackedInfo>>, // Group: {task: info}
-    pub bps: DashMap<String, DownloadBytesPerSecond>,
-    counter: DashMap<String, JoinHandle<()>>,
+    pub tasks: HashMap<String, HashMap<DownloadTask, TrackedInfo>>, // Group: {task: info}
+    pub bps: HashMap<String, DownloadBytesPerSecond>,
+    counter: HashMap<String, JoinHandle<()>>,
+    downloader: Weak<ElementalDownloader>, // to avoid cyclic strong reference
 }
 
 #[derive(Debug)]
@@ -43,149 +40,154 @@ impl Default for DownloadBytesPerSecond {
 }
 
 impl ElementalTaskTracker {
-    pub fn new() -> Self {
+    pub fn new(downloader: Weak<ElementalDownloader>) -> Self {
         Self {
-            tasks: DashMap::new(),
-            bps: DashMap::new(),
-            counter: DashMap::new(),
+            tasks: HashMap::new(),
+            bps: HashMap::new(),
+            counter: HashMap::new(),
+            downloader: downloader,
         }
     }
 
-    pub fn track_task(&self, task: &DownloadTask) {
-        self.tasks
-            .get(&task.group)
-            .map(|tasks| tasks.insert(task.clone(), task.track()));
+    pub async fn track_task(&self, task: &DownloadTask) {
+        if let Some(tasks) = self.tasks.get_async(&task.group).await {
+            tasks.upsert_async(task.clone(), task.track()).await;
+        }
     }
 
-    pub fn active_task(&self, task: &DownloadTask) {
-        self.tasks.get(&task.group).map(|tasks| {
-            tasks.get_mut(task).map(|mut tracked| {
-                tracked.value_mut().status = TrackedTaskStatus::ACTIVE;
-            })
-        });
+    pub async fn active_task(&self, task: &DownloadTask) {
+        if let Some(tasks) = self.tasks.get_async(&task.group).await {
+            if let Some(mut e) = tasks.get_async(task).await {
+                e.status = TrackedTaskStatus::ACTIVE;
+            }
+        }
     }
 
-    pub fn create_track_group(&self, group: impl Into<String>) {
+    //FIXME Gracefully handle the upsert case.
+    pub async fn create_track_group(&self, group: impl Into<String>) -> Result<()> {
         let group = group.into();
         self.bps
-            .insert(group.clone(), DownloadBytesPerSecond::default());
+            .upsert_async(group.clone(), DownloadBytesPerSecond::default())
+            .await;
         let group_moved = group.clone();
-        self.counter.insert(
-            group.clone(),
-            tokio::spawn(async move {
-                loop {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                    if let Some(mut bps) = SHARED_DOWNLOADER.tracker.bps.get_mut(&group_moved) {
-                        bps.value_mut().value = bps.value().count;
-                        bps.value_mut().count = 0;
-                    } else {
-                        break;
+        let downloader = self
+            .downloader
+            .upgrade()
+            .context("unexpected downloader drop")?;
+        self.counter
+            .upsert_async(
+                group.clone(),
+                tokio::spawn(async move {
+                    loop {
+                        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                        if let Some(mut bps) = downloader.tracker.bps.get_async(&group_moved).await
+                        {
+                            bps.value = bps.count;
+                            bps.count = 0;
+                        } else {
+                            break;
+                        }
                     }
-                }
-            }),
-        );
-        self.tasks.insert(group, DashMap::new());
-    }
-
-    pub fn remove_track_group(&self, group: impl Into<String>) {
-        let group = group.into();
-        self.bps.remove(&group);
-        self.counter.remove(&group).map(|(_, handle)| {
-            handle.abort();
-        });
-        self.tasks.remove(&group);
-    }
-
-    pub fn has_track_group(&self, group: impl Into<String>) -> bool {
-        self.tasks.contains_key(&group.into())
-    }
-}
-
-static SHARED_DOWNLOADER: LazyLock<ElementalDownloader> = LazyLock::new(ElementalDownloader::new);
-
-impl ElementalDownloader {
-    fn new() -> Self {
-        Self {
-            client: reqwest::Client::new(),
-            handler: DashMap::new(),
-            tracker: ElementalTaskTracker::new(),
-            connections: Arc::new(Semaphore::new(8)), // Default max connections
-        }
-    }
-
-    pub fn shared() -> &'static LazyLock<ElementalDownloader> {
-        &SHARED_DOWNLOADER
-    }
-
-    pub fn create_task_group(&self, group: impl Into<String>) -> Option<JoinSet<()>> {
-        let group = group.into();
-        self.tracker.create_track_group(&group);
-        self.handler.insert(group, JoinSet::new())
-    }
-
-    pub fn remove_task_group(&self, group: impl Into<String>) {
-        let group = group.into();
-        self.handler.remove(&group).map(|(_, mut handler)| {
-            handler.abort_all();
-            drop(handler)
-        });
-        self.tracker.remove_track_group(&group);
-    }
-
-    pub fn has_task_group(&self, group: impl Into<String>) -> bool {
-        self.handler.contains_key(&group.into())
-    }
-
-    pub fn get_task_group(&self, group: impl Into<String>) -> Option<Ref<'_, String, JoinSet<()>>> {
-        self.handler.get(&group.into())
-    }
-
-    pub async fn group_context<F: Future<Output = Result<()>> + Send + 'static>(
-        &self,
-        group: impl Into<String>,
-        future: fn(downloader: &'static LazyLock<ElementalDownloader>, group: String) -> F,
-    ) -> Result<()> {
-        let group = group.into();
-        self.create_task_group(group.clone());
-        future(&SHARED_DOWNLOADER, group.clone()).await?;
-        self.remove_task_group(group);
+                }),
+            )
+            .await;
+        self.tasks.upsert_async(group, HashMap::new()).await;
         Ok(())
     }
 
-    pub fn get_task_group_mut(
+    pub async fn remove_track_group(&self, group: impl Into<String>) {
+        let group = group.into();
+        self.bps.remove_async(&group).await;
+        self.counter.remove_async(&group).await.map(|(_, handle)| {
+            handle.abort();
+        });
+        self.tasks.remove_async(&group).await;
+    }
+
+    pub async fn has_track_group(&self, group: impl Into<String>) -> bool {
+        self.tasks.contains_async(&group.into()).await
+    }
+}
+
+impl ElementalDownloader {
+    pub fn new() -> Arc<Self> {
+        Arc::new_cyclic(|me| Self {
+            client: reqwest::Client::new(),
+            handler: HashMap::new(),
+            tracker: Arc::new(ElementalTaskTracker::new(me.clone())),
+            connections: Arc::new(Semaphore::new(8)), // Default max connections
+            me: me.clone(),
+        })
+    }
+
+    pub async fn create_task_group(&self, group: impl Into<String>) -> Result<()> {
+        let group = group.into();
+        self.tracker.create_track_group(&group).await?;
+        self.handler.upsert_async(group, JoinSet::new()).await;
+        Ok(())
+    }
+
+    pub async fn remove_task_group(&self, group: impl Into<String>) {
+        let group = group.into();
+        self.handler
+            .remove_async(&group)
+            .await
+            .map(|(_, mut handler)| {
+                handler.abort_all();
+                drop(handler)
+            });
+        self.tracker.remove_track_group(&group).await;
+    }
+
+    pub async fn has_task_group(&self, group: impl Into<String>) -> bool {
+        self.handler.contains_async(&group.into()).await
+    }
+
+    pub async fn get_task_group(
         &self,
         group: impl Into<String>,
-    ) -> Option<RefMut<'_, String, JoinSet<()>>> {
-        self.handler.get_mut(&group.into())
+    ) -> Option<OccupiedEntry<'_, String, JoinSet<()>>> {
+        self.handler.get_async(&group.into()).await
     }
 
-    pub fn add_task(&self, task: DownloadTask) {
-        self.add_task_with_headers(task, None);
+    pub async fn add_task(&self, task: DownloadTask) -> Result<()> {
+        self.add_task_with_headers(task, None).await
     }
 
-    pub fn add_task_with_headers(&self, task: DownloadTask, headers: Option<HeaderMap>) {
+    pub async fn add_task_with_headers(
+        &self,
+        task: DownloadTask,
+        headers: Option<HeaderMap>,
+    ) -> Result<()> {
         // validate file exist
         if let Some(sha1) = &task.sha1 {
-            if file_sha1(&task.path).map_or(false, |hash| hash == *sha1) {
-                return;
+            if async_file_sha1(&task.path)
+                .await
+                .map_or(false, |hash| hash == *sha1)
+            {
+                return Ok(());
             }
         }
 
         let client = self.client.clone();
+        let downloader = self.me.upgrade().context("unexpected downloader drop")?;
+        let tracker = self.tracker.clone();
+
         let url = task.url.clone();
         let path = task.path.clone();
         let group = task.group.clone();
 
-        self.handler.get_mut(&task.group).map(|mut handler| {
+        if let Some(mut handler) = self.handler.get_async(&task.group).await {
             // Initialize the task tracking
-            SHARED_DOWNLOADER.tracker.track_task(&task);
-            let semaphore = SHARED_DOWNLOADER.connections.clone();
+            tracker.track_task(&task).await;
+            let semaphore = downloader.connections.clone();
             let task_cloned = task.clone();
             let group_cloned = group.clone();
-            handler.value_mut().spawn(async move {
+            let tracker_cloned = tracker.clone();
+            handler.spawn(async move {
                 let _permit = semaphore.acquire_owned().await.expect("semaphore closed");
-                let tracker = &SHARED_DOWNLOADER.tracker;
-                tracker.active_task(&task);
+                tracker_cloned.active_task(&task).await;
+
                 let executer: Result<()> = async move {
                     let mut stream = client
                         .get(url.clone())
@@ -198,16 +200,17 @@ impl ElementalDownloader {
                     while let Some(item) = stream.next().await {
                         let data = item?;
 
-                        tracker.tasks.get_mut(&group_cloned).map(|mut tasks| {
-                            tasks.value_mut().get_mut(&task.clone()).map(|mut tracked| {
+                        tracker.tasks.get_async(&group_cloned).await.map(|tasks| {
+                            tasks.get_sync(&task.clone()).map(|mut tracked| {
                                 tracked.recv += data.len();
                             })
                         });
 
-                        SHARED_DOWNLOADER
+                        downloader
                             .tracker
                             .bps
-                            .get_mut(&group_cloned)
+                            .get_async(&group_cloned)
+                            .await
                             .map(|mut bps| {
                                 bps.count += data.len();
                             });
@@ -221,44 +224,38 @@ impl ElementalDownloader {
                 drop(_permit);
 
                 match executer {
-                    Ok(_) => SHARED_DOWNLOADER
-                        .tracker
-                        .tasks
-                        .get_mut(&group)
-                        .map(|mut tasks| {
-                            // Remove this task to clean up
-                            tasks.value_mut().remove(&task_cloned);
-                            Some(())
-                        }),
+                    Ok(_) => {
+                        if let Some(tasks) = tracker_cloned.tasks.get_async(&group).await {
+                            tasks.remove_async(&task_cloned).await;
+                        }
+                    }
                     Err(error) => {
-                        SHARED_DOWNLOADER
-                            .tracker
-                            .tasks
-                            .get_mut(&group)
-                            .map(|mut tasks| {
-                                tasks.value_mut().get_mut(&task_cloned).map(|mut tracked| {
-                                    tracked.value_mut().status =
-                                        TrackedTaskStatus::ERR(error.to_string());
-                                })
-                            })
+                        if let Some(tasks) = tracker_cloned.tasks.get_async(&group).await {
+                            if let Some(mut tracked) = tasks.get_async(&task_cloned).await {
+                                tracked.status = TrackedTaskStatus::ERR(error.to_string());
+                            }
+                        }
                     }
                 };
             });
-        });
+        };
+
+        Ok(())
     }
 
-    pub fn add_tasks(&self, tasks: Vec<DownloadTask>) {
+    pub async fn add_tasks(&self, tasks: Vec<DownloadTask>) -> Result<()> {
         for task in tasks {
-            self.add_task(task);
+            self.add_task(task).await?;
         }
+        Ok(())
     }
 
     /// waiting will also cleanup joinset & waiting deque.
     pub async fn wait_group_tasks_unconstrained(&self, group: impl Into<String>) {
         let group = group.into();
         // wait for all tasks in the group to finish
-        if let Some(mut tasks) = self.get_task_group_mut(group) {
-            while let Some(Some(_)) = unconstrained(tasks.value_mut().join_next()).now_or_never() {}
+        if let Some(mut tasks) = self.get_task_group(group).await {
+            while let Some(Some(_)) = unconstrained(tasks.join_next()).now_or_never() {}
         }
     }
 
@@ -266,8 +263,8 @@ impl ElementalDownloader {
         let group = group.into();
 
         // wait for all tasks in the group to finish
-        if let Some(mut tasks) = self.get_task_group_mut(group) {
-            while let Some(_) = tasks.value_mut().join_next().await {}
+        if let Some(mut tasks) = self.get_task_group(group).await {
+            while let Some(_) = tasks.join_next().await {}
         }
     }
 }
@@ -322,23 +319,20 @@ impl DownloadTask {
 
 #[tokio::test]
 async fn test_downloader() {
-    let downloader = ElementalDownloader::shared();
+    let downloader = ElementalDownloader::new();
     let group_name = "test";
+    println!("Creating group: {}", group_name);
+    downloader.create_task_group(group_name).await.unwrap();
+    let task = DownloadTask::new(
+        "https://example.com/file1.txt",
+        "file1.txt",
+        group_name,
+        None,
+        None,
+    );
+    downloader.add_task(task).await.unwrap();
+    println!("group: {:?}", downloader.tracker.tasks);
 
-    let result = downloader
-        .group_context(group_name, |downloader, group| async {
-            let task = DownloadTask::new(
-                "https://example.com/file1.txt",
-                "file1.txt",
-                &group,
-                None,
-                None,
-            );
-            downloader.add_task(task);
-            downloader.wait_group_tasks(group).await;
-            Ok(())
-        })
-        .await;
-    println!("{:?}", result);
+    downloader.wait_group_tasks(group_name).await;
     println!("group: {:?}", downloader.tracker.tasks);
 }

@@ -9,31 +9,31 @@ use elemental_core::storage::game::GameStorage;
 #[tokio::main]
 async fn main() {
     // Test Download
+    let downloader = ElementalDownloader::new();
     let service = MojangService::default();
     let version_name = "MyGame-1.16.5";
     let stroage = GameStorage::new_ensure_dir(".minecraft").unwrap();
     let s = SystemTime::now();
-    tokio::spawn(async {
+    let downloader_cloned = downloader.clone();
+    tokio::spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_millis(500)).await;
-            println!("{:?}", ElementalDownloader::shared().tracker.bps)
+            println!("{:?}", downloader_cloned.tracker.bps);
         }
     });
     // if all file exists, it will cost 5-8s to vaildate sha1.
     stroage
-        .download_version_all(&service, "1.16.5", version_name)
+        .download_version_all(&downloader, &service, "1.16.5", version_name)
         .await
         .unwrap();
 
-    ElementalDownloader::shared()
-        .wait_group_tasks(version_name)
-        .await;
+    downloader.wait_group_tasks(version_name).await;
     println!(
         "costs {}ms",
         SystemTime::now().duration_since(s).unwrap().as_millis()
     );
-    ElementalDownloader::shared().remove_task_group(version_name);
-    println!("{:?}", ElementalDownloader::shared().tracker.bps);
+    downloader.remove_task_group(version_name).await;
+    println!("{:?}", downloader.tracker.bps);
     println!("start extract");
 
     stroage.extract_version_natives(version_name).unwrap();

@@ -1,12 +1,11 @@
 use super::mojang::PistonMetaData;
 use crate::{consts::PLATFORM_NATIVES_DIR_NAME, offline};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::{
     collections::HashMap,
-    io::{Error, ErrorKind},
     path::{Path, absolute},
 };
 
@@ -71,7 +70,7 @@ impl LaunchEnvs {
     pub fn map(&self) -> Result<Map<String, Value>> {
         Ok(serde_json::to_value(self)?
             .as_object()
-            .ok_or(Error::new(ErrorKind::Other, "struct is not a object."))?
+            .context("struct is not a object.")?
             .clone())
     }
 

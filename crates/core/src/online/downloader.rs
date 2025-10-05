@@ -91,14 +91,7 @@ impl ElementalTaskTracker {
         }
     }
 
-    pub async fn active_task(&self, task: &DownloadTask) {
-        if let Some(state) = self.tasks.get_async(&task.group).await {
-            if let Some(mut e) = state.tasks.get_async(&task.taskid()).await {
-                e.status = TrackedTaskStatus::ACTIVE;
-            }
-        }
-    }
-
+    /// It wont create the task if not exists
     pub async fn update_task_status(&self, task: &DownloadTask, status: TrackedTaskStatus) {
         if let Some(state) = self.tasks.get_async(&task.group).await {
             if let Some(mut e) = state.tasks.get_async(&task.taskid()).await {
@@ -107,7 +100,6 @@ impl ElementalTaskTracker {
         }
     }
 
-    //FIXME Gracefully handle the upsert case.
     pub async fn create_track_group(&self, group: impl Into<String>) -> Result<()> {
         let group = group.into();
 
@@ -116,9 +108,19 @@ impl ElementalTaskTracker {
             .upgrade()
             .context("unexpected downloader drop")?;
 
-        self.tasks
+        let popout = self
+            .tasks
             .upsert_async(group.clone(), TaskGroupState::new(group, downloader))
             .await;
+
+        // Gracefully cancel the old task group if exists
+        if let Some(old) = popout {
+            old.token.cancel();
+            old.counter.abort();
+            // Wait for the task to finish
+            let _ = old.counter.await;
+        }
+
         Ok(())
     }
 
@@ -129,12 +131,13 @@ impl ElementalTaskTracker {
         }
     }
 
+    /// will try cancel the task group if exists
     pub async fn remove_track_group(&self, group: impl Into<String>) {
         let group = group.into();
         if let Some(state) = self.tasks.get_async(&group).await {
             state.token.cancel();
-            self.tasks.remove_async(&group).await;
         }
+        self.tasks.remove_async(&group).await;
     }
 
     pub async fn has_track_group(&self, group: impl Into<String>) -> bool {
@@ -427,5 +430,6 @@ async fn test_downloader() {
     println!("group: {:?}", downloader.tracker.tasks);
 
     downloader.wait_group_tasks_empty(group_name).await;
+    downloader.remove_task_group(group_name).await;
     println!("group: {:?}", downloader.tracker.tasks);
 }

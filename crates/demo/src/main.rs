@@ -18,7 +18,13 @@ async fn main() {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_millis(500)).await;
-            println!("{:?}", downloader_cloned.tracker.bps);
+
+            downloader_cloned
+                .tracker
+                .tasks
+                .get_async(version_name)
+                .await
+                .map(|state| println!("{:?}", state.bps));
         }
     });
     // if all file exists, it will cost 5-8s to vaildate sha1.
@@ -27,16 +33,23 @@ async fn main() {
         .await
         .unwrap();
 
-    downloader.wait_group_tasks(version_name).await;
+    downloader.wait_group_tasks_empty(version_name).await;
     println!(
-        "costs {}ms",
+        "download in {}ms",
         SystemTime::now().duration_since(s).unwrap().as_millis()
     );
     downloader.remove_task_group(version_name).await;
-    println!("{:?}", downloader.tracker.bps);
+    println!(
+        "remove in {}ms",
+        SystemTime::now().duration_since(s).unwrap().as_millis()
+    );
     println!("start extract");
 
     stroage.extract_version_natives(version_name).unwrap();
+    println!(
+        "extract in {}ms",
+        SystemTime::now().duration_since(s).unwrap().as_millis()
+    );
 }
 
 #[tokio::test]

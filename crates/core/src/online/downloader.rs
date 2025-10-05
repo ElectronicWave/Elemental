@@ -29,7 +29,6 @@ pub struct ElementalDownloader {
 
 #[derive(Debug)]
 pub struct ElementalTaskTracker {
-    //TODO Optimize the data structure to avoid double HashMap lookup
     pub groups: HashMap<GroupId, GroupState>,
     downloader: Weak<ElementalDownloader>,
 }
@@ -85,14 +84,14 @@ impl ElementalTaskTracker {
         }
     }
 
-    pub async fn track_task(&self, task: &DownloadTask) {
+    pub async fn create_task(&self, task: &DownloadTask) {
         if let Some(state) = self.groups.get_async(&task.group).await {
             state.tasks.upsert_async(task.taskid(), task.track()).await;
         }
     }
 
     /// It wont create the task if not exists
-    pub async fn update_task_status(&self, task: &DownloadTask, status: TrackedTaskStatus) {
+    pub async fn update_task(&self, task: &DownloadTask, status: TrackedTaskStatus) {
         if let Some(state) = self.groups.get_async(&task.group).await {
             if let Some(mut e) = state.tasks.get_async(&task.taskid()).await {
                 e.status = status;
@@ -100,7 +99,7 @@ impl ElementalTaskTracker {
         }
     }
 
-    pub async fn create_track_group(&self, group: impl Into<String>) -> Result<()> {
+    pub async fn create_group(&self, group: impl Into<String>) -> Result<()> {
         let group = group.into();
 
         let downloader = self
@@ -124,7 +123,7 @@ impl ElementalTaskTracker {
         Ok(())
     }
 
-    pub async fn cancel_task_group(&self, group: impl Into<String>) {
+    pub async fn cancel_group(&self, group: impl Into<String>) {
         let group = group.into();
         if let Some(state) = self.groups.get_async(&group).await {
             state.token.cancel();
@@ -132,7 +131,7 @@ impl ElementalTaskTracker {
     }
 
     /// will try cancel the task group if exists
-    pub async fn remove_track_group(&self, group: impl Into<String>) {
+    pub async fn remove_group(&self, group: impl Into<String>) {
         let group = group.into();
         if let Some(state) = self.groups.get_async(&group).await {
             state.token.cancel();
@@ -152,6 +151,7 @@ impl PartialEq<&str> for AnyHost {
         true
     }
 }
+const ANY_HOST: AnyHost = AnyHost {};
 
 impl ElementalDownloader {
     pub fn new() -> Arc<Self> {
@@ -166,7 +166,7 @@ impl ElementalDownloader {
 
     //TODO Complete the configuration options
     pub fn with_config() -> Result<Arc<Self>> {
-        let retry_policy = retry::for_host(AnyHost::default())
+        let retry_policy = retry::for_host(ANY_HOST)
             .max_retries_per_request(3)
             .classify_fn(|req_rep| {
                 if req_rep.error().is_some() {
@@ -191,30 +191,37 @@ impl ElementalDownloader {
         }))
     }
 
-    pub async fn create_task_group(&self, group: impl Into<String>) -> Result<()> {
+    pub async fn create_group(&self, group: impl Into<String>) -> Result<()> {
         let group = group.into();
-        self.tracker.create_track_group(&group).await?;
+        self.tracker.create_group(&group).await?;
         self.handler.upsert_async(group, TaskTracker::new()).await;
         Ok(())
     }
 
-    pub async fn remove_task_group(&self, group: impl Into<String>) {
+    pub async fn remove_group(&self, group: impl Into<String>) {
         let group = group.into();
         self.handler.remove_async(&group).await.map(|(_, handler)| {
             handler.close();
         });
-        self.tracker.remove_track_group(&group).await;
+        self.tracker.remove_group(&group).await;
     }
 
-    pub async fn has_task_group(&self, group: impl Into<String>) -> bool {
+    pub async fn has_group(&self, group: impl Into<String>) -> bool {
         self.handler.contains_async(&group.into()).await
     }
 
-    pub async fn get_task_group(
+    pub async fn get_group(
         &self,
         group: impl Into<String>,
     ) -> Option<OccupiedEntry<'_, String, TaskTracker>> {
         self.handler.get_async(&group.into()).await
+    }
+
+    pub async fn get_group_state(
+        &self,
+        group: impl Into<String>,
+    ) -> Option<OccupiedEntry<'_, GroupId, GroupState>> {
+        self.tracker.groups.get_async(&group.into()).await
     }
 
     pub async fn add_task(&self, task: DownloadTask) -> Result<()> {
@@ -255,7 +262,7 @@ impl ElementalDownloader {
 
         if let Some(handler) = self.handler.get_async(&task.group).await {
             // Initialize the task tracking
-            tracker.track_task(&task).await;
+            tracker.create_task(&task).await;
             let semaphore = downloader.connections.clone();
             let task_cloned = task.clone();
             let taskid = task.taskid();
@@ -342,20 +349,20 @@ impl ElementalDownloader {
         Ok(())
     }
 
-    pub async fn wait_group_tasks_empty(&self, group: impl Into<String>) {
+    pub async fn wait_group_empty(&self, group: impl Into<String>) {
         let group = group.into();
-        if let Some(tasks) = self.get_task_group(group).await {
+        if let Some(tasks) = self.get_group(group).await {
             while !tasks.is_empty() {
                 tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
             }
         }
     }
 
-    pub async fn wait_group_tasks(&self, group: impl Into<String>) {
+    pub async fn wait_group(&self, group: impl Into<String>) {
         let group = group.into();
 
         // wait for all tasks in the group to finish
-        if let Some(tasks) = self.get_task_group(group).await {
+        if let Some(tasks) = self.get_group(group).await {
             tasks.wait().await;
         }
     }
@@ -418,7 +425,7 @@ async fn test_downloader() {
     let downloader = ElementalDownloader::new();
     let group_name = "test";
     println!("Creating group: {}", group_name);
-    downloader.create_task_group(group_name).await.unwrap();
+    downloader.create_group(group_name).await.unwrap();
     let task = DownloadTask::new(
         "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json",
         "versions.json",
@@ -429,7 +436,7 @@ async fn test_downloader() {
     downloader.add_task(task).await.unwrap();
     println!("group: {:?}", downloader.tracker.groups);
 
-    downloader.wait_group_tasks_empty(group_name).await;
-    downloader.remove_task_group(group_name).await;
+    downloader.wait_group_empty(group_name).await;
+    downloader.remove_group(group_name).await;
     println!("group: {:?}", downloader.tracker.groups);
 }

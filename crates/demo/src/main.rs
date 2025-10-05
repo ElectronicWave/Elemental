@@ -33,12 +33,12 @@ async fn main() {
         .await
         .unwrap();
 
-    downloader.wait_group_tasks_empty(version_name).await;
+    downloader.wait_group_empty(version_name).await;
     println!(
         "download in {}ms",
         SystemTime::now().duration_since(s).unwrap().as_millis()
     );
-    downloader.remove_task_group(version_name).await;
+    downloader.remove_group(version_name).await;
     println!(
         "remove in {}ms",
         SystemTime::now().duration_since(s).unwrap().as_millis()

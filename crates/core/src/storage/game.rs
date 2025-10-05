@@ -154,8 +154,8 @@ impl GameStorage {
             .await?;
 
         let baseurl = &service.baseurl;
-        if !downloader.has_task_group(&version_name).await {
-            downloader.create_task_group(&version_name).await?;
+        if !downloader.has_group(&version_name).await {
+            downloader.create_group(&version_name).await?;
         }
         self.download_objects(&downloader, &version_name, objs, baseurl)
             .await?;

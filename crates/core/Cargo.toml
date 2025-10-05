@@ -16,12 +16,13 @@ tokio = { workspace = true }
 sha1_smol = "1.0.1"
 toml = "0.9.7"
 uuid = "1.17.0"
-zip = { version = "4.3.0", default-features = false, features = ["deflate"] }
+zip = { version = "5.1.1", default-features = false, features = ["deflate"] }
 const_format = { version = "0.2.34" }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 scc = "3.3.1"
+tokio-util = { version = "0.7.16", default-features = false, features = ["rt"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55.0"

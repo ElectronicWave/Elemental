@@ -1,29 +1,68 @@
 use crate::storage::validate::async_file_sha1;
-use anyhow::{Context, Result};
-use futures::{FutureExt, StreamExt};
-use reqwest::header::HeaderMap;
+use anyhow::{Context, Result, bail};
+use futures::StreamExt;
+use reqwest::{ClientBuilder, header::HeaderMap, retry};
 use scc::{HashMap, hash_map::OccupiedEntry};
-use std::sync::{Arc, Weak};
-use tokio::{
-    sync::Semaphore,
-    task::{JoinHandle, JoinSet, unconstrained},
+use std::{
+    sync::{Arc, Weak},
+    time::Duration,
 };
+use tokio::{
+    fs::create_dir_all,
+    io::{AsyncWriteExt, BufWriter},
+    sync::Semaphore,
+    task::JoinHandle,
+};
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
+
+type TaskId = String;
+type GroupId = String;
 
 #[derive(Debug)]
 pub struct ElementalDownloader {
     client: reqwest::Client,
-    handler: HashMap<String, JoinSet<()>>, // Group name : JoinSet()
+    handler: HashMap<GroupId, TaskTracker>, // Group name : TaskTracker
     pub tracker: Arc<ElementalTaskTracker>,
-    connections: Arc<Semaphore>, //TODO It should be configurable
+    connections: Arc<Semaphore>,
     me: Weak<Self>,
 }
 
 #[derive(Debug)]
 pub struct ElementalTaskTracker {
-    pub tasks: HashMap<String, HashMap<DownloadTask, TrackedInfo>>, // Group: {task: info}
-    pub bps: HashMap<String, DownloadBytesPerSecond>,
-    counter: HashMap<String, JoinHandle<()>>,
-    downloader: Weak<ElementalDownloader>, // to avoid cyclic strong reference
+    //TODO Optimize the data structure to avoid double HashMap lookup
+    pub tasks: HashMap<String, TaskGroupState>, // Group: {task: info} -> { group-task: info }
+    downloader: Weak<ElementalDownloader>,      // to avoid cyclic strong reference
+}
+
+#[derive(Debug)]
+pub struct TaskGroupState {
+    pub tasks: HashMap<TaskId, TrackedInfo>,
+    pub bps: DownloadBytesPerSecond,
+    pub token: CancellationToken,
+    pub counter: JoinHandle<()>,
+}
+
+impl TaskGroupState {
+    pub fn new(group: impl Into<String>, downloader: Arc<ElementalDownloader>) -> Self {
+        let group = group.into();
+        Self {
+            tasks: HashMap::new(),
+            bps: DownloadBytesPerSecond::default(),
+            token: CancellationToken::new(),
+            counter: tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                    if let Some(mut state) = downloader.tracker.tasks.get_async(&group).await {
+                        state.bps.value = state.bps.count;
+                        state.bps.count = 0;
+                    } else {
+                        // Task group removed, exit the loop, it will release the JoinHandle
+                        break;
+                    }
+                }
+            }),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -42,22 +81,28 @@ impl ElementalTaskTracker {
     pub fn new(downloader: Weak<ElementalDownloader>) -> Self {
         Self {
             tasks: HashMap::new(),
-            bps: HashMap::new(),
-            counter: HashMap::new(),
             downloader: downloader,
         }
     }
 
     pub async fn track_task(&self, task: &DownloadTask) {
-        if let Some(tasks) = self.tasks.get_async(&task.group).await {
-            tasks.upsert_async(task.clone(), task.track()).await;
+        if let Some(state) = self.tasks.get_async(&task.group).await {
+            state.tasks.upsert_async(task.taskid(), task.track()).await;
         }
     }
 
     pub async fn active_task(&self, task: &DownloadTask) {
-        if let Some(tasks) = self.tasks.get_async(&task.group).await {
-            if let Some(mut e) = tasks.get_async(task).await {
+        if let Some(state) = self.tasks.get_async(&task.group).await {
+            if let Some(mut e) = state.tasks.get_async(&task.taskid()).await {
                 e.status = TrackedTaskStatus::ACTIVE;
+            }
+        }
+    }
+
+    pub async fn update_task_status(&self, task: &DownloadTask, status: TrackedTaskStatus) {
+        if let Some(state) = self.tasks.get_async(&task.group).await {
+            if let Some(mut e) = state.tasks.get_async(&task.taskid()).await {
+                e.status = status;
             }
         }
     }
@@ -65,46 +110,43 @@ impl ElementalTaskTracker {
     //FIXME Gracefully handle the upsert case.
     pub async fn create_track_group(&self, group: impl Into<String>) -> Result<()> {
         let group = group.into();
-        self.bps
-            .upsert_async(group.clone(), DownloadBytesPerSecond::default())
-            .await;
-        let group_moved = group.clone();
+
         let downloader = self
             .downloader
             .upgrade()
             .context("unexpected downloader drop")?;
-        self.counter
-            .upsert_async(
-                group.clone(),
-                tokio::spawn(async move {
-                    loop {
-                        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                        if let Some(mut bps) = downloader.tracker.bps.get_async(&group_moved).await
-                        {
-                            bps.value = bps.count;
-                            bps.count = 0;
-                        } else {
-                            break;
-                        }
-                    }
-                }),
-            )
+
+        self.tasks
+            .upsert_async(group.clone(), TaskGroupState::new(group, downloader))
             .await;
-        self.tasks.upsert_async(group, HashMap::new()).await;
         Ok(())
+    }
+
+    pub async fn cancel_task_group(&self, group: impl Into<String>) {
+        let group = group.into();
+        if let Some(state) = self.tasks.get_async(&group).await {
+            state.token.cancel();
+        }
     }
 
     pub async fn remove_track_group(&self, group: impl Into<String>) {
         let group = group.into();
-        self.bps.remove_async(&group).await;
-        self.counter.remove_async(&group).await.map(|(_, handle)| {
-            handle.abort();
-        });
-        self.tasks.remove_async(&group).await;
+        if let Some(state) = self.tasks.get_async(&group).await {
+            state.token.cancel();
+            self.tasks.remove_async(&group).await;
+        }
     }
 
     pub async fn has_track_group(&self, group: impl Into<String>) -> bool {
         self.tasks.contains_async(&group.into()).await
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct AnyHost;
+impl PartialEq<&str> for AnyHost {
+    fn eq(&self, _: &&str) -> bool {
+        true
     }
 }
 
@@ -119,22 +161,45 @@ impl ElementalDownloader {
         })
     }
 
+    //TODO Complete the configuration options
+    pub fn with_config() -> Result<Arc<Self>> {
+        let retry_policy = retry::for_host(AnyHost::default())
+            .max_retries_per_request(3)
+            .classify_fn(|req_rep| {
+                if req_rep.error().is_some() {
+                    req_rep.retryable()
+                } else if matches!(req_rep.status(), Some(status) if status.is_server_error()) {
+                    req_rep.retryable()
+                } else {
+                    req_rep.success()
+                }
+            });
+        let client = ClientBuilder::new()
+            .retry(retry_policy)
+            .connect_timeout(Duration::from_secs(10))
+            .build()?;
+
+        Ok(Arc::new_cyclic(|me| Self {
+            client,
+            handler: HashMap::new(),
+            tracker: Arc::new(ElementalTaskTracker::new(me.clone())),
+            connections: Arc::new(Semaphore::new(8)), // TODO make it configurable
+            me: me.clone(),
+        }))
+    }
+
     pub async fn create_task_group(&self, group: impl Into<String>) -> Result<()> {
         let group = group.into();
         self.tracker.create_track_group(&group).await?;
-        self.handler.upsert_async(group, JoinSet::new()).await;
+        self.handler.upsert_async(group, TaskTracker::new()).await;
         Ok(())
     }
 
     pub async fn remove_task_group(&self, group: impl Into<String>) {
         let group = group.into();
-        self.handler
-            .remove_async(&group)
-            .await
-            .map(|(_, mut handler)| {
-                handler.abort_all();
-                drop(handler)
-            });
+        self.handler.remove_async(&group).await.map(|(_, handler)| {
+            handler.close();
+        });
         self.tracker.remove_track_group(&group).await;
     }
 
@@ -145,7 +210,7 @@ impl ElementalDownloader {
     pub async fn get_task_group(
         &self,
         group: impl Into<String>,
-    ) -> Option<OccupiedEntry<'_, String, JoinSet<()>>> {
+    ) -> Option<OccupiedEntry<'_, String, TaskTracker>> {
         self.handler.get_async(&group.into()).await
     }
 
@@ -175,69 +240,94 @@ impl ElementalDownloader {
         let url = task.url.clone();
         let path = task.path.clone();
         let group = task.group.clone();
+        let headers = headers.unwrap_or_default();
+        let token = self
+            .tracker
+            .tasks
+            .get_async(&task.group)
+            .await
+            .context("task group not found")?
+            .token
+            .child_token();
 
-        if let Some(mut handler) = self.handler.get_async(&task.group).await {
+        if let Some(handler) = self.handler.get_async(&task.group).await {
             // Initialize the task tracking
             tracker.track_task(&task).await;
             let semaphore = downloader.connections.clone();
             let task_cloned = task.clone();
+            let taskid = task.taskid();
             let group_cloned = group.clone();
             let tracker_cloned = tracker.clone();
+
             handler.spawn(async move {
-                let _permit = semaphore.acquire_owned().await.expect("semaphore closed");
-                tracker_cloned.active_task(&task).await;
+                let executer =
+                    async move {
+                        let mut stream = client
+                            .get(url.clone())
+                            .headers(headers)
+                            .send()
+                            .await?
+                            .error_for_status()?
+                            .bytes_stream();
 
-                let executer: Result<()> = async move {
-                    let mut stream = client
-                        .get(url.clone())
-                        .headers(headers.unwrap_or_default())
-                        .send()
-                        .await?
-                        .bytes_stream();
-                    let mut output = tokio::fs::File::create(path).await?;
+                        let path = std::path::Path::new(&path);
+                        create_dir_all(path.parent().context("Can't get parent directory")?)
+                            .await?;
+                        let file = tokio::fs::File::create(path).await?;
+                        let mut output = BufWriter::with_capacity(128 * 1024, file);
+                        while let Some(item) = stream.next().await {
+                            let data = item?;
 
-                    while let Some(item) = stream.next().await {
-                        let data = item?;
-
-                        tracker.tasks.get_async(&group_cloned).await.map(|tasks| {
-                            tasks.get_sync(&task.clone()).map(|mut tracked| {
-                                tracked.recv += data.len();
-                            })
-                        });
-
-                        downloader
-                            .tracker
-                            .bps
-                            .get_async(&group_cloned)
-                            .await
-                            .map(|mut bps| {
-                                bps.count += data.len();
+                            tracker.tasks.get_async(&group_cloned).await.map(|state| {
+                                state.tasks.get_sync(&task.taskid()).map(|mut tracked| {
+                                    tracked.recv += data.len();
+                                })
                             });
-                        tokio::io::copy(&mut data.as_ref(), &mut output).await?;
-                    }
-                    Ok(())
+
+                            downloader.tracker.tasks.get_async(&group_cloned).await.map(
+                                |mut state| {
+                                    state.bps.count += data.len();
+                                },
+                            );
+                            output.write_all(&data).await?;
+                        }
+                        output.flush().await?;
+                        anyhow::Ok(())
+                    };
+                let path_cloned = task_cloned.path.clone();
+                let cleanup = async move {
+                    //TODO ignore the error?
+                    let _ = tokio::fs::remove_file(&path_cloned).await;
+                };
+                let _permit = semaphore.acquire_owned().await.expect("semaphore closed");
+                tokio::select! {
+                    result = executer => {
+                        match result {
+                            Ok(_) => {
+                                if let Some(state) = tracker_cloned.tasks.get_async(&group).await {
+                                    state.tasks.remove_async(&taskid).await;
+                                }
+                            }
+                            Err(error) => {
+                                if let Some(state) = tracker_cloned.tasks.get_async(&group).await {
+                                    if let Some(mut tracked) = state.tasks.get_async(&taskid).await {
+                                        tracked.status = TrackedTaskStatus::ERR(error.to_string());
+                                    }
+                                }
+                            }
+                        };
+                    },
+                    () = token.cancelled() => {
+                        cleanup.await;
+                    },
                 }
-                .await;
 
                 // release the semaphore permit
                 drop(_permit);
-
-                match executer {
-                    Ok(_) => {
-                        if let Some(tasks) = tracker_cloned.tasks.get_async(&group).await {
-                            tasks.remove_async(&task_cloned).await;
-                        }
-                    }
-                    Err(error) => {
-                        if let Some(tasks) = tracker_cloned.tasks.get_async(&group).await {
-                            if let Some(mut tracked) = tasks.get_async(&task_cloned).await {
-                                tracked.status = TrackedTaskStatus::ERR(error.to_string());
-                            }
-                        }
-                    }
-                };
             });
-        };
+        } else {
+            bail!("task group '{}' not found", task.group);
+        }
 
         Ok(())
     }
@@ -249,12 +339,12 @@ impl ElementalDownloader {
         Ok(())
     }
 
-    /// waiting will also cleanup joinset & waiting deque.
-    pub async fn wait_group_tasks_unconstrained(&self, group: impl Into<String>) {
+    pub async fn wait_group_tasks_empty(&self, group: impl Into<String>) {
         let group = group.into();
-        // wait for all tasks in the group to finish
-        if let Some(mut tasks) = self.get_task_group(group).await {
-            while let Some(Some(_)) = unconstrained(tasks.join_next()).now_or_never() {}
+        if let Some(tasks) = self.get_task_group(group).await {
+            while !tasks.is_empty() {
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
         }
     }
 
@@ -262,8 +352,8 @@ impl ElementalDownloader {
         let group = group.into();
 
         // wait for all tasks in the group to finish
-        if let Some(mut tasks) = self.get_task_group(group).await {
-            while let Some(_) = tasks.join_next().await {}
+        if let Some(tasks) = self.get_task_group(group).await {
+            tasks.wait().await;
         }
     }
 }
@@ -314,6 +404,10 @@ impl DownloadTask {
             status: TrackedTaskStatus::WAITING,
         }
     }
+
+    pub fn taskid(&self) -> TaskId {
+        format!("{}-{}-{}", self.group, self.url, self.path)
+    }
 }
 
 #[tokio::test]
@@ -323,8 +417,8 @@ async fn test_downloader() {
     println!("Creating group: {}", group_name);
     downloader.create_task_group(group_name).await.unwrap();
     let task = DownloadTask::new(
-        "https://example.com/file1.txt",
-        "file1.txt",
+        "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json",
+        "versions.json",
         group_name,
         None,
         None,
@@ -332,6 +426,6 @@ async fn test_downloader() {
     downloader.add_task(task).await.unwrap();
     println!("group: {:?}", downloader.tracker.tasks);
 
-    downloader.wait_group_tasks(group_name).await;
+    downloader.wait_group_tasks_empty(group_name).await;
     println!("group: {:?}", downloader.tracker.tasks);
 }

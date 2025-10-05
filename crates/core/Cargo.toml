@@ -21,7 +21,7 @@ const_format = { version = "0.2.34" }
 dashmap = "6.1.0"
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-
+anyhow = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55.0"

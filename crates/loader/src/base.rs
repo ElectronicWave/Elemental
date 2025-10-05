@@ -2,19 +2,15 @@ use async_trait::async_trait;
 use elemental_core::storage::version::VersionStorage;
 use std::{
     collections::HashMap,
-    io::{Error, ErrorKind, Result},
 };
-
+use anyhow::{bail, Result};
 #[async_trait]
 pub trait ModLoader {
     type T: ModLoaderVersion;
     /// Map { GameVersion: Vec<LoaderVersion>}
     async fn versions(&self) -> Result<HashMap<String, Vec<Self::T>>>;
     async fn versions_slim(&self) -> Result<HashMap<String, Vec<Self::T>>> {
-        Err(Error::new(
-            ErrorKind::Unsupported,
-            "`versions_slim` not implemented",
-        ))
+        bail!("`versions_slim` not implemented");
     }
 
     async fn installed(&self, version: VersionStorage) -> Result<Option<impl ModLoaderVersion>>;

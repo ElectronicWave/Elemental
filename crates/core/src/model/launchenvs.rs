@@ -1,14 +1,14 @@
-use crate::{consts::PLATFORM_NATIVES_DIR_NAME, error::unification::UnifiedResult, offline};
+use super::mojang::PistonMetaData;
+use crate::{consts::PLATFORM_NATIVES_DIR_NAME, offline};
+use anyhow::Result;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::{
     collections::HashMap,
-    io::{Error, ErrorKind, Result},
+    io::{Error, ErrorKind},
     path::{Path, absolute},
 };
-
-use super::mojang::PistonMetaData;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LaunchEnvs {
@@ -69,21 +69,20 @@ impl LaunchEnvs {
     }
 
     pub fn map(&self) -> Result<Map<String, Value>> {
-        Ok(serde_json::to_value(self)
-            .to_stdio()?
+        Ok(serde_json::to_value(self)?
             .as_object()
             .ok_or(Error::new(ErrorKind::Other, "struct is not a object."))?
             .clone())
     }
 
     pub fn json(&self) -> Result<String> {
-        serde_json::to_string(self).to_stdio()
+        Ok(serde_json::to_string(self)?)
     }
 
     pub fn copy_with(&self, key: String, value: String) -> Result<Self> {
         let mut map = self.map()?;
         map.insert(key, Value::String(value));
-        serde_json::from_value(Value::Object(map)).to_stdio()
+        Ok(serde_json::from_value(Value::Object(map))?)
     }
 
     pub fn copy_with_option(&self, key: String, value: Option<String>) -> Result<Self> {
@@ -92,7 +91,7 @@ impl LaunchEnvs {
         } else {
             let mut map = self.map()?;
             map.remove(&key);
-            serde_json::from_value(Value::Object(map)).to_stdio()
+            Ok(serde_json::from_value(Value::Object(map))?)
         }
     }
 
@@ -163,7 +162,7 @@ impl LaunchEnvs {
     pub fn apply_launchenvs_mut(&self, args: &mut Vec<String>) -> Result<()> {
         let data = self.map()?;
         //TODO Build a algorithm instead of using regex
-        let regex = Regex::new(r#"\$\{(.*?)\}"#).to_stdio()?;
+        let regex = Regex::new(r#"\$\{(.*?)\}"#)?;
         for (index, mut copied) in args.clone().into_iter().enumerate() {
             let value = copied.clone();
             for var in regex.captures_iter(&value) {
@@ -184,7 +183,7 @@ impl LaunchEnvs {
         let mut result = vec![];
         let data = self.map()?;
         //TODO Build a algorithm instead of using regex
-        let regex = Regex::new(r#"\$\{(.*?)\}"#).to_stdio()?;
+        let regex = Regex::new(r#"\$\{(.*?)\}"#)?;
         for value in args.iter() {
             let mut copied = value.clone();
             for var in regex.captures_iter(value) {

@@ -1,11 +1,9 @@
 use std::fs::{File, create_dir_all, write};
-use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf, absolute};
 
 use tokio::process::Child;
 
 use super::version::VersionStorage;
-use crate::error::unification::UnifiedResult;
 use crate::model::mojang::{
     MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaDownload,
     PistonMetaLibraries, PistonMetaLibrariesDownloadsArtifact,
@@ -13,6 +11,7 @@ use crate::model::mojang::{
 use crate::online::downloader::{DownloadTask, ElementalDownloader};
 use crate::online::mojang::MojangService;
 use crate::storage::jar::JarFile;
+use anyhow::{Context, Result, bail};
 
 pub struct GameStorage {
     pub root: String, // ..../.minecraft
@@ -59,16 +58,17 @@ impl GameStorage {
     ) -> Result<PistonMetaAssetIndexObjects> {
         let objs = service
             .pistonmeta_assetindex_objects(&asset_index_url)
-            .await
-            .to_stdio()?;
+            .await?;
         let parent = self.join("assets").join("indexes");
         let data = serde_json::to_string(&objs)?;
 
         write(
-            parent.join(asset_index_url.split("/").last().ok_or(Error::new(
-                ErrorKind::Other,
-                "Split asset index url failed!",
-            ))?),
+            parent.join(
+                asset_index_url
+                    .split("/")
+                    .last()
+                    .context("Failed to extract asset index file name")?,
+            ),
             data,
         )?;
 
@@ -101,7 +101,7 @@ impl GameStorage {
         let path = self.join("libraries").join(&library.path);
         let parent = path
             .parent()
-            .ok_or(Error::new(ErrorKind::Other, "No such directory"))?;
+            .context("Failed to get library parent directory")?;
 
         create_dir_all(parent)?;
         Ok(path)
@@ -138,10 +138,7 @@ impl GameStorage {
                     .versions
                     .iter()
                     .find(|data| data.id == version_id)
-                    .ok_or(Error::new(
-                        ErrorKind::Other,
-                        format!("Can't find version named `{}`", version_id),
-                    ))?
+                    .context(format!("Can't find version named `{}`", version_id))?
                     .url
                     .clone(),
             )
@@ -309,29 +306,26 @@ impl GameStorage {
         let parent = self.join("versions").join(&version_name);
         create_dir_all(&parent)?;
 
-        write(
+        Ok(write(
             parent.join(format!("{version_name}.json")),
             serde_json::to_string(data)?,
-        )
+        )?)
     }
 
     pub fn get_version(&self, version_name: impl Into<String>) -> Result<VersionStorage> {
         let name = version_name.into();
-        if self.version_exist(&name) {
-            Ok(VersionStorage {
-                root: self //It can be proved to be absolute path
-                    .join("versions")
-                    .join(&name)
-                    .to_string_lossy()
-                    .to_string(),
-                name,
-            })
-        } else {
-            Err(Error::new(
-                ErrorKind::NotFound,
-                format!("Can't find a vaild version named '{name}'"),
-            ))
+        if !self.version_exist(&name) {
+            bail!("Can't find a valid version named '{name}'")
         }
+
+        Ok(VersionStorage {
+            root: self //It can be proved to be absolute path
+                .join("versions")
+                .join(&name)
+                .to_string_lossy()
+                .to_string(),
+            name,
+        })
     }
 
     pub fn extract_version_natives(&self, version_name: impl Into<String>) -> Result<()> {

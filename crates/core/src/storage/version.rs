@@ -1,15 +1,13 @@
 use std::fs::{File, create_dir_all};
-use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf, absolute};
 
-use tokio::process::{Child, Command};
-
 use crate::consts::PLATFORM_NATIVES_DIR_NAME;
-use crate::error::unification::UnifiedResult;
 use crate::model::launchenvs::LaunchEnvs;
 use crate::model::mojang::PistonMetaData;
 use crate::online::downloader::DownloadTask;
 use crate::storage::game::GameStorage;
+use anyhow::{Result, bail};
+use tokio::process::{Child, Command};
 
 pub struct VersionStorage {
     pub root: String,
@@ -41,10 +39,7 @@ impl VersionStorage {
             .map(|r| r.to_string_lossy().to_string() != name)
             .unwrap_or(true)
         {
-            return Err(Error::new(
-                ErrorKind::Other,
-                format!("Version `{name}` has a different name with it's root."),
-            ));
+            bail!("Version `{name}` has a different name with it's root.");
         }
 
         Ok(Self {
@@ -58,7 +53,9 @@ impl VersionStorage {
     }
 
     pub fn pistonmeta(&self) -> Result<PistonMetaData> {
-        serde_json::from_reader(File::open(self.join(format!("{}.json", self.name)))?).to_stdio()
+        Ok(serde_json::from_reader(File::open(
+            self.join(format!("{}.json", self.name)),
+        )?)?)
     }
 
     pub fn get_ensure_natives_path(&self) -> Result<PathBuf> {
@@ -77,7 +74,9 @@ impl VersionStorage {
             .get_object_index(pistonmeta.asset_index.id)?
             .objects
             .values()
-        {}
+        {
+            //TODO Check SHA1
+        }
 
         // Validate Libraries
 

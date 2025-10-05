@@ -1,3 +1,5 @@
+use crate::storage::validate::file_sha1;
+use anyhow::Result;
 use dashmap::{
     DashMap,
     mapref::one::{Ref, RefMut},
@@ -6,12 +8,9 @@ use futures::{FutureExt, StreamExt};
 use reqwest::header::HeaderMap;
 use std::{
     collections::VecDeque,
-    io::Result,
     sync::{LazyLock, RwLock},
 };
 use tokio::task::{JoinHandle, JoinSet, unconstrained};
-
-use crate::{error::unification::UnifiedResult, storage::validate::file_sha1};
 // Please use `ElementalDownloader::shared()` to access the shared downloader instance.
 pub struct ElementalDownloader {
     client: reqwest::Client,
@@ -210,13 +209,12 @@ impl ElementalDownloader {
                         .get(url.clone())
                         .headers(headers.unwrap_or_default())
                         .send()
-                        .await
-                        .to_stdio()?
+                        .await?
                         .bytes_stream();
                     let mut output = tokio::fs::File::create(path).await?;
 
                     while let Some(item) = stream.next().await {
-                        let data = item.to_stdio()?;
+                        let data = item?;
 
                         tracker.tasks.get_mut(&group_cloned).map(|mut tasks| {
                             tasks.value_mut().get_mut(&task.clone()).map(|mut tracked| {

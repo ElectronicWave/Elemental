@@ -2,13 +2,12 @@
 // https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json
 
 use crate::base::{ModLoader, ModLoaderVersion, ModLoaderVersionInfo};
+use anyhow::Result;
 use async_trait::async_trait;
-use elemental_core::error::unification::UnifiedResult;
 use elemental_core::storage::version::VersionStorage;
 use quick_xml::de::from_str;
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::io::Result;
 
 pub struct ForgeModLoader {
     pub files: String,
@@ -59,12 +58,10 @@ impl ModLoader for ForgeModLoader {
             "https://{}/net/minecraftforge/forge/maven-metadata.xml",
             self.maven,
         ))
-        .await
-        .to_stdio()?
+        .await?
         .text()
-        .await
-        .to_stdio()?;
-        let body: MavenMetadataBody = from_str(&raw).to_stdio()?;
+        .await?;
+        let body: MavenMetadataBody = from_str(&raw)?;
         for version in body.versioning.versions.version {
             if let Some((game_version, loader_version)) = version.split_once("-") {
                 data.entry(game_version.to_owned())

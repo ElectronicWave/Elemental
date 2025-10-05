@@ -1,8 +1,7 @@
-use crate::{
-    error::unification::UnifiedResult,
-    model::mojang::{LaunchMetaData, MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaData},
+use crate::model::mojang::{
+    LaunchMetaData, MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaData,
 };
-use std::io::Result;
+use anyhow::Result;
 #[derive(Debug)]
 pub struct MojangService {
     pub baseurl: MojangBaseUrl,
@@ -23,15 +22,13 @@ impl MojangService {
 
     pub async fn launchmeta(&self) -> Result<LaunchMetaData> {
         // Use shortcut here because it wont call many times.
-        reqwest::get(format!(
+        Ok(reqwest::get(format!(
             "https://{}/mc/game/version_manifest_v2.json",
             self.baseurl.launchermeta
         ))
-        .await
-        .to_stdio()?
+        .await?
         .json()
-        .await
-        .to_stdio()
+        .await?)
     }
 
     pub async fn launchmeta_v2(&self) {
@@ -39,15 +36,13 @@ impl MojangService {
     }
 
     pub async fn pistonmeta(&self, url: impl Into<String>) -> Result<PistonMetaData> {
-        reqwest::get(
+        Ok(reqwest::get(
             url.into()
                 .replace("piston-meta.mojang.com", &self.baseurl.pistonmeta),
         )
-        .await
-        .to_stdio()?
+        .await?
         .json()
-        .await
-        .to_stdio()
+        .await?)
     }
 
     pub async fn pistonmeta_v2(&self, url: impl Into<String>) {
@@ -58,15 +53,13 @@ impl MojangService {
         &self,
         url: impl Into<String>,
     ) -> Result<PistonMetaAssetIndexObjects> {
-        reqwest::get(
+        Ok(reqwest::get(
             url.into()
                 .replace("piston-meta.mojang.com", &self.baseurl.pistonmeta),
         )
-        .await
-        .to_stdio()?
+        .await?
         .json()
-        .await
-        .to_stdio()
+        .await?)
     }
 }
 

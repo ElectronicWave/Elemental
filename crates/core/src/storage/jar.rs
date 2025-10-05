@@ -1,12 +1,11 @@
 use std::{
     ffi::OsStr,
     fs::{File, create_dir_all},
-    io::{self, Read, Result},
+    io::{self, Read},
     path::Path,
 };
 use zip::ZipArchive;
-
-use crate::error::unification::UnifiedResult;
+use anyhow::Result;
 
 // Support `Deflate/Stored` Now
 #[derive(Debug, Clone)]
@@ -67,7 +66,7 @@ impl<P: AsRef<Path>> JarFile<P> {
     }
 
     pub fn by_name_string(&self, name: &str) -> Result<String> {
-        String::from_utf8(self.by_name_bytes(name)?).to_stdio()
+        Ok(String::from_utf8(self.by_name_bytes(name)?)?)
     }
 }
 

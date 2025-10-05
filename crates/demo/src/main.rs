@@ -9,7 +9,7 @@ use elemental_core::storage::game::GameStorage;
 #[tokio::main]
 async fn main() {
     // Test Download
-    let downloader = ElementalDownloader::new();
+    let downloader = ElementalDownloader::with_config_default().unwrap();
     let service = MojangService::default();
     let version_name = "MyGame-1.16.5";
     let stroage = GameStorage::new_ensure_dir(".minecraft").unwrap();

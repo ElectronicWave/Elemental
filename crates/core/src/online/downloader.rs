@@ -41,6 +41,23 @@ pub struct GroupState {
     pub counter: JoinHandle<()>,
 }
 
+#[derive(Debug)]
+pub struct ElementalDownloaderConfig {
+    pub max_connections: usize,
+    pub connect_timeout: Duration,
+    pub retry_times: u32,
+}
+
+impl Default for ElementalDownloaderConfig {
+    fn default() -> Self {
+        Self {
+            max_connections: 8,
+            connect_timeout: Duration::from_secs(10),
+            retry_times: 3,
+        }
+    }
+}
+
 impl GroupState {
     pub fn new(group: impl Into<String>, downloader: Arc<ElementalDownloader>) -> Self {
         let group = group.into();
@@ -164,10 +181,13 @@ impl ElementalDownloader {
         })
     }
 
-    //TODO Complete the configuration options
-    pub fn with_config() -> Result<Arc<Self>> {
+    pub fn with_config_default() -> Result<Arc<Self>> {
+        Self::with_config(ElementalDownloaderConfig::default())
+    }
+
+    pub fn with_config(config: ElementalDownloaderConfig) -> Result<Arc<Self>> {
         let retry_policy = retry::for_host(ANY_HOST)
-            .max_retries_per_request(3)
+            .max_retries_per_request(config.retry_times)
             .classify_fn(|req_rep| {
                 if req_rep.error().is_some() {
                     req_rep.retryable()
@@ -179,14 +199,14 @@ impl ElementalDownloader {
             });
         let client = ClientBuilder::new()
             .retry(retry_policy)
-            .connect_timeout(Duration::from_secs(10))
+            .connect_timeout(config.connect_timeout)
             .build()?;
 
         Ok(Arc::new_cyclic(|me| Self {
             client,
             handler: HashMap::new(),
             tracker: Arc::new(ElementalTaskTracker::new(me.clone())),
-            connections: Arc::new(Semaphore::new(8)), // TODO make it configurable
+            connections: Arc::new(Semaphore::new(config.max_connections)),
             me: me.clone(),
         }))
     }
@@ -422,7 +442,7 @@ impl DownloadTask {
 
 #[tokio::test]
 async fn test_downloader() {
-    let downloader = ElementalDownloader::new();
+    let downloader = ElementalDownloader::with_config_default().unwrap();
     let group_name = "test";
     println!("Creating group: {}", group_name);
     downloader.create_group(group_name).await.unwrap();

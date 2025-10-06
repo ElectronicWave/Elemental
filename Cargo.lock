@@ -290,7 +290,7 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "winreg",
- "zip 5.1.1",
+ "zip",
 ]
 
 [[package]]
@@ -1055,7 +1055,7 @@ dependencies = [
  "toml",
  "uuid",
  "winreg",
- "zip 4.3.0",
+ "zip",
 ]
 
 [[package]]
@@ -2435,20 +2435,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "zip"
-version = "4.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9aed4ac33e8eb078c89e6cbb1d5c4c7703ec6d299fc3e7c3695af8f8b423468b"
-dependencies = [
- "arbitrary",
- "crc32fast",
- "flate2",
- "indexmap",
- "memchr",
- "zopfli",
 ]
 
 [[package]]

@@ -21,7 +21,7 @@ const_format = { version = "0.2.34" }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
-scc = "3.3.1"
+scc = { workspace = true }
 tokio-util = { version = "0.7.16", default-features = false, features = ["rt"] }
 
 [target.'cfg(windows)'.dependencies]

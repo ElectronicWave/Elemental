@@ -1,0 +1,12 @@
+[package]
+name = "elemental-object"
+version = "0.1.0"
+edition = "2024"
+
+
+[dependencies]
+scc = { workspace = true }
+anyhow = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

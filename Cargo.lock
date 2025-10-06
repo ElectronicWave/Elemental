@@ -316,6 +316,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "elemental-object"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "scc",
+ "tokio",
+]
+
+[[package]]
 name = "encoding_rs"
 version = "0.8.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"

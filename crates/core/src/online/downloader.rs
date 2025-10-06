@@ -38,7 +38,7 @@ pub struct GroupState {
     pub tasks: HashMap<TaskId, TrackedInfo>,
     pub bps: DownloadBytesPerSecond,
     pub token: CancellationToken,
-    pub counter: JoinHandle<()>,
+    counter: JoinHandle<()>,
 }
 
 #[derive(Debug)]
@@ -286,6 +286,7 @@ impl ElementalDownloader {
             let semaphore = downloader.connections.clone();
             let task_cloned = task.clone();
             let taskid = task.taskid();
+            let taskid_cloned = taskid.clone();
             let group_cloned = group.clone();
             let tracker_cloned = tracker.clone();
 
@@ -307,18 +308,13 @@ impl ElementalDownloader {
                         let mut output = BufWriter::with_capacity(128 * 1024, file);
                         while let Some(item) = stream.next().await {
                             let data = item?;
+                            if let Some(mut state) = tracker.groups.get_async(&group_cloned).await{
+                                if let Some(mut tracked) = state.tasks.get_async(&taskid_cloned).await {
+                                    tracked.recv+=data.len();
+                                }
+                                state.bps.count += data.len();
+                            }
 
-                            tracker.groups.get_async(&group_cloned).await.map(|state| {
-                                state.tasks.get_sync(&task.taskid()).map(|mut tracked| {
-                                    tracked.recv += data.len();
-                                })
-                            });
-
-                            downloader.tracker.groups.get_async(&group_cloned).await.map(
-                                |mut state| {
-                                    state.bps.count += data.len();
-                                },
-                            );
                             output.write_all(&data).await?;
                         }
                         output.flush().await?;
@@ -329,7 +325,20 @@ impl ElementalDownloader {
                     //TODO ignore the error?
                     let _ = tokio::fs::remove_file(&path_cloned).await;
                 };
-                let _permit = semaphore.acquire_owned().await.expect("semaphore closed");
+                let permit = semaphore.acquire_owned().await;
+
+                if let Err(error) = permit
+                {
+                    if let Some(state) = tracker_cloned.groups.get_async(&group).await {
+                        if let Some(mut tracked) = state.tasks.get_async(&taskid).await {
+                            tracked.status = TrackedTaskStatus::ERR(error.to_string());
+                        }
+                    }
+                    return;
+                }
+
+                let _permit = permit.unwrap();
+
                 tokio::select! {
                     result = executer => {
                         match result {

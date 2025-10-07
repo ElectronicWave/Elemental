@@ -7,6 +7,9 @@ edition = "2024"
 [dependencies]
 scc = { workspace = true }
 anyhow = { workspace = true }
+tokio = { workspace = true, optional = true, features = ["sync"] }
 
-[dev-dependencies]
-tokio = { workspace = true }
+
+[features]
+notify = ["tokio"]
+default = ["notify"]

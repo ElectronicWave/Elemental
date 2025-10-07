@@ -6,9 +6,10 @@ edition = "2024"
 [dependencies]
 elemental-core = { path = "../core" }
 elemental-loader = { path = "../loader" }
-
+elemental-object = { path = "../object" }
 
 [features]
 loader = []
-full = ["loader"]
+object = []
+full = ["loader", "object"]
 default = ["full"]

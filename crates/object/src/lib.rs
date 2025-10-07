@@ -13,9 +13,24 @@ mod testobj {
             println!("making delay");
             sleep(Duration::from_secs(1)).await;
             println!("Fulfilling value");
-            fulfill("value".to_string()).await;
+            provide(
+                "value".to_string(),
+                Some(|value| async move {
+                    println!("Shutting down value {}", value);
+                }),
+            )
+            .await;
+            sleep(Duration::from_secs(1)).await;
+            println!("Fulfilling value again");
+            fulfill("value2".to_string()).await;
         });
         println!("Got value here {:?}", acquire::<String>().await);
+        // After acquiring, drop this value
+        println!("Dropping value");
+        drop_value::<String>().await;
+        println!("Acquired value again {:?}", acquire::<String>().await);
+
+        shutdown().await;
     }
 
     #[tokio::test]

@@ -18,9 +18,11 @@ struct PoolEntry<T: Any + Send + Sync + ?Sized> {
 }
 
 impl<T: Any + Send + Sync + ?Sized> PoolEntry<T> {
-    async fn shutdown(&self) {
+    async fn shutdown(&mut self) {
+        let val = self.value.clone();
+        self.value = None;
         if let Some(shutdown) = &self.shutdown {
-            if let Some(value) = &self.value {
+            if let Some(value) = &val {
                 (shutdown)(value.clone()).await;
             }
         }
@@ -70,9 +72,7 @@ impl ObjectPool {
         shutdown: Option<ShutdownFn<T>>,
     ) {
         let type_id = TypeId::of::<T>();
-        let mut entry = PoolEntry::new();
-        entry.value = Some(value.clone() as Arc<dyn Any + Send + Sync>);
-        entry.shutdown = shutdown.map(|shutdown_fn| {
+        let shutdown = shutdown.map(|shutdown_fn| {
             Box::new(move |value_any: Arc<dyn Any + Send + Sync>| {
                 let value = value_any
                     .downcast::<T>()
@@ -80,24 +80,32 @@ impl ObjectPool {
                 shutdown_fn(value)
             }) as ShutdownFn<dyn Any + Send + Sync>
         });
-
-        let popout = self.inner.upsert_async(type_id, entry).await;
-        if let Some(old_entry) = popout {
-            old_entry.shutdown().await;
+        if self.inner.contains_async(&type_id).await {
+            // Noops if already fulfilled
+            let mut entry = self.inner.get_async(&type_id).await.unwrap();
+            entry.shutdown().await;
+            entry.value = Some(value.clone() as Arc<dyn Any + Send + Sync>);
+            entry.shutdown = shutdown;
+            #[cfg(feature = "notify")]
+            entry.notify.notify_waiters();
+            return;
         }
+
+        let mut entry = PoolEntry::new();
+        entry.value = Some(value.clone() as Arc<dyn Any + Send + Sync>);
+        entry.shutdown = shutdown;
     }
 
     pub async fn remove_value<T: Any + Send + Sync>(&self) {
         let type_id = TypeId::of::<T>();
         if let Some(mut entry) = self.inner.get_async(&type_id).await {
             entry.shutdown().await;
-            entry.value = None;
         }
     }
 
     pub async fn remove_entry<T: Any + Send + Sync>(&self) {
         let type_id = TypeId::of::<T>();
-        if let Some((_, entry)) = self.inner.remove_async(&type_id).await {
+        if let Some((_, mut entry)) = self.inner.remove_async(&type_id).await {
             entry.shutdown().await;
         }
     }
@@ -132,6 +140,15 @@ impl ObjectPool {
         if let Some(mut entry) = self.inner.get_async(&type_id).await {
             entry.value = Some(value);
             entry.notify.notify_waiters();
+        }
+    }
+
+    pub async fn shutdown(&self) {
+        let mut iter = self.inner.begin_async().await;
+        while let Some(mut entry) = iter {
+            // `OccupiedEntry` can be sent across awaits and threads.
+            entry.shutdown().await;
+            iter = entry.next_async().await;
         }
     }
 }
@@ -196,4 +213,18 @@ pub async fn fulfill<T: Any + Send + Sync>(value: T) {
 #[cfg(feature = "notify")]
 pub async fn fulfill_arc<T: Any + Send + Sync>(value: Arc<T>) {
     POOL.fulfill_value(value).await;
+}
+
+/// Shutdown all entries in the pool when dropping the pool. Not work for static `POOL`.
+impl Drop for ObjectPool {
+    fn drop(&mut self) {
+        let rt = tokio::runtime::Handle::current();
+        rt.block_on(async {
+            self.shutdown().await;
+        });
+    }
+}
+
+pub async fn shutdown() {
+    POOL.shutdown().await;
 }

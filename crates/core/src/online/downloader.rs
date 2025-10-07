@@ -142,16 +142,24 @@ impl ElementalTaskTracker {
 
     pub async fn cancel_group(&self, group: impl Into<String>) {
         let group = group.into();
-        if let Some(state) = self.groups.get_async(&group).await {
-            state.token.cancel();
+        if let Some(token) = self
+            .groups
+            .read_async(&group, |_, state| state.token.clone())
+            .await
+        {
+            token.cancel();
         }
     }
 
     /// will try cancel the task group if exists
     pub async fn remove_group(&self, group: impl Into<String>) {
         let group = group.into();
-        if let Some(state) = self.groups.get_async(&group).await {
-            state.token.cancel();
+        if let Some(token) = self
+            .groups
+            .read_async(&group, |_, state| state.token.clone())
+            .await
+        {
+            token.cancel();
         }
         self.groups.remove_async(&group).await;
     }
@@ -274,13 +282,15 @@ impl ElementalDownloader {
         let token = self
             .tracker
             .groups
-            .get_async(&task.group)
+            .read_async(&task.group, |_, state| state.token.child_token())
             .await
-            .context("task group not found")?
-            .token
-            .child_token();
+            .context("task group not found")?;
 
-        if let Some(handler) = self.handler.get_async(&task.group).await {
+        if let Some(handler) = self
+            .handler
+            .read_async(&task.group, |_, handler| handler.clone())
+            .await
+        {
             // Initialize the task tracking
             tracker.create_task(&task).await;
             let semaphore = downloader.connections.clone();

@@ -94,6 +94,8 @@ impl ObjectPool {
         let mut entry = PoolEntry::new();
         entry.value = Some(value.clone() as Arc<dyn Any + Send + Sync>);
         entry.shutdown = shutdown;
+        // The entry is new, just insert it!
+        self.inner.upsert_async(type_id, entry).await;
     }
 
     pub async fn remove_value<T: Any + Send + Sync>(&self) {

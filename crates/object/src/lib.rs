@@ -9,7 +9,7 @@ mod testobj {
 
     use super::*;
     #[tokio::test]
-    async fn test() {
+    async fn test_fulfill() {
         tokio::spawn(async {
             println!("making delay");
             sleep(Duration::from_secs(1)).await;
@@ -18,25 +18,18 @@ mod testobj {
         });
         println!("Got value here {:?}", acquire::<String>().await);
     }
-}
-#[cfg(test)]
-mod testmap {
-    use scc::HashMap;
-    use std::sync::LazyLock;
-    static GLOBAL_STATIC_MAP: LazyLock<HashMap<String, String>> = LazyLock::new(|| HashMap::new());
-    const GLOBAL_CONST_MAP: LazyLock<HashMap<String, String>> = LazyLock::new(|| HashMap::new());
 
-    #[test]
-    fn test_static() {
-        GLOBAL_STATIC_MAP.upsert_sync("key".to_string(), "value".to_string());
-        let v = GLOBAL_STATIC_MAP.read_sync(&"key".to_string(), |_, v| v.clone());
-        assert_eq!(v, Some("value".to_string()));
-    }
-
-    #[test]
-    fn test_const() {
-        GLOBAL_CONST_MAP.upsert_sync("key".to_string(), "value".to_string());
-        let v = GLOBAL_CONST_MAP.read_sync(&"key".to_string(), |_, v| v.clone());
-        assert_eq!(v, Some("value".to_string()));
+    #[tokio::test]
+    async fn test_provide() {
+        provide(
+            "value".to_string(),
+            Some(|value| async move {
+                println!("Shutting down value {}", value);
+            }),
+        )
+        .await;
+        println!("Got value here {:?}", require::<String>().await);
+        println!("Dropping value");
+        drop_value::<String>().await;
     }
 }

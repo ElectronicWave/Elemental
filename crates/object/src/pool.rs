@@ -87,6 +87,21 @@ impl ObjectPool {
         }
     }
 
+    pub async fn remove_value<T: Any + Send + Sync>(&self) {
+        let type_id = TypeId::of::<T>();
+        if let Some(mut entry) = self.inner.get_async(&type_id).await {
+            entry.shutdown().await;
+            entry.value = None;
+        }
+    }
+
+    pub async fn remove_entry<T: Any + Send + Sync>(&self) {
+        let type_id = TypeId::of::<T>();
+        if let Some((_, entry)) = self.inner.remove_async(&type_id).await {
+            entry.shutdown().await;
+        }
+    }
+
     #[cfg(feature = "notify")]
     pub async fn wait_value<T: Any + Send + Sync>(&self) {
         let type_id = TypeId::of::<T>();
@@ -104,9 +119,19 @@ impl ObjectPool {
     #[cfg(feature = "notify")]
     pub async fn fulfill_value<T: Any + Send + Sync>(&self, value: Arc<T>) {
         let type_id = TypeId::of::<T>();
+        if let Some(fulfilled) = self
+            .inner
+            .read_async(&type_id, |_, v| v.value.is_some())
+            .await
+            && fulfilled
+        {
+            // Noops if already fulfilled
+            return;
+        }
+
         if let Some(mut entry) = self.inner.get_async(&type_id).await {
             entry.value = Some(value);
-            entry.notify.notify_one();
+            entry.notify.notify_waiters();
         }
     }
 }
@@ -149,6 +174,13 @@ pub fn require_sync<T: Any + Send + Sync>() -> Result<Arc<T>> {
     ))
 }
 
+pub async fn drop_value<T: Any + Send + Sync>() {
+    POOL.remove_value::<T>().await;
+}
+
+pub async fn drop_entry<T: Any + Send + Sync>() {
+    POOL.remove_entry::<T>().await;
+}
 /// Acquire a value from the pool, if not exists, wait until it is provided.
 #[cfg(feature = "notify")]
 pub async fn acquire<T: Any + Send + Sync>() -> Result<Arc<T>> {

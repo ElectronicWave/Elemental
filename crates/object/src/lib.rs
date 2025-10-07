@@ -4,7 +4,6 @@ pub use pool::*;
 #[cfg(test)]
 mod testobj {
     use std::time::Duration;
-
     use tokio::time::sleep;
 
     use super::*;
@@ -28,8 +27,16 @@ mod testobj {
             }),
         )
         .await;
-        println!("Got value here {:?}", require::<String>().await);
-        println!("Dropping value");
+        provide(
+            1usize,
+            Some(|value| async move {
+                println!("Shutting down value {}", value);
+            }),
+        )
+        .await;
+        println!("Got `String` value here {:?}", require::<String>().await);
+        println!("Got `usize` value here {:?}", require::<usize>().await);
+        println!("Dropping `String` value");
         drop_value::<String>().await;
     }
 }

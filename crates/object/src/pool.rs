@@ -10,7 +10,7 @@ use std::{
 use tokio::sync::Notify;
 static POOL: LazyLock<ObjectPool> = LazyLock::new(|| ObjectPool::new());
 type ShutdownFn<T> = Box<dyn Fn(Arc<T>) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
-struct PoolEntry<T: Any + Send + Sync + ?Sized> {
+pub struct PoolEntry<T: Any + Send + Sync + ?Sized> {
     value: Option<Arc<T>>,
     #[cfg(feature = "notify")]
     notify: Arc<Notify>,
@@ -38,7 +38,7 @@ impl<T: Any + Send + Sync + ?Sized> PoolEntry<T> {
     }
 }
 
-struct ObjectPool {
+pub struct ObjectPool {
     inner: HashMap<TypeId, PoolEntry<dyn Any + Send + Sync>>,
 }
 
@@ -52,8 +52,8 @@ impl ObjectPool {
 
     pub fn get_sync<T: Any + Send + Sync>(&self) -> Option<Arc<T>> {
         self.inner
-            .get_sync(&TypeId::of::<T>())
-            .and_then(|entry| Arc::downcast::<T>(entry.get().value.clone()?).ok())
+            .read_sync(&TypeId::of::<T>(), |_, v| v.value.clone())
+            .and_then(|entry| Arc::downcast::<T>(entry?).ok())
     }
 
     pub async fn get_async<T: Any + Send + Sync>(&self) -> Option<Arc<T>> {
@@ -215,16 +215,6 @@ pub async fn fulfill<T: Any + Send + Sync>(value: T) {
 #[cfg(feature = "notify")]
 pub async fn fulfill_arc<T: Any + Send + Sync>(value: Arc<T>) {
     POOL.fulfill_value(value).await;
-}
-
-/// Shutdown all entries in the pool when dropping the pool. Not work for static `POOL`.
-impl Drop for ObjectPool {
-    fn drop(&mut self) {
-        let rt = tokio::runtime::Handle::current();
-        rt.block_on(async {
-            self.shutdown().await;
-        });
-    }
 }
 
 pub async fn shutdown() {

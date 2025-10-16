@@ -2,9 +2,9 @@ use std::fs::{File, create_dir_all};
 use std::path::{Path, PathBuf, absolute};
 
 use crate::consts::PLATFORM_NATIVES_DIR_NAME;
-use crate::model::launchenvs::LaunchEnvs;
-use crate::model::mojang::PistonMetaData;
-use crate::online::downloader::DownloadTask;
+use crate::models::launchenvs::LaunchEnvs;
+use crate::models::mojang::PistonMetaData;
+use crate::services::downloader::DownloadTask;
 use crate::storage::game::GameStorage;
 use anyhow::{Result, bail};
 use tokio::process::{Child, Command};

@@ -5,12 +5,12 @@ use std::sync::Arc;
 use tokio::process::Child;
 
 use super::version::VersionStorage;
-use crate::model::mojang::{
+use crate::models::mojang::{
     MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaDownload,
     PistonMetaLibraries, PistonMetaLibrariesDownloadsArtifact,
 };
-use crate::online::downloader::{DownloadTask, ElementalDownloader};
-use crate::online::mojang::MojangService;
+use crate::services::downloader::{DownloadTask, ElementalDownloader};
+use crate::services::mojang::MojangService;
 use crate::storage::jar::JarFile;
 use anyhow::{Context, Result, bail};
 

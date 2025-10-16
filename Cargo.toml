@@ -6,7 +6,6 @@ members = [
     "crates/loader",
     "crates/discover",
     "crates/elemental",
-    "crates/meta",
     "crates/object",
 ]
 

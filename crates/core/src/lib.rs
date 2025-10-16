@@ -1,8 +1,7 @@
-pub mod bootstrap;
 pub mod consts;
-pub mod meta;
-pub mod model;
+pub mod models;
 pub mod offline;
-pub mod online;
 pub mod os;
+pub mod runtime;
+pub mod services;
 pub mod storage;

@@ -132,7 +132,7 @@ impl LaunchEnvs {
 
         Ok(Self {
             auth_xuid: "${auth_xuid}".to_owned(),
-            auth_uuid: offline::uuid::player_uuid(&player_name),
+            auth_uuid: offline::player_uuid(&player_name),
             auth_player_name: player_name,
             version_name: version_name,
             game_directory: version_path.to_string_lossy().to_string(),

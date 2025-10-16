@@ -1,4 +1,4 @@
-use crate::model::mojang::{
+use crate::models::mojang::{
     LaunchMetaData, MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaData,
 };
 use anyhow::Result;

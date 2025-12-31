@@ -221,7 +221,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -299,6 +299,15 @@ dependencies = [
  "anyhow",
  "scc",
  "tokio",
+]
+
+[[package]]
+name = "elemental-shared"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "scc",
+ "serde",
 ]
 
 [[package]]
@@ -913,7 +922,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1214,6 +1223,7 @@ checksum = "70210ae462e438f41d3645a859eb9e5f5c63533a58dbc6291b451cd0b5524148"
 dependencies = [
  "saa",
  "sdd",
+ "serde",
 ]
 
 [[package]]

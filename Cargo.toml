@@ -4,7 +4,6 @@ members = [
     "crates/core",
     "crates/demo",
     "crates/loader",
-    "crates/discover",
     "crates/elemental",
     "crates/object",
     "crates/shared",

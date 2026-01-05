@@ -1,3 +1,6 @@
-pub trait Config {
-    //TODO: Define methods and associated types as needed
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
+pub struct Config {
+    
 }

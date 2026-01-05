@@ -7,7 +7,7 @@ impl<V: VersionControlled> Persistor<V> for NoPersistor {
         Ok(Some(V::default()))
     }
 
-    fn save(&self, _value: &V) -> anyhow::Result<()> {
+    fn save(&self, _value: &V) -> Result<()> {
         Ok(())
     }
 }

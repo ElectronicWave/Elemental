@@ -38,6 +38,18 @@ impl<M: Migrator<V>, V: VersionControlled, P: Persistor<V>> Loader<M, V, P> {
         let guard = self.inner.read().await;
         guard.clone()
     }
+
+    pub async fn get<T>(&self, f: impl FnOnce(&V) -> T) -> T {
+        let guard = self.inner.read().await;
+        f(&*guard)
+    }
+
+    pub async fn set(&self, f: impl FnOnce(&mut V)) -> Result<()> {
+        let mut guard = self.inner.write().await;
+        f(&mut *guard);
+        self.persistor.save(&*guard)?;
+        Ok(())
+    }
 }
 
 pub type ProfileLoader<M, C, P> = Loader<M, Profile<C>, P>;

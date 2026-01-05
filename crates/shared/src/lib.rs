@@ -2,12 +2,12 @@ pub mod loader;
 pub mod migrator;
 pub mod persistor;
 pub mod profile;
+pub mod scope;
 pub mod version;
 
 #[cfg(test)]
 mod shared_test {
-    use super::profile::Profile;
-    use crate::{migrator::NoMigrator, persistor::NoPersistor};
+    use crate::{migrator::NoMigrator, persistor::NoPersistor, profile::Profile};
     use serde::{Deserialize, Serialize};
 
     /// A sample configuration struct for testing purposes.
@@ -32,6 +32,17 @@ mod shared_test {
             .await
             .unwrap();
 
-        println!("{:?}", loader.cloned().await.config.user);
+        println!(
+            "{:?}",
+            loader.get(|profile| profile.config.user.clone()).await
+        ); // Player
+        loader
+            .set(|profile| profile.config.user = "NewPlayer".to_owned())
+            .await
+            .unwrap();
+        println!(
+            "{:?}",
+            loader.get(|profile| profile.config.user.clone()).await
+        ); // NewPlayer
     }
 }

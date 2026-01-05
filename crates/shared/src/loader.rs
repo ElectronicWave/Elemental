@@ -16,7 +16,8 @@ pub struct Loader<M: Migrator<V>, V: VersionControlled, P: Persistor<V>> {
 
 impl<M: Migrator<V>, V: VersionControlled, P: Persistor<V>> Loader<M, V, P> {
     pub async fn load(migrator: M, persistor: P, loader_version: usize) -> Result<Self> {
-        let mut value = persistor.load()?;
+        let mut value = persistor.load()?.unwrap_or_default();
+
         if !value.is_up_to_date(loader_version) {
             value = migrator.migrate(value, loader_version)?;
             // Save migrated value
@@ -39,4 +40,4 @@ impl<M: Migrator<V>, V: VersionControlled, P: Persistor<V>> Loader<M, V, P> {
     }
 }
 
-pub type ProfileLoader<M, P> = Loader<M, Profile, P>;
+pub type ProfileLoader<M, C, P> = Loader<M, Profile<C>, P>;

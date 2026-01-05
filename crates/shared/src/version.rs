@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-pub trait VersionControlled {
+pub trait VersionControlled: Default {
     fn version(&self) -> usize;
     fn is_up_to_date(&self, latest_version: usize) -> bool {
         self.version() >= latest_version
@@ -12,7 +12,7 @@ pub trait Migrator<V: VersionControlled> {
 
 pub trait Persistor<V: VersionControlled> {
     fn save(&self, value: &V) -> Result<()>;
-    fn load(&self) -> Result<V>
+    fn load(&self) -> Result<Option<V>>
     where
         Self: Sized;
 }

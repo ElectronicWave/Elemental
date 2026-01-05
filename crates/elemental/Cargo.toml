@@ -7,9 +7,11 @@ edition = "2024"
 elemental-core = { path = "../core" }
 elemental-loader = { path = "../loader" }
 elemental-object = { path = "../object" }
+elemental-shared = { path = "../shared" }
 
 [features]
+shared = []
 loader = []
 object = []
-full = ["loader", "object"]
+full = ["loader", "object", "shared"]
 default = ["full"]

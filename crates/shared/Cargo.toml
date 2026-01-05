@@ -7,3 +7,4 @@ edition = "2024"
 serde = { workspace = true, features = ["derive"] }
 anyhow = { workspace = true }
 scc = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }

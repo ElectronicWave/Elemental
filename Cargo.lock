@@ -212,6 +212,7 @@ dependencies = [
  "elemental-core",
  "elemental-loader",
  "elemental-object",
+ "elemental-shared",
 ]
 
 [[package]]
@@ -269,6 +270,7 @@ dependencies = [
  "anyhow",
  "scc",
  "serde",
+ "tokio",
 ]
 
 [[package]]

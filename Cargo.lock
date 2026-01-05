@@ -1161,15 +1161,15 @@ checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
 
 [[package]]
 name = "saa"
-version = "5.0.0"
+version = "5.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c2d7c5178d64caf296b798b8e96d8dcc4b6427bab402eeae2f65f4d76a08a4c"
+checksum = "77cb23a1da9bcf98289bea29df468b782ddf2993836d1ebd171c403210b86baa"
 
 [[package]]
 name = "scc"
-version = "3.3.1"
+version = "3.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70210ae462e438f41d3645a859eb9e5f5c63533a58dbc6291b451cd0b5524148"
+checksum = "41314cecf05a9988a3717479e80f132c00f64298489f177c268bd675aef03fcc"
 dependencies = [
  "saa",
  "sdd",
@@ -1187,9 +1187,9 @@ dependencies = [
 
 [[package]]
 name = "sdd"
-version = "4.1.2"
+version = "4.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e232156d14cacaf98e2c2affe9c168e306123915143e179b0aa47503137023c"
+checksum = "6e63d45f3526312c9c90d717aac28d37010e623fbd7ca6f21503e69784e86f40"
 
 [[package]]
 name = "security-framework"

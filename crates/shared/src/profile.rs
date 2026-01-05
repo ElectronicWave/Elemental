@@ -3,15 +3,15 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-pub struct Profile<C: Config> {
+pub struct Profile {
     /// Profile name
     pub name: String,
     /// Profile configuration data
-    pub config: C,
+    pub config: Config,
     pub version: usize,
 }
 
-impl<C: Config> Profile<C> {
+impl Profile {
     pub fn migrate<M: BackwardsCompatible>(
         &self,
         migrator: &M,

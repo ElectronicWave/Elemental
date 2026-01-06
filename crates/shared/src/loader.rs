@@ -16,12 +16,12 @@ pub struct Loader<M: Migrator<V>, V: VersionControlled, P: Persistor<V>> {
 
 impl<M: Migrator<V>, V: VersionControlled, P: Persistor<V>> Loader<M, V, P> {
     pub async fn load(migrator: M, persistor: P, loader_version: usize) -> Result<Self> {
-        let mut value = persistor.load()?.unwrap_or_default();
+        let mut value = persistor.load().await?.unwrap_or_default();
 
         if !value.is_up_to_date(loader_version) {
             value = migrator.migrate(value, loader_version)?;
             // Save migrated value
-            persistor.save(&value)?;
+            persistor.save(&value).await?;
         }
 
         Ok(Self {
@@ -47,7 +47,7 @@ impl<M: Migrator<V>, V: VersionControlled, P: Persistor<V>> Loader<M, V, P> {
     pub async fn set(&self, f: impl FnOnce(&mut V)) -> Result<()> {
         let mut guard = self.inner.write().await;
         f(&mut *guard);
-        self.persistor.save(&*guard)?;
+        self.persistor.save(&*guard).await?;
         Ok(())
     }
 }

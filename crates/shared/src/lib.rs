@@ -7,7 +7,7 @@ pub mod version;
 
 #[cfg(test)]
 mod shared_test {
-    use crate::{migrator::NoMigrator, persistor::NoPersistor, profile::Profile};
+    use crate::{migrator::NoMigrator, persistor::json_persistor, profile::Profile, scope::Scope};
     use serde::{Deserialize, Serialize};
 
     /// A sample configuration struct for testing purposes.
@@ -28,9 +28,13 @@ mod shared_test {
 
     #[tokio::test]
     async fn test_profile() {
-        let loader = ProfileConfig::load(NoMigrator, NoPersistor, 0)
-            .await
-            .unwrap();
+        let loader = ProfileConfig::load(
+            NoMigrator,
+            json_persistor("foobar".to_string(), Scope::Dot),
+            0,
+        )
+        .await
+        .unwrap();
 
         println!(
             "{:?}",

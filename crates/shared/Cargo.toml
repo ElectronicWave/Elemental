@@ -9,7 +9,9 @@ anyhow = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 dirs = { version = "6" }
 serde_json = { workspace = true, optional = true }
+toml = { version = "0.9", optional = true }
 
 [features]
 json = ["dep:serde_json"]
+toml = ["dep:toml"]
 default = ["json"]

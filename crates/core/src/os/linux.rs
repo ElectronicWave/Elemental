@@ -8,7 +8,7 @@ static OS_RELEASE: OnceLock<Result<OsReleaseVariables, ()>> = OnceLock::new();
 pub fn get_os_release() -> Option<&'static OsReleaseVariables> {
     let result = OS_RELEASE.get_or_init(|| {
         rs_release::get_os_release().map_err(|e| {
-            tracing::warn!("Failed to get OS release:", e);
+            tracing::warn!("Failed to get OS release:{}", e);
         })
     });
     result.as_ref().ok()

@@ -1,7 +1,7 @@
 // https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml
 // https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json
 
-use crate::base::{ModLoader, ModLoaderVersion, ModLoaderVersionInfo};
+use crate::base::{ModLoader, ModLoaderVersion, ModLoaderVersionInfo, Version};
 use anyhow::Result;
 use async_trait::async_trait;
 use elemental_core::storage::version::VersionStorage;
@@ -42,7 +42,7 @@ impl ModLoaderVersion for ForgeModLoaderVersion {
     async fn info(&self) -> ModLoaderVersionInfo {
         ModLoaderVersionInfo {
             name: self.loader.clone(),
-            version: self.game.clone(),
+            version: Version::SINGLE(self.game.clone()),
             description: self.description.clone(),
         }
     }
@@ -52,7 +52,7 @@ impl ModLoaderVersion for ForgeModLoaderVersion {
 impl ModLoader for ForgeModLoader {
     type T = ForgeModLoaderVersion;
 
-    async fn versions(&self) -> Result<HashMap<String, Vec<ForgeModLoaderVersion>>> {
+    async fn versions(&self) -> Result<HashMap<Version, Vec<ForgeModLoaderVersion>>> {
         let mut data = HashMap::new();
         let raw = reqwest::get(format!(
             "https://{}/net/minecraftforge/forge/maven-metadata.xml",
@@ -64,7 +64,7 @@ impl ModLoader for ForgeModLoader {
         let body: MavenMetadataBody = from_str(&raw)?;
         for version in body.versioning.versions.version {
             if let Some((game_version, loader_version)) = version.split_once("-") {
-                data.entry(game_version.to_owned())
+                data.entry(Version::SINGLE(game_version.to_owned()))
                     .or_insert(Vec::new())
                     .push(ForgeModLoaderVersion {
                         loader: loader_version.to_owned(),

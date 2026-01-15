@@ -4,14 +4,23 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-elemental-core = { path = "../core" }
-elemental-loader = { path = "../loader" }
-elemental-object = { path = "../object" }
-elemental-shared = { path = "../shared" }
+elemental-core = { path = "../core", optional = true, default-features = false }
+elemental-loader = { path = "../loader", optional = true, default-features = false }
+elemental-object = { path = "../object", optional = true, default-features = false }
+elemental-shared = { path = "../shared", optional = true, default-features = false }
 
 [features]
-shared = []
-loader = []
-object = []
-full = ["loader", "object", "shared"]
-default = ["full"]
+core = ["dep:elemental-core"]
+
+shared = ["dep:elemental-shared"]
+shared-json = ["elemental-shared/json"]
+shared-toml = ["elemental-shared/toml"]
+
+loader = ["dep:elemental-loader"]
+
+object = ["dep:elemental-object"]
+object-notify = ["elemental-object/notify"]
+
+full = ["loader", "object", "shared", "core"]
+
+default = ["full", "shared-json", "object-notify"]

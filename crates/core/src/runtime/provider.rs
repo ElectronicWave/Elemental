@@ -1,7 +1,9 @@
+use async_trait::async_trait;
 use std::path::PathBuf;
 
+#[async_trait]
 pub trait RuntimeProvider {
-    fn list(&self) -> Vec<PathBuf>;
+    async fn list(&self) -> Vec<PathBuf>;
 
     #[inline(always)]
     fn name(&self) -> &'static str {

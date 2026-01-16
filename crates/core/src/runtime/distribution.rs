@@ -1,11 +1,12 @@
 use std::env::consts::EXE_SUFFIX;
 use std::path::PathBuf;
 
+use futures::future::join_all;
 use tokio::fs;
 use tokio::process::Command;
 
 use crate::runtime::provider::RuntimeProvider;
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DistributionReleaseData {
     /// java.vm.vendor e.g. Eclipse Adoptium
     pub implementor: Option<String>,
@@ -156,18 +157,6 @@ fn parse_release_value(s: &str) -> String {
     s.trim_matches('"').to_string()
 }
 
-impl Default for DistributionReleaseData {
-    fn default() -> Self {
-        Self {
-            implementor: None,
-            architecture: None,
-            major_version: None,
-            jre_version: None,
-            jvm_version: None,
-        }
-    }
-}
-
 impl Distribution {
     pub async fn build_from_root(root: PathBuf, provider: &'static str) -> Self {
         Self {
@@ -181,13 +170,15 @@ impl Distribution {
     where
         O: FromIterator<Self>,
     {
-        let mut distributions = Vec::new();
+        let mut futures = Vec::new();
         for provider in providers {
             let name = provider.name();
-            for path in provider.list() {
-                distributions.push(Distribution::build_from_root(path, name).await);
+            let paths = provider.list().await;
+            for path in paths {
+                futures.push(async move { Distribution::build_from_root(path, name).await });
             }
         }
+        let distributions = join_all(futures).await;
         distributions.into_iter().collect()
     }
 

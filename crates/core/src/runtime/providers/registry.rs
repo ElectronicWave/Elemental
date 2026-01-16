@@ -1,13 +1,15 @@
 use std::path::{Path, PathBuf};
 
+use async_trait::async_trait;
+
 use super::super::provider::RuntimeProvider;
 
 #[derive(Default)]
 pub struct RegistryProvider;
-
+#[async_trait]
 impl RuntimeProvider for RegistryProvider {
-    fn list(&self) -> Vec<PathBuf> {
-        Self::get_java_distribution_from_registry()
+    async fn list(&self) -> Vec<PathBuf> {
+        Self::get_java_distribution_from_registry().await
     }
 
     fn name(&self) -> &'static str {
@@ -17,7 +19,14 @@ impl RuntimeProvider for RegistryProvider {
 
 impl RegistryProvider {
     #[cfg(windows)]
-    fn get_java_distribution_from_registry() -> Vec<PathBuf> {
+    async fn get_java_distribution_from_registry() -> Vec<PathBuf> {
+        tokio::task::spawn_blocking(Self::get_java_distribution_from_registry_sync)
+            .await
+            .unwrap_or_default()
+    }
+
+    #[cfg(windows)]
+    fn get_java_distribution_from_registry_sync() -> Vec<PathBuf> {
         const DISTRIBUTION_REGISTRY_LOCATIONS: &[(&str, &str, &str)] = &[
             // Oracle JRE/JDK
             (
@@ -106,7 +115,7 @@ impl RegistryProvider {
     }
 
     #[cfg(not(windows))]
-    fn get_java_distribution_from_registry() -> Vec<PathBuf> {
+    async fn get_java_distribution_from_registry() -> Vec<PathBuf> {
         vec![]
     }
 }

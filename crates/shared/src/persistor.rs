@@ -1,5 +1,3 @@
-use std::{io::ErrorKind, marker::PhantomData, path::PathBuf};
-
 use crate::{
     scope::Scope,
     version::{Persistor, VersionControlled},
@@ -7,9 +5,11 @@ use crate::{
 use anyhow::Result;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use std::{io::ErrorKind, marker::PhantomData, path::PathBuf};
 use tokio::fs::{read_to_string, write};
 
 pub struct NoPersistor;
+
 impl<V: VersionControlled> Persistor<V> for NoPersistor {
     async fn load(&self) -> Result<Option<V>> {
         Ok(Some(V::default()))
@@ -19,12 +19,14 @@ impl<V: VersionControlled> Persistor<V> for NoPersistor {
         Ok(())
     }
 }
+
 pub trait PersistorIO<S> {
     fn read(path: PathBuf) -> impl Future<Output = Result<Option<S>>>;
     fn write(path: PathBuf, data: S) -> impl Future<Output = Result<()>>;
 }
 
 pub struct AsyncFileStringIO;
+
 impl PersistorIO<String> for AsyncFileStringIO {
     async fn read(path: PathBuf) -> Result<Option<String>> {
         match read_to_string(&path).await {
@@ -73,6 +75,7 @@ where
         }
     }
 }
+
 impl<V, S, IO, Ser, De> Persistor<V> for CustomPersistor<V, S, IO, Ser, De>
 where
     V: VersionControlled + Serialize + DeserializeOwned,

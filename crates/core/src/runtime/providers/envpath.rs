@@ -1,3 +1,5 @@
+use async_trait::async_trait;
+use dirs::data_local_dir;
 use std::env::consts::EXE_SUFFIX;
 use std::path::{Path, PathBuf};
 
@@ -6,9 +8,10 @@ use super::super::provider::RuntimeProvider;
 #[derive(Default)]
 pub struct EnvPathProvider;
 
+#[async_trait]
 impl RuntimeProvider for EnvPathProvider {
-    fn list(&self) -> Vec<PathBuf> {
-        Self::get_official_java_distribution_bundles()
+    async fn list(&self) -> Vec<PathBuf> {
+        Self::get_official_java_distribution_bundles().await
     }
 
     fn name(&self) -> &'static str {
@@ -17,11 +20,11 @@ impl RuntimeProvider for EnvPathProvider {
 }
 
 impl EnvPathProvider {
-    fn get_official_java_distribution_bundles() -> Vec<PathBuf> {
+    async fn get_official_java_distribution_bundles() -> Vec<PathBuf> {
         let search_locations = Self::get_bundle_search_locations();
         let mut javas = vec![];
         for location in search_locations {
-            javas.extend(Self::find_java_in_dir(&location));
+            javas.extend(Self::find_java_in_dir(&location).await);
         }
         javas
     }
@@ -30,16 +33,9 @@ impl EnvPathProvider {
         let mut locations = vec![];
         #[cfg(windows)]
         {
-            use dirs_sys::known_folder_local_app_data;
-            use dirs_sys::known_folder_roaming_app_data;
+            locations.push(data_local_dir().unwrap().join(".minecraft").join("runtime"));
             locations.push(
-                known_folder_roaming_app_data()
-                    .unwrap()
-                    .join(".minecraft")
-                    .join("runtime"),
-            );
-            locations.push(
-                known_folder_local_app_data()
+                data_local_dir()
                     .unwrap()
                     .join("Packages")
                     .join("Microsoft.4297127D64EC6_8wekyb3d8bbwe")
@@ -62,24 +58,21 @@ impl EnvPathProvider {
         locations
     }
 
-    fn find_java_in_dir(path: &Path) -> Vec<PathBuf> {
+    async fn find_java_in_dir(path: &Path) -> Vec<PathBuf> {
         let mut javas = vec![];
-        if !path.exists() || !path.is_dir() {
+        if !tokio::fs::try_exists(path).await.unwrap_or(false) {
             return javas;
         }
-        let Ok(read_dir) = path.read_dir() else {
+        let Ok(mut read_dir) = tokio::fs::read_dir(path).await else {
             return javas;
         };
-        for sub in read_dir {
-            let Ok(sub_dir) = sub else {
-                continue;
-            };
-            let sub_dir_path = sub_dir.path();
+        while let Ok(Some(sub)) = read_dir.next_entry().await {
+            let sub_dir_path = sub.path();
             if sub_dir_path.is_dir() {
                 let bin_path = sub_dir_path.join("bin");
-                if bin_path.exists()
-                    && bin_path.is_dir()
-                    && bin_path.join(format!("java{EXE_SUFFIX}")).exists()
+                let java_exe = bin_path.join(format!("java{EXE_SUFFIX}"));
+                if tokio::fs::try_exists(&bin_path).await.unwrap_or(false)
+                    && tokio::fs::try_exists(&java_exe).await.unwrap_or(false)
                 {
                     javas.push(sub_dir_path);
                 }

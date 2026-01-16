@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 pub trait RuntimeProvider {
     fn list(&self) -> Vec<PathBuf>;
+
     #[inline(always)]
     fn name(&self) -> &'static str {
         return "Provider";
@@ -17,5 +18,15 @@ pub trait RuntimeProvider {
 
 /// Re-export providers
 pub use super::providers::{
-    envpath::EnvPathProvider, pm::PackageManagerProvider, registry::RegistryProvider,
+    envjavahome::EnvJavaHomeProvider, envpath::EnvPathProvider, pm::PackageManagerProvider,
+    registry::RegistryProvider,
 };
+
+pub fn all_providers() -> Vec<Box<dyn RuntimeProvider>> {
+    vec![
+        RegistryProvider::box_default(),
+        EnvPathProvider::box_default(),
+        PackageManagerProvider::box_default(),
+        EnvJavaHomeProvider::box_default(),
+    ]
+}

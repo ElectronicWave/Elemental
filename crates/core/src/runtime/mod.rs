@@ -1,5 +1,4 @@
 pub mod distribution;
-pub mod java;
 pub mod provider;
-// Inline
+/// Private Implements, got it in [`provider`]
 pub(crate) mod providers;

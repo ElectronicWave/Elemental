@@ -5,3 +5,4 @@ pub mod os;
 pub mod runtime;
 pub mod services;
 pub mod storage;
+mod online;

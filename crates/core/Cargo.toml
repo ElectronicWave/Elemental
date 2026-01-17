@@ -23,6 +23,11 @@ tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 scc = { workspace = true }
 tokio-util = { version = "0.7.17", default-features = false, features = ["rt"] }
+minecraft-msa-auth = "0.4.0"
+oauth2 = { version = "5.0.0", default-features = false, features = [
+    "reqwest",
+    "rustls-tls"
+] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55.0"

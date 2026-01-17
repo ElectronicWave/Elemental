@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use std::env::consts::EXE_SUFFIX;
+use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
 

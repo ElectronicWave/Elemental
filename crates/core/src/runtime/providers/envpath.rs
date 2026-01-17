@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use dirs::data_local_dir;
+use dirs::{data_local_dir, home_dir};
 use std::env::consts::EXE_SUFFIX;
 use std::path::{Path, PathBuf};
 

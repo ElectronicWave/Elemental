@@ -54,19 +54,28 @@ async fn main() {
 
 #[tokio::test]
 async fn test_game_run() {
-    use elemental_core::runtime::java::JavaDistribution;
+    use elemental_core::runtime::{distribution::Distribution, provider::all_providers};
+
+    let executable = Distribution::from_providers::<Vec<_>>(all_providers())
+        .await
+        .into_iter()
+        .find(
+            |e| match e.release.as_ref().and_then(|r| r.jre_version.as_ref()) {
+                Some(v) => v.starts_with("1.8"),
+                _ => false,
+            },
+        )
+        .unwrap()
+        .executable();
+
+    println!("Using java executable: {}", executable.to_string_lossy());
     let storage = GameStorage::new_ensure_dir("../../.minecraft").unwrap();
-    let installs = JavaDistribution::get().await;
-    let selected = installs
-        .iter()
-        .find(|e| e.install.path.contains("8"))
-        .unwrap();
 
     let mut child = storage
         .launch_version(
             "IAMPlayer",
             "MyGame-1.16.5",
-            format!("{}/java.exe", selected.install.path),
+            executable.to_string_lossy().to_string(),
             vec![
                 "-Dfile.encoding=utf-8".to_owned(),
                 "-Dsun.stdout.encoding=utf-8".to_owned(),

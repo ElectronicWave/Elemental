@@ -7,9 +7,9 @@ edition = "2024"
 serde = { workspace = true, features = ["derive"] }
 anyhow = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
-dirs = { version = "6" }
+dirs = { workspace = true }
 serde_json = { workspace = true, optional = true }
-toml = { version = "0.9", optional = true }
+toml = { workspace = true, optional = true }
 
 [features]
 json = ["dep:serde_json"]

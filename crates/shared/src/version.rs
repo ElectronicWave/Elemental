@@ -11,7 +11,7 @@ pub trait Migrator<V: VersionControlled> {
 }
 
 pub trait Persistor<V: VersionControlled> {
-    fn save(&self, value: &V) ->impl Future<Output = Result<()>>;
+    fn save(&self, value: &V) -> impl Future<Output = Result<()>>;
     fn load(&self) -> impl Future<Output = Result<Option<V>>>
     where
         Self: Sized;

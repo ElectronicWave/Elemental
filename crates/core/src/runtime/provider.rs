@@ -19,7 +19,7 @@ pub trait RuntimeProvider {
 }
 
 /// Re-export providers
-pub use super::providers::{
+use super::providers::{
     envjavahome::EnvJavaHomeProvider, envpath::EnvPathProvider, pm::PackageManagerProvider,
     registry::RegistryProvider,
 };

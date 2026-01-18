@@ -1,5 +1,4 @@
-use std::env::consts::EXE_SUFFIX;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use async_trait::async_trait;
 
@@ -29,18 +28,21 @@ impl PackageManagerProvider {
             ("/usr/lib", "openjdk-"),   // /usr/lib/openjdk-<major>
             ("/opt", "openjdk-bin-"),   // /opt/openjdk-bin-<ver>
         ];
-        use crate::os::linux::get_os_release;
         let mut javas: Vec<PathBuf> = vec![];
-        let filters: &[(&str, &str)] = get_os_release()
-            .and_then(|os_release| os_release.get("ID").map(|s| s.as_str()))
-            .map_or(&[], |os_id| match os_id {
-                "aosc" => &AOSC_JAVA_PATHS,
-                "debian" | "ubuntu" => &DEBIAN_JAVA_PATHS,
-                "fedora" => &FEDORA_JAVA_PATHS,
-                "gentoo" => &GENTOO_JAVA_PATHS as &[(&str, &str)],
-                "Deepin" | "deepin" => todo!("deepin implementation"),
-                _ => &[],
-            });
+        let os_release = rs_release::get_os_release().unwrap_or_default();
+
+        let filters: &[(&str, &str)] =
+            os_release
+                .get("ID")
+                .map(|s| s.as_str())
+                .map_or(&[], |os_id| match os_id {
+                    "aosc" => &AOSC_JAVA_PATHS,
+                    "debian" | "ubuntu" => &DEBIAN_JAVA_PATHS,
+                    "fedora" => &FEDORA_JAVA_PATHS,
+                    "gentoo" => &GENTOO_JAVA_PATHS as &[(&str, &str)],
+                    "Deepin" | "deepin" => todo!("deepin implementation"),
+                    _ => &[],
+                });
         for filter in filters {
             let path = Path::new(filter.0);
             if !tokio::fs::try_exists(path).await.unwrap_or(false) {

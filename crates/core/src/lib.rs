@@ -1,8 +1,7 @@
+pub mod auth;
 pub mod consts;
 pub mod models;
-pub mod offline;
-pub mod os;
+mod online;
 pub mod runtime;
 pub mod services;
 pub mod storage;
-mod online;

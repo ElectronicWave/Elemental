@@ -1,5 +1,5 @@
 use super::mojang::PistonMetaData;
-use crate::{consts::PLATFORM_NATIVES_DIR_NAME, offline};
+use crate::consts::PLATFORM_NATIVES_DIR_NAME;
 use anyhow::{Context, Result};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -132,7 +132,7 @@ impl LaunchEnvs {
 
         Ok(Self {
             auth_xuid: "${auth_xuid}".to_owned(),
-            auth_uuid: offline::player_uuid(&player_name),
+            auth_uuid: "TODO: FIXME".to_owned(),
             auth_player_name: player_name,
             version_name: version_name,
             game_directory: version_path.to_string_lossy().to_string(),

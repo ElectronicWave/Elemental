@@ -10,4 +10,4 @@ updates:
       - "/crates/core"
       - "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"

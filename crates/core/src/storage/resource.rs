@@ -1,0 +1,15 @@
+pub enum Resource {
+    AssetsIndexes,
+    AssetsObjects,
+    Versions,
+    Logs,
+    Configs,
+    ShaderPacks,
+    ResourcePacks,
+    Saves,
+    Libraries,
+    Natives,
+    Mods,
+    Subdir(String),
+    Custom(&'static str),
+}

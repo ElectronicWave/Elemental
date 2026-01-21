@@ -1,118 +1,32 @@
-use std::fs::{File, create_dir_all};
-use std::path::{Path, PathBuf, absolute};
+use std::path::PathBuf;
 
-use crate::consts::PLATFORM_NATIVES_DIR_NAME;
-use crate::models::launchenvs::LaunchEnvs;
-use crate::models::mojang::PistonMetaData;
-use crate::services::downloader::DownloadTask;
-use crate::storage::game::GameStorage;
-use anyhow::{Result, bail};
-use tokio::process::{Child, Command};
+use crate::storage::{
+    game::GameStorage,
+    layout::{Layout, Layoutable},
+};
 
-pub struct VersionStorage {
-    pub root: String,
-    pub name: String,
+pub struct VersionStorage<L: Layout, VL: Layout> {
+    pub path: PathBuf,
+    pub inherits: GameStorage<L>,
+    pub layout: VL,
 }
 
-impl VersionStorage {
-    pub fn new_unchecked(root: impl Into<String>, name: impl Into<String>) -> Self {
+impl<L: Layout, VL: Layout> VersionStorage<L, VL> {
+    pub fn new(path: PathBuf, inherits: GameStorage<L>, layout: VL) -> Self {
         Self {
-            root: root.into(),
-            name: name.into(),
+            path,
+            inherits,
+            layout,
         }
-    }
-
-    pub fn new_abs_unchecked(root: impl Into<String>, name: impl Into<String>) -> Result<Self> {
-        let root = absolute(root.into())?;
-        Ok(Self {
-            root: root.to_string_lossy().to_string(),
-            name: name.into(),
-        })
-    }
-
-    pub fn new(root: impl Into<String>, name: impl Into<String>) -> Result<Self> {
-        let root = absolute(root.into())?;
-        let name = name.into();
-
-        if root
-            .file_name()
-            .map(|r| r.to_string_lossy().to_string() != name)
-            .unwrap_or(true)
-        {
-            bail!("Version `{name}` has a different name with it's root.");
-        }
-
-        Ok(Self {
-            root: root.to_string_lossy().to_string(),
-            name,
-        })
-    }
-
-    pub fn join<P: AsRef<Path>>(&self, path: P) -> PathBuf {
-        Path::new(&self.root).join(path)
-    }
-
-    pub fn pistonmeta(&self) -> Result<PistonMetaData> {
-        Ok(serde_json::from_reader(File::open(
-            self.join(format!("{}.json", self.name)),
-        )?)?)
-    }
-
-    pub fn get_ensure_natives_path(&self) -> Result<PathBuf> {
-        let path = self.join(PLATFORM_NATIVES_DIR_NAME);
-        create_dir_all(&path)?;
-        Ok(path)
-    }
-
-    pub fn validate_version_data(&self, storage: &GameStorage) -> Result<Vec<DownloadTask>> {
-        let pistonmeta = self.pistonmeta()?;
-        let requires = Vec::new();
-        // Validate Client
-
-        // Validate Object Indexs
-        for obj in storage
-            .get_object_index(pistonmeta.asset_index.id)?
-            .objects
-            .values()
-        {
-            //TODO Check SHA1
-        }
-
-        // Validate Libraries
-
-        Ok(requires)
-    }
-
-    pub fn get_ensure_subpath<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf> {
-        let subpath = self.join(path);
-        create_dir_all(&subpath)?;
-        Ok(subpath)
-    }
-
-    pub fn launch(
-        &self,
-        player_name: impl Into<String>,
-        storage: &GameStorage,
-        executable: impl Into<String>,
-        extra_args: impl IntoIterator<Item = String>,
-    ) -> Result<Child> {
-        let envs = LaunchEnvs::offline_player(
-            player_name.into(),
-            storage.root.clone(),
-            self.root.clone(),
-            &self.pistonmeta()?,
-        )?;
-        let pistonmeta = self.pistonmeta()?;
-        let mut args = vec![];
-        args.extend(extra_args);
-        args.extend(envs.apply_launchenvs(pistonmeta.arguments.get_jvm_arguments())?);
-        args.push(pistonmeta.main_class.clone());
-        args.extend(envs.apply_launchenvs(pistonmeta.arguments.get_game_arguments())?);
-        //TODO Customize Output
-        Ok(Command::new(executable.into()).args(args).spawn()?)
     }
 }
 
-pub enum VersionLaunchMode {
-    Offline,
+impl<L: Layout, VL: Layout> Layoutable<VL> for VersionStorage<L, VL> {
+    fn layout(&self) -> &VL {
+        &self.layout
+    }
+
+    fn root_path(&self) -> &PathBuf {
+        &self.path
+    }
 }

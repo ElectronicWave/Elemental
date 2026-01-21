@@ -1,7 +1,7 @@
 use crate::base::{ModLoader, ModLoaderVersion, ModLoaderVersionInfo, Version};
 use anyhow::Result;
 use async_trait::async_trait;
-use elemental_core::storage::version::VersionStorage;
+use elemental_core::legacystorage::version::VersionStorage;
 use serde::Deserialize;
 use std::collections::HashMap;
 

@@ -4,7 +4,7 @@ use std::time::{Duration, SystemTime};
 
 use elemental_core::services::downloader::ElementalDownloader;
 use elemental_core::services::mojang::MojangService;
-use elemental_core::storage::game::GameStorage;
+use elemental_core::legacystorage::game::GameStorage;
 
 #[tokio::main]
 async fn main() {

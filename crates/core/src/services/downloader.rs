@@ -1,4 +1,3 @@
-use crate::storage::validate::async_file_sha1;
 use anyhow::{Context, Result, bail};
 use futures::StreamExt;
 use reqwest::{ClientBuilder, header::HeaderMap, retry};
@@ -261,15 +260,15 @@ impl ElementalDownloader {
         task: DownloadTask,
         headers: Option<HeaderMap>,
     ) -> Result<()> {
-        // validate file exist
-        if let Some(sha1) = &task.sha1 {
-            if async_file_sha1(&task.path)
-                .await
-                .map_or(false, |hash| hash == *sha1)
-            {
-                return Ok(());
-            }
-        }
+        //TODO validate file exist
+        // if let Some(sha1) = &task.sha1 {
+        //     if async_file_sha1(&task.path)
+        //         .await
+        //         .map_or(false, |hash| hash == *sha1)
+        //     {
+        //         return Ok(());
+        //     }
+        // }
 
         let client = self.client.clone();
         let downloader = self.me.upgrade().context("unexpected downloader drop")?;

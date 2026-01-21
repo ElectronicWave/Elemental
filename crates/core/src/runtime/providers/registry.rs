@@ -6,6 +6,7 @@ use super::super::provider::RuntimeProvider;
 
 #[derive(Default)]
 pub struct RegistryProvider;
+
 #[async_trait]
 impl RuntimeProvider for RegistryProvider {
     async fn list(&self) -> Vec<PathBuf> {

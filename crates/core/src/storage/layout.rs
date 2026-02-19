@@ -1,18 +1,18 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::storage::resource::Resource;
 use anyhow::Result;
 use tokio::fs::create_dir_all;
 
-pub trait Layout {
-    fn get_resource(&self, root: &PathBuf, resource: Resource) -> Option<PathBuf>;
+pub trait Layout: Send + Sync {
+    fn get_resource(&self, root: &Path, resource: Resource) -> Option<PathBuf>;
     fn name(&self) -> &'static str;
 }
 
 #[async_trait::async_trait]
 pub trait Layoutable<L: Layout> {
     fn layout(&self) -> &L;
-    fn root_path(&self) -> &PathBuf;
+    fn root_path(&self) -> &Path;
     fn get_resource(&self, resource: Resource) -> Option<PathBuf> {
         self.layout().get_resource(self.root_path(), resource)
     }
@@ -39,7 +39,7 @@ pub trait Layoutable<L: Layout> {
 pub struct BaseLayout;
 
 impl Layout for BaseLayout {
-    fn get_resource(&self, root: &PathBuf, resource: Resource) -> Option<PathBuf> {
+    fn get_resource(&self, root: &Path, resource: Resource) -> Option<PathBuf> {
         match resource {
             Resource::AssetsIndexes => Some(root.join("assets").join("indexes")),
             Resource::AssetsObjects => Some(root.join("assets").join("objects")),
@@ -52,6 +52,7 @@ impl Layout for BaseLayout {
             Resource::Libraries => Some(root.join("libraries")),
             Resource::Natives => Some(root.join("natives")),
             Resource::Mods => Some(root.join("mods")),
+            Resource::Dot => Some(root.to_path_buf()),
             Resource::Subdir(subdir) => Some(root.join(subdir)),
             _ => None,
         }

@@ -10,6 +10,7 @@ pub enum Resource {
     Libraries,
     Natives,
     Mods,
+    Dot,
     Subdir(String),
     Custom(&'static str),
 }

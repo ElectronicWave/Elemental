@@ -4,7 +4,7 @@
 use crate::base::{ModLoader, ModLoaderVersion, ModLoaderVersionInfo, Version};
 use anyhow::Result;
 use async_trait::async_trait;
-use elemental_core::legacystorage::version::VersionStorage;
+use elemental_core::storage::{layout::Layout, version::VersionStorage};
 use quick_xml::de::from_str;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -76,7 +76,10 @@ impl ModLoader for ForgeModLoader {
         Ok(data)
     }
 
-    async fn installed(&self, version: VersionStorage) -> Result<Option<ForgeModLoaderVersion>> {
+    async fn installed<L: Layout, VL: Layout>(
+        &self,
+        version: VersionStorage<L, VL>,
+    ) -> Result<Option<ForgeModLoaderVersion>> {
         todo!()
     }
 }

@@ -1,7 +1,7 @@
 use crate::base::{ModLoader, ModLoaderVersion, ModLoaderVersionInfo, Version};
 use anyhow::Result;
 use async_trait::async_trait;
-use elemental_core::legacystorage::version::VersionStorage;
+use elemental_core::storage::{layout::Layout, version::VersionStorage};
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -14,7 +14,7 @@ pub enum Fabric {
     Fabric,
     LegacyFabric,
     Babric,
-    Custom(String)
+    Custom(String),
 }
 
 impl Fabric {
@@ -23,13 +23,13 @@ impl Fabric {
             Fabric::Fabric => "https://meta.fabricmc.net".to_owned(),
             Fabric::LegacyFabric => "https://meta.legacyfabric.net".to_owned(),
             Fabric::Babric => "https://meta.babric.glass-launcher.net".to_owned(),
-            Fabric::Custom(url) => url.to_owned()
+            Fabric::Custom(url) => url.to_owned(),
         }
     }
 }
 
 pub struct FabricLike {
-    pub fabric: Fabric
+    pub fabric: Fabric,
 }
 
 impl Default for FabricLike {
@@ -81,7 +81,7 @@ impl ModLoaderVersion for FabricLoaderVersion {
         ModLoaderVersionInfo {
             name: self.loader.clone(),
             version: self.game.clone(),
-            description: self.description.clone()
+            description: self.description.clone(),
         }
     }
 }
@@ -92,9 +92,17 @@ impl ModLoader for FabricLike {
 
     async fn versions(&self) -> Result<HashMap<Version, Vec<Self::T>>> {
         let mut data = HashMap::new();
-        let raw = reqwest::get(format!("{}/v2/versions/loader", self.fabric.get_meta_url())).await?.text().await?;
+        let raw = reqwest::get(format!("{}/v2/versions/loader", self.fabric.get_meta_url()))
+            .await?
+            .text()
+            .await?;
         let body: Vec<LoaderVersion> = serde_json::from_str(&raw)?;
-        let game_body: Vec<GameVersion> = serde_json::from_str(&reqwest::get(format!("{}/v2/versions/game", self.fabric.get_meta_url())).await?.text().await?)?;
+        let game_body: Vec<GameVersion> = serde_json::from_str(
+            &reqwest::get(format!("{}/v2/versions/game", self.fabric.get_meta_url()))
+                .await?
+                .text()
+                .await?,
+        )?;
         let mut game_version = Vec::new();
         for game in game_body {
             game_version.push(game.version.clone());
@@ -117,7 +125,10 @@ impl ModLoader for FabricLike {
         Ok(data)
     }
 
-    async fn installed(&self, version: VersionStorage) -> Result<Option<FabricLoaderVersion>> {
+    async fn installed<L: Layout, VL: Layout>(
+        &self,
+        version: VersionStorage<L, VL>,
+    ) -> Result<Option<FabricLoaderVersion>> {
         todo!()
     }
 }
@@ -128,11 +139,11 @@ pub(crate) struct LoaderVersion {
     pub build: i32,
     pub maven: String,
     pub version: String,
-    pub stable: bool
+    pub stable: bool,
 }
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct GameVersion {
     pub version: String,
-    pub stable: bool
+    pub stable: bool,
 }

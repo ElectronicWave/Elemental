@@ -1,10 +1,12 @@
 //TODO REFACTOR ME WITH TUI/CLI
 
+use std::path::Path;
 use std::time::{Duration, SystemTime};
 
 use elemental_core::services::downloader::ElementalDownloader;
 use elemental_core::services::mojang::MojangService;
-use elemental_core::legacystorage::game::GameStorage;
+use elemental_core::storage::game::GameStorage;
+use elemental_core::storage::layout::BaseLayout;
 
 #[tokio::main]
 async fn main() {
@@ -12,7 +14,7 @@ async fn main() {
     let downloader = ElementalDownloader::with_config_default().unwrap();
     let service = MojangService::default();
     let version_name = "MyGame-1.16.5";
-    let stroage = GameStorage::new_ensure_dir(".minecraft").unwrap();
+    let stroage = GameStorage::new(Path::new(".minecraft"), BaseLayout);
     let s = SystemTime::now();
     let downloader_cloned = downloader.clone();
     tokio::spawn(async move {

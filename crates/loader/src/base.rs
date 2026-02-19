@@ -1,6 +1,6 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use async_trait::async_trait;
-use elemental_core::legacystorage::version::VersionStorage;
+use elemental_core::storage::{layout::Layout, version::VersionStorage};
 use std::collections::HashMap;
 #[async_trait]
 pub trait ModLoader {
@@ -11,7 +11,10 @@ pub trait ModLoader {
         bail!("`versions_slim` not implemented");
     }
 
-    async fn installed(&self, version: VersionStorage) -> Result<Option<impl ModLoaderVersion>>;
+    async fn installed<L: Layout, VL: Layout>(
+        &self,
+        version: VersionStorage<L, VL>,
+    ) -> Result<Option<impl ModLoaderVersion>>;
 }
 
 #[async_trait]
@@ -34,5 +37,5 @@ pub struct ModLoaderVersionInfo {
 pub enum Version {
     SINGLE(String),
     MULTI(Vec<String>),
-    IGNORE
+    IGNORE,
 }

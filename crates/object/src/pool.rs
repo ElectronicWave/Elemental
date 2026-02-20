@@ -165,7 +165,7 @@ impl ObjectPool {
             // maybe an acquire is waiting for this entry, we should notify it after shutdown, otherwise it may wait forever.
             #[cfg(feature = "notify")]
             if let None = entry.value {
-                entry.notify.notified().await;
+                entry.notify.notify_waiters().await;
             }
 
             iter = entry.next_async().await;

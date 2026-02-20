@@ -1,15 +1,16 @@
-use anyhow::{Context, Result};
 use scc::HashMap;
 use std::{
-    any::{Any, TypeId, type_name},
+    any::{Any, TypeId},
     future::Future,
     pin::Pin,
     sync::{Arc, LazyLock},
 };
 #[cfg(feature = "notify")]
 use tokio::sync::Notify;
-static POOL: LazyLock<ObjectPool> = LazyLock::new(|| ObjectPool::new());
-type ShutdownFn<T> = Box<dyn Fn(Arc<T>) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
+
+pub static POOL: LazyLock<ObjectPool> = LazyLock::new(|| ObjectPool::new());
+pub type ShutdownFn<T> =
+    Box<dyn Fn(Arc<T>) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
 pub struct PoolEntry<T: Any + Send + Sync + ?Sized> {
     value: Option<Arc<T>>,
     #[cfg(feature = "notify")]
@@ -50,12 +51,6 @@ impl ObjectPool {
         }
     }
 
-    pub fn get_sync<T: Any + Send + Sync>(&self) -> Option<Arc<T>> {
-        self.inner
-            .read_sync(&TypeId::of::<T>(), |_, v| v.value.clone())
-            .and_then(|entry| Arc::downcast::<T>(entry?).ok())
-    }
-
     pub async fn get_async<T: Any + Send + Sync>(&self) -> Option<Arc<T>> {
         let typeid = TypeId::of::<T>();
         let entry = self.inner.read_async(&typeid, |_, v| v.value.clone()).await;
@@ -66,6 +61,7 @@ impl ObjectPool {
         None
     }
 
+    // Overwrite and call the notifier if exists, otherwise just insert the value.
     pub async fn set_value<T: Any + Send + Sync>(
         &self,
         value: Arc<T>,
@@ -81,7 +77,8 @@ impl ObjectPool {
             }) as ShutdownFn<dyn Any + Send + Sync>
         });
         if self.inner.contains_async(&type_id).await {
-            // Noops if already fulfilled
+            // Call shutdown of old value if exists, and update the value and shutdown fn.
+            // It means the old value will be shutdown before the new value is set, so the shutdown fn can still access the old value.
             let mut entry = self.inner.get_async(&type_id).await.unwrap();
             entry.shutdown().await;
             entry.value = Some(value.clone() as Arc<dyn Any + Send + Sync>);
@@ -127,7 +124,11 @@ impl ObjectPool {
     }
 
     #[cfg(feature = "notify")]
-    pub async fn fulfill_value<T: Any + Send + Sync>(&self, value: Arc<T>) {
+    pub async fn fulfill_value<T: Any + Send + Sync>(
+        &self,
+        value: Arc<T>,
+        shutdown: Option<ShutdownFn<T>>,
+    ) {
         let type_id = TypeId::of::<T>();
         if let Some(fulfilled) = self
             .inner
@@ -140,7 +141,16 @@ impl ObjectPool {
         }
 
         if let Some(mut entry) = self.inner.get_async(&type_id).await {
-            entry.value = Some(value);
+            entry.value = Some(value.clone() as Arc<dyn Any + Send + Sync>);
+            let shutdown = shutdown.map(|shutdown_fn| {
+                Box::new(move |value_any: Arc<dyn Any + Send + Sync>| {
+                    let value = value_any
+                        .downcast::<T>()
+                        .expect("Can't downcast value in shutdown fn");
+                    shutdown_fn(value)
+                }) as ShutdownFn<dyn Any + Send + Sync>
+            });
+            entry.shutdown = shutdown;
             entry.notify.notify_waiters();
         }
     }
@@ -153,70 +163,4 @@ impl ObjectPool {
             iter = entry.next_async().await;
         }
     }
-}
-
-pub async fn require<T: Any + Send + Sync>() -> Result<Arc<T>> {
-    POOL.get_async::<T>().await.context(format!(
-        "Cannot get object `{}` from pool",
-        type_name::<T>()
-    ))
-}
-/// Provide a value to the pool, it will let the old value shutdown if exists.
-pub async fn provide<T, F, Fut>(value: T, shutdown: Option<F>)
-where
-    T: Any + Send + Sync,
-    F: Fn(Arc<T>) -> Fut + Send + Sync + 'static,
-    Fut: Future<Output = ()> + Send + 'static,
-{
-    provide_arc(Arc::new(value), shutdown).await;
-}
-
-/// Provide a value to the pool, it will let the old value shutdown if exists.
-pub async fn provide_arc<T, F, Fut>(value: Arc<T>, shutdown: Option<F>)
-where
-    T: Any + Send + Sync,
-    F: Fn(Arc<T>) -> Fut + Send + Sync + 'static,
-    Fut: Future<Output = ()> + Send + 'static,
-{
-    let shutdown: Option<ShutdownFn<T>> = shutdown.map(|f| {
-        Box::new(move |value: Arc<T>| {
-            Box::pin(f(value)) as Pin<Box<dyn Future<Output = ()> + Send>>
-        }) as ShutdownFn<T>
-    });
-    POOL.set_value(value, shutdown).await;
-}
-
-pub fn require_sync<T: Any + Send + Sync>() -> Result<Arc<T>> {
-    POOL.get_sync::<T>().context(format!(
-        "Cannot get object `{}` from pool",
-        type_name::<T>()
-    ))
-}
-
-pub async fn drop_value<T: Any + Send + Sync>() {
-    POOL.remove_value::<T>().await;
-}
-
-pub async fn drop_entry<T: Any + Send + Sync>() {
-    POOL.remove_entry::<T>().await;
-}
-/// Acquire a value from the pool, if not exists, wait until it is provided.
-#[cfg(feature = "notify")]
-pub async fn acquire<T: Any + Send + Sync>() -> Result<Arc<T>> {
-    POOL.wait_value::<T>().await;
-    require::<T>().await
-}
-
-#[cfg(feature = "notify")]
-pub async fn fulfill<T: Any + Send + Sync>(value: T) {
-    fulfill_arc(Arc::new(value)).await;
-}
-
-#[cfg(feature = "notify")]
-pub async fn fulfill_arc<T: Any + Send + Sync>(value: Arc<T>) {
-    POOL.fulfill_value(value).await;
-}
-
-pub async fn shutdown() {
-    POOL.shutdown().await;
 }

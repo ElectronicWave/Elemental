@@ -159,7 +159,15 @@ impl ObjectPool {
         let mut iter = self.inner.begin_async().await;
         while let Some(mut entry) = iter {
             // `OccupiedEntry` can be sent across awaits and threads.
+            // clean up the old value if it's exists
             entry.shutdown().await;
+
+            // maybe an acquire is waiting for this entry, we should notify it after shutdown, otherwise it may wait forever.
+            #[cfg(feature = "notify")]
+            if let None = entry.value {
+                entry.notify.notified().await;
+            }
+
             iter = entry.next_async().await;
         }
     }

@@ -52,8 +52,15 @@ mod testobj {
     #[tokio::test]
     async fn test_context() {
         provide("Cheese".to_string()).await;
+        provide_with_shutdown(1usize, |value| async move {
+            println!(
+                "This means the context shutdown can also access the value, value = {}",
+                value
+            );
+        })
+        .await;
         let context = ObjectContext::new();
-        let supplyer = context.clone().run(async {
+        let supplier = context.clone().run(async {
             println!("Making delay in context");
             sleep(Duration::from_secs(3)).await;
             provide_context_with_shutdown("Hamburger".to_string(), |value| async move {
@@ -65,11 +72,12 @@ mod testobj {
             let order = acquire::<String>().await;
             println!("Got value in context {:?}", order);
         });
-        join!(supplyer, comsumer);
+        join!(supplier, comsumer);
         println!(
             "After context shutdown, value is {:?}",
             require::<String>().await
         );
         context.shutdown().await;
+        shutdown().await;
     }
 }

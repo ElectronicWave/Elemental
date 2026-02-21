@@ -22,6 +22,9 @@ impl<T: Any + Send + Sync + ?Sized> PoolEntry<T> {
     async fn shutdown(&mut self) {
         let val = self.value.clone();
         self.value = None;
+        // maybe an acquire is waiting for this entry, we should notify it after shutdown, otherwise it may wait forever.
+        #[cfg(feature = "notify")]
+        self.notify.notify_waiters();
         if let Some(shutdown) = &self.shutdown {
             if let Some(value) = &val {
                 (shutdown)(value.clone()).await;
@@ -161,12 +164,6 @@ impl ObjectPool {
             // `OccupiedEntry` can be sent across awaits and threads.
             // clean up the old value if it's exists
             entry.shutdown().await;
-
-            // maybe an acquire is waiting for this entry, we should notify it after shutdown, otherwise it may wait forever.
-            #[cfg(feature = "notify")]
-            if let None = entry.value {
-                entry.notify.notify_waiters().await;
-            }
 
             iter = entry.next_async().await;
         }

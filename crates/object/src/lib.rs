@@ -80,4 +80,36 @@ mod testobj {
         context.shutdown().await;
         shutdown().await;
     }
+    #[tokio::test]
+    async fn test_listener() {
+        let supplier = tokio::spawn(async {
+            for i in 0..5usize {
+                println!("Providing value {}", i);
+                provide(i).await;
+                sleep(Duration::from_secs(1)).await;
+            }
+
+            println!("Dropping value");
+            drop_value::<usize>().await;
+        });
+
+        let comsumer1 = tokio::spawn(async {
+            while let Ok(value) = acquire::<usize>().await {
+                println!("#1 Got value {}", value);
+            }
+
+            println!("#1 Exiting");
+        });
+
+        let comsumer2 = tokio::spawn(async {
+            while let Ok(value) = acquire::<usize>().await {
+                println!("#2 Got value {}", value);
+            }
+
+            println!("#2 Exiting");
+        });
+
+        let _ = join!(supplier, comsumer1, comsumer2);
+        
+    }
 }

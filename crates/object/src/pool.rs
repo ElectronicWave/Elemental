@@ -29,7 +29,7 @@ impl<T: Any + Send + Sync + ?Sized> PoolEntry<T> {
         #[cfg(feature = "notify")]
         {
             // maybe one comsumer is going to waiting for value, but the value is shutdown, we should set active to false to avoid waiting forever.
-            self.active.store(false, Ordering::Relaxed);
+            self.active.store(false, Ordering::Release);
             // maybe an acquire is waiting for this entry, we should notify it after shutdown, otherwise it may wait forever.
             self.notify.notify_waiters();
         }
@@ -44,7 +44,7 @@ impl<T: Any + Send + Sync + ?Sized> PoolEntry<T> {
         let old_shutdown = std::mem::replace(&mut self.shutdown, shutdown);
         #[cfg(feature = "notify")]
         {
-            self.active.store(true, Ordering::Relaxed);
+            self.active.store(true, Ordering::Release);
             self.notify.notify_waiters();
         }
 
@@ -138,7 +138,7 @@ impl ObjectPool {
         // If the value is shutdown, return immediately to avoid waiting forever.
         if let Some(active) = self
             .inner
-            .read_async(&type_id, |_, v| v.active.load(Ordering::Relaxed))
+            .read_async(&type_id, |_, v| v.active.load(Ordering::Acquire))
             .await
             && !active
         {
@@ -193,7 +193,7 @@ impl ObjectPool {
                     shutdown_fn(value)
                 }) as ShutdownFn<dyn Any + Send + Sync>
             });
-            entry.active.store(true, Ordering::Relaxed);
+            entry.active.store(true, Ordering::Release);
             entry.shutdown = shutdown;
             entry.notify.notify_waiters();
         }

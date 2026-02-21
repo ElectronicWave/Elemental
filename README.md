@@ -21,4 +21,5 @@
 
 ## Wiki
 
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/43672e5ed5894388a18e6b39bbf0da93)](https://app.codacy.com/gh/ElectronicWave/Elemental?utm_source=github.com&utm_medium=referral&utm_content=ElectronicWave/Elemental&utm_campaign=Badge_Grade)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ElectronicWave/Elemental)

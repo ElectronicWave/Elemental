@@ -7,7 +7,7 @@ pub use facade::*;
 #[cfg(test)]
 mod testobj {
     use std::time::Duration;
-    use tokio::{join, time::sleep};
+    use tokio::{join, task::JoinSet, time::sleep};
 
     use super::*;
     #[tokio::test]
@@ -82,7 +82,9 @@ mod testobj {
     }
     #[tokio::test]
     async fn test_listener() {
-        let supplier = tokio::spawn(async {
+        let mut js = JoinSet::new();
+
+        js.spawn(async {
             for i in 0..5usize {
                 println!("Providing value {}", i);
                 provide(i).await;
@@ -92,24 +94,16 @@ mod testobj {
             println!("Dropping value");
             drop_value::<usize>().await;
         });
+        for index in 0..10usize {
+            js.spawn(async move {
+                while let Ok(value) = acquire::<usize>().await {
+                    println!("#{} Got value {}", index, value);
+                }
 
-        let comsumer1 = tokio::spawn(async {
-            while let Ok(value) = acquire::<usize>().await {
-                println!("#1 Got value {}", value);
-            }
-
-            println!("#1 Exiting");
-        });
-
-        let comsumer2 = tokio::spawn(async {
-            while let Ok(value) = acquire::<usize>().await {
-                println!("#2 Got value {}", value);
-            }
-
-            println!("#2 Exiting");
-        });
-
-        let _ = join!(supplier, comsumer1, comsumer2);
-        
+                println!("#{} Exiting", index);
+            });
+        }
+        js.join_all().await;
+        shutdown().await;
     }
 }

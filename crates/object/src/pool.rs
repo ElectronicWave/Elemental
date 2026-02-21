@@ -24,8 +24,8 @@ pub struct PoolEntry<T: Any + Send + Sync + ?Sized> {
 
 impl<T: Any + Send + Sync + ?Sized> PoolEntry<T> {
     async fn shutdown(&mut self) {
-        let val = self.value.clone();
-        self.value = None;
+        let old_value = self.value.take();
+        let old_shutdown = self.shutdown.take();
         #[cfg(feature = "notify")]
         {
             // maybe one comsumer is going to waiting for value, but the value is shutdown, we should set active to false to avoid waiting forever.
@@ -33,26 +33,23 @@ impl<T: Any + Send + Sync + ?Sized> PoolEntry<T> {
             // maybe an acquire is waiting for this entry, we should notify it after shutdown, otherwise it may wait forever.
             self.notify.notify_waiters();
         }
-        if let Some(shutdown) = &self.shutdown {
-            if let Some(value) = &val {
-                (shutdown)(value.clone()).await;
-            }
+
+        if let (Some(v), Some(s)) = (old_value, old_shutdown) {
+            (s)(v).await;
         }
     }
 
     async fn reload(&mut self, value: Arc<T>, shutdown: Option<ShutdownFn<T>>) {
-        let old_value = self.value.clone();
-        self.value = Some(value);
-        if let Some(shutdown) = &self.shutdown {
-            if let Some(old_value) = &old_value {
-                (shutdown)(old_value.clone()).await;
-            }
-        }
-        self.shutdown = shutdown;
+        let old_value = self.value.replace(value);
+        let old_shutdown = std::mem::replace(&mut self.shutdown, shutdown);
         #[cfg(feature = "notify")]
         {
             self.active.store(true, Ordering::Relaxed);
             self.notify.notify_waiters();
+        }
+
+        if let (Some(v), Some(s)) = (old_value, old_shutdown) {
+            (s)(v).await;
         }
     }
 

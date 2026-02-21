@@ -1,9 +1,11 @@
 use scc::HashMap;
+#[cfg(feature = "notify")]
+use std::sync::atomic::AtomicBool;
 use std::{
     any::{Any, TypeId},
     future::Future,
     pin::Pin,
-    sync::{Arc, LazyLock},
+    sync::{Arc, LazyLock, atomic::Ordering},
 };
 #[cfg(feature = "notify")]
 use tokio::sync::Notify;
@@ -15,6 +17,8 @@ pub struct PoolEntry<T: Any + Send + Sync + ?Sized> {
     value: Option<Arc<T>>,
     #[cfg(feature = "notify")]
     notify: Arc<Notify>,
+    #[cfg(feature = "notify")]
+    active: AtomicBool,
     shutdown: Option<ShutdownFn<T>>,
 }
 
@@ -22,13 +26,33 @@ impl<T: Any + Send + Sync + ?Sized> PoolEntry<T> {
     async fn shutdown(&mut self) {
         let val = self.value.clone();
         self.value = None;
-        // maybe an acquire is waiting for this entry, we should notify it after shutdown, otherwise it may wait forever.
         #[cfg(feature = "notify")]
-        self.notify.notify_waiters();
+        {
+            // maybe one comsumer is going to waiting for value, but the value is shutdown, we should set active to false to avoid waiting forever.
+            self.active.store(false, Ordering::Relaxed);
+            // maybe an acquire is waiting for this entry, we should notify it after shutdown, otherwise it may wait forever.
+            self.notify.notify_waiters();
+        }
         if let Some(shutdown) = &self.shutdown {
             if let Some(value) = &val {
                 (shutdown)(value.clone()).await;
             }
+        }
+    }
+
+    async fn reload(&mut self, value: Arc<T>, shutdown: Option<ShutdownFn<T>>) {
+        let old_value = self.value.clone();
+        self.value = Some(value);
+        if let Some(shutdown) = &self.shutdown {
+            if let Some(old_value) = &old_value {
+                (shutdown)(old_value.clone()).await;
+            }
+        }
+        self.shutdown = shutdown;
+        #[cfg(feature = "notify")]
+        {
+            self.active.store(true, Ordering::Relaxed);
+            self.notify.notify_waiters();
         }
     }
 
@@ -37,6 +61,8 @@ impl<T: Any + Send + Sync + ?Sized> PoolEntry<T> {
             value: None,
             #[cfg(feature = "notify")]
             notify: Arc::new(Notify::new()),
+            #[cfg(feature = "notify")]
+            active: AtomicBool::new(true),
             shutdown: None,
         }
     }
@@ -83,11 +109,7 @@ impl ObjectPool {
             // Call shutdown of old value if exists, and update the value and shutdown fn.
             // It means the old value will be shutdown before the new value is set, so the shutdown fn can still access the old value.
             let mut entry = self.inner.get_async(&type_id).await.unwrap();
-            entry.shutdown().await;
-            entry.value = Some(value.clone() as Arc<dyn Any + Send + Sync>);
-            entry.shutdown = shutdown;
-            #[cfg(feature = "notify")]
-            entry.notify.notify_waiters();
+            entry.reload(value, shutdown).await;
             return;
         }
 
@@ -115,6 +137,26 @@ impl ObjectPool {
     #[cfg(feature = "notify")]
     pub async fn wait_value<T: Any + Send + Sync>(&self) {
         let type_id = TypeId::of::<T>();
+
+        // If the value is shutdown, return immediately to avoid waiting forever.
+        if let Some(active) = self
+            .inner
+            .read_async(&type_id, |_, v| v.active.load(Ordering::Relaxed))
+            .await
+            && !active
+        {
+            return;
+        }
+
+        if let Some(_) = self
+            .inner
+            .read_async(&type_id, |_, v| v.value.clone())
+            .await
+        {
+            // If the value exists, return immediately.
+            return;
+        }
+
         let notified = self
             .inner
             .entry_async(type_id)
@@ -123,6 +165,7 @@ impl ObjectPool {
             .get()
             .notify
             .clone();
+
         notified.notified().await;
     }
 
@@ -153,6 +196,7 @@ impl ObjectPool {
                     shutdown_fn(value)
                 }) as ShutdownFn<dyn Any + Send + Sync>
             });
+            entry.active.store(true, Ordering::Relaxed);
             entry.shutdown = shutdown;
             entry.notify.notify_waiters();
         }

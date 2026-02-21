@@ -82,28 +82,36 @@ mod testobj {
     }
     #[tokio::test]
     async fn test_listener() {
+        use tokio::time::Instant;
+        let start = Instant::now();
         let mut js = JoinSet::new();
 
         js.spawn(async {
-            for i in 0..5usize {
-                println!("Providing value {}", i);
-                provide(i).await;
-                sleep(Duration::from_secs(1)).await;
-            }
-
-            println!("Dropping value");
+            let bc = 1usize;
+            println!("Providing value {}", bc);
+            provide(bc).await;
+            sleep(Duration::from_secs(1)).await;
+            // hot reload value
+            let bc = 2usize;
+            println!("Providing value {}", bc);
+            provide(bc).await;
+            sleep(Duration::from_secs(2)).await;
             drop_value::<usize>().await;
         });
-        for index in 0..10usize {
+        for index in 0..3usize {
             js.spawn(async move {
                 while let Ok(value) = acquire::<usize>().await {
-                    println!("#{} Got value {}", index, value);
+                    // println!("#{} Got value {}", index, value);
+                    sleep(Duration::new(3, 0)).await;
+                    println!("Consumer #{} got value {}", index, value);
                 }
-
                 println!("#{} Exiting", index);
             });
         }
         js.join_all().await;
         shutdown().await;
+        let end = Instant::now();
+
+        println!("Total time taken: {:?}", end - start);
     }
 }

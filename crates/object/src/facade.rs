@@ -10,6 +10,9 @@ use anyhow::{Context, Result};
 pub use crate::context::ObjectContext;
 use crate::pool::{POOL, ShutdownFn};
 use crate::{context::CONTEXT, instant::InstantObject};
+
+
+/// Fast try to get a value from the pool, if not exists, return error immediately.
 pub async fn require<T: Any + Send + Sync>() -> Result<Arc<T>> {
     let pool = CONTEXT.try_with(|pool| pool.clone());
     if let Ok(pool) = pool {
@@ -28,6 +31,7 @@ pub async fn require<T: Any + Send + Sync>() -> Result<Arc<T>> {
 }
 
 /// Provide a value to the pool, it will let the old value shutdown if exists.
+/// Provide value to a existing value means safe **HOT RELOAD**
 pub async fn provide<T>(value: T)
 where
     T: Any + Send + Sync,
@@ -143,6 +147,9 @@ pub async fn drop_context_entry<T: Any + Send + Sync>() {
 }
 
 /// Acquire a value from the pool, if not exists, wait until it is provided.
+/// If the value is shutdown while waiting, return error immediately to avoid waiting forever.
+/// This function is designed for the scenario that comsumer want to ensure a value is provided and blocking on it.
+/// If you want to use it as a subscriber, you may got some value lost in the scenario that the value is frequently provided and comsumer is slow.
 #[cfg(feature = "notify")]
 pub async fn acquire<T: Any + Send + Sync>() -> Result<Arc<T>> {
     let pool = CONTEXT.try_with(|pool| pool.clone());

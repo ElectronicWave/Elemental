@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 elemental-core = { path = "../core" }
+elemental-infra = { path = "../infra" }
 # Mark * to use the same ver of elemental
 tokio = { version = "*" }
 serde_json = { version = "*" }

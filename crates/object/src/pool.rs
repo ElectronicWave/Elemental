@@ -166,7 +166,6 @@ impl ObjectPool {
         notified.notified().await;
     }
 
-    #[cfg(feature = "notify")]
     pub async fn fulfill_value<T: Any + Send + Sync>(
         &self,
         value: Arc<T>,
@@ -193,9 +192,12 @@ impl ObjectPool {
                     shutdown_fn(value)
                 }) as ShutdownFn<dyn Any + Send + Sync>
             });
-            entry.active.store(true, Ordering::Release);
             entry.shutdown = shutdown;
-            entry.notify.notify_waiters();
+            #[cfg(feature = "notify")]
+            {
+                entry.active.store(true, Ordering::Release);
+                entry.notify.notify_waiters();
+            }
         }
     }
 

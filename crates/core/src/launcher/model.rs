@@ -1,9 +1,11 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 use anyhow::{Context, Result};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+
+use crate::{consts::PLATFORM_NATIVES_DIR_NAME, models::mojang::PistonMetaData};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LaunchEnvs {
@@ -71,6 +73,69 @@ pub enum UserType {
 }
 
 impl LaunchEnvs {
+    pub fn offline_player(
+        player_name: String,
+        game_directory: String,
+        version_root: String,
+        pistonmeta: &PistonMetaData,
+    ) -> Result<Self> {
+        let version_name = Path::new(&version_root)
+            .file_name()
+            .context("version root has no file name")?
+            .to_string_lossy()
+            .to_string();
+        let version_jar = Path::new(&version_root).join(format!("{version_name}.jar"));
+        let classpath = pistonmeta
+            .libraries
+            .iter()
+            .filter_map(|library| {
+                if library.downloads.artifact.path.contains("natives") {
+                    None
+                } else {
+                    Some(
+                        Path::new(&game_directory)
+                            .join("libraries")
+                            .join(&library.downloads.artifact.path)
+                            .to_string_lossy()
+                            .to_string(),
+                    )
+                }
+            })
+            .chain(std::iter::once(version_jar.to_string_lossy().to_string()))
+            .collect::<Vec<String>>()
+            .join(";");
+
+        Ok(Self {
+            auth_player_name: player_name,
+            version_name,
+            game_directory: game_directory.clone(),
+            assets_root: Path::new(&game_directory)
+                .join("assets")
+                .to_string_lossy()
+                .to_string(),
+            assets_index_name: pistonmeta.assets.clone(),
+            auth_uuid: String::new(),
+            auth_access_token: String::new(),
+            clientid: String::new(),
+            auth_xuid: String::new(),
+            user_type: UserType::LEGACY,
+            version_type: pistonmeta.release_type.clone(),
+            resolution_width: "854".to_owned(),
+            resolution_height: "480".to_owned(),
+            quick_play_path: None,
+            quick_play_singleplayer: None,
+            quick_play_multiplayer: None,
+            quick_play_realms: None,
+            natives_directory: Path::new(&version_root)
+                .join(PLATFORM_NATIVES_DIR_NAME)
+                .to_string_lossy()
+                .to_string(),
+            launcher_name: "Elemental".to_owned(),
+            launcher_version: env!("CARGO_PKG_VERSION").to_owned(),
+            classpath,
+        })
+    }
+
     pub fn hashmap(&self) -> Result<HashMap<String, String>> {
         Ok(HashMap::from_iter(self.map()?.into_iter().filter_map(
             |(k, v)| {

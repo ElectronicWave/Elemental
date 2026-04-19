@@ -1,10 +1,11 @@
 use std::fs::{File, create_dir_all};
 use std::path::{Path, PathBuf, absolute};
 
+use elemental_infra::downloader::core::DownloadPlan;
+
 use crate::consts::PLATFORM_NATIVES_DIR_NAME;
-use crate::models::launchenvs::LaunchEnvs;
+use crate::launcher::model::LaunchEnvs;
 use crate::models::mojang::PistonMetaData;
-use crate::services::downloader::DownloadTask;
 use crate::legacystorage::game::GameStorage;
 use anyhow::{Result, bail};
 use tokio::process::{Child, Command};
@@ -64,7 +65,7 @@ impl VersionStorage {
         Ok(path)
     }
 
-    pub fn validate_version_data(&self, storage: &GameStorage) -> Result<Vec<DownloadTask>> {
+    pub fn validate_version_data(&self, storage: &GameStorage) -> Result<DownloadPlan> {
         let pistonmeta = self.pistonmeta()?;
         let requires = Vec::new();
         // Validate Client
@@ -80,7 +81,7 @@ impl VersionStorage {
 
         // Validate Libraries
 
-        Ok(requires)
+        Ok(DownloadPlan::named(self.name.clone(), requires))
     }
 
     pub fn get_ensure_subpath<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf> {

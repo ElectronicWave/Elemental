@@ -4,12 +4,13 @@ use std::sync::Arc;
 
 use tokio::process::Child;
 
+use elemental_infra::downloader::core::{DownloadSession, DownloadTask, ElementalDownloader};
+
 use super::version::VersionStorage;
 use crate::models::mojang::{
     MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaDownload,
     PistonMetaLibraries, PistonMetaLibrariesDownloadsArtifact,
 };
-use crate::services::downloader::{DownloadTask, ElementalDownloader};
 use crate::services::mojang::MojangService;
 use crate::legacystorage::jar::JarFile;
 use anyhow::{Context, Result, bail};
@@ -121,18 +122,16 @@ impl GameStorage {
         Path::new(&self.root).join(path)
     }
 
-    /// Use [crate::online::downloader::ElementalDownloader::shared] to download file
+    /// Use [ElementalDownloader] to create a download session for the version.
     ///
-    /// you can provide `version_name` and wait all tasks via [crate::online::downloader::ElementalDownloader::wait_group_tasks]
-    ///
-    /// if there has no task group named `version_name` in downloader, this function will create task group automatically.
+    /// The returned [DownloadSession] can be awaited or queried for results independently.
     pub async fn download_version_all(
         &self,
         downloader: &Arc<ElementalDownloader>,
         service: &MojangService,
         version_id: impl Into<String>,
         version_name: impl Into<String>,
-    ) -> Result<()> {
+    ) -> Result<DownloadSession> {
         let version_name = version_name.into();
         let version_id = version_id.into();
         let launchmeta = service.launchmeta().await.unwrap();
@@ -154,32 +153,24 @@ impl GameStorage {
             .await?;
 
         let baseurl = &service.baseurl;
-        if !downloader.has_group(&version_name).await {
-            downloader.create_group(&version_name).await?;
-        }
-        self.download_objects(&downloader, &version_name, objs, baseurl)
+        let session = downloader.create_named_session(version_name.clone()).await?;
+        self.download_objects(&session, objs, baseurl)
             .await?;
-        self.download_client(
-            &downloader,
-            &version_name,
-            &pistonmeta.downloads.client,
-            baseurl,
-        )
-        .await?;
-        self.download_libraries(&downloader, &version_name, &pistonmeta.libraries, baseurl)
+        self.download_client(&session, &pistonmeta.downloads.client, baseurl)
             .await?;
-        Ok(())
+        self.download_libraries(&session, &pistonmeta.libraries, baseurl)
+            .await?;
+        Ok(session)
     }
 
     pub async fn download_libraries(
         &self,
-        downloader: &Arc<ElementalDownloader>,
-        version_name: &str,
+        session: &DownloadSession,
         libraries: &Vec<PistonMetaLibraries>,
         baseurl: &MojangBaseUrl,
     ) -> Result<()> {
         for library in libraries {
-            self.download_library(downloader.clone(), version_name, library, baseurl)
+            self.download_library(session, library, baseurl)
                 .await?;
         }
         Ok(())
@@ -187,8 +178,7 @@ impl GameStorage {
 
     pub async fn download_library(
         &self,
-        downloader: Arc<ElementalDownloader>,
-        version_name: &str,
+        session: &DownloadSession,
         library: &PistonMetaLibraries,
         baseurl: &MojangBaseUrl,
     ) -> Result<()> {
@@ -206,28 +196,24 @@ impl GameStorage {
             .url
             .replace("libraries.minecraft.net", &baseurl.libraries);
 
-        downloader
+        session
             .add_task(DownloadTask::new(
                 url,
-                path.to_string_lossy().to_string(),
-                version_name.to_string(),
-                Some(artifact.size),
+                path,
+                Some(artifact.size as u64),
                 Some(artifact.sha1.clone()),
             ))
             .await?;
 
         // 3. Download Native Lib (Legacy)
         if let Some(download) = library.try_get_classifiers_native_artifact() {
-            downloader
+            session
                 .add_task(DownloadTask::new(
                     &download
                         .url
                         .replace("libraries.minecraft.net", &baseurl.libraries),
-                    self.get_ensure_library_path(download)?
-                        .to_string_lossy()
-                        .to_string(),
-                    version_name.to_string(),
-                    Some(download.size),
+                    self.get_ensure_library_path(download)?,
+                    Some(download.size as u64),
                     Some(download.sha1.clone()),
                 ))
                 .await?;
@@ -238,20 +224,22 @@ impl GameStorage {
 
     pub async fn download_client(
         &self,
-        downloader: &Arc<ElementalDownloader>,
-        version_name: &str,
+        session: &DownloadSession,
         download: &PistonMetaDownload,
         baseurl: &MojangBaseUrl,
     ) -> Result<()> {
-        let path = self.get_ensure_client_path(version_name)?;
-        downloader
+        let path = self.get_ensure_client_path(
+            session
+                .name()
+                .context("download session has no name for client path")?,
+        )?;
+        session
             .add_task(DownloadTask::new(
                 download
                     .url
                     .replace("piston-data.mojang.com", &baseurl.pistondata),
-                path.to_string_lossy().to_string(),
-                version_name.to_string(),
-                Some(download.size),
+                path,
+                Some(download.size as u64),
                 Some(download.sha1.clone()),
             ))
             .await?;
@@ -260,8 +248,7 @@ impl GameStorage {
 
     pub async fn download_objects(
         &self,
-        downloader: &Arc<ElementalDownloader>,
-        version_name: &str,
+        session: &DownloadSession,
         data: PistonMetaAssetIndexObjects,
         baseurl: &MojangBaseUrl,
     ) -> Result<()> {
@@ -269,16 +256,13 @@ impl GameStorage {
         for (_, v) in data.objects {
             tasks.push(DownloadTask::new(
                 baseurl.get_object_url(v.hash.clone()),
-                self.get_ensure_object_path(v.hash.clone())?
-                    .to_string_lossy()
-                    .to_string(),
-                version_name.to_string(),
-                Some(v.size),
+                self.get_ensure_object_path(v.hash.clone())?,
+                Some(v.size as u64),
                 Some(v.hash),
             ));
         }
 
-        downloader.add_tasks(tasks).await?;
+        session.add_tasks(tasks).await?;
         Ok(())
     }
 

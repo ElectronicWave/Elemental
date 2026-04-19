@@ -1,12 +1,10 @@
 //TODO REFACTOR ME WITH TUI/CLI
 
-use std::path::Path;
 use std::time::{Duration, SystemTime};
 
-use elemental_core::services::downloader::ElementalDownloader;
+use elemental_core::legacystorage::game::GameStorage;
 use elemental_core::services::mojang::MojangService;
-use elemental_core::storage::game::GameStorage;
-use elemental_core::storage::layout::BaseLayout;
+use elemental_infra::downloader::core::ElementalDownloader;
 
 #[tokio::main]
 async fn main() {
@@ -14,8 +12,13 @@ async fn main() {
     let downloader = ElementalDownloader::with_config_default().unwrap();
     let service = MojangService::default();
     let version_name = "MyGame-1.16.5";
-    let stroage = GameStorage::new(Path::new(".minecraft"), BaseLayout);
+    let storage = GameStorage::new_ensure_dir(".minecraft").unwrap();
     let s = SystemTime::now();
+    let session = storage
+        .download_version_all(&downloader, &service, "1.16.5", version_name)
+        .await
+        .unwrap();
+    let session_id = session.id();
     let downloader_cloned = downloader.clone();
     tokio::spawn(async move {
         loop {
@@ -23,31 +26,26 @@ async fn main() {
 
             downloader_cloned
                 .tracker
-                .groups
-                .get_async(version_name)
+                .sessions
+                .get_async(&session_id)
                 .await
                 .map(|state| println!("{:?}", state.bps));
         }
     });
     // if all file exists, it will cost 5-8s to vaildate sha1.
-    stroage
-        .download_version_all(&downloader, &service, "1.16.5", version_name)
-        .await
-        .unwrap();
-
-    downloader.wait_group_empty(version_name).await;
+    session.wait_empty().await.unwrap();
     println!(
         "download in {}ms",
         SystemTime::now().duration_since(s).unwrap().as_millis()
     );
-    downloader.remove_group(version_name).await;
+    session.remove().await.unwrap();
     println!(
         "remove in {}ms",
         SystemTime::now().duration_since(s).unwrap().as_millis()
     );
     println!("start extract");
 
-    stroage.extract_version_natives(version_name).unwrap();
+    storage.extract_version_natives(version_name).unwrap();
     println!(
         "extract in {}ms",
         SystemTime::now().duration_since(s).unwrap().as_millis()

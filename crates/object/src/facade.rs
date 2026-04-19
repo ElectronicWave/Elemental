@@ -11,7 +11,6 @@ pub use crate::context::ObjectContext;
 use crate::pool::{POOL, ShutdownFn};
 use crate::{context::CONTEXT, instant::InstantObject};
 
-
 /// Fast try to get a value from the pool, if not exists, return error immediately.
 pub async fn require<T: Any + Send + Sync>() -> Result<Arc<T>> {
     let pool = CONTEXT.try_with(|pool| pool.clone());
@@ -163,12 +162,10 @@ pub async fn acquire<T: Any + Send + Sync>() -> Result<Arc<T>> {
 }
 
 // Who first provide the value, we use whose shutdown function, even if the value is overwritten later, so the shutdown function can always access the value.
-#[cfg(feature = "notify")]
 pub async fn fulfill<T: Any + Send + Sync>(value: T) {
     fulfill_arc(Arc::new(value), None, false).await;
 }
 
-#[cfg(feature = "notify")]
 pub async fn fulfill_with_shutdown<T, F, Fut>(value: T, shutdown: F)
 where
     T: Any + Send + Sync,
@@ -178,12 +175,10 @@ where
     fulfill_arc(Arc::new(value), Some(convert_shutdown_fn(shutdown)), false).await;
 }
 
-#[cfg(feature = "notify")]
 pub async fn fulfill_context<T: Any + Send + Sync>(value: T) {
     fulfill_arc(Arc::new(value), None, true).await;
 }
 
-#[cfg(feature = "notify")]
 pub async fn fulfill_with_context_shutdown<T, F, Fut>(value: T, shutdown: F)
 where
     T: Any + Send + Sync,
@@ -193,7 +188,6 @@ where
     fulfill_arc(Arc::new(value), Some(convert_shutdown_fn(shutdown)), true).await;
 }
 
-#[cfg(feature = "notify")]
 async fn fulfill_arc<T: Any + Send + Sync>(
     value: Arc<T>,
     shutdown: Option<ShutdownFn<T>>,

@@ -355,6 +355,7 @@ name = "elemental"
 version = "0.1.0"
 dependencies = [
  "elemental-core",
+ "elemental-infra",
  "elemental-loader",
  "elemental-object",
  "elemental-shared",

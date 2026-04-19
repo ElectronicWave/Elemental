@@ -285,9 +285,9 @@ dependencies = [
 name = "demo"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "elemental-core",
  "elemental-infra",
- "serde_json",
  "tokio",
 ]
 

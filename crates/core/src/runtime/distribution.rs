@@ -4,9 +4,13 @@ use std::path::PathBuf;
 use futures::future::join_all;
 use tokio::fs;
 use tokio::process::Command;
+use tokio::sync::OnceCell;
 
-use crate::runtime::provider::RuntimeProvider;
-#[derive(Debug, Default)]
+use crate::runtime::provider::{RuntimeProvider, all_providers};
+
+static DISTRIBUTION_CACHE: OnceCell<Vec<Distribution>> = OnceCell::const_new();
+
+#[derive(Debug, Default, Clone)]
 pub struct DistributionReleaseData {
     /// java.vm.vendor e.g. Eclipse Adoptium
     pub implementor: Option<String>,
@@ -21,7 +25,7 @@ pub struct DistributionReleaseData {
     pub jvm_version: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Distribution {
     // Release Data (when available)
     pub release: Option<DistributionReleaseData>,
@@ -36,6 +40,13 @@ pub struct Distribution {
 }
 
 impl DistributionReleaseData {
+    pub fn matches_java_major_version(&self, major_version: usize) -> bool {
+        self.major_version
+            .as_deref()
+            .and_then(parse_java_major_version)
+            .is_some_and(|current| current == major_version)
+    }
+
     pub async fn parse_from_commandline(root: &PathBuf) -> Self {
         let java_exe = root.join("bin").join("java");
         if let Ok(output) = Command::new(&java_exe)
@@ -71,13 +82,10 @@ impl DistributionReleaseData {
     }
 
     pub fn is_lts(&self) -> bool {
-        match &self.major_version {
-            Some(ver) => match ver.as_str() {
-                "8" | "11" | "17" | "21" => true,
-                _ => false,
-            },
-            None => false,
-        }
+        self.major_version
+            .as_deref()
+            .and_then(parse_java_major_version)
+            .is_some_and(|version| matches!(version, 8 | 11 | 17 | 21))
     }
 
     fn parse_properties(output: &str) -> Self {
@@ -133,7 +141,7 @@ impl DistributionReleaseData {
 
         // Extract major version from jre_version
         if let Some(ref ver) = jre_version {
-            major_version = ver.split('.').next().map(|s| s.to_string());
+            major_version = parse_java_major_version(ver).map(|value| value.to_string());
         }
 
         Self {
@@ -182,9 +190,44 @@ impl Distribution {
         distributions.into_iter().collect()
     }
 
+    pub async fn cached() -> Vec<Self> {
+        DISTRIBUTION_CACHE
+            .get_or_init(|| async { Distribution::from_providers::<Vec<_>>(all_providers()).await })
+            .await
+            .clone()
+    }
+
+    pub fn matches_java_major_version(&self, major_version: usize) -> bool {
+        self.release
+            .as_ref()
+            .is_some_and(|release| release.matches_java_major_version(major_version))
+    }
+
+    pub async fn find_cached_by_java_major(major_version: usize) -> Option<Self> {
+        Self::cached()
+            .await
+            .into_iter()
+            .find(|distribution| distribution.matches_java_major_version(major_version))
+    }
+
     pub fn executable(&self) -> PathBuf {
         self.path.join("bin").join(format!("java{}", EXE_SUFFIX))
     }
+}
+
+fn parse_java_major_version(version: &str) -> Option<usize> {
+    let normalized = version.trim();
+    if let Some(legacy) = normalized.strip_prefix("1.") {
+        return legacy
+            .split(['.', '_', '-'])
+            .next()
+            .and_then(|value| value.parse::<usize>().ok());
+    }
+
+    normalized
+        .split(['.', '_', '-'])
+        .next()
+        .and_then(|value| value.parse::<usize>().ok())
 }
 
 #[tokio::test]

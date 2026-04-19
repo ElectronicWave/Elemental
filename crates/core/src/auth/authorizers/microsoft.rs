@@ -1,6 +1,6 @@
 use crate::auth::authorizer::Authorizer;
 use crate::auth::credential::UserCredential;
-use anyhow::{Ok, Result};
+use anyhow::{Context, Result};
 use minecraft_msa_auth::MinecraftAuthorizationFlow;
 use oauth2::basic::BasicClient;
 use oauth2::reqwest::Client;
@@ -12,6 +12,13 @@ use oauth2::{
 const DEVICE_CODE_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode";
 const MSA_AUTHORIZE_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize";
 const MSA_TOKEN_URL: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
+const MINECRAFT_PROFILE_URL: &str = "https://api.minecraftservices.com/minecraft/profile";
+
+#[derive(serde::Deserialize)]
+struct MinecraftProfileResponse {
+    id: String,
+    name: String,
+}
 
 pub struct MicrosoftAuthorizer<F: Fn(String, String)> {
     pub client_id: String,
@@ -49,9 +56,19 @@ impl<F: Fn(String, String)> Authorizer for MicrosoftAuthorizer<F> {
         let mc_token = mc_flow
             .exchange_microsoft_token(token.access_token().secret())
             .await?;
+        let profile = reqwest::Client::new()
+            .get(MINECRAFT_PROFILE_URL)
+            .bearer_auth(mc_token.access_token().as_ref())
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<MinecraftProfileResponse>()
+            .await
+            .context("fetch minecraft profile failed")?;
 
         Ok(UserCredential {
-            uuid: mc_token.username().to_string(),
+            username: profile.name,
+            uuid: profile.id,
             access_token: mc_token.access_token().clone().into_inner(),
         })
     }

@@ -1,3 +1,4 @@
+use std::env::consts::EXE_SUFFIX;
 use std::env::var;
 use std::path::PathBuf;
 
@@ -11,12 +12,16 @@ pub struct EnvJavaHomeProvider;
 #[async_trait]
 impl RuntimeProvider for EnvJavaHomeProvider {
     async fn list(&self) -> Vec<PathBuf> {
-        //TODO: Need to specifically validate the JAVA_HOME path
-        var("JAVA_HOME")
-            .ok()
-            .map(PathBuf::from)
-            .into_iter()
-            .collect()
+        let Some(java_home) = var("JAVA_HOME").ok().map(PathBuf::from) else {
+            return Vec::new();
+        };
+
+        let java_executable = java_home.join("bin").join(format!("java{EXE_SUFFIX}"));
+        if java_home.is_dir() && java_executable.exists() {
+            vec![java_home]
+        } else {
+            Vec::new()
+        }
     }
 
     fn name(&self) -> &'static str {

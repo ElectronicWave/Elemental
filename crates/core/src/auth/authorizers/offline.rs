@@ -17,6 +17,7 @@ impl Authorizer for OfflineAuthorizer {
         buffer[8] = (buffer[8] & 0x3f) | 0x80;
 
         Ok(UserCredential {
+            username: self.username.clone(),
             uuid: Uuid::from_bytes(buffer.into()).to_string(),
             access_token: "".to_string(),
         })

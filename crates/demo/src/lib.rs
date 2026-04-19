@@ -1,23 +1,16 @@
 use std::{
     path::PathBuf,
     process::ExitStatus,
-    sync::Arc,
     time::{Duration, Instant},
 };
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use elemental_core::{
     auth::authorizers::offline::OfflineAuthorizer,
-    install::ResolvedVanillaVersion,
-    launcher::builder::LaunchBuilder,
-    runtime::{distribution::Distribution, provider::all_providers},
-    services::mojang::MojangService,
-    storage::{game::GameStorage, layout::BaseLayout, version::VersionStorage},
+    install::{ReadyVanillaVersion, VanillaInstallStatus},
+    launcher::vanilla::{VanillaLaunchOptions, VanillaLauncher, VanillaVersionSpec},
+    storage::{game::GameStorage, layout::BaseLayout},
 };
-use elemental_infra::downloader::{core::ElementalDownloader, report::SessionExecutionReport};
-
-pub type DemoResolvedVersion = ResolvedVanillaVersion<BaseLayout, BaseLayout>;
-pub type DemoVersionStorage = VersionStorage<BaseLayout, BaseLayout>;
 
 #[derive(Debug, Clone)]
 pub struct DemoInstallSpec {
@@ -29,20 +22,18 @@ pub struct DemoInstallSpec {
 #[derive(Debug, Clone)]
 pub struct DemoLaunchSpec {
     pub username: String,
-    pub runtime_version_prefix: String,
 }
 
 #[derive(Debug)]
 pub struct DemoInstallSummary {
     pub version_root: PathBuf,
-    pub download_reports: Vec<SessionExecutionReport>,
-    pub download_elapsed: Duration,
-    pub extract_elapsed: Duration,
+    pub install_status: VanillaInstallStatus,
+    pub ready_elapsed: Duration,
 }
 
 #[derive(Debug)]
-pub struct PreparedDemoVersion {
-    pub resolved_version: DemoResolvedVersion,
+pub struct ReadyDemoVersion {
+    pub ready_version: ReadyVanillaVersion<BaseLayout, BaseLayout>,
     pub install_summary: DemoInstallSummary,
 }
 
@@ -64,22 +55,18 @@ impl DemoInstallSpec {
 }
 
 impl DemoLaunchSpec {
-    pub fn new(username: String, runtime_version_prefix: String) -> Self {
-        Self {
-            username,
-            runtime_version_prefix,
-        }
+    pub fn new(username: String) -> Self {
+        Self { username }
     }
 }
 
 impl DemoInstallSummary {
     pub fn render(&self) -> String {
         format!(
-            "version root: {}\nreports: {:#?}\ndownload in {}ms\nextract in {}ms",
+            "version root: {}\ninstall status: {:?}\nready in {}ms",
             self.version_root.display(),
-            self.download_reports,
-            self.download_elapsed.as_millis(),
-            self.extract_elapsed.as_millis(),
+            self.install_status,
+            self.ready_elapsed.as_millis(),
         )
     }
 }
@@ -93,128 +80,66 @@ pub fn demo_install_spec() -> DemoInstallSpec {
 }
 
 pub fn demo_launch_spec() -> DemoLaunchSpec {
-    DemoLaunchSpec::new("IAMPlayer".to_owned(), "1.8".to_owned())
+    DemoLaunchSpec::new("IAMPlayer".to_owned())
 }
 
-fn demo_downloader() -> Result<Arc<ElementalDownloader>> {
-    ElementalDownloader::with_config_default().context("create demo downloader failed")
-}
-
-fn demo_service() -> MojangService {
-    MojangService::default()
+fn demo_launcher() -> Result<VanillaLauncher> {
+    VanillaLauncher::with_defaults()
 }
 
 fn demo_storage(install_spec: &DemoInstallSpec) -> GameStorage<BaseLayout> {
     GameStorage::new(&install_spec.game_root, BaseLayout)
 }
 
-async fn resolve_demo_version(install_spec: &DemoInstallSpec) -> Result<DemoResolvedVersion> {
+fn demo_version_spec(install_spec: &DemoInstallSpec) -> VanillaVersionSpec<BaseLayout> {
+    VanillaVersionSpec::new(
+        install_spec.version_id.clone(),
+        install_spec.version_name.clone(),
+        BaseLayout,
+    )
+}
+
+pub async fn ready_demo_version(install_spec: &DemoInstallSpec) -> Result<ReadyDemoVersion> {
+    let launcher = demo_launcher()?;
     let storage = demo_storage(install_spec);
-    let service = demo_service();
-
-    service
-        .resolve_vanilla_version(
-            &storage,
-            install_spec.version_id.clone(),
-            install_spec.version_name.clone(),
-            BaseLayout,
-        )
-        .await
-        .context("resolve demo version failed")
-}
-
-async fn download_demo_version(
-    downloader: &Arc<ElementalDownloader>,
-    resolved_version: &DemoResolvedVersion,
-) -> Result<(Vec<SessionExecutionReport>, Duration)> {
-    let planner = resolved_version.planner();
     let started_at = Instant::now();
-    let download_reports = downloader
-        .execute_planner(&planner)
-        .await
-        .context("download demo version artifacts failed")?;
+    let ready_version = launcher
+        .ready(&storage, &demo_version_spec(install_spec))
+        .await?;
+    let ready_elapsed = started_at.elapsed();
+    let version_root = ready_version.resolved_version.version.path.clone();
+    let install_status = ready_version.install_status;
 
-    Ok((download_reports, started_at.elapsed()))
-}
-
-fn extract_demo_version(resolved_version: &DemoResolvedVersion) -> Result<Duration> {
-    let started_at = Instant::now();
-    resolved_version
-        .version
-        .extract_natives()
-        .context("extract demo natives failed")?;
-
-    Ok(started_at.elapsed())
-}
-
-pub async fn prepare_demo_version(install_spec: &DemoInstallSpec) -> Result<PreparedDemoVersion> {
-    let downloader = demo_downloader()?;
-    let resolved_version = resolve_demo_version(install_spec).await?;
-    let (download_reports, download_elapsed) =
-        download_demo_version(&downloader, &resolved_version).await?;
-    let extract_elapsed = extract_demo_version(&resolved_version)?;
-    let version_root = resolved_version.version.path.clone();
-
-    Ok(PreparedDemoVersion {
-        resolved_version,
+    Ok(ReadyDemoVersion {
+        ready_version,
         install_summary: DemoInstallSummary {
             version_root,
-            download_reports,
-            download_elapsed,
-            extract_elapsed,
+            install_status,
+            ready_elapsed,
         },
     })
-}
-
-pub async fn find_runtime_distribution(runtime_version_prefix: &str) -> Result<Distribution> {
-    Distribution::from_providers::<Vec<_>>(all_providers())
-        .await
-        .into_iter()
-        .find(|distribution| {
-            distribution
-                .release
-                .as_ref()
-                .and_then(|release| release.jre_version.as_ref())
-                .is_some_and(|version| version.starts_with(runtime_version_prefix))
-        })
-        .with_context(|| {
-            format!(
-                "can't find a java runtime with version prefix '{}'",
-                runtime_version_prefix
-            )
-        })
-}
-
-fn offline_launch_builder(
-    runtime: Distribution,
-    version: DemoVersionStorage,
-    launch_spec: &DemoLaunchSpec,
-) -> LaunchBuilder<OfflineAuthorizer, BaseLayout, BaseLayout> {
-    let authorizer = OfflineAuthorizer {
-        username: launch_spec.username.clone(),
-    };
-
-    LaunchBuilder::new(authorizer, runtime, version).set_username(launch_spec.username.clone())
 }
 
 pub async fn launch_demo(
     install_spec: &DemoInstallSpec,
     launch_spec: &DemoLaunchSpec,
 ) -> Result<DemoLaunchSummary> {
-    let runtime = find_runtime_distribution(&launch_spec.runtime_version_prefix).await?;
-    let runtime_executable = runtime.executable();
-    let prepared_demo = prepare_demo_version(install_spec).await?;
-    let builder =
-        offline_launch_builder(runtime, prepared_demo.resolved_version.version, launch_spec);
-    let mut child = builder
-        .launch()
-        .await
-        .context("launch demo process failed")?;
-    let exit_status = child.wait().await.context("wait for demo process failed")?;
+    let launcher = demo_launcher()?;
+    let ready_demo = ready_demo_version(install_spec).await?;
+    let launch_options = VanillaLaunchOptions::new(demo_version_spec(install_spec));
+    let authorizer = OfflineAuthorizer {
+        username: launch_spec.username.clone(),
+    };
+    let launched = launcher
+        .launch_ready(ready_demo.ready_version, &launch_options, authorizer)
+        .await?;
+    let runtime_executable = launched.runtime.executable();
+    let mut child = launched.child;
+    let exit_status = child.wait().await?;
 
     Ok(DemoLaunchSummary {
         runtime_executable,
-        install_summary: prepared_demo.install_summary,
+        install_summary: ready_demo.install_summary,
         exit_status,
     })
 }

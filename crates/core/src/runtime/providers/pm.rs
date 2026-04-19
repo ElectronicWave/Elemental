@@ -1,4 +1,6 @@
 use std::path::PathBuf;
+#[cfg(target_os = "linux")]
+use std::{env::consts::EXE_SUFFIX, path::Path};
 
 use async_trait::async_trait;
 
@@ -40,7 +42,7 @@ impl PackageManagerProvider {
                     "debian" | "ubuntu" => &DEBIAN_JAVA_PATHS,
                     "fedora" => &FEDORA_JAVA_PATHS,
                     "gentoo" => &GENTOO_JAVA_PATHS as &[(&str, &str)],
-                    "Deepin" | "deepin" => todo!("deepin implementation"),
+                    "Deepin" | "deepin" => &DEBIAN_JAVA_PATHS,
                     _ => &[],
                 });
         for filter in filters {

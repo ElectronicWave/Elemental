@@ -1,5 +1,6 @@
 use std::{
     fmt::Display,
+    fs::File,
     path::{Path, PathBuf},
 };
 
@@ -109,6 +110,11 @@ impl<L: Layout> GameStorage<L> {
         create_dir_all(parent).await?;
         tokio::fs::write(path, serde_json::to_vec(objects)?).await?;
         Ok(())
+    }
+
+    pub fn asset_index_objects(&self, id: impl Display) -> Result<PistonMetaAssetIndexObjects> {
+        let path = self.asset_index_path(id)?;
+        Ok(serde_json::from_reader(File::open(path)?)?)
     }
 
     pub fn version_exists(&self, name: impl AsRef<str>) -> Result<bool> {

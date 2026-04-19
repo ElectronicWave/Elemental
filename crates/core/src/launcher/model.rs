@@ -7,6 +7,7 @@ use serde_json::{Map, Value};
 
 use crate::{
     consts::PLATFORM_NATIVES_DIR_NAME,
+    launcher::classpath::join_classpath,
     mojang::{MojangRuleContext, PistonMetaData, PistonMetaLibrariesExt},
 };
 
@@ -107,8 +108,8 @@ impl LaunchEnvs {
                 }
             })
             .chain(std::iter::once(version_jar.to_string_lossy().to_string()))
-            .collect::<Vec<String>>()
-            .join(";");
+            .collect::<Vec<String>>();
+        let classpath = join_classpath(classpath);
 
         Ok(Self {
             auth_player_name: player_name,

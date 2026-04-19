@@ -6,6 +6,7 @@ use super::model::LaunchEnvs;
 use crate::{
     auth::authorizer::Authorizer,
     consts::PLATFORM_NATIVES_DIR_NAME,
+    launcher::classpath::join_classpath,
     mojang::{MojangRuleContext, PistonMetaDataExt, PistonMetaLibrariesExt},
     runtime::distribution::Distribution,
     storage::{
@@ -97,7 +98,7 @@ impl<A: Authorizer, L: Layout, VL: Layout> LaunchBuilder<A, L, VL> {
             .context("authorize failed")?;
 
         if self.inner.auth_player_name.is_empty() {
-            self.inner.auth_player_name = version_name.clone();
+            self.inner.auth_player_name = credential.username.clone();
         }
         if self.inner.resolution_width.is_empty() {
             self.inner.resolution_width = "854".to_owned();
@@ -141,11 +142,9 @@ impl<A: Authorizer, L: Layout, VL: Layout> LaunchBuilder<A, L, VL> {
                     )
                 }
             })
-            .collect::<Vec<String>>()
-            .join(";")
-            + ";"
-            + &versionjar.to_string_lossy();
-        self.inner.classpath = classpath;
+            .chain(std::iter::once(versionjar.to_string_lossy().to_string()))
+            .collect::<Vec<String>>();
+        self.inner.classpath = join_classpath(classpath);
 
         let mut logging_jvm_args = Vec::new();
         if let Some(logging) = &metadata.logging {

@@ -23,6 +23,8 @@ pub struct VersionStorage<L: Layout, VL: Layout> {
 }
 
 impl<L: Layout, VL: Layout> VersionStorage<L, VL> {
+    const NATIVES_READY_MARKER: &str = ".elemental-natives-ready";
+
     pub fn new(path: PathBuf, global: GameStorage<L>, layout: VL) -> Self {
         Self {
             path,
@@ -64,11 +66,23 @@ impl<L: Layout, VL: Layout> VersionStorage<L, VL> {
     pub async fn write_metadata(&self, metadata: &PistonMetaData) -> Result<()> {
         self.ensure_root().await?;
         tokio::fs::write(self.metadata_path()?, serde_json::to_vec(metadata)?).await?;
+        let marker = self.natives_marker_path();
+        if marker.exists() {
+            tokio::fs::remove_file(marker).await?;
+        }
         Ok(())
     }
 
     pub fn platform_natives_path(&self) -> PathBuf {
         self.path.join(PLATFORM_NATIVES_DIR_NAME)
+    }
+
+    pub fn natives_marker_path(&self) -> PathBuf {
+        self.path.join(Self::NATIVES_READY_MARKER)
+    }
+
+    pub fn natives_are_extracted(&self) -> bool {
+        self.natives_marker_path().exists()
     }
 
     pub async fn ensure_platform_natives_path(&self) -> Result<PathBuf> {
@@ -98,6 +112,8 @@ impl<L: Layout, VL: Layout> VersionStorage<L, VL> {
                 JarFile::new(source).extract_blocking(&destination)?;
             }
         }
+
+        std::fs::write(self.natives_marker_path(), b"ready")?;
 
         Ok(())
     }

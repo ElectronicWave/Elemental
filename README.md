@@ -15,6 +15,7 @@ It currently provides the pieces needed for a practical vanilla-launch workflow:
 - version resolution and launch metadata handling in `elemental-core`
 - artifact downloading in `elemental-infra`
 - Java runtime discovery from local providers
+- a high-level vanilla launcher flow that resolves, readies, and launches an instance
 - an executable demo that downloads a version and launches it offline
 
 ## Workspace Layout
@@ -39,9 +40,9 @@ cargo run -p demo
 The demo will:
 
 1. Resolve Mojang metadata for a vanilla version
-2. Download the client jar, libraries, assets, and logging config
-3. Extract native libraries
-4. Discover a local Java runtime
+2. Ready the local instance, downloading missing jars, libraries, assets, and logging config
+3. Extract native libraries when needed
+4. Auto-select a compatible local Java runtime from the version metadata
 5. Launch the game with an offline account
 
 The default demo settings live in [crates/demo/src/lib.rs](crates/demo/src/lib.rs).
@@ -57,7 +58,6 @@ This is the smallest end-to-end flow using the library crates directly.
 anyhow = "1"
 tokio = { version = "1", features = ["macros", "process", "rt-multi-thread"] }
 elemental-core = { path = "crates/core" }
-elemental-infra = { path = "crates/infra" }
 ```
 
 ### Example
@@ -65,66 +65,32 @@ elemental-infra = { path = "crates/infra" }
 ```rust
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use elemental_core::{
     auth::authorizers::offline::OfflineAuthorizer,
-    launcher::builder::LaunchBuilder,
-    runtime::{distribution::Distribution, provider::all_providers},
-    services::mojang::MojangService,
+    launcher::vanilla::{VanillaLaunchOptions, VanillaLauncher, VanillaVersionSpec},
     storage::{game::GameStorage, layout::BaseLayout},
 };
-use elemental_infra::downloader::core::ElementalDownloader;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let game_root = PathBuf::from(".minecraft");
-    let version_id = "1.16.5".to_owned();
-    let version_name = "MyGame-1.16.5".to_owned();
-
-    let storage = GameStorage::new(&game_root, BaseLayout);
-    let service = MojangService::default();
-
-    let resolved = service
-        .resolve_vanilla_version(&storage, version_id, version_name, BaseLayout)
-        .await
-        .context("resolve vanilla version failed")?;
-
-    let downloader = ElementalDownloader::with_config_default()
-        .context("create downloader failed")?;
-    let reports = downloader
-        .execute_planner(&resolved.planner())
-        .await
-        .context("download version artifacts failed")?;
-    println!("download reports: {reports:#?}");
-
-    resolved
-        .version
-        .extract_natives()
-        .context("extract natives failed")?;
-
-    let runtime = Distribution::from_providers::<Vec<_>>(all_providers())
-        .await
-        .into_iter()
-        .find(|distribution| {
-            distribution
-                .release
-                .as_ref()
-                .and_then(|release| release.jre_version.as_ref())
-                .is_some_and(|version| version.starts_with("1.8"))
-        })
-        .context("can't find a local Java runtime with version prefix 1.8")?;
-
+    let storage = GameStorage::new(PathBuf::from(".minecraft"), BaseLayout);
+    let launcher = VanillaLauncher::with_defaults()?;
+    let launch_options = VanillaLaunchOptions::new(VanillaVersionSpec::new(
+        "1.16.5".to_owned(),
+        "MyGame-1.16.5".to_owned(),
+        BaseLayout,
+    ));
     let authorizer = OfflineAuthorizer {
         username: "Player".to_owned(),
     };
 
-    let mut child = LaunchBuilder::new(authorizer, runtime, resolved.version)
-        .set_username("Player".to_owned())
-        .launch()
-        .await
-        .context("launch game failed")?;
+    let launched = launcher.launch(&storage, &launch_options, authorizer).await?;
+    println!("java executable: {}", launched.runtime.executable().display());
+    println!("install status: {:?}", launched.ready_version.install_status);
 
-    let exit_status = child.wait().await.context("wait for game failed")?;
+    let mut child = launched.child;
+    let exit_status = child.wait().await?;
     println!("game exited with: {exit_status}");
 
     Ok(())
@@ -134,8 +100,9 @@ async fn main() -> Result<()> {
 ## Notes
 
 - This example assumes you already have a compatible local Java runtime.
-- `all_providers()` looks for Java in sources such as the Windows registry, `PATH`, package-manager locations, and `JAVA_HOME`.
-- The example uses `OfflineAuthorizer` on purpose so the minimal flow stays easy to run.
+- Elemental now auto-selects a local runtime using the Minecraft version metadata.
+- Runtime discovery uses sources such as the Windows registry, `PATH`, package-manager locations, and `JAVA_HOME`.
+- The example uses offline auth on purpose so the minimal flow stays easy to run.
 - If you want a complete runnable reference from this repository, [crates/demo/src/lib.rs](crates/demo/src/lib.rs) is the best starting point.
 
 ## Wiki

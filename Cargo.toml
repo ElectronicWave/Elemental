@@ -6,6 +6,7 @@ members = [
     "crates/loader",
     "crates/elemental",
     "crates/object",
+    "crates/schema",
     "crates/shared",
     "crates/infra",
 ]

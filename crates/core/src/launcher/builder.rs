@@ -6,6 +6,7 @@ use super::model::LaunchEnvs;
 use crate::{
     auth::authorizer::Authorizer,
     consts::PLATFORM_NATIVES_DIR_NAME,
+    mojang::{MojangRuleContext, PistonMetaDataExt, PistonMetaLibrariesExt},
     runtime::distribution::Distribution,
     storage::{
         layout::{Layout, Layoutable},
@@ -88,6 +89,7 @@ impl<A: Authorizer, L: Layout, VL: Layout> LaunchBuilder<A, L, VL> {
             .version
             .metadata()
             .context("read version metadata failed")?;
+        let rule_context = MojangRuleContext::current();
         let credential = self
             .authorizer
             .authorize()
@@ -125,6 +127,7 @@ impl<A: Authorizer, L: Layout, VL: Layout> LaunchBuilder<A, L, VL> {
         let classpath = metadata
             .libraries
             .iter()
+            .filter(|library| library.is_allowed(&rule_context))
             .filter_map(|library| {
                 if library.downloads.artifact.path.contains("natives") {
                     None
@@ -170,8 +173,13 @@ impl<A: Authorizer, L: Layout, VL: Layout> LaunchBuilder<A, L, VL> {
         }
 
         let mut jvm_args = logging_jvm_args;
-        jvm_args.extend(self.inner.apply_launchenvs(metadata.get_jvm_arguments())?);
-        let game_args = self.inner.apply_launchenvs(metadata.get_game_arguments())?;
+        jvm_args.extend(
+            self.inner
+                .apply_launchenvs(metadata.jvm_arguments(&rule_context))?,
+        );
+        let game_args = self
+            .inner
+            .apply_launchenvs(metadata.game_arguments(&rule_context))?;
 
         let mut args = vec![self.runtime.executable().to_string_lossy().to_string()];
         args.extend(jvm_args);

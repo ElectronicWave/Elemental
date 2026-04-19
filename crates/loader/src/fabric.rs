@@ -2,7 +2,7 @@ use crate::base::{ModLoader, ModLoaderVersion, ModLoaderVersionInfo, Version};
 use anyhow::Result;
 use async_trait::async_trait;
 use elemental_core::storage::{layout::Layout, version::VersionStorage};
-use serde::Deserialize;
+use elemental_schema::fabric::{GameVersion, LoaderVersion};
 use std::collections::HashMap;
 
 /// Fabric: https://meta.fabricmc.net/ - 1.14 ~ 26.1(Latest)
@@ -127,23 +127,8 @@ impl ModLoader for FabricLike {
 
     async fn installed<L: Layout, VL: Layout>(
         &self,
-        version: VersionStorage<L, VL>,
+        _version: VersionStorage<L, VL>,
     ) -> Result<Option<FabricLoaderVersion>> {
         todo!()
     }
-}
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct LoaderVersion {
-    pub separator: String,
-    pub build: i32,
-    pub maven: String,
-    pub version: String,
-    pub stable: bool,
-}
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct GameVersion {
-    pub version: String,
-    pub stable: bool,
 }

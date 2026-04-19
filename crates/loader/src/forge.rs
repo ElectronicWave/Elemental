@@ -5,8 +5,8 @@ use crate::base::{ModLoader, ModLoaderVersion, ModLoaderVersionInfo, Version};
 use anyhow::Result;
 use async_trait::async_trait;
 use elemental_core::storage::{layout::Layout, version::VersionStorage};
+use elemental_schema::forge::MavenMetadataBody;
 use quick_xml::de::from_str;
-use serde::Deserialize;
 use std::collections::HashMap;
 
 pub struct ForgeModLoader {
@@ -78,24 +78,8 @@ impl ModLoader for ForgeModLoader {
 
     async fn installed<L: Layout, VL: Layout>(
         &self,
-        version: VersionStorage<L, VL>,
+        _version: VersionStorage<L, VL>,
     ) -> Result<Option<ForgeModLoaderVersion>> {
         todo!()
     }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename = "metadata")]
-pub(crate) struct MavenMetadataBody {
-    pub versioning: MavenMetadataVersioning,
-}
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct MavenMetadataVersioning {
-    pub versions: MavenMetadataVersion,
-}
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct MavenMetadataVersion {
-    pub version: Vec<String>,
 }

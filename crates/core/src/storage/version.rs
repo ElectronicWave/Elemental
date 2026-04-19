@@ -7,12 +7,13 @@ use tokio::fs::create_dir_all;
 
 use anyhow::{Context, Result};
 
+use crate::consts::PLATFORM_NATIVES_DIR_NAME;
 use crate::jar::JarFile;
+use crate::mojang::{MojangRuleContext, PistonMetaData, PistonMetaLibrariesExt};
 use crate::storage::{
     game::GameStorage,
     layout::{Layout, Layoutable},
 };
-use crate::{consts::PLATFORM_NATIVES_DIR_NAME, models::mojang::PistonMetaData};
 
 #[derive(Debug, Clone)]
 pub struct VersionStorage<L: Layout, VL: Layout> {
@@ -79,21 +80,20 @@ impl<L: Layout, VL: Layout> VersionStorage<L, VL> {
     pub fn extract_natives(&self) -> Result<()> {
         let metadata = self.metadata()?;
         let destination = self.platform_natives_path();
+        let rule_context = MojangRuleContext::current();
         std::fs::create_dir_all(&destination)?;
 
         for library in metadata.libraries {
-            if let Some(rules) = &library.rules {
-                if !rules.iter().all(|rule| rule.is_allow()) {
-                    continue;
-                }
+            if !library.is_allowed(&rule_context) {
+                continue;
             }
 
-            if let Some(artifact) = library.try_get_classifiers_native_artifact() {
+            if let Some(artifact) = library.classifiers_native_artifact(rule_context.platform()) {
                 let source = self.global.library_path(artifact.path.as_str())?;
                 JarFile::new(source).extract_blocking(&destination)?;
             }
 
-            if let Some(artifact) = library.try_get_native_artifact() {
+            if let Some(artifact) = library.native_artifact(rule_context.platform()) {
                 let source = self.global.library_path(artifact.path.as_str())?;
                 JarFile::new(source).extract_blocking(&destination)?;
             }

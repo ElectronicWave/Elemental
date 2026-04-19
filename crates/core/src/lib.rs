@@ -4,7 +4,7 @@ pub mod hash;
 pub mod install;
 pub mod jar;
 pub mod launcher;
-pub mod models;
+pub mod mojang;
 pub mod runtime;
 pub mod services;
 pub mod storage;

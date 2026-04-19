@@ -5,7 +5,10 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::{consts::PLATFORM_NATIVES_DIR_NAME, models::mojang::PistonMetaData};
+use crate::{
+    consts::PLATFORM_NATIVES_DIR_NAME,
+    mojang::{MojangRuleContext, PistonMetaData, PistonMetaLibrariesExt},
+};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LaunchEnvs {
@@ -79,6 +82,7 @@ impl LaunchEnvs {
         version_root: String,
         pistonmeta: &PistonMetaData,
     ) -> Result<Self> {
+        let rule_context = MojangRuleContext::current();
         let version_name = Path::new(&version_root)
             .file_name()
             .context("version root has no file name")?
@@ -88,6 +92,7 @@ impl LaunchEnvs {
         let classpath = pistonmeta
             .libraries
             .iter()
+            .filter(|library| library.is_allowed(&rule_context))
             .filter_map(|library| {
                 if library.downloads.artifact.path.contains("natives") {
                     None

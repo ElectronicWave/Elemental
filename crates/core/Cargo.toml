@@ -6,6 +6,7 @@ edition = "2024"
 
 [dependencies]
 elemental-infra = { path = "../infra" }
+elemental-schema = { path = "../schema" }
 dirs = { workspace = true }
 futures = "0.3.31"
 md-5 = "0.11.0"

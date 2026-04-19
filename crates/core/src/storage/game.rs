@@ -6,7 +6,7 @@ use std::{
 use anyhow::{Context, Result};
 use tokio::fs::create_dir_all;
 
-use crate::models::mojang::PistonMetaAssetIndexObjects;
+use crate::mojang::PistonMetaAssetIndexObjects;
 use crate::storage::{
     layout::{Layout, Layoutable},
     resource::Resource,

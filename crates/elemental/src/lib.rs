@@ -9,3 +9,5 @@ pub use elemental_loader as loader;
 pub use elemental_object as object;
 #[cfg(feature = "shared")]
 pub use elemental_shared as shared;
+#[cfg(feature = "schema")]
+pub use elemental_schema as schema;

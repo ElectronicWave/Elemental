@@ -358,6 +358,7 @@ dependencies = [
  "elemental-infra",
  "elemental-loader",
  "elemental-object",
+ "elemental-schema",
  "elemental-shared",
 ]
 
@@ -370,6 +371,7 @@ dependencies = [
  "const_format",
  "dirs",
  "elemental-infra",
+ "elemental-schema",
  "futures",
  "md-5",
  "minecraft-msa-auth",
@@ -413,6 +415,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "elemental-core",
+ "elemental-schema",
  "quick-xml",
  "reqwest 0.13.2",
  "serde",
@@ -427,6 +430,13 @@ dependencies = [
  "async-trait",
  "scc",
  "tokio",
+]
+
+[[package]]
+name = "elemental-schema"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

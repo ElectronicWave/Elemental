@@ -1,6 +1,4 @@
-use crate::models::mojang::{
-    LaunchMetaData, MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaData,
-};
+use crate::mojang::{LaunchMetaData, MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaData};
 use anyhow::Result;
 #[derive(Debug)]
 pub struct MojangService {
@@ -45,7 +43,7 @@ impl MojangService {
         .await?)
     }
 
-    pub async fn pistonmeta_v2(&self, url: impl Into<String>) {
+    pub async fn pistonmeta_v2(&self, _url: impl Into<String>) {
         todo!()
     }
 

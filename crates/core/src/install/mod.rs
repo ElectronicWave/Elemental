@@ -5,9 +5,9 @@ use elemental_infra::downloader::{
 };
 
 use crate::{
-    models::mojang::{
-        MojangBaseUrl, PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaLibraries,
-        PistonMetaLibrariesDownloadsArtifact,
+    mojang::{
+        MojangBaseUrl, MojangRuleContext, PistonMetaAssetIndexObjects, PistonMetaData,
+        PistonMetaLibraries, PistonMetaLibrariesDownloadsArtifact, PistonMetaLibrariesExt,
     },
     services::mojang::MojangService,
     storage::{game::GameStorage, layout::Layout, version::VersionStorage},
@@ -28,6 +28,7 @@ impl<L: Layout, VL: Layout> ResolvedVanillaVersion<L, VL> {
             metadata: &self.metadata,
             asset_index_objects: &self.asset_index_objects,
             baseurl: self.baseurl.clone(),
+            rule_context: MojangRuleContext::current(),
         }
     }
 }
@@ -37,6 +38,7 @@ pub struct VanillaInstallPlanner<'a, L: Layout, VL: Layout> {
     metadata: &'a PistonMetaData,
     asset_index_objects: &'a PistonMetaAssetIndexObjects,
     baseurl: MojangBaseUrl,
+    rule_context: MojangRuleContext,
 }
 
 impl<'a, L: Layout, VL: Layout> VanillaInstallPlanner<'a, L, VL> {
@@ -81,16 +83,14 @@ impl<'a, L: Layout, VL: Layout> VanillaInstallPlanner<'a, L, VL> {
     }
 
     fn plan_library_tasks(&self, library: &PistonMetaLibraries) -> Result<Vec<DownloadTask>> {
-        if let Some(rules) = &library.rules {
-            if !rules.iter().all(|rule| rule.is_allow()) {
-                return Ok(Vec::new());
-            }
+        if !library.is_allowed(&self.rule_context) {
+            return Ok(Vec::new());
         }
 
         let mut tasks = Vec::new();
         tasks.push(self.plan_library_artifact_task(&library.downloads.artifact)?);
 
-        if let Some(artifact) = library.try_get_classifiers_native_artifact() {
+        if let Some(artifact) = library.classifiers_native_artifact(self.rule_context.platform()) {
             tasks.push(self.plan_library_artifact_task(artifact)?);
         }
 

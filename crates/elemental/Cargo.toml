@@ -9,6 +9,7 @@ elemental-loader = { path = "../loader", optional = true, default-features = fal
 elemental-object = { path = "../object", optional = true, default-features = false }
 elemental-shared = { path = "../shared", optional = true, default-features = false }
 elemental-infra = { path = "../infra", optional = true, default-features = false }
+elemental-schema = { path = "../schema", optional = true, default-features = false }
 
 [features]
 core = ["dep:elemental-core"]
@@ -24,6 +25,8 @@ object-notify = ["elemental-object/notify"]
 
 infra = ["dep:elemental-infra"]
 
-full = ["loader", "object", "shared", "core"]
+schema = ["dep:elemental-schema"]
+
+full = ["loader", "object", "shared", "core", "infra", "schema"]
 
 default = ["full", "shared-json", "object-notify"]

@@ -1,4 +1,4 @@
 pub mod base;
-pub mod forge;
 mod fabric;
+pub mod forge;
 mod neoforge;

@@ -4,8 +4,8 @@ use reqwest::{ClientBuilder, header::HeaderMap, retry};
 use scc::{HashMap, hash_map::OccupiedEntry};
 use std::{
     fmt,
-    sync::{Arc, Weak},
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+    sync::{Arc, Weak},
     time::Duration,
 };
 use tokio::{
@@ -16,9 +16,10 @@ use tokio::{
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 use super::anyhost::ANY_HOST;
+use super::plan::DownloadPlanner;
 pub use super::report::{SessionExecutionReport, TaskExecutionFailure};
-pub use super::storage::{DownloadStorage, HardlinkCachedStorage, LocalFsStorage};
 use super::storage::StagedDownload;
+pub use super::storage::{DownloadStorage, HardlinkCachedStorage, LocalFsStorage};
 pub use super::task::{DownloadPlan, DownloadTask, SessionId};
 use super::tracking::build_task_id;
 pub use super::tracking::{TaskId, TrackedInfo, TrackedTaskStatus};
@@ -325,7 +326,9 @@ impl SessionState {
             counter: tokio::spawn(async move {
                 loop {
                     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                    if let Some(mut state) = downloader.tracker.sessions.get_async(&session_id).await {
+                    if let Some(mut state) =
+                        downloader.tracker.sessions.get_async(&session_id).await
+                    {
                         state.bps.value = state.bps.count;
                         state.bps.count = 0;
                     } else {
@@ -359,7 +362,10 @@ impl ElementalTaskTracker {
 
     pub async fn create_task(&self, session_id: SessionId, task_id: TaskId) {
         if let Some(state) = self.sessions.get_async(&session_id).await {
-            state.tasks.upsert_async(task_id, TrackedInfo::waiting()).await;
+            state
+                .tasks
+                .upsert_async(task_id, TrackedInfo::waiting())
+                .await;
         }
     }
 
@@ -614,7 +620,9 @@ impl ElementalDownloader {
             return Ok(());
         }
 
-        let sender = handler.clone_sender().context("download session is closed")?;
+        let sender = handler
+            .clone_sender()
+            .context("download session is closed")?;
         let task_id = build_task_id(session_id, &task);
         self.tracker.create_task(session_id, task_id.clone()).await;
         handler.start_task();
@@ -693,6 +701,25 @@ impl ElementalDownloader {
         self.remove_session(session.id()).await?;
         Ok(report)
     }
+
+    pub async fn execute_plans(
+        &self,
+        plans: Vec<DownloadPlan>,
+    ) -> Result<Vec<SessionExecutionReport>> {
+        let mut reports = Vec::with_capacity(plans.len());
+        for plan in plans {
+            reports.push(self.run_plan(plan).await?);
+        }
+        Ok(reports)
+    }
+
+    pub async fn execute_planner<P>(&self, planner: &P) -> Result<Vec<SessionExecutionReport>>
+    where
+        P: DownloadPlanner + ?Sized,
+    {
+        let plans = planner.plan()?;
+        self.execute_plans(plans).await
+    }
 }
 
 async fn run_session_worker(
@@ -739,7 +766,11 @@ async fn execute_queued_task(
             let error_message = error.to_string();
             downloader
                 .tracker
-                .update_task(session_id, &task_id, TrackedTaskStatus::ERR(error_message.clone()))
+                .update_task(
+                    session_id,
+                    &task_id,
+                    TrackedTaskStatus::ERR(error_message.clone()),
+                )
                 .await;
             handler.mark_failed(task_id.clone(), error_message);
             handler.finish_task();
@@ -781,7 +812,11 @@ async fn execute_queued_task(
             let error_message = error.to_string();
             downloader
                 .tracker
-                .update_task(session_id, &task_id, TrackedTaskStatus::ERR(error_message.clone()))
+                .update_task(
+                    session_id,
+                    &task_id,
+                    TrackedTaskStatus::ERR(error_message.clone()),
+                )
                 .await;
             handler.mark_failed(task_id.clone(), error_message);
             handler.finish_task();
@@ -801,7 +836,11 @@ async fn execute_queued_task(
             let error_message = error.to_string();
             downloader
                 .tracker
-                .update_task(session_id, &task_id, TrackedTaskStatus::ERR(error_message.clone()))
+                .update_task(
+                    session_id,
+                    &task_id,
+                    TrackedTaskStatus::ERR(error_message.clone()),
+                )
                 .await;
             handler.mark_failed(task_id.clone(), error_message);
             drop(permit);
@@ -845,13 +884,7 @@ async fn execute_queued_task(
         drop(output);
         validator.finish(&path)?;
         storage_for_execute
-            .commit(
-                StagedDownload {
-                    path,
-                    file: None,
-                },
-                &task,
-            )
+            .commit(StagedDownload { path, file: None }, &task)
             .await?;
         anyhow::Ok(())
     };

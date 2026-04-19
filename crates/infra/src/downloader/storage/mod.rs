@@ -39,8 +39,12 @@ pub(super) async fn create_temp_output_file(
 
     for _ in 0..32u32 {
         let suffix = TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let temp_path =
-            parent.join(format!(".{}.part.{}.{}", file_name, std::process::id(), suffix));
+        let temp_path = parent.join(format!(
+            ".{}.part.{}.{}",
+            file_name,
+            std::process::id(),
+            suffix
+        ));
         match OpenOptions::new()
             .create_new(true)
             .write(true)

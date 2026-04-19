@@ -65,20 +65,20 @@ pub struct LaunchMetaVersionData {
 /// https://piston-meta.mojang.com/v1/packages/<sha1>/<id>.json
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaData {
-    pub arguments: PistonMetaArguments, // Only exist on >1.12.2, so maybe should be set to Option?
+    pub arguments: Option<PistonMetaArguments>, // Only exist on >1.12.2
     #[serde(rename = "minecraftArguments")]
     pub minecraft_arguments: Option<String>, // <=1.12.2
     #[serde(rename = "assetIndex")]
     pub asset_index: PistonMetaAssetIndex,
     pub assets: String,
     #[serde(rename = "complianceLevel")]
-    pub compliance_level: usize,//FIXME: may not exist
+    pub compliance_level: usize, //FIXME: may not exist
     pub downloads: PistonMetaDownloads,
     pub id: String,
     #[serde(rename = "javaVersion")]
     pub java_version: PistonMetaJavaVersion,
     pub libraries: Vec<PistonMetaLibraries>,
-    pub logging: PistonMetaLogging,//FIXME: may not exist
+    pub logging: Option<PistonMetaLogging>,
     #[serde(rename = "mainClass")]
     pub main_class: String,
     #[serde(rename = "minimumLauncherVersion")]
@@ -88,6 +88,31 @@ pub struct PistonMetaData {
     pub time: String,
     #[serde(rename = "releaseTime")]
     pub release_time: String,
+}
+
+impl PistonMetaData {
+    pub fn get_jvm_arguments(&self) -> Vec<String> {
+        self.arguments
+            .as_ref()
+            .map(PistonMetaArguments::get_jvm_arguments)
+            .unwrap_or_default()
+    }
+
+    pub fn get_game_arguments(&self) -> Vec<String> {
+        if let Some(arguments) = &self.arguments {
+            let game_arguments = arguments.get_game_arguments();
+            if !game_arguments.is_empty() {
+                return game_arguments;
+            }
+        }
+
+        self.minecraft_arguments
+            .as_deref()
+            .unwrap_or_default()
+            .split_whitespace()
+            .map(|value| value.to_owned())
+            .collect()
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -150,7 +175,7 @@ impl PistonMetaArguments {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaRuleArgument {
-    pub rules: Vec<PistonMetaRuleArgumentRules>,// FIXME: May not exist
+    pub rules: Vec<PistonMetaRuleArgumentRules>, // FIXME: May not exist
     pub value: Option<ContinuousArgument>,
 }
 
@@ -186,8 +211,8 @@ impl PistonMetaRuleArgumentRules {
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct OperatingSystem {
-    pub arch: Option<String>,// Note: not exist for libraries download rules
-    pub name: Option<String>,// Note: must exist for libraries download rules
+    pub arch: Option<String>, // Note: not exist for libraries download rules
+    pub name: Option<String>, // Note: must exist for libraries download rules
     pub version: Option<String>,
 }
 
@@ -298,7 +323,7 @@ pub struct PistonMetaLibrariesExtract {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaLibrariesDownloads {
-    pub artifact: PistonMetaLibrariesDownloadsArtifact,//FIXME: may not exist
+    pub artifact: PistonMetaLibrariesDownloadsArtifact, //FIXME: may not exist
     // linux-x86_64, natives-linux, natives-macos, natives-windows, natives-osx, natives-windows-32, natives-windows-64
     pub classifiers: Option<HashMap<String, PistonMetaLibrariesDownloadsArtifact>>,
 }
@@ -320,7 +345,7 @@ pub struct PistonMetaLoggingSide {
     pub argument: String,
     pub file: PistonMetaLoggingSideFile,
     #[serde(rename = "type")]
-    pub logging_type: String,// Only `log4j2-xml`
+    pub logging_type: String, // Only `log4j2-xml`
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PistonMetaLoggingSideFile {

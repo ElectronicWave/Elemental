@@ -2,8 +2,8 @@
 
 use std::time::{Duration, SystemTime};
 
-use elemental_core::legacystorage::game::GameStorage;
 use elemental_core::services::mojang::MojangService;
+use elemental_core::storage::{game::GameStorage, layout::BaseLayout};
 use elemental_infra::downloader::core::ElementalDownloader;
 
 #[tokio::main]
@@ -12,40 +12,24 @@ async fn main() {
     let downloader = ElementalDownloader::with_config_default().unwrap();
     let service = MojangService::default();
     let version_name = "MyGame-1.16.5";
-    let storage = GameStorage::new_ensure_dir(".minecraft").unwrap();
-    let s = SystemTime::now();
-    let session = storage
-        .download_version_all(&downloader, &service, "1.16.5", version_name)
+    let storage = GameStorage::new(".minecraft", BaseLayout);
+    let resolved = service
+        .resolve_vanilla_version(&storage, "1.16.5", version_name, BaseLayout)
         .await
         .unwrap();
-    let session_id = session.id();
-    let downloader_cloned = downloader.clone();
-    tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(Duration::from_millis(500)).await;
+    let planner = resolved.planner();
+    let s = SystemTime::now();
+    let reports = downloader.execute_planner(&planner).await.unwrap();
 
-            downloader_cloned
-                .tracker
-                .sessions
-                .get_async(&session_id)
-                .await
-                .map(|state| println!("{:?}", state.bps));
-        }
-    });
-    // if all file exists, it will cost 5-8s to vaildate sha1.
-    session.wait_empty().await.unwrap();
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    println!("reports: {reports:#?}");
     println!(
         "download in {}ms",
         SystemTime::now().duration_since(s).unwrap().as_millis()
     );
-    session.remove().await.unwrap();
-    println!(
-        "remove in {}ms",
-        SystemTime::now().duration_since(s).unwrap().as_millis()
-    );
     println!("start extract");
 
-    storage.extract_version_natives(version_name).unwrap();
+    resolved.version.extract_natives().unwrap();
     println!(
         "extract in {}ms",
         SystemTime::now().duration_since(s).unwrap().as_millis()
@@ -54,7 +38,11 @@ async fn main() {
 
 #[tokio::test]
 async fn test_game_run() {
-    use elemental_core::runtime::{distribution::Distribution, provider::all_providers};
+    use elemental_core::{
+        auth::authorizers::offline::OfflineAuthorizer,
+        launcher::builder::LaunchBuilder,
+        runtime::{distribution::Distribution, provider::all_providers},
+    };
 
     let executable = Distribution::from_providers::<Vec<_>>(all_providers())
         .await
@@ -65,23 +53,29 @@ async fn test_game_run() {
                 _ => false,
             },
         )
-        .unwrap()
-        .executable();
-
-    println!("Using java executable: {}", executable.to_string_lossy());
-    let storage = GameStorage::new_ensure_dir("../../.minecraft").unwrap();
-
-    let mut child = storage
-        .launch_version(
-            "IAMPlayer",
-            "MyGame-1.16.5",
-            executable.to_string_lossy().to_string(),
-            vec![
-                "-Dfile.encoding=utf-8".to_owned(),
-                "-Dsun.stdout.encoding=utf-8".to_owned(),
-                "-Dsun.stderr.encoding=utf-8".to_owned(),
-            ],
-        )
         .unwrap();
+
+    println!(
+        "Using java executable: {}",
+        executable.executable().to_string_lossy()
+    );
+    let storage = GameStorage::new("../../.minecraft", BaseLayout);
+    let service = MojangService::default();
+    let resolved = service
+        .resolve_vanilla_version(&storage, "1.16.5", "MyGame-1.16.5", BaseLayout)
+        .await
+        .unwrap();
+    let downloader = ElementalDownloader::with_config_default().unwrap();
+    let planner = resolved.planner();
+    downloader.execute_planner(&planner).await.unwrap();
+    resolved.version.extract_natives().unwrap();
+
+    let authorizer = OfflineAuthorizer {
+        username: "IAMPlayer".to_owned(),
+    };
+    let builder = LaunchBuilder::new(authorizer, executable, resolved.version)
+        .set_username("IAMPlayer".to_owned());
+
+    let mut child = builder.launch().await.unwrap();
     child.wait().await.unwrap();
 }

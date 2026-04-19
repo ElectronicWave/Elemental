@@ -1,7 +1,9 @@
 pub mod auth;
 pub mod consts;
+pub mod hash;
+pub mod install;
+pub mod jar;
 pub mod launcher;
-pub mod legacystorage;
 pub mod models;
 pub mod runtime;
 pub mod services;

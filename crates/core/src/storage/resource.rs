@@ -1,6 +1,7 @@
 pub enum Resource {
     AssetsIndexes,
     AssetsObjects,
+    AssetsLogConfigs,
     Versions,
     Logs,
     Configs,

@@ -195,14 +195,23 @@ impl LaunchEnvs {
     }
 
     pub fn apply_launchenvs(&self, args: Vec<String>) -> Result<Vec<String>> {
+        self.apply_launchenvs_with(args, &HashMap::new())
+    }
+
+    pub fn apply_launchenvs_with(
+        &self,
+        args: Vec<String>,
+        extra_variables: &HashMap<String, String>,
+    ) -> Result<Vec<String>> {
         let mut result = vec![];
-        let data = self.map()?;
+        let mut data = self.hashmap()?;
+        data.extend(extra_variables.clone());
         let regex = Regex::new(r#"\$\{(.*?)\}"#)?;
         for value in args.iter() {
             let mut copied = value.clone();
             for var in regex.captures_iter(value) {
                 if let Some(key) = var.get(1).map(|e| e.as_str()) {
-                    if let Some(Value::String(val)) = data.get(key) {
+                    if let Some(val) = data.get(key) {
                         copied = copied.replace(&format!("${{{key}}}"), val)
                     }
                 }

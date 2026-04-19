@@ -11,7 +11,6 @@ pub fn file_sha1<P: AsRef<Path>>(path: P) -> Result<String> {
     Ok(sha1(read(path)?))
 }
 
-
 #[inline]
 pub async fn async_file_sha1<P: AsRef<Path>>(path: P) -> Result<String> {
     Ok(sha1(tokio::fs::read(path).await?))

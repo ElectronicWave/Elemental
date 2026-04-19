@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::{Context, Result, bail};
 
 use super::model::LaunchEnvs;
@@ -142,22 +144,34 @@ impl<A: Authorizer, L: Layout, VL: Layout> LaunchBuilder<A, L, VL> {
             + &versionjar.to_string_lossy();
         self.inner.classpath = classpath;
 
-        let jvm_args = self
-            .inner
-            .apply_launchenvs(metadata.arguments.get_jvm_arguments())?;
-        let game_args = if !metadata.arguments.game.is_empty() {
-            self.inner
-                .apply_launchenvs(metadata.arguments.get_game_arguments())?
-        } else {
-            self.inner.apply_launchenvs(
-                metadata
-                    .minecraft_arguments
-                    .unwrap_or_default()
-                    .split_whitespace()
-                    .map(|v| v.to_string())
-                    .collect(),
-            )?
-        };
+        let mut logging_jvm_args = Vec::new();
+        if let Some(logging) = &metadata.logging {
+            let log_config_path = self
+                .version
+                .global
+                .get_existing_resource(Resource::AssetsLogConfigs)
+                .context("get logging configs root failed")?
+                .join(&logging.client.file.id);
+
+            if !log_config_path.exists() {
+                bail!(
+                    "logging config not found: {}",
+                    log_config_path.to_string_lossy()
+                );
+            }
+
+            logging_jvm_args = self.inner.apply_launchenvs_with(
+                vec![logging.client.argument.clone()],
+                &HashMap::from([(
+                    "path".to_owned(),
+                    log_config_path.to_string_lossy().to_string(),
+                )]),
+            )?;
+        }
+
+        let mut jvm_args = logging_jvm_args;
+        jvm_args.extend(self.inner.apply_launchenvs(metadata.get_jvm_arguments())?);
+        let game_args = self.inner.apply_launchenvs(metadata.get_game_arguments())?;
 
         let mut args = vec![self.runtime.executable().to_string_lossy().to_string()];
         args.extend(jvm_args);
@@ -169,6 +183,10 @@ impl<A: Authorizer, L: Layout, VL: Layout> LaunchBuilder<A, L, VL> {
 
     pub async fn launch(self) -> Result<tokio::process::Child> {
         super::process::spawn_command(self.build().await?)
+    }
+
+    pub async fn launch_logged(self) -> Result<super::process::LoggedChild> {
+        super::process::spawn_command_logged(self.build().await?)
     }
 
     pub fn envs(self) -> LaunchEnvs {

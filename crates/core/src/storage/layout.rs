@@ -35,7 +35,7 @@ pub trait Layoutable<L: Layout> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct BaseLayout;
 
 impl Layout for BaseLayout {
@@ -43,6 +43,7 @@ impl Layout for BaseLayout {
         match resource {
             Resource::AssetsIndexes => Some(root.join("assets").join("indexes")),
             Resource::AssetsObjects => Some(root.join("assets").join("objects")),
+            Resource::AssetsLogConfigs => Some(root.join("assets").join("log_configs")),
             Resource::Versions => Some(root.join("versions")),
             Resource::Logs => Some(root.join("logs")),
             Resource::Configs => Some(root.join("config")),

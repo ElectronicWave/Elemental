@@ -5,12 +5,7 @@ use async_trait::async_trait;
 use elemental_core::{
     auth::authorizer::Authorizer,
     launcher::{command::LaunchCommand, process},
-    mojang::{
-        MojangBaseUrl, MojangRuleContext, PistonMetaAssetIndexObjects, PistonMetaData,
-        PistonMetaLibraries, PistonMetaLibrariesDownloadsArtifact, PistonMetaLibrariesExt,
-    },
     runtime::distribution::Distribution,
-    services::mojang::MojangClient,
     storage::{Storage, layout::Layout},
 };
 use elemental_infra::downloader::{
@@ -24,11 +19,21 @@ use crate::{
     driver::{Driver, DriverDescriptor, InstalledDriver},
     drivers::version_json::{
         builder::MojangLaunchBuilder,
+        extensions::PistonMetaLibrariesExt,
+        meta::{
+            PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaLibraries,
+            PistonMetaLibrariesDownloadsArtifact,
+        },
         resource::Resource,
+        rules::MojangRuleContext,
         storage::{VersionJsonGameStorageExt, VersionJsonVersionStorageExt},
     },
-    inspect::VersionProbe,
+    inspect::InstanceProbe,
 };
+
+mod source;
+
+pub use source::{VanillaEndpoints, VanillaSource};
 
 #[derive(Clone)]
 pub struct LaunchResolution {
@@ -55,17 +60,17 @@ pub struct VanillaLaunchConfig {
 }
 
 pub struct VanillaDriver {
-    client: MojangClient,
+    source: VanillaSource,
     downloader: Arc<ElementalDownloader>,
 }
 
 pub struct VanillaCatalog {
-    client: MojangClient,
+    source: VanillaSource,
 }
 
 #[derive(Debug, Clone)]
 pub struct ResolvedVanillaMetadata {
-    baseurl: MojangBaseUrl,
+    endpoints: VanillaEndpoints,
     pub metadata: PistonMetaData,
     pub asset_index_objects: PistonMetaAssetIndexObjects,
 }
@@ -81,7 +86,7 @@ pub struct VanillaInstallStatus {
 
 #[derive(Debug, Clone)]
 pub struct ResolvedVanillaVersion<L: Layout<Resource = Resource>, VL: Layout> {
-    baseurl: MojangBaseUrl,
+    endpoints: VanillaEndpoints,
     pub version: Storage<VL, Storage<L>>,
     pub metadata: PistonMetaData,
     pub asset_index_objects: PistonMetaAssetIndexObjects,
@@ -103,7 +108,7 @@ pub struct VanillaInstallPlanner<'a, L: Layout<Resource = Resource>, VL: Layout>
     version: &'a Storage<VL, Storage<L>>,
     metadata: &'a PistonMetaData,
     asset_index_objects: &'a PistonMetaAssetIndexObjects,
-    baseurl: MojangBaseUrl,
+    endpoints: VanillaEndpoints,
     rule_context: MojangRuleContext,
 }
 
@@ -195,7 +200,7 @@ impl ResolvedVanillaMetadata {
             .await?;
 
         Ok(ResolvedVanillaVersion {
-            baseurl: self.baseurl,
+            endpoints: self.endpoints,
             version: instance.clone(),
             metadata: self.metadata,
             asset_index_objects: self.asset_index_objects,
@@ -204,14 +209,14 @@ impl ResolvedVanillaMetadata {
 }
 
 impl<L: Layout<Resource = Resource>, VL: Layout> ResolvedVanillaVersion<L, VL> {
-    pub fn load(baseurl: MojangBaseUrl, version: Storage<VL, Storage<L>>) -> Result<Self> {
+    pub fn load(endpoints: VanillaEndpoints, version: Storage<VL, Storage<L>>) -> Result<Self> {
         let metadata = version.metadata()?;
         let asset_index_objects = version
             .parent
             .asset_index_objects(metadata.asset_index.id.as_str())?;
 
         Ok(Self {
-            baseurl,
+            endpoints,
             version,
             metadata,
             asset_index_objects,
@@ -236,7 +241,7 @@ impl<L: Layout<Resource = Resource>, VL: Layout> ResolvedVanillaVersion<L, VL> {
             version: &self.version,
             metadata: &self.metadata,
             asset_index_objects: &self.asset_index_objects,
-            baseurl: self.baseurl.clone(),
+            endpoints: self.endpoints.clone(),
             rule_context: MojangRuleContext::current(),
         }
     }
@@ -353,8 +358,8 @@ impl<'a, L: Layout<Resource = Resource>, VL: Layout> VanillaInstallPlanner<'a, L
     fn plan_version_artifacts(&self) -> Result<DownloadPlan> {
         let mut tasks = Vec::new();
         tasks.push(DownloadTask::new(
-            self.baseurl
-                .rewrite_pistondata_url(self.metadata.downloads.client.url.clone()),
+            self.endpoints
+                .rewrite(self.metadata.downloads.client.url.as_str())?,
             self.version.jar_path()?,
             Some(self.metadata.downloads.client.size as u64),
             Some(self.metadata.downloads.client.sha1.clone()),
@@ -366,12 +371,7 @@ impl<'a, L: Layout<Resource = Resource>, VL: Layout> VanillaInstallPlanner<'a, L
 
         if let Some(logging) = &self.metadata.logging {
             tasks.push(DownloadTask::new(
-                logging
-                    .client
-                    .file
-                    .url
-                    .replace("piston-data.mojang.com", &self.baseurl.pistondata)
-                    .replace("launchermeta.mojang.com", &self.baseurl.launchermeta),
+                self.endpoints.rewrite(logging.client.file.url.as_str())?,
                 self.version
                     .parent
                     .logging_config_path(logging.client.file.id.as_str())?,
@@ -403,7 +403,7 @@ impl<'a, L: Layout<Resource = Resource>, VL: Layout> VanillaInstallPlanner<'a, L
         artifact: &PistonMetaLibrariesDownloadsArtifact,
     ) -> Result<DownloadTask> {
         Ok(DownloadTask::new(
-            self.baseurl.rewrite_library_url(artifact.url.clone()),
+            self.endpoints.rewrite(artifact.url.as_str())?,
             self.version.parent.library_path(artifact.path.as_str())?,
             Some(artifact.size as u64),
             Some(artifact.sha1.clone()),
@@ -418,7 +418,7 @@ impl<'a, L: Layout<Resource = Resource>, VL: Layout> VanillaInstallPlanner<'a, L
             .values()
             .map(|object| {
                 Ok(DownloadTask::new(
-                    self.baseurl.get_object_url(object.hash.clone()),
+                    self.endpoints.object_url(object.hash.as_str())?,
                     self.version
                         .parent
                         .asset_object_path(object.hash.as_str())?,
@@ -453,20 +453,20 @@ impl<'a, L: Layout<Resource = Resource>, VL: Layout> DownloadPlanner
 }
 
 impl VanillaDriver {
-    pub fn new(client: MojangClient, downloader: Arc<ElementalDownloader>) -> Self {
-        Self { client, downloader }
+    pub fn new(source: VanillaSource, downloader: Arc<ElementalDownloader>) -> Self {
+        Self { source, downloader }
     }
 
     pub fn with_defaults() -> Result<Self> {
         Ok(Self::new(
-            MojangClient::default(),
+            VanillaSource::default(),
             ElementalDownloader::with_config_default()
                 .context("create default elemental downloader failed")?,
         ))
     }
 
-    pub fn client(&self) -> &MojangClient {
-        &self.client
+    pub fn source(&self) -> &VanillaSource {
+        &self.source
     }
 
     pub fn downloader(&self) -> &ElementalDownloader {
@@ -486,7 +486,8 @@ impl VanillaDriver {
         &self,
         instance: &Storage<VL, Storage<L>>,
     ) -> Result<PreparedVanillaVersion<L, VL>> {
-        ResolvedVanillaVersion::load(self.client.baseurl.clone(), instance.clone())?.into_prepared()
+        ResolvedVanillaVersion::load(self.source.endpoints().clone(), instance.clone())?
+            .into_prepared()
     }
 
     pub async fn launch<A, L: Layout<Resource = Resource> + Clone, VL: Layout + Clone>(
@@ -598,7 +599,7 @@ impl VanillaDriver {
         version_id: String,
     ) -> Result<ResolvedVanillaVersion<L, VL>> {
         if let Ok(resolved) =
-            ResolvedVanillaVersion::load(self.client.baseurl.clone(), instance.clone())
+            ResolvedVanillaVersion::load(self.source.endpoints().clone(), instance.clone())
         {
             return Ok(resolved);
         }
@@ -618,7 +619,7 @@ impl VanillaDriver {
     }
 
     async fn resolve_metadata(&self, version_id: String) -> Result<ResolvedVanillaMetadata> {
-        let launchmeta = self.client.launchmeta().await?;
+        let launchmeta = self.source.launch_meta().await?;
         let metadata_url = launchmeta
             .versions
             .iter()
@@ -626,14 +627,14 @@ impl VanillaDriver {
             .context(format!("Can't find version named `{version_id}`"))?
             .url
             .clone();
-        let metadata = self.client.pistonmeta(metadata_url).await?;
+        let metadata = self.source.piston_meta(metadata_url).await?;
         let asset_index_objects = self
-            .client
-            .pistonmeta_assetindex_objects(metadata.asset_index.url.clone())
+            .source
+            .asset_index_objects(&metadata.asset_index.url)
             .await?;
 
         Ok(ResolvedVanillaMetadata {
-            baseurl: self.client.baseurl.clone(),
+            endpoints: self.source.endpoints().clone(),
             metadata,
             asset_index_objects,
         })
@@ -641,12 +642,12 @@ impl VanillaDriver {
 }
 
 impl VanillaCatalog {
-    pub fn new(client: MojangClient) -> Self {
-        Self { client }
+    pub fn new(source: VanillaSource) -> Self {
+        Self { source }
     }
 
     pub fn with_defaults() -> Self {
-        Self::new(MojangClient::default())
+        Self::new(VanillaSource::default())
     }
 }
 
@@ -656,7 +657,7 @@ impl Catalog for VanillaCatalog {
 
     async fn releases(&self) -> Result<HashMap<GameVersions, Vec<Self::Release>>> {
         let mut releases = HashMap::new();
-        let manifest = self.client.launchmeta().await?;
+        let manifest = self.source.launch_meta().await?;
 
         for version in manifest.versions {
             releases
@@ -681,7 +682,7 @@ impl<L: Layout<Resource = Resource>, VL: Layout> Driver<L, VL> for VanillaDriver
         }
     }
 
-    async fn inspect(&self, probe: &VersionProbe<L, VL>) -> Result<Option<InstalledDriver>> {
+    async fn inspect(&self, probe: &InstanceProbe<L, VL>) -> Result<Option<InstalledDriver>> {
         let Some(metadata) = &probe.metadata else {
             return Ok(None);
         };

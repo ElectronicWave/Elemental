@@ -5,12 +5,12 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use elemental_core::{
-    consts::PLATFORM_NATIVES_DIR_NAME,
-    mojang::{MojangRuleContext, PistonMetaData, PistonMetaLibrariesExt},
-};
+use elemental_core::consts::PLATFORM_NATIVES_DIR_NAME;
 
-use super::classpath::join_classpath;
+use super::{
+    classpath::join_classpath, extensions::PistonMetaLibrariesExt, meta::PistonMetaData,
+    rules::MojangRuleContext,
+};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LauncherVariables {

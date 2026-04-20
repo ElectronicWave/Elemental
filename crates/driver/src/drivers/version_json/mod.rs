@@ -1,10 +1,26 @@
 pub mod builder;
 pub mod classpath;
+pub mod extensions;
 pub mod layout;
+pub mod meta;
+pub mod platform;
 pub mod resource;
+pub mod rules;
 pub mod storage;
 pub mod variables;
 
+pub use extensions::{PistonMetaDataExt, PistonMetaLibrariesExt};
 pub use layout::BaseLayout;
+pub use meta::{
+    ContinuousArgument, LaunchMetaData, LaunchMetaLatestData, LaunchMetaVersionData,
+    OperatingSystem, PistonMetaArguments, PistonMetaAssetIndex, PistonMetaAssetIndexObject,
+    PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaDownload, PistonMetaDownloads,
+    PistonMetaGenericArgument, PistonMetaJavaVersion, PistonMetaLibraries,
+    PistonMetaLibrariesDownloads, PistonMetaLibrariesDownloadsArtifact, PistonMetaLibrariesExtract,
+    PistonMetaLogging, PistonMetaLoggingSide, PistonMetaLoggingSideFile, PistonMetaRuleArgument,
+    PistonMetaRuleArgumentRules,
+};
+pub use platform::MojangPlatform;
 pub use resource::Resource;
-pub use storage::{VersionJsonGameStorageExt, VersionJsonVersionStorageExt};
+pub use rules::{MojangRuleContext, OperatingSystemExt, PistonMetaRuleExt, PistonMetaRulesExt};
+pub use storage::{VersionJsonGameStorageExt, VersionJsonVersionStorageExt, inspect_instances};

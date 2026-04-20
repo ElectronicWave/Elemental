@@ -6,14 +6,15 @@ use elemental_core::{
     auth::authorizer::Authorizer,
     consts::PLATFORM_NATIVES_DIR_NAME,
     launcher::command::LaunchCommand,
-    mojang::{MojangRuleContext, PistonMetaDataExt, PistonMetaLibrariesExt},
     runtime::distribution::Distribution,
     storage::{Storage, layout::Layout},
 };
 
 use super::{
     classpath::join_classpath,
+    extensions::{PistonMetaDataExt, PistonMetaLibrariesExt},
     resource::Resource,
+    rules::MojangRuleContext,
     storage::{VersionJsonGameStorageExt, VersionJsonVersionStorageExt},
     variables::LauncherVariables,
 };

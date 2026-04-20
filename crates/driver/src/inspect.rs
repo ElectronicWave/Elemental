@@ -1,21 +1,15 @@
 use std::{fs::File, path::PathBuf};
 
 use anyhow::Result;
-use elemental_core::{
-    mojang::PistonMetaData,
-    storage::{Storage, layout::Layout},
-};
+use elemental_core::storage::{Storage, layout::Layout};
 
 use crate::{
     driver::{Driver, InstalledDriver},
-    drivers::version_json::{
-        resource::Resource,
-        storage::{VersionJsonGameStorageExt, VersionJsonVersionStorageExt},
-    },
+    drivers::version_json::PistonMetaData,
 };
 
 #[derive(Debug, Clone)]
-pub struct VersionProbe<L: Layout, VL: Layout> {
+pub struct InstanceProbe<L: Layout, VL: Layout> {
     pub storage: Storage<VL, Storage<L>>,
     pub metadata_path: Option<PathBuf>,
     pub metadata: Option<PistonMetaData>,
@@ -24,12 +18,12 @@ pub struct VersionProbe<L: Layout, VL: Layout> {
 }
 
 #[derive(Debug, Clone)]
-pub struct InstalledVersion<L: Layout, VL: Layout> {
+pub struct InstalledInstance<L: Layout, VL: Layout> {
     pub storage: Storage<VL, Storage<L>>,
     pub driver: InstalledDriver,
 }
 
-impl<L: Layout<Resource = Resource>, VL: Layout> VersionProbe<L, VL> {
+impl<L: Layout, VL: Layout> InstanceProbe<L, VL> {
     pub fn collect(storage: Storage<VL, Storage<L>>) -> Result<Self> {
         let metadata_path = detect_metadata_path(&storage)?;
         let metadata: Option<PistonMetaData> = match metadata_path.as_ref() {
@@ -60,18 +54,18 @@ impl<L: Layout<Resource = Resource>, VL: Layout> VersionProbe<L, VL> {
     }
 }
 
-pub async fn inspect_version<L: Layout<Resource = Resource>, VL: Layout>(
+pub async fn inspect_instance<L: Layout, VL: Layout>(
     storage: Storage<VL, Storage<L>>,
     drivers: &[&dyn Driver<L, VL>],
-) -> Result<Option<InstalledVersion<L, VL>>>
+) -> Result<Option<InstalledInstance<L, VL>>>
 where
     L: Clone,
     VL: Clone,
 {
-    let probe = VersionProbe::collect(storage.clone())?;
+    let probe = InstanceProbe::collect(storage.clone())?;
     for driver in drivers {
         if let Some(installed) = driver.inspect(&probe).await? {
-            return Ok(Some(InstalledVersion {
+            return Ok(Some(InstalledInstance {
                 storage,
                 driver: installed,
             }));
@@ -81,29 +75,13 @@ where
     Ok(None)
 }
 
-pub async fn inspect_versions<L, VL>(
-    storage: &Storage<L>,
-    version_layout: VL,
-    drivers: &[&dyn Driver<L, VL>],
-) -> Result<Vec<InstalledVersion<L, VL>>>
-where
-    L: Layout<Resource = Resource> + Clone,
-    VL: Layout + Clone,
-{
-    let mut instances = Vec::new();
-    for instance in storage.instances(version_layout)? {
-        if let Some(installed) = inspect_version(instance, drivers).await? {
-            instances.push(installed);
-        }
-    }
-
-    Ok(instances)
-}
-
-fn detect_metadata_path<L: Layout<Resource = Resource>, VL: Layout>(
+fn detect_metadata_path<L: Layout, VL: Layout>(
     storage: &Storage<VL, Storage<L>>,
 ) -> Result<Option<PathBuf>> {
-    let preferred: Option<PathBuf> = storage.metadata_path().ok().filter(|path| path.exists());
+    let preferred: Option<PathBuf> = storage
+        .name()
+        .map(|name| storage.path.join(format!("{name}.json")))
+        .filter(|path| path.exists());
     if preferred.is_some() {
         return Ok(preferred);
     }

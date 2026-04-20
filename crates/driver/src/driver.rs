@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use elemental_core::storage::layout::Layout;
 
-use crate::inspect::VersionProbe;
+use crate::inspect::InstanceProbe;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DriverDescriptor {
@@ -22,5 +22,5 @@ pub struct InstalledDriver {
 pub trait Driver<L: Layout, VL: Layout> {
     fn descriptor(&self) -> DriverDescriptor;
 
-    async fn inspect(&self, probe: &VersionProbe<L, VL>) -> Result<Option<InstalledDriver>>;
+    async fn inspect(&self, probe: &InstanceProbe<L, VL>) -> Result<Option<InstalledDriver>>;
 }

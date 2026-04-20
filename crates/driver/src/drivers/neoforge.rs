@@ -7,7 +7,7 @@ use crate::{
     catalog::{Catalog, GameVersions, Release, ReleaseInfo},
     driver::{Driver, DriverDescriptor, InstalledDriver},
     drivers::version_json::resource::Resource,
-    inspect::VersionProbe,
+    inspect::InstanceProbe,
 };
 
 #[derive(Default)]
@@ -59,7 +59,7 @@ impl<L: Layout<Resource = Resource>, VL: Layout> Driver<L, VL> for NeoForgeDrive
         }
     }
 
-    async fn inspect(&self, probe: &VersionProbe<L, VL>) -> Result<Option<InstalledDriver>> {
+    async fn inspect(&self, probe: &InstanceProbe<L, VL>) -> Result<Option<InstalledDriver>> {
         let Some(metadata) = &probe.metadata else {
             return Ok(None);
         };

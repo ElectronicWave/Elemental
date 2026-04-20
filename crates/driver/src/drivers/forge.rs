@@ -9,7 +9,7 @@ use crate::{
     catalog::{Catalog, GameVersions, Release, ReleaseInfo},
     driver::{Driver, DriverDescriptor, InstalledDriver},
     drivers::version_json::resource::Resource,
-    inspect::VersionProbe,
+    inspect::InstanceProbe,
 };
 
 pub struct ForgeCatalog {
@@ -92,7 +92,7 @@ impl<L: Layout<Resource = Resource>, VL: Layout> Driver<L, VL> for ForgeDriver {
         }
     }
 
-    async fn inspect(&self, probe: &VersionProbe<L, VL>) -> Result<Option<InstalledDriver>> {
+    async fn inspect(&self, probe: &InstanceProbe<L, VL>) -> Result<Option<InstalledDriver>> {
         let Some(metadata) = &probe.metadata else {
             return Ok(None);
         };

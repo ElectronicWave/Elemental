@@ -3,7 +3,5 @@ pub mod consts;
 pub mod hash;
 pub mod jar;
 pub mod launcher;
-pub mod mojang;
 pub mod runtime;
-pub mod services;
 pub mod storage;

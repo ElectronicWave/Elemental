@@ -8,9 +8,6 @@ use async_trait::async_trait;
 use elemental_core::{
     consts::PLATFORM_NATIVES_DIR_NAME,
     jar::JarFile,
-    mojang::{
-        MojangRuleContext, PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaLibrariesExt,
-    },
     storage::{
         Storage,
         layout::{Layout, Layoutable},
@@ -19,6 +16,14 @@ use elemental_core::{
 use tokio::fs::create_dir_all;
 
 use super::resource::Resource;
+use crate::{
+    driver::Driver,
+    drivers::version_json::{
+        PistonMetaAssetIndexObjects, PistonMetaData, extensions::PistonMetaLibrariesExt,
+        rules::MojangRuleContext,
+    },
+    inspect::{InstalledInstance, inspect_instance},
+};
 
 #[async_trait]
 pub trait VersionJsonGameStorageExt {
@@ -305,4 +310,23 @@ where
 
         Ok(())
     }
+}
+
+pub async fn inspect_instances<L, VL>(
+    storage: &Storage<L>,
+    version_layout: VL,
+    drivers: &[&dyn Driver<L, VL>],
+) -> Result<Vec<InstalledInstance<L, VL>>>
+where
+    L: Layout<Resource = Resource> + Clone,
+    VL: Layout + Clone,
+{
+    let mut instances = Vec::new();
+    for instance in storage.instances(version_layout)? {
+        if let Some(installed) = inspect_instance(instance, drivers).await? {
+            instances.push(installed);
+        }
+    }
+
+    Ok(instances)
 }

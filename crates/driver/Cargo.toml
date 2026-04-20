@@ -1,15 +1,17 @@
 [package]
-name = "elemental-loader"
+name = "elemental-driver"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 async-trait = "0.1.89"
 elemental-core = { path = "../core" }
+elemental-infra = { path = "../infra" }
 elemental-schema = { path = "../schema" }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 quick-xml = { version = "0.39.0", features = ["serialize"] }
-# tokio = { workspace = true }
+tokio = { workspace = true }
 anyhow = { workspace = true }
+regex = "1.12.3"

@@ -15,7 +15,7 @@ It currently provides the pieces needed for a practical vanilla-launch workflow:
 - version resolution and launch metadata handling in `elemental-core`
 - artifact downloading in `elemental-infra`
 - Java runtime discovery from local providers
-- a high-level vanilla launcher flow that resolves, readies, and launches an instance
+- a high-level vanilla launcher flow that resolves, prepares, and launches an instance
 - an executable demo that downloads a version and launches it offline
 
 ## Workspace Layout
@@ -23,7 +23,7 @@ It currently provides the pieces needed for a practical vanilla-launch workflow:
 - `crates/schema`: Pure protocol and serialization types
 - `crates/core`: Launcher domain logic, Mojang services, storage, runtime lookup, launch builder
 - `crates/infra`: Downloader and execution reports
-- `crates/loader`: Mod-loader metadata integrations
+- `crates/driver`: Distribution and driver-specific logic
 - `crates/object`: Shared typed object pool
 - `crates/shared`: Versioned persisted config/profile utilities
 - `crates/elemental`: Re-export facade crate
@@ -40,7 +40,7 @@ cargo run -p demo
 The demo will:
 
 1. Resolve Mojang metadata for a vanilla version
-2. Ready the local instance, downloading missing jars, libraries, assets, and logging config
+2. Prepare the local instance, downloading missing jars, libraries, assets, and logging config
 3. Extract native libraries when needed
 4. Auto-select a compatible local Java runtime from the version metadata
 5. Launch the game with an offline account
@@ -58,6 +58,7 @@ This is the smallest end-to-end flow using the library crates directly.
 anyhow = "1"
 tokio = { version = "1", features = ["macros", "process", "rt-multi-thread"] }
 elemental-core = { path = "crates/core" }
+elemental-driver = { path = "crates/driver" }
 ```
 
 ### Example
@@ -68,27 +69,74 @@ use std::path::PathBuf;
 use anyhow::Result;
 use elemental_core::{
     auth::authorizers::offline::OfflineAuthorizer,
-    launcher::vanilla::{VanillaLaunchOptions, VanillaLauncher, VanillaVersionSpec},
-    storage::{game::GameStorage, layout::BaseLayout},
+    storage::Storage,
+};
+use elemental_driver::{
+    vanilla::{VanillaDriver, VanillaLaunchConfig},
+    version_json::BaseLayout,
 };
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let storage = GameStorage::new(PathBuf::from(".minecraft"), BaseLayout);
-    let launcher = VanillaLauncher::with_defaults()?;
-    let launch_options = VanillaLaunchOptions::new(VanillaVersionSpec::new(
-        "1.16.5".to_owned(),
-        "MyGame-1.16.5".to_owned(),
-        BaseLayout,
-    ));
+    let storage = Storage::new(PathBuf::from(".minecraft"), BaseLayout);
+    let vanilla = VanillaDriver::with_defaults()?;
+    let launch_config = VanillaLaunchConfig::new();
     let authorizer = OfflineAuthorizer {
         username: "Player".to_owned(),
     };
 
-    let launched = launcher.launch(&storage, &launch_options, authorizer).await?;
+    let prepared = vanilla
+        .prepare(
+            &storage,
+            "1.16.5".to_owned(),
+            "MyGame-1.16.5".to_owned(),
+            BaseLayout,
+        )
+        .await?;
+    let launched = vanilla.launch(prepared, &launch_config, authorizer).await?;
     println!("java executable: {}", launched.runtime.executable().display());
-    println!("install status: {:?}", launched.ready_version.install_status);
+    println!(
+        "install status: {:?}",
+        launched.prepared_version.install_status
+    );
 
+    let mut child = launched.child;
+    let exit_status = child.wait().await?;
+    println!("game exited with: {exit_status}");
+
+    Ok(())
+}
+```
+
+## Launch An Existing Local Version
+
+If you want to launch a version that is already fully prepared on disk without downloading anything,
+load it from storage first and then launch it.
+
+```rust
+use std::path::PathBuf;
+
+use anyhow::Result;
+use elemental_core::{
+    auth::authorizers::offline::OfflineAuthorizer,
+    storage::Storage,
+};
+use elemental_driver::{
+    vanilla::{VanillaDriver, VanillaLaunchConfig},
+    version_json::BaseLayout,
+};
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let storage = Storage::new(PathBuf::from(".minecraft"), BaseLayout);
+    let vanilla = VanillaDriver::with_defaults()?;
+    let launch_config = VanillaLaunchConfig::new();
+    let authorizer = OfflineAuthorizer {
+        username: "Player".to_owned(),
+    };
+
+    let prepared = vanilla.load_prepared(&storage, "MyGame-1.16.5".to_owned(), BaseLayout)?;
+    let launched = vanilla.launch(prepared, &launch_config, authorizer).await?;
     let mut child = launched.child;
     let exit_status = child.wait().await?;
     println!("game exited with: {exit_status}");

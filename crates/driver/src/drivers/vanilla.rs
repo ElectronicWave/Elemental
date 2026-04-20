@@ -1,0 +1,727 @@
+use std::{collections::HashMap, sync::Arc};
+
+use anyhow::{Context, Result, bail};
+use async_trait::async_trait;
+use elemental_core::{
+    auth::authorizer::Authorizer,
+    launcher::{command::LaunchCommand, process},
+    mojang::{
+        MojangBaseUrl, MojangRuleContext, PistonMetaAssetIndexObjects, PistonMetaData,
+        PistonMetaLibraries, PistonMetaLibrariesDownloadsArtifact, PistonMetaLibrariesExt,
+    },
+    runtime::distribution::Distribution,
+    services::mojang::MojangClient,
+    storage::{Storage, layout::Layout},
+};
+use elemental_infra::downloader::{
+    core::ElementalDownloader,
+    plan::DownloadPlanner,
+    task::{DownloadPlan, DownloadTask},
+};
+
+use crate::{
+    catalog::{Catalog, GameVersions, Release, ReleaseInfo},
+    driver::{Driver, DriverDescriptor, InstalledDriver},
+    drivers::version_json::{
+        builder::MojangLaunchBuilder,
+        resource::Resource,
+        storage::{VersionJsonGameStorageExt, VersionJsonVersionStorageExt},
+    },
+    inspect::VersionProbe,
+};
+
+#[derive(Clone)]
+pub struct LaunchResolution {
+    pub width: String,
+    pub height: String,
+}
+
+#[derive(Clone)]
+pub struct QuickPlayOptions {
+    pub path: Option<String>,
+    pub multiplayer: Option<String>,
+    pub singleplayer: Option<String>,
+    pub realms: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct VanillaLaunchConfig {
+    pub runtime_major_version: Option<usize>,
+    pub launcher_name: Option<String>,
+    pub launcher_version: Option<String>,
+    pub client_id: Option<String>,
+    pub resolution: Option<LaunchResolution>,
+    pub quick_play: Option<QuickPlayOptions>,
+}
+
+pub struct VanillaDriver {
+    client: MojangClient,
+    downloader: Arc<ElementalDownloader>,
+}
+
+pub struct VanillaCatalog {
+    client: MojangClient,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolvedVanillaMetadata {
+    baseurl: MojangBaseUrl,
+    pub metadata: PistonMetaData,
+    pub asset_index_objects: PistonMetaAssetIndexObjects,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VanillaInstallStatus {
+    pub metadata_persisted: bool,
+    pub asset_index_persisted: bool,
+    pub version_artifacts_ready: bool,
+    pub assets_ready: bool,
+    pub natives_extracted: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolvedVanillaVersion<L: Layout<Resource = Resource>, VL: Layout> {
+    baseurl: MojangBaseUrl,
+    pub version: Storage<VL, Storage<L>>,
+    pub metadata: PistonMetaData,
+    pub asset_index_objects: PistonMetaAssetIndexObjects,
+}
+
+#[derive(Debug, Clone)]
+pub struct PreparedVanillaVersion<L: Layout<Resource = Resource>, VL: Layout> {
+    pub resolved_version: ResolvedVanillaVersion<L, VL>,
+    pub install_status: VanillaInstallStatus,
+}
+
+pub struct LaunchedVanillaVersion<L: Layout<Resource = Resource>, VL: Layout> {
+    pub prepared_version: PreparedVanillaVersion<L, VL>,
+    pub runtime: Distribution,
+    pub child: tokio::process::Child,
+}
+
+pub struct VanillaInstallPlanner<'a, L: Layout<Resource = Resource>, VL: Layout> {
+    version: &'a Storage<VL, Storage<L>>,
+    metadata: &'a PistonMetaData,
+    asset_index_objects: &'a PistonMetaAssetIndexObjects,
+    baseurl: MojangBaseUrl,
+    rule_context: MojangRuleContext,
+}
+
+pub struct VanillaRelease {
+    pub version_id: String,
+    pub description: Option<String>,
+}
+
+impl LaunchResolution {
+    pub fn new(width: String, height: String) -> Self {
+        Self { width, height }
+    }
+}
+
+impl QuickPlayOptions {
+    pub fn new(
+        path: Option<String>,
+        multiplayer: Option<String>,
+        singleplayer: Option<String>,
+        realms: Option<String>,
+    ) -> Self {
+        Self {
+            path,
+            multiplayer,
+            singleplayer,
+            realms,
+        }
+    }
+}
+
+impl VanillaLaunchConfig {
+    pub fn new() -> Self {
+        Self {
+            runtime_major_version: None,
+            launcher_name: None,
+            launcher_version: None,
+            client_id: None,
+            resolution: None,
+            quick_play: None,
+        }
+    }
+}
+
+#[async_trait]
+impl Release for VanillaRelease {
+    async fn install(&self) -> Result<()> {
+        todo!()
+    }
+
+    async fn uninstall(&self) -> Result<()> {
+        todo!()
+    }
+
+    async fn info(&self) -> ReleaseInfo {
+        ReleaseInfo {
+            name: self.version_id.clone(),
+            game_versions: GameVersions::Single(self.version_id.clone()),
+            description: self.description.clone(),
+        }
+    }
+}
+
+impl VanillaInstallStatus {
+    pub fn is_persisted(&self) -> bool {
+        self.metadata_persisted && self.asset_index_persisted
+    }
+
+    pub fn is_downloaded(&self) -> bool {
+        self.is_persisted() && self.version_artifacts_ready && self.assets_ready
+    }
+
+    pub fn is_ready(&self) -> bool {
+        self.is_downloaded() && self.natives_extracted
+    }
+}
+
+impl ResolvedVanillaMetadata {
+    pub async fn persist<L: Layout<Resource = Resource> + Clone, VL: Layout>(
+        self,
+        storage: &Storage<L>,
+        version_name: impl Into<String>,
+        version_layout: VL,
+    ) -> Result<ResolvedVanillaVersion<L, VL>> {
+        let version = storage
+            .ensure_version(version_name.into(), version_layout)
+            .await?;
+        version.write_metadata(&self.metadata).await?;
+        storage
+            .write_asset_index(
+                self.metadata.asset_index.id.clone(),
+                &self.asset_index_objects,
+            )
+            .await?;
+
+        Ok(ResolvedVanillaVersion {
+            baseurl: self.baseurl,
+            version,
+            metadata: self.metadata,
+            asset_index_objects: self.asset_index_objects,
+        })
+    }
+}
+
+impl<L: Layout<Resource = Resource>, VL: Layout> ResolvedVanillaVersion<L, VL> {
+    pub fn load(baseurl: MojangBaseUrl, version: Storage<VL, Storage<L>>) -> Result<Self> {
+        let metadata = version.metadata()?;
+        let asset_index_objects = version
+            .parent
+            .asset_index_objects(metadata.asset_index.id.as_str())?;
+
+        Ok(Self {
+            baseurl,
+            version,
+            metadata,
+            asset_index_objects,
+        })
+    }
+
+    pub fn into_prepared(self) -> Result<PreparedVanillaVersion<L, VL>> {
+        let status = self.status()?;
+        if !status.is_ready() {
+            let version_name = self.version.name().context("get version name failed")?;
+            bail!("local version '{version_name}' is not prepared: {status:?}");
+        }
+
+        Ok(PreparedVanillaVersion {
+            install_status: status,
+            resolved_version: self,
+        })
+    }
+
+    pub fn planner<'a>(&'a self) -> VanillaInstallPlanner<'a, L, VL> {
+        VanillaInstallPlanner {
+            version: &self.version,
+            metadata: &self.metadata,
+            asset_index_objects: &self.asset_index_objects,
+            baseurl: self.baseurl.clone(),
+            rule_context: MojangRuleContext::current(),
+        }
+    }
+
+    pub fn required_java_major_version(&self) -> usize {
+        self.metadata.java_version.major_version
+    }
+
+    pub fn status(&self) -> Result<VanillaInstallStatus> {
+        let rule_context = MojangRuleContext::current();
+
+        Ok(VanillaInstallStatus {
+            metadata_persisted: self.version.metadata_path()?.exists(),
+            asset_index_persisted: self
+                .version
+                .parent
+                .asset_index_path(self.metadata.asset_index.id.as_str())?
+                .exists(),
+            version_artifacts_ready: self.version_artifacts_ready(&rule_context)?,
+            assets_ready: self.assets_ready()?,
+            natives_extracted: self.version.natives_are_extracted(),
+        })
+    }
+
+    pub async fn prepare(
+        self,
+        downloader: &ElementalDownloader,
+    ) -> Result<PreparedVanillaVersion<L, VL>> {
+        let status = self.status()?;
+        if !status.is_downloaded() {
+            downloader.execute_planner(&self.planner()).await?;
+        }
+
+        let status = self.status()?;
+        if !status.natives_extracted {
+            self.version.extract_natives()?;
+        }
+
+        self.into_prepared()
+    }
+
+    fn version_artifacts_ready(&self, rule_context: &MojangRuleContext) -> Result<bool> {
+        if !self.version.jar_path()?.exists() {
+            return Ok(false);
+        }
+
+        for library in &self.metadata.libraries {
+            if !library.is_allowed(rule_context) {
+                continue;
+            }
+
+            if !self
+                .version
+                .parent
+                .library_path(library.downloads.artifact.path.as_str())?
+                .exists()
+            {
+                return Ok(false);
+            }
+
+            if let Some(artifact) = library.classifiers_native_artifact(rule_context.platform()) {
+                if !self
+                    .version
+                    .parent
+                    .library_path(artifact.path.as_str())?
+                    .exists()
+                {
+                    return Ok(false);
+                }
+            }
+        }
+
+        if let Some(logging) = &self.metadata.logging {
+            if !self
+                .version
+                .parent
+                .logging_config_path(logging.client.file.id.as_str())?
+                .exists()
+            {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
+    }
+
+    fn assets_ready(&self) -> Result<bool> {
+        for object in self.asset_index_objects.objects.values() {
+            if !self
+                .version
+                .parent
+                .asset_object_path(object.hash.as_str())?
+                .exists()
+            {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
+    }
+}
+
+impl<L: Layout<Resource = Resource>, VL: Layout> PreparedVanillaVersion<L, VL> {
+    pub fn required_java_major_version(&self) -> usize {
+        self.resolved_version.required_java_major_version()
+    }
+}
+
+impl<'a, L: Layout<Resource = Resource>, VL: Layout> VanillaInstallPlanner<'a, L, VL> {
+    fn version_name(&self) -> Result<String> {
+        self.version.name().context("get version name failed")
+    }
+
+    fn plan_version_artifacts(&self) -> Result<DownloadPlan> {
+        let mut tasks = Vec::new();
+        tasks.push(DownloadTask::new(
+            self.baseurl
+                .rewrite_pistondata_url(self.metadata.downloads.client.url.clone()),
+            self.version.jar_path()?,
+            Some(self.metadata.downloads.client.size as u64),
+            Some(self.metadata.downloads.client.sha1.clone()),
+        ));
+
+        for library in &self.metadata.libraries {
+            tasks.extend(self.plan_library_tasks(library)?);
+        }
+
+        if let Some(logging) = &self.metadata.logging {
+            tasks.push(DownloadTask::new(
+                logging
+                    .client
+                    .file
+                    .url
+                    .replace("piston-data.mojang.com", &self.baseurl.pistondata)
+                    .replace("launchermeta.mojang.com", &self.baseurl.launchermeta),
+                self.version
+                    .parent
+                    .logging_config_path(logging.client.file.id.as_str())?,
+                Some(logging.client.file.size as u64),
+                Some(logging.client.file.sha1.clone()),
+            ));
+        }
+
+        Ok(DownloadPlan::named(self.version_name()?, tasks))
+    }
+
+    fn plan_library_tasks(&self, library: &PistonMetaLibraries) -> Result<Vec<DownloadTask>> {
+        if !library.is_allowed(&self.rule_context) {
+            return Ok(Vec::new());
+        }
+
+        let mut tasks = Vec::new();
+        tasks.push(self.plan_library_artifact_task(&library.downloads.artifact)?);
+
+        if let Some(artifact) = library.classifiers_native_artifact(self.rule_context.platform()) {
+            tasks.push(self.plan_library_artifact_task(artifact)?);
+        }
+
+        Ok(tasks)
+    }
+
+    fn plan_library_artifact_task(
+        &self,
+        artifact: &PistonMetaLibrariesDownloadsArtifact,
+    ) -> Result<DownloadTask> {
+        Ok(DownloadTask::new(
+            self.baseurl.rewrite_library_url(artifact.url.clone()),
+            self.version.parent.library_path(artifact.path.as_str())?,
+            Some(artifact.size as u64),
+            Some(artifact.sha1.clone()),
+        ))
+    }
+
+    fn plan_assets(&self) -> Result<DownloadPlan> {
+        let version_name = self.version_name()?;
+        let tasks = self
+            .asset_index_objects
+            .objects
+            .values()
+            .map(|object| {
+                Ok(DownloadTask::new(
+                    self.baseurl.get_object_url(object.hash.clone()),
+                    self.version
+                        .parent
+                        .asset_object_path(object.hash.as_str())?,
+                    Some(object.size as u64),
+                    Some(object.hash.clone()),
+                ))
+            })
+            .collect::<Result<Vec<DownloadTask>>>()?;
+
+        Ok(DownloadPlan::named(format!("{version_name}-assets"), tasks))
+    }
+}
+
+impl<'a, L: Layout<Resource = Resource>, VL: Layout> DownloadPlanner
+    for VanillaInstallPlanner<'a, L, VL>
+{
+    fn plan(&self) -> Result<Vec<DownloadPlan>> {
+        let mut plans = Vec::new();
+
+        let version_plan = self.plan_version_artifacts()?;
+        if !version_plan.tasks.is_empty() {
+            plans.push(version_plan);
+        }
+
+        let assets_plan = self.plan_assets()?;
+        if !assets_plan.tasks.is_empty() {
+            plans.push(assets_plan);
+        }
+
+        Ok(plans)
+    }
+}
+
+impl VanillaDriver {
+    pub fn new(client: MojangClient, downloader: Arc<ElementalDownloader>) -> Self {
+        Self { client, downloader }
+    }
+
+    pub fn with_defaults() -> Result<Self> {
+        Ok(Self::new(
+            MojangClient::default(),
+            ElementalDownloader::with_config_default()
+                .context("create default elemental downloader failed")?,
+        ))
+    }
+
+    pub fn client(&self) -> &MojangClient {
+        &self.client
+    }
+
+    pub fn downloader(&self) -> &ElementalDownloader {
+        self.downloader.as_ref()
+    }
+
+    pub async fn prepare<L: Layout<Resource = Resource> + Clone, VL: Layout + Clone>(
+        &self,
+        storage: &Storage<L>,
+        version_id: String,
+        version_name: String,
+        version_layout: VL,
+    ) -> Result<PreparedVanillaVersion<L, VL>> {
+        let resolved = self
+            .resolve_or_load(storage, version_id, version_name, version_layout)
+            .await?;
+        resolved.prepare(self.downloader()).await
+    }
+
+    pub fn load_prepared<L: Layout<Resource = Resource> + Clone, VL: Layout + Clone>(
+        &self,
+        storage: &Storage<L>,
+        version_name: String,
+        version_layout: VL,
+    ) -> Result<PreparedVanillaVersion<L, VL>> {
+        let local_version = storage.version(version_name, version_layout)?;
+        ResolvedVanillaVersion::load(self.client.baseurl.clone(), local_version)?.into_prepared()
+    }
+
+    pub async fn launch<A, L: Layout<Resource = Resource> + Clone, VL: Layout + Clone>(
+        &self,
+        prepared_version: PreparedVanillaVersion<L, VL>,
+        config: &VanillaLaunchConfig,
+        authorizer: A,
+    ) -> Result<LaunchedVanillaVersion<L, VL>>
+    where
+        A: Authorizer,
+    {
+        let (runtime, command) = self
+            .build_launch_command(authorizer, &prepared_version, config)
+            .await?;
+        let child = process::spawn_command(command)?;
+
+        Ok(LaunchedVanillaVersion {
+            prepared_version,
+            runtime,
+            child,
+        })
+    }
+
+    pub async fn build_launch_command<
+        A,
+        L: Layout<Resource = Resource> + Clone,
+        VL: Layout + Clone,
+    >(
+        &self,
+        authorizer: A,
+        prepared_version: &PreparedVanillaVersion<L, VL>,
+        config: &VanillaLaunchConfig,
+    ) -> Result<(Distribution, LaunchCommand)>
+    where
+        A: Authorizer,
+    {
+        let runtime = self
+            .runtime_for_prepared_version(prepared_version, config.runtime_major_version)
+            .await?;
+        let command = self
+            .build_launch_builder(authorizer, runtime.clone(), prepared_version, config)?
+            .build_command()
+            .await?;
+
+        Ok((runtime, command))
+    }
+
+    async fn runtime_for_prepared_version<L: Layout<Resource = Resource>, VL: Layout>(
+        &self,
+        prepared_version: &PreparedVanillaVersion<L, VL>,
+        runtime_major_version: Option<usize>,
+    ) -> Result<Distribution> {
+        let required_major_version =
+            runtime_major_version.unwrap_or_else(|| prepared_version.required_java_major_version());
+
+        Distribution::find_cached_by_java_major(required_major_version)
+            .await
+            .with_context(|| {
+                format!(
+                    "can't find a local Java runtime with major version {}",
+                    required_major_version
+                )
+            })
+    }
+
+    fn build_launch_builder<A, L: Layout<Resource = Resource> + Clone, VL: Layout + Clone>(
+        &self,
+        authorizer: A,
+        runtime: Distribution,
+        prepared_version: &PreparedVanillaVersion<L, VL>,
+        config: &VanillaLaunchConfig,
+    ) -> Result<MojangLaunchBuilder<A, L, VL>>
+    where
+        A: Authorizer,
+    {
+        let mut builder = MojangLaunchBuilder::new(
+            authorizer,
+            runtime,
+            prepared_version.resolved_version.version.clone(),
+        );
+
+        if let Some(client_id) = &config.client_id {
+            builder = builder.set_client_id(client_id.clone());
+        }
+
+        if let Some(resolution) = &config.resolution {
+            builder = builder.set_resolution(resolution.width.clone(), resolution.height.clone());
+        }
+
+        if let (Some(name), Some(version)) = (&config.launcher_name, &config.launcher_version) {
+            builder = builder.set_launcher(name.clone(), version.clone());
+        }
+
+        if let Some(quick_play) = &config.quick_play {
+            builder = builder.set_quick_play(
+                quick_play.path.clone(),
+                quick_play.multiplayer.clone(),
+                quick_play.singleplayer.clone(),
+                quick_play.realms.clone(),
+            );
+        }
+
+        Ok(builder)
+    }
+
+    async fn resolve_or_load<L: Layout<Resource = Resource> + Clone, VL: Layout + Clone>(
+        &self,
+        storage: &Storage<L>,
+        version_id: String,
+        version_name: String,
+        version_layout: VL,
+    ) -> Result<ResolvedVanillaVersion<L, VL>> {
+        if let Ok(local_version) = storage.version(version_name.clone(), version_layout.clone()) {
+            if let Ok(resolved) =
+                ResolvedVanillaVersion::load(self.client.baseurl.clone(), local_version)
+            {
+                return Ok(resolved);
+            }
+        }
+
+        self.resolve_version(storage, version_id, version_name, version_layout)
+            .await
+    }
+
+    async fn resolve_version<L: Layout<Resource = Resource> + Clone, VL: Layout>(
+        &self,
+        storage: &Storage<L>,
+        version_id: String,
+        version_name: String,
+        version_layout: VL,
+    ) -> Result<ResolvedVanillaVersion<L, VL>> {
+        self.resolve_metadata(version_id)
+            .await?
+            .persist(storage, version_name, version_layout)
+            .await
+    }
+
+    async fn resolve_metadata(&self, version_id: String) -> Result<ResolvedVanillaMetadata> {
+        let launchmeta = self.client.launchmeta().await?;
+        let metadata_url = launchmeta
+            .versions
+            .iter()
+            .find(|version| version.id == version_id)
+            .context(format!("Can't find version named `{version_id}`"))?
+            .url
+            .clone();
+        let metadata = self.client.pistonmeta(metadata_url).await?;
+        let asset_index_objects = self
+            .client
+            .pistonmeta_assetindex_objects(metadata.asset_index.url.clone())
+            .await?;
+
+        Ok(ResolvedVanillaMetadata {
+            baseurl: self.client.baseurl.clone(),
+            metadata,
+            asset_index_objects,
+        })
+    }
+}
+
+impl VanillaCatalog {
+    pub fn new(client: MojangClient) -> Self {
+        Self { client }
+    }
+
+    pub fn with_defaults() -> Self {
+        Self::new(MojangClient::default())
+    }
+}
+
+#[async_trait]
+impl Catalog for VanillaCatalog {
+    type Release = VanillaRelease;
+
+    async fn releases(&self) -> Result<HashMap<GameVersions, Vec<Self::Release>>> {
+        let mut releases = HashMap::new();
+        let manifest = self.client.launchmeta().await?;
+
+        for version in manifest.versions {
+            releases
+                .entry(GameVersions::Single(version.id.clone()))
+                .or_insert(Vec::new())
+                .push(VanillaRelease {
+                    version_id: version.id,
+                    description: Some(version.release_type),
+                });
+        }
+
+        Ok(releases)
+    }
+}
+
+#[async_trait]
+impl<L: Layout<Resource = Resource>, VL: Layout> Driver<L, VL> for VanillaDriver {
+    fn descriptor(&self) -> DriverDescriptor {
+        DriverDescriptor {
+            id: "vanilla",
+            name: "Vanilla",
+        }
+    }
+
+    async fn inspect(&self, probe: &VersionProbe<L, VL>) -> Result<Option<InstalledDriver>> {
+        let Some(metadata) = &probe.metadata else {
+            return Ok(None);
+        };
+        if has_loader_marker(&metadata) {
+            return Ok(None);
+        }
+
+        Ok(Some(InstalledDriver {
+            driver: <Self as Driver<L, VL>>::descriptor(self),
+            driver_version: None,
+            game_version: Some(metadata.id.clone()),
+            description: Some(metadata.release_type.clone()),
+        }))
+    }
+}
+
+fn has_loader_marker(metadata: &PistonMetaData) -> bool {
+    metadata.libraries.iter().any(|library| {
+        let name = library.name.as_str();
+        name.starts_with("net.minecraftforge:forge:")
+            || name.starts_with("net.neoforged:forge:")
+            || name.starts_with("net.neoforged:neoforge:")
+            || name.starts_with("net.fabricmc:fabric-loader:")
+    })
+}

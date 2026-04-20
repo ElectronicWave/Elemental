@@ -2,38 +2,40 @@ use std::collections::HashMap;
 
 use anyhow::{Context, Result, bail};
 
-use super::model::LaunchEnvs;
-use crate::{
+use elemental_core::{
     auth::authorizer::Authorizer,
     consts::PLATFORM_NATIVES_DIR_NAME,
-    launcher::classpath::join_classpath,
+    launcher::command::LaunchCommand,
     mojang::{MojangRuleContext, PistonMetaDataExt, PistonMetaLibrariesExt},
     runtime::distribution::Distribution,
-    storage::{
-        layout::{Layout, Layoutable},
-        resource::Resource,
-        version::VersionStorage,
-    },
+    storage::{Storage, layout::Layout},
 };
 
-pub struct LaunchBuilder<A: Authorizer, L: Layout, VL: Layout> {
+use super::{
+    classpath::join_classpath,
+    resource::Resource,
+    storage::{VersionJsonGameStorageExt, VersionJsonVersionStorageExt},
+    variables::LauncherVariables,
+};
+
+pub struct MojangLaunchBuilder<A: Authorizer, L: Layout<Resource = Resource>, VL: Layout> {
     pub authorizer: A,
     pub runtime: Distribution,
-    pub version: VersionStorage<L, VL>,
-    inner: LaunchEnvs,
+    pub version: Storage<VL, Storage<L>>,
+    inner: LauncherVariables,
 }
 
-impl<A: Authorizer, L: Layout, VL: Layout> LaunchBuilder<A, L, VL> {
-    pub fn new(authorizer: A, runtime: Distribution, version: VersionStorage<L, VL>) -> Self {
+impl<A: Authorizer, L: Layout<Resource = Resource>, VL: Layout> MojangLaunchBuilder<A, L, VL> {
+    pub fn new(authorizer: A, runtime: Distribution, version: Storage<VL, Storage<L>>) -> Self {
         Self {
             authorizer,
             runtime,
             version,
-            inner: LaunchEnvs::default(),
+            inner: LauncherVariables::default(),
         }
     }
 
-    pub fn set_quick_play_path(
+    pub fn set_quick_play(
         mut self,
         quick_play_path: Option<String>,
         quick_play_multiplayer: Option<String>,
@@ -69,21 +71,14 @@ impl<A: Authorizer, L: Layout, VL: Layout> LaunchBuilder<A, L, VL> {
         self
     }
 
-    pub async fn build(mut self) -> Result<Vec<String>> {
+    pub async fn build_command(mut self) -> Result<LaunchCommand> {
         let version_name = self.version.name().context("get version name failed")?;
-        let version_root = self
-            .version
-            .get_existing_resource(Resource::Dot)
-            .context("get version root failed")?;
-        let global_root = self
-            .version
-            .global
-            .get_existing_resource(Resource::Dot)
-            .context("get game root failed")?;
-        let versionjar = self.version.jar_path()?;
+        let version_root = self.version.path.clone();
+        let global_root = self.version.parent.path.clone();
+        let version_jar = self.version.jar_path()?;
 
-        if !versionjar.exists() {
-            bail!("version jar not found: {}", versionjar.to_string_lossy());
+        if !version_jar.exists() {
+            bail!("version jar not found: {}", version_jar.to_string_lossy());
         }
 
         let metadata = self
@@ -142,18 +137,16 @@ impl<A: Authorizer, L: Layout, VL: Layout> LaunchBuilder<A, L, VL> {
                     )
                 }
             })
-            .chain(std::iter::once(versionjar.to_string_lossy().to_string()))
+            .chain(std::iter::once(version_jar.to_string_lossy().to_string()))
             .collect::<Vec<String>>();
         self.inner.classpath = join_classpath(classpath);
 
-        let mut logging_jvm_args = Vec::new();
+        let mut jvm_args = Vec::new();
         if let Some(logging) = &metadata.logging {
             let log_config_path = self
                 .version
-                .global
-                .get_existing_resource(Resource::AssetsLogConfigs)
-                .context("get logging configs root failed")?
-                .join(&logging.client.file.id);
+                .parent
+                .logging_config_path(&logging.client.file.id)?;
 
             if !log_config_path.exists() {
                 bail!(
@@ -162,41 +155,26 @@ impl<A: Authorizer, L: Layout, VL: Layout> LaunchBuilder<A, L, VL> {
                 );
             }
 
-            logging_jvm_args = self.inner.apply_launchenvs_with(
+            jvm_args.extend(self.inner.apply_with(
                 vec![logging.client.argument.clone()],
                 &HashMap::from([(
                     "path".to_owned(),
                     log_config_path.to_string_lossy().to_string(),
                 )]),
-            )?;
+            )?);
         }
 
-        let mut jvm_args = logging_jvm_args;
-        jvm_args.extend(
-            self.inner
-                .apply_launchenvs(metadata.jvm_arguments(&rule_context))?,
-        );
-        let game_args = self
-            .inner
-            .apply_launchenvs(metadata.game_arguments(&rule_context))?;
+        jvm_args.extend(self.inner.apply(metadata.jvm_arguments(&rule_context))?);
+        let game_args = self.inner.apply(metadata.game_arguments(&rule_context))?;
 
-        let mut args = vec![self.runtime.executable().to_string_lossy().to_string()];
-        args.extend(jvm_args);
+        let mut args = jvm_args;
         args.push(metadata.main_class);
         args.extend(game_args);
 
-        Ok(args)
+        Ok(LaunchCommand::new(self.runtime.executable(), args))
     }
 
-    pub async fn launch(self) -> Result<tokio::process::Child> {
-        super::process::spawn_command(self.build().await?)
-    }
-
-    pub async fn launch_logged(self) -> Result<super::process::LoggedChild> {
-        super::process::spawn_command_logged(self.build().await?)
-    }
-
-    pub fn envs(self) -> LaunchEnvs {
+    pub fn variables(self) -> LauncherVariables {
         self.inner
     }
 }

@@ -1,11 +1,13 @@
 use std::process::Stdio;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use tokio::{
     io::{AsyncBufReadExt, AsyncRead, BufReader},
     process::{Child, Command},
     sync::mpsc::{UnboundedReceiver, unbounded_channel},
 };
+
+use super::command::LaunchCommand;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProcessLogSource {
@@ -24,23 +26,42 @@ pub struct LoggedChild {
     pub lines: UnboundedReceiver<ProcessLogLine>,
 }
 
-pub fn spawn_command(args: Vec<String>) -> Result<Child> {
-    let (exe, process_args) = args.split_first().context("launch args is empty")?;
-    if exe.is_empty() {
+pub fn spawn_command(command: LaunchCommand) -> Result<Child> {
+    if command.program.as_os_str().is_empty() {
         bail!("launch executable is empty");
     }
 
-    Ok(Command::new(exe).args(process_args).spawn()?)
+    let mut child = Command::new(&command.program);
+    child.args(&command.args);
+
+    if let Some(cwd) = &command.cwd {
+        child.current_dir(cwd);
+    }
+
+    for (key, value) in &command.env {
+        child.env(key, value);
+    }
+
+    Ok(child.spawn()?)
 }
 
-pub fn spawn_command_logged(args: Vec<String>) -> Result<LoggedChild> {
-    let (exe, process_args) = args.split_first().context("launch args is empty")?;
-    if exe.is_empty() {
+pub fn spawn_command_logged(command: LaunchCommand) -> Result<LoggedChild> {
+    if command.program.as_os_str().is_empty() {
         bail!("launch executable is empty");
     }
 
-    let mut child = Command::new(exe)
-        .args(process_args)
+    let mut child = Command::new(&command.program);
+    child.args(&command.args);
+
+    if let Some(cwd) = &command.cwd {
+        child.current_dir(cwd);
+    }
+
+    for (key, value) in &command.env {
+        child.env(key, value);
+    }
+
+    let mut child = child
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;

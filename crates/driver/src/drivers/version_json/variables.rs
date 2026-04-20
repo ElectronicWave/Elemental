@@ -5,14 +5,15 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::{
+use elemental_core::{
     consts::PLATFORM_NATIVES_DIR_NAME,
-    launcher::classpath::join_classpath,
     mojang::{MojangRuleContext, PistonMetaData, PistonMetaLibrariesExt},
 };
 
+use super::classpath::join_classpath;
+
 #[derive(Debug, Deserialize, Serialize)]
-pub struct LaunchEnvs {
+pub struct LauncherVariables {
     pub auth_player_name: String,
     pub version_name: String,
     pub game_directory: String,
@@ -40,7 +41,7 @@ pub struct LaunchEnvs {
     pub classpath: String,
 }
 
-impl Default for LaunchEnvs {
+impl Default for LauncherVariables {
     fn default() -> Self {
         Self {
             auth_player_name: Default::default(),
@@ -52,7 +53,7 @@ impl Default for LaunchEnvs {
             auth_access_token: Default::default(),
             clientid: Default::default(),
             auth_xuid: Default::default(),
-            user_type: UserType::MSA,
+            user_type: UserType::Msa,
             version_type: Default::default(),
             resolution_width: Default::default(),
             resolution_height: Default::default(),
@@ -71,12 +72,12 @@ impl Default for LaunchEnvs {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum UserType {
-    LEGACY,
-    MSA,
-    MOJANG,
+    Legacy,
+    Msa,
+    Mojang,
 }
 
-impl LaunchEnvs {
+impl LauncherVariables {
     pub fn offline_player(
         player_name: String,
         game_directory: String,
@@ -124,7 +125,7 @@ impl LaunchEnvs {
             auth_access_token: String::new(),
             clientid: String::new(),
             auth_xuid: String::new(),
-            user_type: UserType::LEGACY,
+            user_type: UserType::Legacy,
             version_type: pistonmeta.release_type.clone(),
             resolution_width: "854".to_owned(),
             resolution_height: "480".to_owned(),
@@ -144,12 +145,9 @@ impl LaunchEnvs {
 
     pub fn hashmap(&self) -> Result<HashMap<String, String>> {
         Ok(HashMap::from_iter(self.map()?.into_iter().filter_map(
-            |(k, v)| {
-                if let Value::String(val) = v {
-                    Some((k, val))
-                } else {
-                    None
-                }
+            |(key, value)| match value {
+                Value::String(string) => Some((key, string)),
+                _ => None,
             },
         )))
     }
@@ -157,7 +155,7 @@ impl LaunchEnvs {
     pub fn map(&self) -> Result<Map<String, Value>> {
         Ok(serde_json::to_value(self)?
             .as_object()
-            .context("struct is not a object.")?
+            .context("struct is not an object")?
             .clone())
     }
 
@@ -172,8 +170,8 @@ impl LaunchEnvs {
     }
 
     pub fn copy_with_option(&self, key: String, value: Option<String>) -> Result<Self> {
-        if let Some(val) = value {
-            self.copy_with(key, val)
+        if let Some(value) = value {
+            self.copy_with(key, value)
         } else {
             let mut map = self.map()?;
             map.remove(&key);
@@ -181,49 +179,52 @@ impl LaunchEnvs {
         }
     }
 
-    pub fn apply_launchenvs_mut(&self, args: &mut Vec<String>) -> Result<()> {
+    pub fn apply_mut(&self, args: &mut [String]) -> Result<()> {
         let data = self.map()?;
         let regex = Regex::new(r#"\$\{(.*?)\}"#)?;
-        for (index, mut copied) in args.clone().into_iter().enumerate() {
-            let value = copied.clone();
-            for var in regex.captures_iter(&value) {
-                if let Some(key) = var.get(1).map(|e| e.as_str()) {
-                    if let Some(Value::String(val)) = data.get(key) {
-                        copied = copied.replace(&format!("${{{}}}", key), val)
+
+        for value in args.iter_mut() {
+            let original = value.clone();
+            let mut copied = original.clone();
+            for variable in regex.captures_iter(&original) {
+                if let Some(key) = variable.get(1).map(|item| item.as_str()) {
+                    if let Some(Value::String(replacement)) = data.get(key) {
+                        copied = copied.replace(&format!("${{{key}}}"), replacement);
                     }
                 }
             }
-
-            args[index] = copied;
+            *value = copied;
         }
 
         Ok(())
     }
 
-    pub fn apply_launchenvs(&self, args: Vec<String>) -> Result<Vec<String>> {
-        self.apply_launchenvs_with(args, &HashMap::new())
+    pub fn apply(&self, args: Vec<String>) -> Result<Vec<String>> {
+        self.apply_with(args, &HashMap::new())
     }
 
-    pub fn apply_launchenvs_with(
+    pub fn apply_with(
         &self,
         args: Vec<String>,
         extra_variables: &HashMap<String, String>,
     ) -> Result<Vec<String>> {
-        let mut result = vec![];
+        let mut result = Vec::with_capacity(args.len());
         let mut data = self.hashmap()?;
         data.extend(extra_variables.clone());
         let regex = Regex::new(r#"\$\{(.*?)\}"#)?;
-        for value in args.iter() {
+
+        for value in &args {
             let mut copied = value.clone();
-            for var in regex.captures_iter(value) {
-                if let Some(key) = var.get(1).map(|e| e.as_str()) {
-                    if let Some(val) = data.get(key) {
-                        copied = copied.replace(&format!("${{{key}}}"), val)
+            for variable in regex.captures_iter(value) {
+                if let Some(key) = variable.get(1).map(|item| item.as_str()) {
+                    if let Some(replacement) = data.get(key) {
+                        copied = copied.replace(&format!("${{{key}}}"), replacement);
                     }
                 }
             }
             result.push(copied);
         }
+
         Ok(result)
     }
 }

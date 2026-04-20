@@ -287,7 +287,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "elemental-core",
- "elemental-infra",
+ "elemental-driver",
  "tokio",
 ]
 
@@ -355,8 +355,8 @@ name = "elemental"
 version = "0.1.0"
 dependencies = [
  "elemental-core",
+ "elemental-driver",
  "elemental-infra",
- "elemental-loader",
  "elemental-object",
  "elemental-schema",
  "elemental-shared",
@@ -370,7 +370,6 @@ dependencies = [
  "async-trait",
  "const_format",
  "dirs",
- "elemental-infra",
  "elemental-schema",
  "futures",
  "md-5",
@@ -393,6 +392,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "elemental-driver"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "elemental-core",
+ "elemental-infra",
+ "elemental-schema",
+ "quick-xml",
+ "regex",
+ "reqwest 0.13.2",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "elemental-infra"
 version = "0.1.0"
 dependencies = [
@@ -406,20 +422,6 @@ dependencies = [
  "sha1_smol",
  "tokio",
  "tokio-util",
-]
-
-[[package]]
-name = "elemental-loader"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "elemental-core",
- "elemental-schema",
- "quick-xml",
- "reqwest 0.13.2",
- "serde",
- "serde_json",
 ]
 
 [[package]]

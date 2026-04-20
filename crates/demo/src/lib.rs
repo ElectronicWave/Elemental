@@ -5,12 +5,11 @@ use std::{
 };
 
 use anyhow::Result;
-use elemental_core::{
-    auth::authorizers::offline::OfflineAuthorizer,
-    install::{ReadyVanillaVersion, VanillaInstallStatus},
-    launcher::vanilla::{VanillaLaunchOptions, VanillaLauncher, VanillaVersionSpec},
-    storage::{game::GameStorage, layout::BaseLayout},
+use elemental_core::{auth::authorizers::offline::OfflineAuthorizer, storage::Storage};
+use elemental_driver::vanilla::{
+    PreparedVanillaVersion, VanillaDriver, VanillaInstallStatus, VanillaLaunchConfig,
 };
+use elemental_driver::version_json::BaseLayout;
 
 #[derive(Debug, Clone)]
 pub struct DemoInstallSpec {
@@ -28,12 +27,12 @@ pub struct DemoLaunchSpec {
 pub struct DemoInstallSummary {
     pub version_root: PathBuf,
     pub install_status: VanillaInstallStatus,
-    pub ready_elapsed: Duration,
+    pub prepare_elapsed: Duration,
 }
 
 #[derive(Debug)]
-pub struct ReadyDemoVersion {
-    pub ready_version: ReadyVanillaVersion<BaseLayout, BaseLayout>,
+pub struct PreparedDemoVersion {
+    pub prepared_version: PreparedVanillaVersion<BaseLayout, BaseLayout>,
     pub install_summary: DemoInstallSummary,
 }
 
@@ -63,10 +62,10 @@ impl DemoLaunchSpec {
 impl DemoInstallSummary {
     pub fn render(&self) -> String {
         format!(
-            "version root: {}\ninstall status: {:?}\nready in {}ms",
+            "version root: {}\ninstall status: {:?}\nprepared in {}ms",
             self.version_root.display(),
             self.install_status,
-            self.ready_elapsed.as_millis(),
+            self.prepare_elapsed.as_millis(),
         )
     }
 }
@@ -83,39 +82,36 @@ pub fn demo_launch_spec() -> DemoLaunchSpec {
     DemoLaunchSpec::new("IAMPlayer".to_owned())
 }
 
-fn demo_launcher() -> Result<VanillaLauncher> {
-    VanillaLauncher::with_defaults()
+fn demo_launcher() -> Result<VanillaDriver> {
+    VanillaDriver::with_defaults()
 }
 
-fn demo_storage(install_spec: &DemoInstallSpec) -> GameStorage<BaseLayout> {
-    GameStorage::new(&install_spec.game_root, BaseLayout)
+fn demo_storage(install_spec: &DemoInstallSpec) -> Storage<BaseLayout> {
+    Storage::new(&install_spec.game_root, BaseLayout)
 }
 
-fn demo_version_spec(install_spec: &DemoInstallSpec) -> VanillaVersionSpec<BaseLayout> {
-    VanillaVersionSpec::new(
-        install_spec.version_id.clone(),
-        install_spec.version_name.clone(),
-        BaseLayout,
-    )
-}
-
-pub async fn ready_demo_version(install_spec: &DemoInstallSpec) -> Result<ReadyDemoVersion> {
+pub async fn prepare_demo_version(install_spec: &DemoInstallSpec) -> Result<PreparedDemoVersion> {
     let launcher = demo_launcher()?;
     let storage = demo_storage(install_spec);
     let started_at = Instant::now();
-    let ready_version = launcher
-        .ready(&storage, &demo_version_spec(install_spec))
+    let prepared_version = launcher
+        .prepare(
+            &storage,
+            install_spec.version_id.clone(),
+            install_spec.version_name.clone(),
+            BaseLayout,
+        )
         .await?;
-    let ready_elapsed = started_at.elapsed();
-    let version_root = ready_version.resolved_version.version.path.clone();
-    let install_status = ready_version.install_status;
+    let prepare_elapsed = started_at.elapsed();
+    let version_root = prepared_version.resolved_version.version.path.clone();
+    let install_status = prepared_version.install_status;
 
-    Ok(ReadyDemoVersion {
-        ready_version,
+    Ok(PreparedDemoVersion {
+        prepared_version,
         install_summary: DemoInstallSummary {
             version_root,
             install_status,
-            ready_elapsed,
+            prepare_elapsed,
         },
     })
 }
@@ -125,13 +121,13 @@ pub async fn launch_demo(
     launch_spec: &DemoLaunchSpec,
 ) -> Result<DemoLaunchSummary> {
     let launcher = demo_launcher()?;
-    let ready_demo = ready_demo_version(install_spec).await?;
-    let launch_options = VanillaLaunchOptions::new(demo_version_spec(install_spec));
+    let prepared_demo = prepare_demo_version(install_spec).await?;
+    let launch_config = VanillaLaunchConfig::new();
     let authorizer = OfflineAuthorizer {
         username: launch_spec.username.clone(),
     };
     let launched = launcher
-        .launch_ready(ready_demo.ready_version, &launch_options, authorizer)
+        .launch(prepared_demo.prepared_version, &launch_config, authorizer)
         .await?;
     let runtime_executable = launched.runtime.executable();
     let mut child = launched.child;
@@ -139,7 +135,7 @@ pub async fn launch_demo(
 
     Ok(DemoLaunchSummary {
         runtime_executable,
-        install_summary: ready_demo.install_summary,
+        install_summary: prepared_demo.install_summary,
         exit_status,
     })
 }

@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use crate::{
     catalog::{Catalog, GameVersions, Release, ReleaseInfo},
     driver::{Driver, DriverDescriptor, InstalledDriver},
-    drivers::version_json::resource::Resource,
     inspect::InstanceProbe,
 };
 
@@ -51,7 +50,7 @@ impl Catalog for NeoForgeCatalog {
 }
 
 #[async_trait]
-impl<L: Layout<Resource = Resource>, VL: Layout> Driver<L, VL> for NeoForgeDriver {
+impl<L: Layout, VL: Layout> Driver<L, VL> for NeoForgeDriver {
     fn descriptor(&self) -> DriverDescriptor {
         DriverDescriptor {
             id: "neoforge",

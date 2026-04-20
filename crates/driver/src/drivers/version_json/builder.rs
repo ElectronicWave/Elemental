@@ -3,30 +3,33 @@ use std::collections::HashMap;
 use anyhow::{Context, Result, bail};
 
 use elemental_core::{
-    auth::authorizer::Authorizer,
-    consts::PLATFORM_NATIVES_DIR_NAME,
-    launcher::command::LaunchCommand,
-    runtime::distribution::Distribution,
-    storage::{Storage, layout::Layout},
+    auth::authorizer::Authorizer, consts::PLATFORM_NATIVES_DIR_NAME,
+    launcher::command::LaunchCommand, runtime::distribution::Distribution, storage::Storage,
 };
 
 use super::{
     classpath::join_classpath,
     extensions::{PistonMetaDataExt, PistonMetaLibrariesExt},
-    resource::Resource,
+    layout::{VersionJsonInstanceLayout, VersionJsonRootLayout},
     rules::MojangRuleContext,
     storage::{VersionJsonGameStorageExt, VersionJsonVersionStorageExt},
     variables::LauncherVariables,
 };
 
-pub struct MojangLaunchBuilder<A: Authorizer, L: Layout<Resource = Resource>, VL: Layout> {
+pub struct MojangLaunchBuilder<
+    A: Authorizer,
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+> {
     pub authorizer: A,
     pub runtime: Distribution,
     pub version: Storage<VL, Storage<L>>,
     inner: LauncherVariables,
 }
 
-impl<A: Authorizer, L: Layout<Resource = Resource>, VL: Layout> MojangLaunchBuilder<A, L, VL> {
+impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
+    MojangLaunchBuilder<A, L, VL>
+{
     pub fn new(authorizer: A, runtime: Distribution, version: Storage<VL, Storage<L>>) -> Self {
         Self {
             authorizer,

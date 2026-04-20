@@ -3,11 +3,9 @@ use std::{path::PathBuf, time::Instant};
 use anyhow::Result;
 use elemental::{
     core::{auth::authorizers::offline::OfflineAuthorizer, storage::Storage},
-    driver::{
-        drivers::{
-            vanilla::{VanillaDriver, VanillaLaunchConfig},
-            version_json::{BaseLayout, VersionJsonGameStorageExt},
-        },
+    driver::drivers::{
+        vanilla::{VanillaDriver, VanillaLaunchConfig},
+        version_json::{BaseLayout, VersionJsonGameStorageExt},
     },
 };
 

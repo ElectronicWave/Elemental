@@ -10,7 +10,7 @@ pub mod storage;
 pub mod variables;
 
 pub use extensions::{PistonMetaDataExt, PistonMetaLibrariesExt};
-pub use layout::BaseLayout;
+pub use layout::{BaseLayout, VersionJsonInstanceLayout, VersionJsonRootLayout};
 pub use meta::{
     ContinuousArgument, LaunchMetaData, LaunchMetaLatestData, LaunchMetaVersionData,
     OperatingSystem, PistonMetaArguments, PistonMetaAssetIndex, PistonMetaAssetIndexObject,

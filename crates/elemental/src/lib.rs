@@ -1,4 +1,4 @@
-// Republic Modules here
+// Re-export Modules here
 #[cfg(feature = "core")]
 pub use elemental_core as core;
 #[cfg(feature = "driver")]

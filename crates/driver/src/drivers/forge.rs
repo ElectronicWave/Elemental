@@ -8,7 +8,6 @@ use std::collections::HashMap;
 use crate::{
     catalog::{Catalog, GameVersions, Release, ReleaseInfo},
     driver::{Driver, DriverDescriptor, InstalledDriver},
-    drivers::version_json::resource::Resource,
     inspect::InstanceProbe,
 };
 
@@ -84,7 +83,7 @@ impl Catalog for ForgeCatalog {
 }
 
 #[async_trait]
-impl<L: Layout<Resource = Resource>, VL: Layout> Driver<L, VL> for ForgeDriver {
+impl<L: Layout, VL: Layout> Driver<L, VL> for ForgeDriver {
     fn descriptor(&self) -> DriverDescriptor {
         DriverDescriptor {
             id: "forge",

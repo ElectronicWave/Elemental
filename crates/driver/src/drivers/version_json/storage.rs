@@ -5,17 +5,10 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
-use elemental_core::{
-    consts::PLATFORM_NATIVES_DIR_NAME,
-    jar::JarFile,
-    storage::{
-        Storage,
-        layout::{Layout, Layoutable},
-    },
-};
+use elemental_core::{jar::JarFile, storage::Storage};
 use tokio::fs::create_dir_all;
 
-use super::resource::Resource;
+use super::layout::{VersionJsonInstanceLayout, VersionJsonRootLayout};
 use crate::{
     driver::Driver,
     drivers::version_json::{
@@ -27,7 +20,7 @@ use crate::{
 
 #[async_trait]
 pub trait VersionJsonGameStorageExt {
-    type Layout: Layout<Resource = Resource>;
+    type Layout: VersionJsonRootLayout;
 
     fn instances_root_path(&self) -> Result<PathBuf>;
     fn instance_root_path(&self, name: impl AsRef<str>) -> Result<PathBuf>;
@@ -38,7 +31,7 @@ pub trait VersionJsonGameStorageExt {
     ) -> Result<Storage<VL, Storage<Self::Layout>>>
     where
         Self::Layout: Clone,
-        VL: Layout + Send;
+        VL: VersionJsonInstanceLayout + Send;
     fn instance_exists(&self, name: impl AsRef<str>) -> Result<bool>;
     fn instance<VL>(
         &self,
@@ -47,12 +40,12 @@ pub trait VersionJsonGameStorageExt {
     ) -> Result<Storage<VL, Storage<Self::Layout>>>
     where
         Self::Layout: Clone,
-        VL: Layout;
+        VL: VersionJsonInstanceLayout;
     fn instance_names(&self) -> Result<Vec<String>>;
     fn instances<VL>(&self, version_layout: VL) -> Result<Vec<Storage<VL, Storage<Self::Layout>>>>
     where
         Self::Layout: Clone,
-        VL: Layout + Clone;
+        VL: VersionJsonInstanceLayout + Clone;
     fn asset_index_path(&self, id: impl AsRef<str>) -> Result<PathBuf>;
     fn asset_object_path(&self, hash: impl AsRef<str>) -> Result<PathBuf>;
     fn library_path(&self, path: impl AsRef<Path>) -> Result<PathBuf>;
@@ -68,13 +61,12 @@ pub trait VersionJsonGameStorageExt {
 #[async_trait]
 impl<L> VersionJsonGameStorageExt for Storage<L>
 where
-    L: Layout<Resource = Resource>,
+    L: VersionJsonRootLayout,
 {
     type Layout = L;
 
     fn instances_root_path(&self) -> Result<PathBuf> {
-        self.get_resource(Resource::Versions)
-            .context("versions resource is not available")
+        Ok(self.layout.instances_root_path(&self.path))
     }
 
     fn instance_root_path(&self, name: impl AsRef<str>) -> Result<PathBuf> {
@@ -88,7 +80,7 @@ where
     ) -> Result<Storage<VL, Storage<Self::Layout>>>
     where
         Self::Layout: Clone,
-        VL: Layout + Send,
+        VL: VersionJsonInstanceLayout + Send,
     {
         let instances_root = self.instances_root_path()?;
         create_dir_all(&instances_root).await?;
@@ -118,7 +110,7 @@ where
     ) -> Result<Storage<VL, Storage<Self::Layout>>>
     where
         Self::Layout: Clone,
-        VL: Layout,
+        VL: VersionJsonInstanceLayout,
     {
         let name = name.into();
         if !self.instance_exists(&name)? {
@@ -157,7 +149,7 @@ where
     fn instances<VL>(&self, version_layout: VL) -> Result<Vec<Storage<VL, Storage<Self::Layout>>>>
     where
         Self::Layout: Clone,
-        VL: Layout + Clone,
+        VL: VersionJsonInstanceLayout + Clone,
     {
         self.instance_names()?
             .into_iter()
@@ -166,30 +158,21 @@ where
     }
 
     fn asset_index_path(&self, id: impl AsRef<str>) -> Result<PathBuf> {
-        self.get_resource(Resource::AssetsIndexes)
-            .map(|path| path.join(format!("{}.json", id.as_ref())))
-            .context("asset indexes resource is not available")
+        Ok(self.layout.asset_index_path(&self.path, id.as_ref()))
     }
 
     fn asset_object_path(&self, hash: impl AsRef<str>) -> Result<PathBuf> {
-        let hash = hash.as_ref();
-        let prefix = hash.get(0..2).context("asset hash is too short")?;
-
-        self.get_resource(Resource::AssetsObjects)
-            .map(|path| path.join(prefix).join(hash))
-            .context("asset objects resource is not available")
+        Ok(self.layout.asset_object_path(&self.path, hash.as_ref()))
     }
 
     fn library_path(&self, path: impl AsRef<Path>) -> Result<PathBuf> {
-        self.get_resource(Resource::Libraries)
-            .map(|root| root.join(path))
-            .context("libraries resource is not available")
+        Ok(self.layout.library_path(&self.path, path.as_ref()))
     }
 
     fn logging_config_path(&self, file_id: impl AsRef<str>) -> Result<PathBuf> {
-        self.get_resource(Resource::AssetsLogConfigs)
-            .map(|root| root.join(file_id.as_ref()))
-            .context("logging configs resource is not available")
+        Ok(self
+            .layout
+            .logging_config_path(&self.path, file_id.as_ref()))
     }
 
     async fn write_asset_index(
@@ -215,8 +198,8 @@ where
 
 #[async_trait]
 pub trait VersionJsonVersionStorageExt {
-    type GameLayout: Layout<Resource = Resource>;
-    type VersionLayout: Layout;
+    type GameLayout: VersionJsonRootLayout;
+    type VersionLayout: VersionJsonInstanceLayout;
 
     fn metadata_path(&self) -> Result<PathBuf>;
     fn metadata(&self) -> Result<PistonMetaData>;
@@ -232,17 +215,15 @@ pub trait VersionJsonVersionStorageExt {
 #[async_trait]
 impl<L, VL> VersionJsonVersionStorageExt for Storage<VL, Storage<L>>
 where
-    L: Layout<Resource = Resource>,
-    VL: Layout,
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
 {
     type GameLayout = L;
     type VersionLayout = VL;
 
     fn metadata_path(&self) -> Result<PathBuf> {
-        Ok(self.path.join(format!(
-            "{}.json",
-            self.name().context("get version name failed")?
-        )))
+        let name = self.name().context("get version name failed")?;
+        Ok(self.layout.metadata_path(&self.path, &name))
     }
 
     fn metadata(&self) -> Result<PistonMetaData> {
@@ -250,10 +231,8 @@ where
     }
 
     fn jar_path(&self) -> Result<PathBuf> {
-        Ok(self.path.join(format!(
-            "{}.jar",
-            self.name().context("get version name failed")?
-        )))
+        let name = self.name().context("get version name failed")?;
+        Ok(self.layout.jar_path(&self.path, &name))
     }
 
     async fn write_metadata(&self, metadata: &PistonMetaData) -> Result<()> {
@@ -267,11 +246,11 @@ where
     }
 
     fn platform_natives_path(&self) -> PathBuf {
-        self.path.join(PLATFORM_NATIVES_DIR_NAME)
+        self.layout.platform_natives_path(&self.path)
     }
 
     fn natives_marker_path(&self) -> PathBuf {
-        self.path.join(".elemental-natives-ready")
+        self.layout.natives_marker_path(&self.path)
     }
 
     fn natives_are_extracted(&self) -> bool {
@@ -318,8 +297,8 @@ pub async fn inspect_instances<L, VL>(
     drivers: &[&dyn Driver<L, VL>],
 ) -> Result<Vec<InstalledInstance<L, VL>>>
 where
-    L: Layout<Resource = Resource> + Clone,
-    VL: Layout + Clone,
+    L: VersionJsonRootLayout + Clone,
+    VL: VersionJsonInstanceLayout + Clone,
 {
     let mut instances = Vec::new();
     for instance in storage.instances(version_layout)? {

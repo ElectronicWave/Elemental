@@ -20,11 +20,11 @@ use crate::{
     drivers::version_json::{
         builder::MojangLaunchBuilder,
         extensions::PistonMetaLibrariesExt,
+        layout::{VersionJsonInstanceLayout, VersionJsonRootLayout},
         meta::{
             PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaLibraries,
             PistonMetaLibrariesDownloadsArtifact,
         },
-        resource::Resource,
         rules::MojangRuleContext,
         storage::{VersionJsonGameStorageExt, VersionJsonVersionStorageExt},
     },
@@ -85,7 +85,7 @@ pub struct VanillaInstallStatus {
 }
 
 #[derive(Debug, Clone)]
-pub struct ResolvedVanillaVersion<L: Layout<Resource = Resource>, VL: Layout> {
+pub struct ResolvedVanillaVersion<L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> {
     endpoints: VanillaEndpoints,
     pub version: Storage<VL, Storage<L>>,
     pub metadata: PistonMetaData,
@@ -93,18 +93,18 @@ pub struct ResolvedVanillaVersion<L: Layout<Resource = Resource>, VL: Layout> {
 }
 
 #[derive(Debug, Clone)]
-pub struct PreparedVanillaVersion<L: Layout<Resource = Resource>, VL: Layout> {
+pub struct PreparedVanillaVersion<L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> {
     pub resolved_version: ResolvedVanillaVersion<L, VL>,
     pub install_status: VanillaInstallStatus,
 }
 
-pub struct LaunchedVanillaVersion<L: Layout<Resource = Resource>, VL: Layout> {
+pub struct LaunchedVanillaVersion<L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> {
     pub prepared_version: PreparedVanillaVersion<L, VL>,
     pub runtime: Distribution,
     pub child: tokio::process::Child,
 }
 
-pub struct VanillaInstallPlanner<'a, L: Layout<Resource = Resource>, VL: Layout> {
+pub struct VanillaInstallPlanner<'a, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> {
     version: &'a Storage<VL, Storage<L>>,
     metadata: &'a PistonMetaData,
     asset_index_objects: &'a PistonMetaAssetIndexObjects,
@@ -186,7 +186,10 @@ impl VanillaInstallStatus {
 }
 
 impl ResolvedVanillaMetadata {
-    pub async fn persist<L: Layout<Resource = Resource> + Clone, VL: Layout + Clone>(
+    pub async fn persist<
+        L: VersionJsonRootLayout + Clone,
+        VL: VersionJsonInstanceLayout + Clone,
+    >(
         self,
         instance: &Storage<VL, Storage<L>>,
     ) -> Result<ResolvedVanillaVersion<L, VL>> {
@@ -208,7 +211,7 @@ impl ResolvedVanillaMetadata {
     }
 }
 
-impl<L: Layout<Resource = Resource>, VL: Layout> ResolvedVanillaVersion<L, VL> {
+impl<L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> ResolvedVanillaVersion<L, VL> {
     pub fn load(endpoints: VanillaEndpoints, version: Storage<VL, Storage<L>>) -> Result<Self> {
         let metadata = version.metadata()?;
         let asset_index_objects = version
@@ -344,13 +347,13 @@ impl<L: Layout<Resource = Resource>, VL: Layout> ResolvedVanillaVersion<L, VL> {
     }
 }
 
-impl<L: Layout<Resource = Resource>, VL: Layout> PreparedVanillaVersion<L, VL> {
+impl<L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> PreparedVanillaVersion<L, VL> {
     pub fn required_java_major_version(&self) -> usize {
         self.resolved_version.required_java_major_version()
     }
 }
 
-impl<'a, L: Layout<Resource = Resource>, VL: Layout> VanillaInstallPlanner<'a, L, VL> {
+impl<'a, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> VanillaInstallPlanner<'a, L, VL> {
     fn version_name(&self) -> Result<String> {
         self.version.name().context("get version name failed")
     }
@@ -432,7 +435,7 @@ impl<'a, L: Layout<Resource = Resource>, VL: Layout> VanillaInstallPlanner<'a, L
     }
 }
 
-impl<'a, L: Layout<Resource = Resource>, VL: Layout> DownloadPlanner
+impl<'a, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> DownloadPlanner
     for VanillaInstallPlanner<'a, L, VL>
 {
     fn plan(&self) -> Result<Vec<DownloadPlan>> {
@@ -473,7 +476,10 @@ impl VanillaDriver {
         self.downloader.as_ref()
     }
 
-    pub async fn prepare<L: Layout<Resource = Resource> + Clone, VL: Layout + Clone>(
+    pub async fn prepare<
+        L: VersionJsonRootLayout + Clone,
+        VL: VersionJsonInstanceLayout + Clone,
+    >(
         &self,
         instance: &Storage<VL, Storage<L>>,
         version_id: String,
@@ -482,7 +488,10 @@ impl VanillaDriver {
         resolved.prepare(self.downloader()).await
     }
 
-    pub fn load_prepared<L: Layout<Resource = Resource> + Clone, VL: Layout + Clone>(
+    pub fn load_prepared<
+        L: VersionJsonRootLayout + Clone,
+        VL: VersionJsonInstanceLayout + Clone,
+    >(
         &self,
         instance: &Storage<VL, Storage<L>>,
     ) -> Result<PreparedVanillaVersion<L, VL>> {
@@ -490,7 +499,11 @@ impl VanillaDriver {
             .into_prepared()
     }
 
-    pub async fn launch<A, L: Layout<Resource = Resource> + Clone, VL: Layout + Clone>(
+    pub async fn launch<
+        A,
+        L: VersionJsonRootLayout + Clone,
+        VL: VersionJsonInstanceLayout + Clone,
+    >(
         &self,
         prepared_version: PreparedVanillaVersion<L, VL>,
         config: &VanillaLaunchConfig,
@@ -513,8 +526,8 @@ impl VanillaDriver {
 
     pub async fn build_launch_command<
         A,
-        L: Layout<Resource = Resource> + Clone,
-        VL: Layout + Clone,
+        L: VersionJsonRootLayout + Clone,
+        VL: VersionJsonInstanceLayout + Clone,
     >(
         &self,
         authorizer: A,
@@ -535,7 +548,10 @@ impl VanillaDriver {
         Ok((runtime, command))
     }
 
-    async fn runtime_for_prepared_version<L: Layout<Resource = Resource>, VL: Layout>(
+    async fn runtime_for_prepared_version<
+        L: VersionJsonRootLayout,
+        VL: VersionJsonInstanceLayout,
+    >(
         &self,
         prepared_version: &PreparedVanillaVersion<L, VL>,
         runtime_major_version: Option<usize>,
@@ -553,7 +569,11 @@ impl VanillaDriver {
             })
     }
 
-    fn build_launch_builder<A, L: Layout<Resource = Resource> + Clone, VL: Layout + Clone>(
+    fn build_launch_builder<
+        A,
+        L: VersionJsonRootLayout + Clone,
+        VL: VersionJsonInstanceLayout + Clone,
+    >(
         &self,
         authorizer: A,
         runtime: Distribution,
@@ -593,7 +613,10 @@ impl VanillaDriver {
         Ok(builder)
     }
 
-    async fn resolve_or_load<L: Layout<Resource = Resource> + Clone, VL: Layout + Clone>(
+    async fn resolve_or_load<
+        L: VersionJsonRootLayout + Clone,
+        VL: VersionJsonInstanceLayout + Clone,
+    >(
         &self,
         instance: &Storage<VL, Storage<L>>,
         version_id: String,
@@ -607,7 +630,10 @@ impl VanillaDriver {
         self.resolve_version(instance, version_id).await
     }
 
-    async fn resolve_version<L: Layout<Resource = Resource> + Clone, VL: Layout + Clone>(
+    async fn resolve_version<
+        L: VersionJsonRootLayout + Clone,
+        VL: VersionJsonInstanceLayout + Clone,
+    >(
         &self,
         instance: &Storage<VL, Storage<L>>,
         version_id: String,
@@ -674,7 +700,7 @@ impl Catalog for VanillaCatalog {
 }
 
 #[async_trait]
-impl<L: Layout<Resource = Resource>, VL: Layout> Driver<L, VL> for VanillaDriver {
+impl<L: Layout, VL: Layout> Driver<L, VL> for VanillaDriver {
     fn descriptor(&self) -> DriverDescriptor {
         DriverDescriptor {
             id: "vanilla",

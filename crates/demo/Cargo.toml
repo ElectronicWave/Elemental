@@ -5,6 +5,5 @@ edition = "2024"
 
 [dependencies]
 anyhow = { workspace = true }
-elemental-core = { path = "../core" }
-elemental-driver = { path = "../driver" }
+elemental = { path = "../elemental" }
 tokio = { workspace = true }

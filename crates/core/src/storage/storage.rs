@@ -52,6 +52,14 @@ impl<L: Layout, P> Storage<L, P> {
         create_dir_all(&self.path).await?;
         Ok(())
     }
+
+    pub fn scope<NL>(&self, relative: impl AsRef<Path>, layout: NL) -> Storage<NL, Self>
+    where
+        NL: Layout,
+        Self: Clone,
+    {
+        Storage::with_parent(self.path.join(relative), self.clone(), layout)
+    }
 }
 
 impl<L: Layout, P> Layoutable<L> for Storage<L, P> {

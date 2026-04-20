@@ -181,17 +181,13 @@ impl VanillaInstallStatus {
 }
 
 impl ResolvedVanillaMetadata {
-    pub async fn persist<L: Layout<Resource = Resource> + Clone, VL: Layout>(
+    pub async fn persist<L: Layout<Resource = Resource> + Clone, VL: Layout + Clone>(
         self,
-        storage: &Storage<L>,
-        version_name: impl Into<String>,
-        version_layout: VL,
+        instance: &Storage<VL, Storage<L>>,
     ) -> Result<ResolvedVanillaVersion<L, VL>> {
-        let version = storage
-            .ensure_version(version_name.into(), version_layout)
-            .await?;
-        version.write_metadata(&self.metadata).await?;
-        storage
+        instance.write_metadata(&self.metadata).await?;
+        instance
+            .parent
             .write_asset_index(
                 self.metadata.asset_index.id.clone(),
                 &self.asset_index_objects,
@@ -200,7 +196,7 @@ impl ResolvedVanillaMetadata {
 
         Ok(ResolvedVanillaVersion {
             baseurl: self.baseurl,
-            version,
+            version: instance.clone(),
             metadata: self.metadata,
             asset_index_objects: self.asset_index_objects,
         })
@@ -479,25 +475,18 @@ impl VanillaDriver {
 
     pub async fn prepare<L: Layout<Resource = Resource> + Clone, VL: Layout + Clone>(
         &self,
-        storage: &Storage<L>,
+        instance: &Storage<VL, Storage<L>>,
         version_id: String,
-        version_name: String,
-        version_layout: VL,
     ) -> Result<PreparedVanillaVersion<L, VL>> {
-        let resolved = self
-            .resolve_or_load(storage, version_id, version_name, version_layout)
-            .await?;
+        let resolved = self.resolve_or_load(instance, version_id).await?;
         resolved.prepare(self.downloader()).await
     }
 
     pub fn load_prepared<L: Layout<Resource = Resource> + Clone, VL: Layout + Clone>(
         &self,
-        storage: &Storage<L>,
-        version_name: String,
-        version_layout: VL,
+        instance: &Storage<VL, Storage<L>>,
     ) -> Result<PreparedVanillaVersion<L, VL>> {
-        let local_version = storage.version(version_name, version_layout)?;
-        ResolvedVanillaVersion::load(self.client.baseurl.clone(), local_version)?.into_prepared()
+        ResolvedVanillaVersion::load(self.client.baseurl.clone(), instance.clone())?.into_prepared()
     }
 
     pub async fn launch<A, L: Layout<Resource = Resource> + Clone, VL: Layout + Clone>(
@@ -605,33 +594,26 @@ impl VanillaDriver {
 
     async fn resolve_or_load<L: Layout<Resource = Resource> + Clone, VL: Layout + Clone>(
         &self,
-        storage: &Storage<L>,
+        instance: &Storage<VL, Storage<L>>,
         version_id: String,
-        version_name: String,
-        version_layout: VL,
     ) -> Result<ResolvedVanillaVersion<L, VL>> {
-        if let Ok(local_version) = storage.version(version_name.clone(), version_layout.clone()) {
-            if let Ok(resolved) =
-                ResolvedVanillaVersion::load(self.client.baseurl.clone(), local_version)
-            {
-                return Ok(resolved);
-            }
+        if let Ok(resolved) =
+            ResolvedVanillaVersion::load(self.client.baseurl.clone(), instance.clone())
+        {
+            return Ok(resolved);
         }
 
-        self.resolve_version(storage, version_id, version_name, version_layout)
-            .await
+        self.resolve_version(instance, version_id).await
     }
 
-    async fn resolve_version<L: Layout<Resource = Resource> + Clone, VL: Layout>(
+    async fn resolve_version<L: Layout<Resource = Resource> + Clone, VL: Layout + Clone>(
         &self,
-        storage: &Storage<L>,
+        instance: &Storage<VL, Storage<L>>,
         version_id: String,
-        version_name: String,
-        version_layout: VL,
     ) -> Result<ResolvedVanillaVersion<L, VL>> {
         self.resolve_metadata(version_id)
             .await?
-            .persist(storage, version_name, version_layout)
+            .persist(instance)
             .await
     }
 

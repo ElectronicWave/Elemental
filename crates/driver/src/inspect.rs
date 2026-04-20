@@ -90,14 +90,14 @@ where
     L: Layout<Resource = Resource> + Clone,
     VL: Layout + Clone,
 {
-    let mut versions = Vec::new();
-    for version in storage.versions(version_layout)? {
-        if let Some(installed) = inspect_version(version, drivers).await? {
-            versions.push(installed);
+    let mut instances = Vec::new();
+    for instance in storage.instances(version_layout)? {
+        if let Some(installed) = inspect_version(instance, drivers).await? {
+            instances.push(installed);
         }
     }
 
-    Ok(versions)
+    Ok(instances)
 }
 
 fn detect_metadata_path<L: Layout<Resource = Resource>, VL: Layout>(

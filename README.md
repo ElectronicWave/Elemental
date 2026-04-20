@@ -57,8 +57,7 @@ This is the smallest end-to-end flow using the library crates directly.
 [dependencies]
 anyhow = "1"
 tokio = { version = "1", features = ["macros", "process", "rt-multi-thread"] }
-elemental-core = { path = "crates/core" }
-elemental-driver = { path = "crates/driver" }
+elemental = { path = "crates/elemental" }
 ```
 
 ### Example
@@ -67,32 +66,25 @@ elemental-driver = { path = "crates/driver" }
 use std::path::PathBuf;
 
 use anyhow::Result;
-use elemental_core::{
-    auth::authorizers::offline::OfflineAuthorizer,
-    storage::Storage,
-};
-use elemental_driver::{
-    vanilla::{VanillaDriver, VanillaLaunchConfig},
-    version_json::BaseLayout,
+use elemental::{
+    core::{auth::authorizers::offline::OfflineAuthorizer, storage::Storage},
+    driver::{
+        vanilla::{VanillaDriver, VanillaLaunchConfig},
+        version_json::{BaseLayout, VersionJsonGameStorageExt},
+    },
 };
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let storage = Storage::new(PathBuf::from(".minecraft"), BaseLayout);
+    let instance = storage.instance("MyGame-1.16.5".to_owned(), BaseLayout)?;
     let vanilla = VanillaDriver::with_defaults()?;
     let launch_config = VanillaLaunchConfig::new();
     let authorizer = OfflineAuthorizer {
         username: "Player".to_owned(),
     };
 
-    let prepared = vanilla
-        .prepare(
-            &storage,
-            "1.16.5".to_owned(),
-            "MyGame-1.16.5".to_owned(),
-            BaseLayout,
-        )
-        .await?;
+    let prepared = vanilla.prepare(&instance, "1.16.5".to_owned()).await?;
     let launched = vanilla.launch(prepared, &launch_config, authorizer).await?;
     println!("java executable: {}", launched.runtime.executable().display());
     println!(
@@ -117,25 +109,25 @@ load it from storage first and then launch it.
 use std::path::PathBuf;
 
 use anyhow::Result;
-use elemental_core::{
-    auth::authorizers::offline::OfflineAuthorizer,
-    storage::Storage,
-};
-use elemental_driver::{
-    vanilla::{VanillaDriver, VanillaLaunchConfig},
-    version_json::BaseLayout,
+use elemental::{
+    core::{auth::authorizers::offline::OfflineAuthorizer, storage::Storage},
+    driver::{
+        vanilla::{VanillaDriver, VanillaLaunchConfig},
+        version_json::{BaseLayout, VersionJsonGameStorageExt},
+    },
 };
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let storage = Storage::new(PathBuf::from(".minecraft"), BaseLayout);
+    let instance = storage.instance("MyGame-1.16.5".to_owned(), BaseLayout)?;
     let vanilla = VanillaDriver::with_defaults()?;
     let launch_config = VanillaLaunchConfig::new();
     let authorizer = OfflineAuthorizer {
         username: "Player".to_owned(),
     };
 
-    let prepared = vanilla.load_prepared(&storage, "MyGame-1.16.5".to_owned(), BaseLayout)?;
+    let prepared = vanilla.load_prepared(&instance)?;
     let launched = vanilla.launch(prepared, &launch_config, authorizer).await?;
     let mut child = launched.child;
     let exit_status = child.wait().await?;

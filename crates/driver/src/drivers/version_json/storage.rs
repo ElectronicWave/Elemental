@@ -24,9 +24,9 @@ use super::resource::Resource;
 pub trait VersionJsonGameStorageExt {
     type Layout: Layout<Resource = Resource>;
 
-    fn versions_root_path(&self) -> Result<PathBuf>;
-    fn version_root_path(&self, name: impl AsRef<str>) -> Result<PathBuf>;
-    async fn ensure_version<VL>(
+    fn instances_root_path(&self) -> Result<PathBuf>;
+    fn instance_root_path(&self, name: impl AsRef<str>) -> Result<PathBuf>;
+    async fn ensure_instance<VL>(
         &self,
         name: String,
         version_layout: VL,
@@ -34,8 +34,8 @@ pub trait VersionJsonGameStorageExt {
     where
         Self::Layout: Clone,
         VL: Layout + Send;
-    fn version_exists(&self, name: impl AsRef<str>) -> Result<bool>;
-    fn version<VL>(
+    fn instance_exists(&self, name: impl AsRef<str>) -> Result<bool>;
+    fn instance<VL>(
         &self,
         name: impl Into<String>,
         version_layout: VL,
@@ -43,8 +43,8 @@ pub trait VersionJsonGameStorageExt {
     where
         Self::Layout: Clone,
         VL: Layout;
-    fn version_names(&self) -> Result<Vec<String>>;
-    fn versions<VL>(&self, version_layout: VL) -> Result<Vec<Storage<VL, Storage<Self::Layout>>>>
+    fn instance_names(&self) -> Result<Vec<String>>;
+    fn instances<VL>(&self, version_layout: VL) -> Result<Vec<Storage<VL, Storage<Self::Layout>>>>
     where
         Self::Layout: Clone,
         VL: Layout + Clone;
@@ -67,16 +67,16 @@ where
 {
     type Layout = L;
 
-    fn versions_root_path(&self) -> Result<PathBuf> {
+    fn instances_root_path(&self) -> Result<PathBuf> {
         self.get_resource(Resource::Versions)
             .context("versions resource is not available")
     }
 
-    fn version_root_path(&self, name: impl AsRef<str>) -> Result<PathBuf> {
-        Ok(self.versions_root_path()?.join(name.as_ref()))
+    fn instance_root_path(&self, name: impl AsRef<str>) -> Result<PathBuf> {
+        Ok(self.instances_root_path()?.join(name.as_ref()))
     }
 
-    async fn ensure_version<VL>(
+    async fn ensure_instance<VL>(
         &self,
         name: String,
         version_layout: VL,
@@ -85,28 +85,28 @@ where
         Self::Layout: Clone,
         VL: Layout + Send,
     {
-        let versions_root = self.versions_root_path()?;
-        create_dir_all(&versions_root).await?;
+        let instances_root = self.instances_root_path()?;
+        create_dir_all(&instances_root).await?;
 
-        let version_root = versions_root.join(&name);
-        create_dir_all(&version_root).await?;
+        let instance_root = instances_root.join(&name);
+        create_dir_all(&instance_root).await?;
 
         Ok(Storage::with_parent(
-            version_root,
+            instance_root,
             self.clone(),
             version_layout,
         ))
     }
 
-    fn version_exists(&self, name: impl AsRef<str>) -> Result<bool> {
+    fn instance_exists(&self, name: impl AsRef<str>) -> Result<bool> {
         let name = name.as_ref();
-        let version_root = self.version_root_path(name)?;
+        let instance_root = self.instance_root_path(name)?;
 
-        Ok(version_root.join(format!("{name}.jar")).exists()
-            && version_root.join(format!("{name}.json")).exists())
+        Ok(instance_root.join(format!("{name}.jar")).exists()
+            && instance_root.join(format!("{name}.json")).exists())
     }
 
-    fn version<VL>(
+    fn instance<VL>(
         &self,
         name: impl Into<String>,
         version_layout: VL,
@@ -116,47 +116,47 @@ where
         VL: Layout,
     {
         let name = name.into();
-        if !self.version_exists(&name)? {
-            return Err(anyhow!("can't find a valid version named '{name}'"));
+        if !self.instance_exists(&name)? {
+            return Err(anyhow!("can't find a valid instance named '{name}'"));
         }
 
         Ok(Storage::with_parent(
-            self.version_root_path(&name)?,
+            self.instance_root_path(&name)?,
             self.clone(),
             version_layout,
         ))
     }
 
-    fn version_names(&self) -> Result<Vec<String>> {
-        let versions_root = self.versions_root_path()?;
-        if !versions_root.exists() {
+    fn instance_names(&self) -> Result<Vec<String>> {
+        let instances_root = self.instances_root_path()?;
+        if !instances_root.exists() {
             return Ok(Vec::new());
         }
 
-        let mut versions = Vec::new();
-        for entry in versions_root.read_dir()? {
+        let mut instances = Vec::new();
+        for entry in instances_root.read_dir()? {
             let entry = entry?;
             if !entry.file_type()?.is_dir() {
                 continue;
             }
 
             let name = entry.file_name().to_string_lossy().to_string();
-            if self.version_exists(&name)? {
-                versions.push(name);
+            if self.instance_exists(&name)? {
+                instances.push(name);
             }
         }
 
-        Ok(versions)
+        Ok(instances)
     }
 
-    fn versions<VL>(&self, version_layout: VL) -> Result<Vec<Storage<VL, Storage<Self::Layout>>>>
+    fn instances<VL>(&self, version_layout: VL) -> Result<Vec<Storage<VL, Storage<Self::Layout>>>>
     where
         Self::Layout: Clone,
         VL: Layout + Clone,
     {
-        self.version_names()?
+        self.instance_names()?
             .into_iter()
-            .map(|name| self.version(name, version_layout.clone()))
+            .map(|name| self.instance(name, version_layout.clone()))
             .collect()
     }
 

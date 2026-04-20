@@ -104,7 +104,7 @@ pub struct ProfileJson {
     #[serde(rename = "mainClass")]
     pub main_class: String,
     #[serde(rename = "minimumLauncherVersion")]
-    pub minimum_launcher_version: usize,
+    pub minimum_launcher_version: Option<usize>,
     #[serde(rename = "type")]
     pub release_type: String,
     pub time: String,

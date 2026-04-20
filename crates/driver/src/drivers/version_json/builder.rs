@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use anyhow::{Context, Result, bail};
 
 use elemental_core::{
-    auth::authorizer::Authorizer, consts::PLATFORM_NATIVES_DIR_NAME,
-    launcher::command::LaunchCommand, runtime::distribution::Distribution, storage::Storage,
+    auth::authorizer::Authorizer, launcher::command::LaunchCommand,
+    runtime::distribution::Distribution, storage::Storage,
 };
 
 use super::{
@@ -119,8 +119,9 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
         self.inner.auth_uuid = credential.uuid;
         self.inner.auth_access_token = credential.access_token;
         self.inner.version_type = metadata.release_type.clone();
-        self.inner.natives_directory = version_root
-            .join(PLATFORM_NATIVES_DIR_NAME)
+        self.inner.natives_directory = self
+            .version
+            .platform_natives_path()
             .to_string_lossy()
             .to_string();
 

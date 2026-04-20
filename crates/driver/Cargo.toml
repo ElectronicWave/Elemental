@@ -8,6 +8,7 @@ async-trait = "0.1.89"
 elemental-core = { path = "../core" }
 elemental-infra = { path = "../infra" }
 elemental-schema = { path = "../schema" }
+elemental-shared = { path = "../shared" }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

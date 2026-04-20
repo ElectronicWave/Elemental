@@ -55,10 +55,6 @@ pub trait VersionJsonInstanceLayout: Layout {
     fn platform_natives_path(&self, root: &Path) -> PathBuf {
         root.join("natives")
     }
-
-    fn natives_marker_path(&self, root: &Path) -> PathBuf {
-        root.join(".elemental-natives-ready")
-    }
 }
 
 impl VersionJsonRootLayout for BaseLayout {

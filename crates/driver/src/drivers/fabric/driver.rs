@@ -84,14 +84,16 @@ impl FabricDriver {
         resolved.prepare(self.downloader()).await
     }
 
-    pub fn load_prepared<
+    pub async fn load_prepared<
         L: VersionJsonRootLayout + Clone,
         VL: VersionJsonInstanceLayout + Clone,
     >(
         &self,
         instance: &Storage<VL, Storage<L>>,
     ) -> Result<PreparedFabricVersion<L, VL>> {
-        ResolvedFabricVersion::load(self.remote_resolver(), instance.clone())?.into_prepared()
+        ResolvedFabricVersion::load(self.remote_resolver(), instance.clone())?
+            .into_prepared()
+            .await
     }
 
     pub async fn launch<

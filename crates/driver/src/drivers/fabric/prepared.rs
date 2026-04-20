@@ -85,7 +85,9 @@ pub fn merge_fabric_profile(
         libraries: merged_libraries,
         logging: profile_logging.or(base_metadata.logging),
         main_class: profile.main_class,
-        minimum_launcher_version: profile.minimum_launcher_version,
+        minimum_launcher_version: profile
+            .minimum_launcher_version
+            .unwrap_or(base_metadata.minimum_launcher_version),
         release_type: profile.release_type,
         time: profile.time,
         release_time: profile.release_time,

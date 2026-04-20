@@ -1,6 +1,7 @@
 use std::{
     fs::File,
     path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::{Context, Result, anyhow};
@@ -12,13 +13,15 @@ use super::layout::{VersionJsonInstanceLayout, VersionJsonRootLayout};
 use crate::{
     driver::Driver,
     drivers::version_json::{
-        PistonMetaAssetIndexObjects, PistonMetaData, extensions::PistonMetaLibrariesExt,
+        PistonMetaAssetIndexObjects, PistonMetaData,
+        extensions::PistonMetaLibrariesExt,
         rules::VersionJsonRuleContext,
+        state::{NativesState, natives_state_store},
     },
     inspect::{InstalledInstance, inspect_instance},
 };
 
-#[async_trait]
+#[async_trait(?Send)]
 pub trait VersionJsonGameStorageExt {
     type Layout: VersionJsonRootLayout;
 
@@ -58,7 +61,7 @@ pub trait VersionJsonGameStorageExt {
     fn asset_index_objects(&self, id: impl AsRef<str>) -> Result<PistonMetaAssetIndexObjects>;
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl<L> VersionJsonGameStorageExt for Storage<L>
 where
     L: VersionJsonRootLayout,
@@ -196,7 +199,7 @@ where
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 pub trait VersionJsonVersionStorageExt {
     type GameLayout: VersionJsonRootLayout;
     type VersionLayout: VersionJsonInstanceLayout;
@@ -206,13 +209,12 @@ pub trait VersionJsonVersionStorageExt {
     fn jar_path(&self) -> Result<PathBuf>;
     async fn write_metadata(&self, metadata: &PistonMetaData) -> Result<()>;
     fn platform_natives_path(&self) -> PathBuf;
-    fn natives_marker_path(&self) -> PathBuf;
-    fn natives_are_extracted(&self) -> bool;
+    async fn natives_are_extracted(&self) -> bool;
     async fn ensure_platform_natives_path(&self) -> Result<PathBuf>;
-    fn extract_natives(&self) -> Result<()>;
+    async fn extract_natives(&self) -> Result<()>;
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl<L, VL> VersionJsonVersionStorageExt for Storage<VL, Storage<L>>
 where
     L: VersionJsonRootLayout,
@@ -238,10 +240,6 @@ where
     async fn write_metadata(&self, metadata: &PistonMetaData) -> Result<()> {
         self.ensure_root().await?;
         tokio::fs::write(self.metadata_path()?, serde_json::to_vec(metadata)?).await?;
-        let marker = self.natives_marker_path();
-        if marker.exists() {
-            tokio::fs::remove_file(marker).await?;
-        }
         Ok(())
     }
 
@@ -249,12 +247,41 @@ where
         self.layout.platform_natives_path(&self.path)
     }
 
-    fn natives_marker_path(&self) -> PathBuf {
-        self.layout.natives_marker_path(&self.path)
-    }
+    async fn natives_are_extracted(&self) -> bool {
+        let metadata = match self.metadata() {
+            Ok(metadata) => metadata,
+            Err(_) => return false,
+        };
+        let rule_context = VersionJsonRuleContext::current();
+        let natives_root = self.platform_natives_path();
+        let store = match natives_state_store(&self.path).await {
+            Ok(store) => store,
+            Err(_) => return false,
+        };
+        let state = store.cloned().await;
+        if state.value.path.is_empty() {
+            return false;
+        }
 
-    fn natives_are_extracted(&self) -> bool {
-        self.natives_marker_path().exists()
+        let expected_path = natives_root.to_string_lossy().to_string();
+        if state.value.path != expected_path {
+            return false;
+        }
+
+        let expected_artifacts = collect_native_artifact_paths(&metadata, &rule_context);
+        if state.value.native_artifacts != expected_artifacts {
+            return false;
+        }
+
+        if state.value.extracted_files.is_empty() {
+            return false;
+        }
+
+        state
+            .value
+            .extracted_files
+            .iter()
+            .all(|file| natives_root.join(file).exists())
     }
 
     async fn ensure_platform_natives_path(&self) -> Result<PathBuf> {
@@ -263,29 +290,51 @@ where
         Ok(path)
     }
 
-    fn extract_natives(&self) -> Result<()> {
+    async fn extract_natives(&self) -> Result<()> {
         let metadata = self.metadata()?;
         let destination = self.platform_natives_path();
         let rule_context = VersionJsonRuleContext::current();
         std::fs::create_dir_all(&destination)?;
 
-        for library in metadata.libraries {
-            if !library.is_allowed(&rule_context) {
-                continue;
+        tokio::task::block_in_place(|| -> Result<()> {
+            for library in &metadata.libraries {
+                if !library.is_allowed(&rule_context) {
+                    continue;
+                }
+
+                if let Some(artifact) = library.classifiers_native_artifact(rule_context.platform())
+                {
+                    let source = self.parent.library_path(artifact.path.as_str())?;
+                    JarFile::new(source).extract_blocking(&destination)?;
+                }
+
+                if let Some(artifact) = library.native_artifact(rule_context.platform()) {
+                    let source = self.parent.library_path(artifact.path.as_str())?;
+                    JarFile::new(source).extract_blocking(&destination)?;
+                }
             }
 
-            if let Some(artifact) = library.classifiers_native_artifact(rule_context.platform()) {
-                let source = self.parent.library_path(artifact.path.as_str())?;
-                JarFile::new(source).extract_blocking(&destination)?;
-            }
-
-            if let Some(artifact) = library.native_artifact(rule_context.platform()) {
-                let source = self.parent.library_path(artifact.path.as_str())?;
-                JarFile::new(source).extract_blocking(&destination)?;
-            }
-        }
-
-        std::fs::write(self.natives_marker_path(), b"ready")?;
+            flatten_native_binaries(&destination)
+        })?;
+        let extracted_files = collect_root_native_binaries(&destination)?
+            .into_iter()
+            .filter_map(|path| {
+                path.file_name()
+                    .map(|name| name.to_string_lossy().to_string())
+            })
+            .collect::<Vec<String>>();
+        let checked_at_unix_ms = current_unix_ms()?;
+        let store = natives_state_store(&self.path).await?;
+        store
+            .set(|state| {
+                state.value = NativesState {
+                    path: destination.to_string_lossy().to_string(),
+                    native_artifacts: collect_native_artifact_paths(&metadata, &rule_context),
+                    extracted_files,
+                    checked_at_unix_ms,
+                };
+            })
+            .await?;
 
         Ok(())
     }
@@ -308,4 +357,104 @@ where
     }
 
     Ok(instances)
+}
+
+fn current_unix_ms() -> Result<u64> {
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .context("system time is before unix epoch")?;
+    Ok(duration.as_millis() as u64)
+}
+
+fn flatten_native_binaries(root: &Path) -> Result<()> {
+    for path in collect_native_binaries(root)? {
+        let Some(file_name) = path.file_name() else {
+            continue;
+        };
+        let target = root.join(file_name);
+        if target == path {
+            continue;
+        }
+
+        std::fs::copy(&path, &target).with_context(|| {
+            format!(
+                "copy native binary '{}' to '{}' failed",
+                path.display(),
+                target.display()
+            )
+        })?;
+    }
+
+    Ok(())
+}
+
+fn collect_root_native_binaries(root: &Path) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    for entry in std::fs::read_dir(root)? {
+        let entry = entry?;
+        let path = entry.path();
+        if entry.file_type()?.is_file() && is_native_binary(&path) {
+            files.push(path);
+        }
+    }
+    Ok(files)
+}
+
+fn collect_native_artifact_paths(
+    metadata: &PistonMetaData,
+    rule_context: &VersionJsonRuleContext,
+) -> Vec<String> {
+    let mut paths = Vec::new();
+
+    for library in &metadata.libraries {
+        if !library.is_allowed(rule_context) {
+            continue;
+        }
+
+        if let Some(artifact) = library.classifiers_native_artifact(rule_context.platform()) {
+            paths.push(artifact.path.clone());
+        }
+
+        if let Some(artifact) = library.native_artifact(rule_context.platform()) {
+            paths.push(artifact.path.clone());
+        }
+    }
+
+    paths.sort();
+    paths.dedup();
+    paths
+}
+
+fn collect_native_binaries(root: &Path) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    collect_native_binaries_into(root, &mut files)?;
+    Ok(files)
+}
+
+fn collect_native_binaries_into(current: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
+    for entry in std::fs::read_dir(current)? {
+        let entry = entry?;
+        let path = entry.path();
+        if entry.file_type()?.is_dir() {
+            collect_native_binaries_into(&path, files)?;
+            continue;
+        }
+
+        if is_native_binary(&path) {
+            files.push(path);
+        }
+    }
+
+    Ok(())
+}
+
+fn is_native_binary(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            matches!(
+                extension.to_ascii_lowercase().as_str(),
+                "dll" | "so" | "dylib" | "jnilib"
+            )
+        })
 }

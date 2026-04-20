@@ -5,8 +5,6 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use elemental_core::consts::PLATFORM_NATIVES_DIR_NAME;
-
 use super::{
     classpath::join_classpath, extensions::PistonMetaLibrariesExt, meta::PistonMetaData,
     rules::VersionJsonRuleContext,
@@ -82,6 +80,7 @@ impl LauncherVariables {
         player_name: String,
         game_directory: String,
         version_root: String,
+        natives_directory: String,
         pistonmeta: &PistonMetaData,
     ) -> Result<Self> {
         let rule_context = VersionJsonRuleContext::current();
@@ -133,10 +132,7 @@ impl LauncherVariables {
             quick_play_singleplayer: None,
             quick_play_multiplayer: None,
             quick_play_realms: None,
-            natives_directory: Path::new(&version_root)
-                .join(PLATFORM_NATIVES_DIR_NAME)
-                .to_string_lossy()
-                .to_string(),
+            natives_directory,
             launcher_name: "Elemental".to_owned(),
             launcher_version: env!("CARGO_PKG_VERSION").to_owned(),
             classpath,

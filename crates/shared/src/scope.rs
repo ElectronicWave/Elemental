@@ -28,17 +28,27 @@ impl Scope {
         }
     }
 
-    pub async fn get_full_path(&self, id: &str, suffix: Option<String>) -> Result<PathBuf> {
+    pub fn get_full_path_blocking(&self, id: &str, suffix: Option<String>) -> Result<PathBuf> {
         let mut path = self.path().context("There is no valid base path")?;
-        // Make sure the preserved directory exists
         path.push(PRESERVED_DIR);
         if !path.exists() {
-            create_dir_all(&path).await?;
+            std::fs::create_dir_all(&path)?;
         }
 
         path.push(id);
         if let Some(suf) = suffix {
             path.set_extension(suf);
+        }
+
+        Ok(path)
+    }
+
+    pub async fn get_full_path(&self, id: &str, suffix: Option<String>) -> Result<PathBuf> {
+        let path = self.get_full_path_blocking(id, suffix)?;
+        if let Some(parent) = path.parent() {
+            if !parent.exists() {
+                create_dir_all(parent).await?;
+            }
         }
 
         Ok(path)

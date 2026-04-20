@@ -3,6 +3,7 @@ pub mod migrator;
 pub mod persistor;
 pub mod profile;
 pub mod scope;
+pub mod store;
 pub mod version;
 
 #[cfg(test)]

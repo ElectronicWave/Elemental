@@ -67,7 +67,7 @@ impl VanillaDriver {
         resolved.prepare(self.downloader()).await
     }
 
-    pub fn load_prepared<
+    pub async fn load_prepared<
         L: VersionJsonRootLayout + Clone,
         VL: VersionJsonInstanceLayout + Clone,
     >(
@@ -76,6 +76,7 @@ impl VanillaDriver {
     ) -> Result<PreparedVanillaVersion<L, VL>> {
         ResolvedVanillaVersion::load(self.source.endpoints().clone(), instance.clone())?
             .into_prepared()
+            .await
     }
 
     pub async fn launch<

@@ -146,8 +146,8 @@ where
         })
     }
 
-    pub fn into_prepared(self) -> Result<PreparedVersionJsonInstance<R, L, VL>> {
-        let status = self.status()?;
+    pub async fn into_prepared(self) -> Result<PreparedVersionJsonInstance<R, L, VL>> {
+        let status = self.status().await?;
         if !status.is_ready() {
             let version_name = self.version.name().context("get version name failed")?;
             bail!("local version '{version_name}' is not prepared: {status:?}");
@@ -173,7 +173,7 @@ where
         self.metadata.java_version.major_version
     }
 
-    pub fn status(&self) -> Result<VersionJsonInstallStatus> {
+    pub async fn status(&self) -> Result<VersionJsonInstallStatus> {
         let rule_context = VersionJsonRuleContext::current();
 
         Ok(VersionJsonInstallStatus {
@@ -185,7 +185,7 @@ where
                 .exists(),
             version_artifacts_ready: self.version_artifacts_ready(&rule_context)?,
             assets_ready: self.assets_ready()?,
-            natives_extracted: self.version.natives_are_extracted(),
+            natives_extracted: self.version.natives_are_extracted().await,
         })
     }
 
@@ -193,17 +193,17 @@ where
         self,
         downloader: &ElementalDownloader,
     ) -> Result<PreparedVersionJsonInstance<R, L, VL>> {
-        let status = self.status()?;
+        let status = self.status().await?;
         if !status.is_downloaded() {
             downloader.execute_planner(&self.planner()).await?;
         }
 
-        let status = self.status()?;
+        let status = self.status().await?;
         if !status.natives_extracted {
-            self.version.extract_natives()?;
+            self.version.extract_natives().await?;
         }
 
-        self.into_prepared()
+        self.into_prepared().await
     }
 
     fn version_artifacts_ready(&self, rule_context: &VersionJsonRuleContext) -> Result<bool> {

@@ -23,14 +23,6 @@ pub struct NeoForgeRelease {
 
 #[async_trait]
 impl Release for NeoForgeRelease {
-    async fn install(&self) -> Result<()> {
-        todo!()
-    }
-
-    async fn uninstall(&self) -> Result<()> {
-        todo!()
-    }
-
     async fn info(&self) -> ReleaseInfo {
         ReleaseInfo {
             name: self.loader.clone(),

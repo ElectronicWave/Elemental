@@ -5,7 +5,7 @@ use serde::de::DeserializeOwned;
 
 use crate::{
     drivers::version_json::{LaunchMetaData, PistonMetaAssetIndexObjects, PistonMetaData},
-    url::{ReplacePrefixRule, UrlMapper},
+    url::{Origin, OriginPolicy},
 };
 
 const LAUNCHERMETA_ORIGIN: &str = "https://launchermeta.mojang.com";
@@ -14,9 +14,18 @@ const PISTONDATA_ORIGIN: &str = "https://piston-data.mojang.com";
 const RESOURCES_ORIGIN: &str = "https://resources.download.minecraft.net";
 const LIBRARIES_ORIGIN: &str = "https://libraries.minecraft.net";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum VanillaOrigin {
+    LauncherMeta,
+    PistonMeta,
+    PistonData,
+    Resources,
+    Libraries,
+}
+
 #[derive(Debug, Clone)]
 pub struct VanillaEndpoints {
-    mapper: UrlMapper,
+    origin_policy: OriginPolicy<VanillaOrigin>,
 }
 
 #[derive(Debug, Clone)]
@@ -31,13 +40,36 @@ impl Default for VanillaEndpoints {
     }
 }
 
+impl Origin for VanillaOrigin {
+    fn canonical(self) -> &'static str {
+        match self {
+            VanillaOrigin::LauncherMeta => LAUNCHERMETA_ORIGIN,
+            VanillaOrigin::PistonMeta => PISTONMETA_ORIGIN,
+            VanillaOrigin::PistonData => PISTONDATA_ORIGIN,
+            VanillaOrigin::Resources => RESOURCES_ORIGIN,
+            VanillaOrigin::Libraries => LIBRARIES_ORIGIN,
+        }
+    }
+
+    fn all() -> &'static [Self] {
+        const ALL: &[VanillaOrigin] = &[
+            VanillaOrigin::LauncherMeta,
+            VanillaOrigin::PistonMeta,
+            VanillaOrigin::PistonData,
+            VanillaOrigin::Resources,
+            VanillaOrigin::Libraries,
+        ];
+        ALL
+    }
+}
+
 impl VanillaEndpoints {
-    pub fn new(mapper: UrlMapper) -> Self {
-        Self { mapper }
+    pub fn new(origin_policy: OriginPolicy<VanillaOrigin>) -> Self {
+        Self { origin_policy }
     }
 
     pub fn official() -> Self {
-        Self::new(UrlMapper::default())
+        Self::new(OriginPolicy::default())
     }
 
     pub fn mirror(
@@ -46,50 +78,36 @@ impl VanillaEndpoints {
         pistondata_origin: String,
         resources_origin: String,
         libraries_origin: String,
-    ) -> Self {
-        let mapper = UrlMapper::default()
-            .add_rule(ReplacePrefixRule::new(
-                LAUNCHERMETA_ORIGIN.to_owned(),
-                launchermeta_origin,
-            ))
-            .add_rule(ReplacePrefixRule::new(
-                PISTONMETA_ORIGIN.to_owned(),
-                pistonmeta_origin,
-            ))
-            .add_rule(ReplacePrefixRule::new(
-                PISTONDATA_ORIGIN.to_owned(),
-                pistondata_origin,
-            ))
-            .add_rule(ReplacePrefixRule::new(
-                RESOURCES_ORIGIN.to_owned(),
-                resources_origin,
-            ))
-            .add_rule(ReplacePrefixRule::new(
-                LIBRARIES_ORIGIN.to_owned(),
-                libraries_origin,
-            ));
-        Self::new(mapper)
+    ) -> Result<Self> {
+        let policy = OriginPolicy::default()
+            .with_override(VanillaOrigin::LauncherMeta, launchermeta_origin)?
+            .with_override(VanillaOrigin::PistonMeta, pistonmeta_origin)?
+            .with_override(VanillaOrigin::PistonData, pistondata_origin)?
+            .with_override(VanillaOrigin::Resources, resources_origin)?
+            .with_override(VanillaOrigin::Libraries, libraries_origin)?;
+        Ok(Self::new(policy))
     }
 
-    pub fn mapper(&self) -> &UrlMapper {
-        &self.mapper
+    pub fn origin_policy(&self) -> &OriginPolicy<VanillaOrigin> {
+        &self.origin_policy
     }
 
     pub fn version_manifest_url(&self) -> Result<String> {
-        self.mapper.rewrite(format!(
-            "{LAUNCHERMETA_ORIGIN}/mc/game/version_manifest_v2.json"
-        ))
+        self.origin_policy.resolve(
+            VanillaOrigin::LauncherMeta,
+            "/mc/game/version_manifest_v2.json",
+        )
     }
 
-    pub fn rewrite(&self, url: impl AsRef<str>) -> Result<String> {
-        self.mapper.rewrite(url)
+    pub fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
+        self.origin_policy.rewrite_origin_url(raw_url)
     }
 
     pub fn object_url(&self, hash: impl AsRef<str>) -> Result<String> {
         let hash = hash.as_ref();
         let prefix = hash.get(0..2).context("asset hash is too short")?;
-        self.mapper
-            .rewrite(format!("{RESOURCES_ORIGIN}/{prefix}/{hash}"))
+        self.origin_policy
+            .resolve(VanillaOrigin::Resources, &format!("{prefix}/{hash}"))
     }
 }
 
@@ -128,7 +146,7 @@ impl VanillaSource {
     }
 
     pub async fn piston_meta(&self, url: impl AsRef<str>) -> Result<PistonMetaData> {
-        let url = self.endpoints.rewrite(url)?;
+        let url = self.endpoints.rewrite_upstream(url.as_ref())?;
         self.fetch_json(url.as_str()).await
     }
 
@@ -136,7 +154,7 @@ impl VanillaSource {
         &self,
         url: impl AsRef<str>,
     ) -> Result<PistonMetaAssetIndexObjects> {
-        let url = self.endpoints.rewrite(url)?;
+        let url = self.endpoints.rewrite_upstream(url.as_ref())?;
         self.fetch_json(url.as_str()).await
     }
 

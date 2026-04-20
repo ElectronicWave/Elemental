@@ -12,8 +12,6 @@ pub trait Catalog {
 
 #[async_trait]
 pub trait Release {
-    async fn install(&self) -> Result<()>;
-    async fn uninstall(&self) -> Result<()>;
     async fn info(&self) -> ReleaseInfo;
 }
 

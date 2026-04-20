@@ -45,7 +45,7 @@ The demo will:
 4. Auto-select a compatible local Java runtime from the version metadata
 5. Launch the game with an offline account
 
-The default demo settings live in [crates/demo/src/lib.rs](crates/demo/src/lib.rs).
+The default demo settings live in [crates/demo/src/main.rs](crates/demo/src/main.rs).
 
 ## Vanilla Download And Launch Example
 
@@ -68,8 +68,8 @@ use std::path::PathBuf;
 use anyhow::Result;
 use elemental::{
     core::{auth::authorizers::offline::OfflineAuthorizer, storage::Storage},
-    driver::{
-        vanilla::{VanillaDriver, VanillaLaunchConfig},
+    driver::drivers::{
+        vanilla::{config::VanillaLaunchConfig, driver::VanillaDriver},
         version_json::{BaseLayout, VersionJsonGameStorageExt},
     },
 };
@@ -111,8 +111,8 @@ use std::path::PathBuf;
 use anyhow::Result;
 use elemental::{
     core::{auth::authorizers::offline::OfflineAuthorizer, storage::Storage},
-    driver::{
-        vanilla::{VanillaDriver, VanillaLaunchConfig},
+    driver::drivers::{
+        vanilla::{config::VanillaLaunchConfig, driver::VanillaDriver},
         version_json::{BaseLayout, VersionJsonGameStorageExt},
     },
 };
@@ -143,7 +143,7 @@ async fn main() -> Result<()> {
 - Elemental now auto-selects a local runtime using the Minecraft version metadata.
 - Runtime discovery uses sources such as the Windows registry, `PATH`, package-manager locations, and `JAVA_HOME`.
 - The example uses offline auth on purpose so the minimal flow stays easy to run.
-- If you want a complete runnable reference from this repository, [crates/demo/src/lib.rs](crates/demo/src/lib.rs) is the best starting point.
+- If you want a complete runnable reference from this repository, [crates/demo/src/main.rs](crates/demo/src/main.rs) is the best starting point.
 
 ## Wiki
 

@@ -13,7 +13,7 @@ use crate::{
     driver::Driver,
     drivers::version_json::{
         PistonMetaAssetIndexObjects, PistonMetaData, extensions::PistonMetaLibrariesExt,
-        rules::MojangRuleContext,
+        rules::VersionJsonRuleContext,
     },
     inspect::{InstalledInstance, inspect_instance},
 };
@@ -266,7 +266,7 @@ where
     fn extract_natives(&self) -> Result<()> {
         let metadata = self.metadata()?;
         let destination = self.platform_natives_path();
-        let rule_context = MojangRuleContext::current();
+        let rule_context = VersionJsonRuleContext::current();
         std::fs::create_dir_all(&destination)?;
 
         for library in metadata.libraries {

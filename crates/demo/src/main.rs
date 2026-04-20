@@ -4,7 +4,7 @@ use anyhow::Result;
 use elemental::{
     core::{auth::authorizers::offline::OfflineAuthorizer, storage::Storage},
     driver::drivers::{
-        vanilla::{VanillaDriver, VanillaLaunchConfig},
+        vanilla::{config::VanillaLaunchConfig, driver::VanillaDriver},
         version_json::{BaseLayout, VersionJsonGameStorageExt},
     },
 };

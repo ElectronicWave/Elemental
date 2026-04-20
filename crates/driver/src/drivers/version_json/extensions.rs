@@ -1,23 +1,23 @@
 use super::{
-    ContinuousArgument, MojangPlatform, MojangRuleContext, PistonMetaData,
-    PistonMetaGenericArgument, PistonMetaLibraries, PistonMetaLibrariesDownloadsArtifact,
-    PistonMetaRuleArgument, PistonMetaRulesExt,
+    ContinuousArgument, PistonMetaData, PistonMetaGenericArgument, PistonMetaLibraries,
+    PistonMetaLibrariesDownloadsArtifact, PistonMetaRuleArgument, PistonMetaRulesExt,
+    VersionJsonPlatform, VersionJsonRuleContext,
 };
 
 pub trait PistonMetaDataExt {
-    fn jvm_arguments(&self, context: &MojangRuleContext) -> Vec<String>;
-    fn game_arguments(&self, context: &MojangRuleContext) -> Vec<String>;
+    fn jvm_arguments(&self, context: &VersionJsonRuleContext) -> Vec<String>;
+    fn game_arguments(&self, context: &VersionJsonRuleContext) -> Vec<String>;
 }
 
 impl PistonMetaDataExt for PistonMetaData {
-    fn jvm_arguments(&self, context: &MojangRuleContext) -> Vec<String> {
+    fn jvm_arguments(&self, context: &VersionJsonRuleContext) -> Vec<String> {
         self.arguments
             .as_ref()
             .map(|arguments| collect_arguments(&arguments.jvm, context))
             .unwrap_or_default()
     }
 
-    fn game_arguments(&self, context: &MojangRuleContext) -> Vec<String> {
+    fn game_arguments(&self, context: &VersionJsonRuleContext) -> Vec<String> {
         if let Some(arguments) = &self.arguments {
             let game_arguments = collect_arguments(&arguments.game, context);
             if !game_arguments.is_empty() {
@@ -35,19 +35,19 @@ impl PistonMetaDataExt for PistonMetaData {
 }
 
 pub trait PistonMetaLibrariesExt {
-    fn is_allowed(&self, context: &MojangRuleContext) -> bool;
+    fn is_allowed(&self, context: &VersionJsonRuleContext) -> bool;
     fn classifiers_native_artifact<'a>(
         &'a self,
-        platform: &MojangPlatform,
+        platform: &VersionJsonPlatform,
     ) -> Option<&'a PistonMetaLibrariesDownloadsArtifact>;
     fn native_artifact<'a>(
         &'a self,
-        platform: &MojangPlatform,
+        platform: &VersionJsonPlatform,
     ) -> Option<&'a PistonMetaLibrariesDownloadsArtifact>;
 }
 
 impl PistonMetaLibrariesExt for PistonMetaLibraries {
-    fn is_allowed(&self, context: &MojangRuleContext) -> bool {
+    fn is_allowed(&self, context: &VersionJsonRuleContext) -> bool {
         self.rules
             .as_deref()
             .map(|rules| rules.are_allowed(context))
@@ -56,7 +56,7 @@ impl PistonMetaLibrariesExt for PistonMetaLibraries {
 
     fn classifiers_native_artifact<'a>(
         &'a self,
-        platform: &MojangPlatform,
+        platform: &VersionJsonPlatform,
     ) -> Option<&'a PistonMetaLibrariesDownloadsArtifact> {
         let classifiers = self.downloads.classifiers.as_ref()?;
         let natives = self.natives.as_ref()?;
@@ -76,7 +76,7 @@ impl PistonMetaLibrariesExt for PistonMetaLibraries {
 
     fn native_artifact<'a>(
         &'a self,
-        platform: &MojangPlatform,
+        platform: &VersionJsonPlatform,
     ) -> Option<&'a PistonMetaLibrariesDownloadsArtifact> {
         let artifact = &self.downloads.artifact;
         if artifact
@@ -93,7 +93,7 @@ impl PistonMetaLibrariesExt for PistonMetaLibraries {
 
 fn collect_arguments(
     arguments: &[PistonMetaGenericArgument],
-    context: &MojangRuleContext,
+    context: &VersionJsonRuleContext,
 ) -> Vec<String> {
     let mut result = Vec::new();
 

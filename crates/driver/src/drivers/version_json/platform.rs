@@ -1,12 +1,12 @@
 use std::env::consts::{ARCH, OS};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MojangPlatform {
+pub struct VersionJsonPlatform {
     os: String,
     arch: String,
 }
 
-impl MojangPlatform {
+impl VersionJsonPlatform {
     pub fn new(os: String, arch: String) -> Self {
         Self { os, arch }
     }

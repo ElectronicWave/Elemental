@@ -11,12 +11,12 @@ use super::{
     classpath::join_classpath,
     extensions::{PistonMetaDataExt, PistonMetaLibrariesExt},
     layout::{VersionJsonInstanceLayout, VersionJsonRootLayout},
-    rules::MojangRuleContext,
+    rules::VersionJsonRuleContext,
     storage::{VersionJsonGameStorageExt, VersionJsonVersionStorageExt},
     variables::LauncherVariables,
 };
 
-pub struct MojangLaunchBuilder<
+pub struct VersionJsonLaunchBuilder<
     A: Authorizer,
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
@@ -28,7 +28,7 @@ pub struct MojangLaunchBuilder<
 }
 
 impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
-    MojangLaunchBuilder<A, L, VL>
+    VersionJsonLaunchBuilder<A, L, VL>
 {
     pub fn new(authorizer: A, runtime: Distribution, version: Storage<VL, Storage<L>>) -> Self {
         Self {
@@ -89,7 +89,7 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
             .version
             .metadata()
             .context("read version metadata failed")?;
-        let rule_context = MojangRuleContext::current();
+        let rule_context = VersionJsonRuleContext::current();
         let credential = self
             .authorizer
             .authorize()

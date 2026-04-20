@@ -73,14 +73,6 @@ impl FabricCatalog {
 
 #[async_trait]
 impl Release for FabricRelease {
-    async fn install(&self) -> Result<()> {
-        todo!()
-    }
-
-    async fn uninstall(&self) -> Result<()> {
-        todo!()
-    }
-
     async fn info(&self) -> ReleaseInfo {
         ReleaseInfo {
             name: self.loader.clone(),

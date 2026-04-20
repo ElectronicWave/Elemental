@@ -9,7 +9,7 @@ use elemental_core::consts::PLATFORM_NATIVES_DIR_NAME;
 
 use super::{
     classpath::join_classpath, extensions::PistonMetaLibrariesExt, meta::PistonMetaData,
-    rules::MojangRuleContext,
+    rules::VersionJsonRuleContext,
 };
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -84,7 +84,7 @@ impl LauncherVariables {
         version_root: String,
         pistonmeta: &PistonMetaData,
     ) -> Result<Self> {
-        let rule_context = MojangRuleContext::current();
+        let rule_context = VersionJsonRuleContext::current();
         let version_name = Path::new(&version_root)
             .file_name()
             .context("version root has no file name")?

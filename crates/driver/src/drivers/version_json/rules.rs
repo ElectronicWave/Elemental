@@ -1,23 +1,23 @@
 use std::collections::HashMap;
 
-use super::{MojangPlatform, OperatingSystem, PistonMetaRuleArgumentRules};
+use super::{OperatingSystem, PistonMetaRuleArgumentRules, VersionJsonPlatform};
 
 #[derive(Debug, Clone)]
-pub struct MojangRuleContext {
-    platform: MojangPlatform,
+pub struct VersionJsonRuleContext {
+    platform: VersionJsonPlatform,
     features: HashMap<String, bool>,
 }
 
-impl MojangRuleContext {
-    pub fn new(platform: MojangPlatform, features: HashMap<String, bool>) -> Self {
+impl VersionJsonRuleContext {
+    pub fn new(platform: VersionJsonPlatform, features: HashMap<String, bool>) -> Self {
         Self { platform, features }
     }
 
     pub fn current() -> Self {
-        Self::new(MojangPlatform::current(), HashMap::new())
+        Self::new(VersionJsonPlatform::current(), HashMap::new())
     }
 
-    pub fn platform(&self) -> &MojangPlatform {
+    pub fn platform(&self) -> &VersionJsonPlatform {
         &self.platform
     }
 
@@ -27,11 +27,11 @@ impl MojangRuleContext {
 }
 
 pub trait OperatingSystemExt {
-    fn matches_platform(&self, platform: &MojangPlatform) -> bool;
+    fn matches_platform(&self, platform: &VersionJsonPlatform) -> bool;
 }
 
 impl OperatingSystemExt for OperatingSystem {
-    fn matches_platform(&self, platform: &MojangPlatform) -> bool {
+    fn matches_platform(&self, platform: &VersionJsonPlatform) -> bool {
         if let Some(name) = &self.name {
             if !matches_os_name(name, platform.os()) {
                 return false;
@@ -49,11 +49,11 @@ impl OperatingSystemExt for OperatingSystem {
 }
 
 pub trait PistonMetaRuleExt {
-    fn is_allowed(&self, context: &MojangRuleContext) -> bool;
+    fn is_allowed(&self, context: &VersionJsonRuleContext) -> bool;
 }
 
 impl PistonMetaRuleExt for PistonMetaRuleArgumentRules {
-    fn is_allowed(&self, context: &MojangRuleContext) -> bool {
+    fn is_allowed(&self, context: &VersionJsonRuleContext) -> bool {
         let mut action = self.action == "allow";
 
         if let Some(os) = &self.os {
@@ -73,11 +73,11 @@ impl PistonMetaRuleExt for PistonMetaRuleArgumentRules {
 }
 
 pub trait PistonMetaRulesExt {
-    fn are_allowed(&self, context: &MojangRuleContext) -> bool;
+    fn are_allowed(&self, context: &VersionJsonRuleContext) -> bool;
 }
 
 impl PistonMetaRulesExt for [PistonMetaRuleArgumentRules] {
-    fn are_allowed(&self, context: &MojangRuleContext) -> bool {
+    fn are_allowed(&self, context: &VersionJsonRuleContext) -> bool {
         self.iter().all(|rule| rule.is_allowed(context))
     }
 }
@@ -90,7 +90,10 @@ fn matches_os_name(rule_name: &str, platform_name: &str) -> bool {
     rule_name == platform_name
 }
 
-fn features_are_satisfied(features: &HashMap<String, bool>, context: &MojangRuleContext) -> bool {
+fn features_are_satisfied(
+    features: &HashMap<String, bool>,
+    context: &VersionJsonRuleContext,
+) -> bool {
     features
         .iter()
         .all(|(key, expected)| context.feature_enabled(key) == *expected)

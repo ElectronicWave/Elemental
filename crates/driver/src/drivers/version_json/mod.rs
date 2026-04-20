@@ -20,7 +20,9 @@ pub use meta::{
     PistonMetaLogging, PistonMetaLoggingSide, PistonMetaLoggingSideFile, PistonMetaRuleArgument,
     PistonMetaRuleArgumentRules,
 };
-pub use platform::MojangPlatform;
+pub use platform::VersionJsonPlatform;
 pub use resource::Resource;
-pub use rules::{MojangRuleContext, OperatingSystemExt, PistonMetaRuleExt, PistonMetaRulesExt};
+pub use rules::{
+    OperatingSystemExt, PistonMetaRuleExt, PistonMetaRulesExt, VersionJsonRuleContext,
+};
 pub use storage::{VersionJsonGameStorageExt, VersionJsonVersionStorageExt, inspect_instances};

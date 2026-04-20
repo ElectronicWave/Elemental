@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use serde::de::DeserializeOwned;
 
 use crate::{
+    drivers::version_json::VersionJsonRemoteResolver,
     drivers::version_json::{LaunchMetaData, PistonMetaAssetIndexObjects, PistonMetaData},
     url::{Origin, OriginPolicy},
 };
@@ -108,6 +109,16 @@ impl VanillaEndpoints {
         let prefix = hash.get(0..2).context("asset hash is too short")?;
         self.origin_policy
             .resolve(VanillaOrigin::Resources, &format!("{prefix}/{hash}"))
+    }
+}
+
+impl VersionJsonRemoteResolver for VanillaEndpoints {
+    fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
+        self.rewrite_upstream(raw_url)
+    }
+
+    fn object_url(&self, hash: &str) -> Result<String> {
+        self.object_url(hash)
     }
 }
 

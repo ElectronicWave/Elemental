@@ -10,6 +10,8 @@ pub struct PistonMetaData {
     pub arguments: Option<PistonMetaArguments>,
     #[serde(rename = "minecraftArguments")]
     pub minecraft_arguments: Option<String>,
+    #[serde(rename = "inheritsFrom", default)]
+    pub inherits_from: Option<String>,
     #[serde(rename = "assetIndex")]
     pub asset_index: PistonMetaAssetIndex,
     pub assets: String,
@@ -113,8 +115,8 @@ pub struct PistonMetaLibrariesDownloads {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PistonMetaLibrariesDownloadsArtifact {
-    pub sha1: String,
-    pub size: usize,
+    pub sha1: Option<String>,
+    pub size: Option<usize>,
     pub url: String,
     pub path: String,
 }

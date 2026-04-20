@@ -4,6 +4,8 @@ pub mod extensions;
 pub mod layout;
 pub mod meta;
 pub mod platform;
+pub mod prepared;
+pub mod remote;
 pub mod resource;
 pub mod rules;
 pub mod storage;
@@ -21,6 +23,11 @@ pub use meta::{
     PistonMetaRuleArgumentRules,
 };
 pub use platform::VersionJsonPlatform;
+pub use prepared::{
+    LaunchedVersionJsonInstance, PreparedVersionJsonInstance, ResolvedVersionJsonInstance,
+    ResolvedVersionJsonMetadata, VersionJsonInstallStatus,
+};
+pub use remote::VersionJsonRemoteResolver;
 pub use resource::Resource;
 pub use rules::{
     OperatingSystemExt, PistonMetaRuleExt, PistonMetaRulesExt, VersionJsonRuleContext,

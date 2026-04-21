@@ -31,8 +31,8 @@ impl PersistorIO<String> for AsyncFileStringIO {
     async fn read(path: PathBuf) -> Result<Option<String>> {
         match read_to_string(&path).await {
             Ok(d) => Ok(Some(d)),
-            Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None), // File not found
-            Err(e) => return Err(e.into()),
+            Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -45,43 +45,68 @@ impl PersistorIO<String> for AsyncFileStringIO {
 pub struct CustomPersistor<
     V: Serialize + DeserializeOwned,
     S,
+    D: ?Sized,
     IO: PersistorIO<S>,
     Ser: Fn(&V) -> Result<S>,
-    De: Fn(&S) -> Result<V>,
+    De: Fn(&D) -> Result<V>,
 > {
     pub ser: Ser,
     pub de: De,
     pub id: String,
     pub scope: Scope,
     pub suffix: Option<String>,
-    _marker: PhantomData<(IO, V)>,
+    _marker: PhantomData<(IO, V, S, *const D)>,
 }
 
-impl<V, S, IO, Ser, De> CustomPersistor<V, S, IO, Ser, De>
+impl<V, S, D, IO, Ser, De> CustomPersistor<V, S, D, IO, Ser, De>
 where
     V: Serialize + DeserializeOwned,
+    D: ?Sized,
     IO: PersistorIO<S>,
     Ser: Fn(&V) -> Result<S>,
-    De: Fn(&S) -> Result<V>,
+    De: Fn(&D) -> Result<V>,
+    S: AsRef<D>,
 {
     pub fn new(ser: Ser, de: De, id: String, scope: Scope, suffix: Option<String>) -> Self {
         Self {
-            ser: ser,
-            de: de,
-            id: id,
-            scope: scope,
-            suffix: suffix,
+            ser,
+            de,
+            id,
+            scope,
+            suffix,
             _marker: PhantomData,
         }
     }
 }
 
-impl<V, S, IO, Ser, De> Persistor<V> for CustomPersistor<V, S, IO, Ser, De>
+#[cfg(feature = "json")]
+type JsonFilePersistor<V> = CustomPersistor<
+    V,
+    String,
+    str,
+    AsyncFileStringIO,
+    fn(&V) -> Result<String>,
+    fn(&str) -> Result<V>,
+>;
+
+#[cfg(feature = "json")]
+fn serialize_json<V: Serialize>(value: &V) -> Result<String> {
+    Ok(serde_json::to_string(value)?)
+}
+
+#[cfg(feature = "json")]
+fn deserialize_json<V: DeserializeOwned>(value: &str) -> Result<V> {
+    Ok(serde_json::from_str(value)?)
+}
+
+impl<V, S, D, IO, Ser, De> Persistor<V> for CustomPersistor<V, S, D, IO, Ser, De>
 where
     V: VersionControlled + Serialize + DeserializeOwned,
+    D: ?Sized,
     IO: PersistorIO<S>,
     Ser: Fn(&V) -> Result<S>,
-    De: Fn(&S) -> Result<V>,
+    De: Fn(&D) -> Result<V>,
+    S: AsRef<D>,
 {
     async fn load(&self) -> Result<Option<V>> {
         let path = self
@@ -90,7 +115,7 @@ where
             .await?;
         let data = IO::read(path).await?;
         match data {
-            Some(d) => Ok(Some((self.de)(&d)?)),
+            Some(d) => Ok(Some((self.de)(d.as_ref())?)),
             None => Ok(None),
         }
     }
@@ -110,16 +135,10 @@ where
 pub fn json_persistor<V: Serialize + DeserializeOwned>(
     id: String,
     scope: Scope,
-) -> CustomPersistor<
-    V,
-    String,
-    AsyncFileStringIO,
-    impl Fn(&V) -> Result<String>,
-    impl Fn(&String) -> Result<V>,
-> {
+) -> JsonFilePersistor<V> {
     CustomPersistor::new(
-        |v: &V| Ok(serde_json::to_string(v)?),
-        |s: &String| Ok(serde_json::from_str(s)?),
+        serialize_json::<V>,
+        deserialize_json::<V>,
         id,
         scope,
         Some("json".to_string()),
@@ -127,19 +146,33 @@ pub fn json_persistor<V: Serialize + DeserializeOwned>(
 }
 
 #[cfg(feature = "toml")]
+type TomlFilePersistor<V> = CustomPersistor<
+    V,
+    String,
+    str,
+    AsyncFileStringIO,
+    fn(&V) -> Result<String>,
+    fn(&str) -> Result<V>,
+>;
+
+#[cfg(feature = "toml")]
+fn serialize_toml<V: Serialize>(value: &V) -> Result<String> {
+    Ok(toml::to_string(value)?)
+}
+
+#[cfg(feature = "toml")]
+fn deserialize_toml<V: DeserializeOwned>(value: &str) -> Result<V> {
+    Ok(toml::from_str(value)?)
+}
+
+#[cfg(feature = "toml")]
 pub fn toml_persistor<V: Serialize + DeserializeOwned>(
     id: String,
     scope: Scope,
-) -> CustomPersistor<
-    V,
-    String,
-    AsyncFileStringIO,
-    impl Fn(&V) -> Result<String>,
-    impl Fn(&String) -> Result<V>,
-> {
+) -> TomlFilePersistor<V> {
     CustomPersistor::new(
-        |v: &V| Ok(toml::to_string(v)?),
-        |s: &String| Ok(toml::from_str(s)?),
+        serialize_toml::<V>,
+        deserialize_toml::<V>,
         id,
         scope,
         Some("toml".to_string()),

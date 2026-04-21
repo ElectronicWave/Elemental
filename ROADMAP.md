@@ -21,7 +21,7 @@ It is intended as a working architecture reference, not as a release guarantee.
 | LegacyFabric    | Yes     | Yes     | Yes     | Yes            | Yes     | End-to-end flow is working and smoke-verified on a representative legacy anchor   |
 | Babric          | Yes     | Yes     | Yes     | Yes            | Yes     | End-to-end flow is working and smoke-verified on a representative beta anchor     |
 | Quilt           | Yes     | Yes     | Yes     | Yes            | Yes     | Independent fabric-like driver implemented and smoke-verified on a representative anchor |
-| Forge           | Yes     | Yes     | No      | No             | No      | Catalog and inspect only                                                          |
+| Forge           | Yes     | Yes     | Yes     | Yes            | Yes     | Installer-family driver now reaches a verified modern launch anchor               |
 | NeoForge        | No      | Yes     | No      | No             | No      | Inspect only                                                                      |
 | CleanroomMC     | No      | No      | No      | No             | No      | Not started                                                                       |
 | LiteLoader      | No      | No      | No      | No             | No      | Not started                                                                       |
@@ -41,6 +41,7 @@ These anchors should be read as verified points inside the support range, not as
 | LegacyFabric    | `1.13.2`                              | Confirms the flavor-aware family path on the modern edge of the LegacyFabric-supported band    |
 | Babric          | `b1.7.3`                              | Confirms the flavor-aware family path on a representative beta-era Babric anchor               |
 | Quilt           | `1.20.1`                              | Confirms a second independent fabric-like driver on the shared profile-driven substrate         |
+| Forge           | `1.12.2 / 14.23.5.2860`, `1.20.1 / 47.3.1` | Confirms the installer-family pipeline across a classic legacy-era anchor and a modern Forge anchor |
 
 Rolling targets such as the latest release, latest snapshot, and latest stable loader should still be treated as recurring regression checks rather than one-time milestones.
 
@@ -58,7 +59,7 @@ These are the ranges I would claim today based on the current code, upstream doc
 | LegacyFabric    | `1.13.2` verified, broader range not claimed yet          | Medium       | The current workspace now has an end-to-end verified anchor on `1.13.2`, but older LegacyFabric-supported releases and snapshots still need systematic smoke coverage |
 | Babric          | `b1.7.3` verified, broader range not claimed yet          | Medium       | The current workspace now has an end-to-end verified anchor on `b1.7.3`, but broader Babric-supported beta coverage still needs systematic smoke coverage |
 | Quilt           | `1.20.1` verified, broader range not claimed yet          | Medium       | The current workspace now has an end-to-end verified anchor on `1.20.1`, but broader Quilt-supported version coverage still needs systematic smoke coverage |
-| Forge           | no install or launch claim yet                            | High         | Only catalog and inspect exist                                                                                                                             |
+| Forge           | `1.12.2 / 14.23.5.2860` and `1.20.1 / 47.3.1` verified, broader range not claimed yet | High  | The installer-family pipeline now has verified anchors on both a classic `1.12.2` generation and a modern `1.20.1` generation, but broader Forge coverage still needs systematic validation |
 | NeoForge        | no install or launch claim yet                            | High         | Only inspect exists                                                                                                                                        |
 | CleanroomMC     | no install or launch claim yet                            | High         | Not implemented                                                                                                                                            |
 
@@ -98,6 +99,7 @@ Architecture implication:
 
 - Forge is installer-driven.
 - It should be modeled as an `installer family`, not as a plain `version_json` family member.
+- Elemental can now safely claim one classic Forge anchor and one modern Forge anchor, but should still avoid broader range claims until more installer generations are validated.
 
 ## OptiFine
 
@@ -353,6 +355,7 @@ Current status:
 - LegacyFabric now has a verified end-to-end anchor at `1.13.2`
 - Babric now has a verified end-to-end anchor at `b1.7.3`
 - Quilt now has a verified end-to-end anchor at `1.20.1`
+- Forge now has verified installer-family anchors at `1.12.2 / 14.23.5.2860` and `1.20.1 / 47.3.1`
 
 ## Phase 3: Create Installer Family
 
@@ -374,6 +377,12 @@ Work:
 Why this phase matters:
 
 - modern Forge is one of the strongest proofs that not everything belongs in `version_json`
+
+Current status:
+
+- the installer-family substrate exists
+- Forge has verified launch anchors at `1.12.2 / 14.23.5.2860` and `1.20.1 / 47.3.1`
+- broader Forge coverage is still unclaimed until more installer generations are smoke-validated
 
 ## Phase 4: Create Legacy Family
 

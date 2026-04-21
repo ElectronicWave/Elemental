@@ -45,10 +45,10 @@ impl Scope {
 
     pub async fn get_full_path(&self, id: &str, suffix: Option<String>) -> Result<PathBuf> {
         let path = self.get_full_path_blocking(id, suffix)?;
-        if let Some(parent) = path.parent() {
-            if !parent.exists() {
-                create_dir_all(parent).await?;
-            }
+        if let Some(parent) = path.parent()
+            && !parent.exists()
+        {
+            create_dir_all(parent).await?;
         }
 
         Ok(path)

@@ -484,7 +484,6 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "winreg",
- "zip",
 ]
 
 [[package]]
@@ -519,6 +518,7 @@ dependencies = [
  "sha1_smol",
  "tokio",
  "tokio-util",
+ "zip",
 ]
 
 [[package]]
@@ -536,6 +536,7 @@ name = "elemental-schema"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
 ]
 
 [[package]]

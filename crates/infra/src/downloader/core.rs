@@ -340,16 +340,10 @@ impl SessionState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DownloadBytesPerSecond {
     pub count: usize,
     pub value: usize,
-}
-
-impl Default for DownloadBytesPerSecond {
-    fn default() -> Self {
-        Self { count: 0, value: 0 }
-    }
 }
 
 impl ElementalTaskTracker {
@@ -375,10 +369,10 @@ impl ElementalTaskTracker {
         task_id: &TaskId,
         status: TrackedTaskStatus,
     ) {
-        if let Some(state) = self.sessions.get_async(&session_id).await {
-            if let Some(mut entry) = state.tasks.get_async(task_id).await {
-                entry.status = status;
-            }
+        if let Some(state) = self.sessions.get_async(&session_id).await
+            && let Some(mut entry) = state.tasks.get_async(task_id).await
+        {
+            entry.status = status;
         }
     }
 
@@ -466,9 +460,9 @@ impl ElementalDownloader {
         let retry_policy = retry::for_host(ANY_HOST)
             .max_retries_per_request(config.retry_times)
             .classify_fn(|req_rep| {
-                if req_rep.error().is_some() {
-                    req_rep.retryable()
-                } else if matches!(req_rep.status(), Some(status) if status.is_server_error()) {
+                if req_rep.error().is_some()
+                    || matches!(req_rep.status(), Some(status) if status.is_server_error())
+                {
                     req_rep.retryable()
                 } else {
                     req_rep.success()

@@ -54,13 +54,13 @@ impl<L: Layout, VL: Layout> InstanceProbe<L, VL> {
     }
 }
 
-pub async fn inspect_instance<L: Layout, VL: Layout>(
+pub async fn inspect_instance<L, VL>(
     storage: Storage<VL, Storage<L>>,
     drivers: &[&dyn Driver<L, VL>],
 ) -> Result<Option<InstalledInstance<L, VL>>>
 where
-    L: Clone,
-    VL: Clone,
+    L: Layout + Clone,
+    VL: Layout + Clone,
 {
     let probe = InstanceProbe::collect(storage.clone())?;
     for driver in drivers {

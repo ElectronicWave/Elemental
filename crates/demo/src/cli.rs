@@ -21,6 +21,7 @@ enum DriverCommand {
     LegacyFabric(LoaderArgs),
     Babric(LoaderArgs),
     Quilt(LoaderArgs),
+    Forge(LoaderArgs),
 }
 
 #[derive(Clone, Debug, Default, Args)]
@@ -79,6 +80,13 @@ impl Cli {
                 arguments.loader_version,
                 arguments.instance_name,
             ),
+            DriverCommand::Forge(arguments) => build_loader_config(
+                DemoDriver::Forge,
+                storage_root,
+                arguments.game_version,
+                arguments.loader_version,
+                arguments.instance_name,
+            ),
         }
     }
 }
@@ -128,6 +136,7 @@ fn default_loader_game_version(driver: DemoDriver, game_version: Option<String>)
         DemoDriver::LegacyFabric => "1.20.1".to_owned(),
         DemoDriver::Babric => "1.20.1".to_owned(),
         DemoDriver::Quilt => "1.20.1".to_owned(),
+        DemoDriver::Forge => "1.20.1".to_owned(),
         DemoDriver::Vanilla => unreachable!("vanilla is handled separately"),
     })
 }
@@ -138,6 +147,7 @@ fn default_loader_version(driver: DemoDriver, loader_version: Option<String>) ->
         DemoDriver::LegacyFabric => "0.16.10".to_owned(),
         DemoDriver::Babric => "0.16.10".to_owned(),
         DemoDriver::Quilt => "0.24.0".to_owned(),
+        DemoDriver::Forge => "47.3.1".to_owned(),
         DemoDriver::Vanilla => unreachable!("vanilla is handled separately"),
     })
 }
@@ -148,6 +158,7 @@ fn default_loader_instance_name(driver: DemoDriver, game_version: &str) -> Strin
         DemoDriver::LegacyFabric => format!("MyLegacyFabric-{game_version}"),
         DemoDriver::Babric => format!("MyBabric-{game_version}"),
         DemoDriver::Quilt => format!("MyQuilt-{game_version}"),
+        DemoDriver::Forge => format!("MyForge-{game_version}"),
         DemoDriver::Vanilla => unreachable!("vanilla is handled separately"),
     }
 }

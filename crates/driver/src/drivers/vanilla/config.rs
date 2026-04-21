@@ -90,3 +90,9 @@ impl VanillaLaunchConfig {
         Ok(self)
     }
 }
+
+impl Default for VanillaLaunchConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}

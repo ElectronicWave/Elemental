@@ -65,10 +65,10 @@ impl PistonMetaLibrariesExt for PistonMetaLibraries {
             return classifiers.get(key);
         }
 
-        if platform.os() == "macos" {
-            if let Some(key) = natives.get("osx") {
-                return classifiers.get(key);
-            }
+        if platform.os() == "macos"
+            && let Some(key) = natives.get("osx")
+        {
+            return classifiers.get(key);
         }
 
         None

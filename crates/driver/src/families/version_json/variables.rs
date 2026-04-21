@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use super::{
-    classpath::join_classpath, extensions::PistonMetaLibrariesExt, meta::PistonMetaData,
+    classpath::{classpath_separator, join_classpath},
+    extensions::PistonMetaLibrariesExt,
+    meta::PistonMetaData,
     rules::VersionJsonRuleContext,
 };
 
@@ -36,6 +38,8 @@ pub struct LauncherVariables {
     pub natives_directory: String,
     pub launcher_name: String,
     pub launcher_version: String,
+    pub library_directory: String,
+    pub classpath_separator: String,
     pub classpath: String,
 }
 
@@ -62,6 +66,8 @@ impl Default for LauncherVariables {
             natives_directory: Default::default(),
             launcher_name: Default::default(),
             launcher_version: Default::default(),
+            library_directory: Default::default(),
+            classpath_separator: classpath_separator().to_owned(),
             classpath: Default::default(),
         }
     }
@@ -136,6 +142,11 @@ impl LauncherVariables {
             natives_directory,
             launcher_name: "Elemental".to_owned(),
             launcher_version: env!("CARGO_PKG_VERSION").to_owned(),
+            library_directory: Path::new(&game_directory)
+                .join("libraries")
+                .to_string_lossy()
+                .to_string(),
+            classpath_separator: classpath_separator().to_owned(),
             classpath,
         })
     }
@@ -184,10 +195,10 @@ impl LauncherVariables {
             let original = value.clone();
             let mut copied = original.clone();
             for variable in regex.captures_iter(&original) {
-                if let Some(key) = variable.get(1).map(|item| item.as_str()) {
-                    if let Some(Value::String(replacement)) = data.get(key) {
-                        copied = copied.replace(&format!("${{{key}}}"), replacement);
-                    }
+                if let Some(key) = variable.get(1).map(|item| item.as_str())
+                    && let Some(Value::String(replacement)) = data.get(key)
+                {
+                    copied = copied.replace(&format!("${{{key}}}"), replacement);
                 }
             }
             *value = copied;
@@ -213,10 +224,10 @@ impl LauncherVariables {
         for value in &args {
             let mut copied = value.clone();
             for variable in regex.captures_iter(value) {
-                if let Some(key) = variable.get(1).map(|item| item.as_str()) {
-                    if let Some(replacement) = data.get(key) {
-                        copied = copied.replace(&format!("${{{key}}}"), replacement);
-                    }
+                if let Some(key) = variable.get(1).map(|item| item.as_str())
+                    && let Some(replacement) = data.get(key)
+                {
+                    copied = copied.replace(&format!("${{{key}}}"), replacement);
                 }
             }
             result.push(copied);

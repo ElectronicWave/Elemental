@@ -12,7 +12,8 @@ use elemental::{
 use crate::{
     config::DemoConfig,
     diagnostics::{
-        collect_version_diagnostics, print_launch_diagnostics, print_summary, run_logged_process,
+        LaunchDiagnostics, LaunchSummary, collect_version_diagnostics, print_launch_diagnostics,
+        print_summary, run_logged_process,
     },
 };
 
@@ -34,35 +35,34 @@ pub async fn run(config: DemoConfig) -> Result<()> {
     let prepare_elapsed = started_at.elapsed();
 
     let diagnostics = collect_version_diagnostics(&prepared.resolved_version.version)?;
-    let install_status = prepared.install_status.clone();
     let (runtime, command) = driver
         .build_launch_command(authorizer, &prepared, &launch_config)
         .await?;
     let runtime_executable = runtime.executable().to_path_buf();
 
-    print_launch_diagnostics(
-        config.driver.as_str(),
-        None,
-        &config.instance_name,
-        &config.game_version,
-        prepare_elapsed.as_millis(),
-        &install_status,
-        runtime_executable.as_path(),
-        &diagnostics,
-        &command,
-    );
+    print_launch_diagnostics(&LaunchDiagnostics {
+        driver_name: config.driver.as_str(),
+        loader_version: None,
+        instance_name: &config.instance_name,
+        game_version: &config.game_version,
+        prepared_ms: prepare_elapsed.as_millis(),
+        install_status: &prepared.install_status,
+        runtime_executable: runtime_executable.as_path(),
+        diagnostics: &diagnostics,
+        command: &command,
+    });
 
     let exit_status = run_logged_process(command).await?;
-    print_summary(
-        config.driver.as_str(),
-        &config.game_version,
-        None,
-        runtime_executable.as_path(),
-        diagnostics.version_root.as_path(),
-        &install_status,
-        prepare_elapsed.as_millis(),
+    print_summary(&LaunchSummary {
+        driver_name: config.driver.as_str(),
+        game_version: &config.game_version,
+        loader_version: None,
+        runtime_executable: runtime_executable.as_path(),
+        version_root: diagnostics.version_root.as_path(),
+        install_status: &prepared.install_status,
+        prepared_ms: prepare_elapsed.as_millis(),
         exit_status,
-    );
+    });
 
     Ok(())
 }

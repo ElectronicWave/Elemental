@@ -1,4 +1,5 @@
 mod fabric_like;
+mod forge;
 mod quilt;
 mod vanilla;
 
@@ -13,5 +14,6 @@ pub async fn run(config: DemoConfig) -> Result<()> {
             fabric_like::run(config).await
         }
         DemoDriver::Quilt => quilt::run(config).await,
+        DemoDriver::Forge => forge::run(config).await,
     }
 }

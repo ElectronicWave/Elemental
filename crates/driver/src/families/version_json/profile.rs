@@ -320,7 +320,7 @@ fn maven_classifier_notation(notation: &str, classifier: &str) -> String {
 
 fn profile_logging_to_piston(logging: &ProfileLogging) -> PistonMetaLogging {
     PistonMetaLogging {
-        client: PistonMetaLoggingSide {
+        client: Some(PistonMetaLoggingSide {
             argument: logging.client.argument.clone(),
             file: PistonMetaLoggingSideFile {
                 id: logging.client.file.id.clone(),
@@ -329,6 +329,6 @@ fn profile_logging_to_piston(logging: &ProfileLogging) -> PistonMetaLogging {
                 url: logging.client.file.url.clone(),
             },
             logging_type: logging.client.logging_type.clone(),
-        },
+        }),
     }
 }

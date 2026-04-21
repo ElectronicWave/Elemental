@@ -1,5 +1,5 @@
 use std::env::consts::EXE_SUFFIX;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use futures::future::join_all;
 use tokio::fs;
@@ -47,7 +47,7 @@ impl DistributionReleaseData {
             .is_some_and(|current| current == major_version)
     }
 
-    pub async fn parse_from_commandline(root: &PathBuf) -> Self {
+    pub async fn parse_from_commandline(root: &Path) -> Self {
         let java_exe = root.join("bin").join("java");
         if let Ok(output) = Command::new(&java_exe)
             .arg("-XshowSettings:properties")
@@ -64,7 +64,7 @@ impl DistributionReleaseData {
         }
     }
 
-    pub async fn parse_from_release(root: &PathBuf) -> Self {
+    pub async fn parse_from_release(root: &Path) -> Self {
         let release_path = root.join("release");
         if let Ok(content) = fs::read_to_string(release_path).await {
             Self::parse_release_properties(&content)
@@ -73,7 +73,7 @@ impl DistributionReleaseData {
         }
     }
 
-    pub async fn parse(root: &PathBuf) -> Self {
+    pub async fn parse(root: &Path) -> Self {
         if root.join("release").exists() {
             Self::parse_from_release(root).await
         } else {

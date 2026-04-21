@@ -6,7 +6,8 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
-use elemental_core::{jar::JarFile, storage::Storage};
+use elemental_core::storage::Storage;
+use elemental_infra::jar::JarFile;
 use tokio::fs::create_dir_all;
 
 use super::layout::{VersionJsonInstanceLayout, VersionJsonRootLayout};

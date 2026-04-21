@@ -27,7 +27,7 @@ impl<C: Default> Profile<C> {
         persistor: P,
         version: usize,
     ) -> Result<ProfileLoader<M, C, P>> {
-        Ok(ProfileLoader::load(migrator, persistor, version).await?)
+        ProfileLoader::load(migrator, persistor, version).await
     }
 }
 

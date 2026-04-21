@@ -218,38 +218,36 @@ where
                 continue;
             }
 
-            if let Some(artifact) = &library.downloads.artifact {
-                if !self
+            if let Some(artifact) = &library.downloads.artifact
+                && !self
                     .version
                     .parent
                     .library_path(artifact.path.as_str())?
                     .exists()
-                {
-                    return Ok(false);
-                }
-            }
-
-            if let Some(artifact) = library.classifiers_native_artifact(rule_context.platform()) {
-                if !self
-                    .version
-                    .parent
-                    .library_path(artifact.path.as_str())?
-                    .exists()
-                {
-                    return Ok(false);
-                }
-            }
-        }
-
-        if let Some(logging) = &self.metadata.logging {
-            if !self
-                .version
-                .parent
-                .logging_config_path(logging.client.file.id.as_str())?
-                .exists()
             {
                 return Ok(false);
             }
+
+            if let Some(artifact) = library.classifiers_native_artifact(rule_context.platform())
+                && !self
+                    .version
+                    .parent
+                    .library_path(artifact.path.as_str())?
+                    .exists()
+            {
+                return Ok(false);
+            }
+        }
+
+        if let Some(logging) = &self.metadata.logging
+            && let Some(client) = &logging.client
+            && !self
+                .version
+                .parent
+                .logging_config_path(client.file.id.as_str())?
+                .exists()
+        {
+            return Ok(false);
         }
 
         Ok(true)
@@ -336,15 +334,17 @@ where
             tasks.extend(self.plan_library_tasks(library)?);
         }
 
-        if let Some(logging) = &self.metadata.logging {
+        if let Some(logging) = &self.metadata.logging
+            && let Some(client) = &logging.client
+        {
             tasks.push(DownloadTask::new(
                 self.remote_resolver
-                    .rewrite_upstream(logging.client.file.url.as_str())?,
+                    .rewrite_upstream(client.file.url.as_str())?,
                 self.version
                     .parent
-                    .logging_config_path(logging.client.file.id.as_str())?,
-                Some(logging.client.file.size as u64),
-                Some(logging.client.file.sha1.clone()),
+                    .logging_config_path(client.file.id.as_str())?,
+                Some(client.file.size as u64),
+                Some(client.file.sha1.clone()),
             ));
         }
 

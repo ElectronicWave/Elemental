@@ -32,16 +32,16 @@ pub trait OperatingSystemExt {
 
 impl OperatingSystemExt for OperatingSystem {
     fn matches_platform(&self, platform: &VersionJsonPlatform) -> bool {
-        if let Some(name) = &self.name {
-            if !matches_os_name(name, platform.os()) {
-                return false;
-            }
+        if let Some(name) = &self.name
+            && !matches_os_name(name, platform.os())
+        {
+            return false;
         }
 
-        if let Some(arch) = &self.arch {
-            if arch != platform.arch() {
-                return false;
-            }
+        if let Some(arch) = &self.arch
+            && arch != platform.arch()
+        {
+            return false;
         }
 
         true
@@ -56,16 +56,16 @@ impl PistonMetaRuleExt for PistonMetaRuleArgumentRules {
     fn is_allowed(&self, context: &VersionJsonRuleContext) -> bool {
         let mut action = self.action == "allow";
 
-        if let Some(os) = &self.os {
-            if !os.matches_platform(context.platform()) {
-                action = !action;
-            }
+        if let Some(os) = &self.os
+            && !os.matches_platform(context.platform())
+        {
+            action = !action;
         }
 
-        if let Some(features) = &self.features {
-            if !features_are_satisfied(features, context) {
-                action = !action;
-            }
+        if let Some(features) = &self.features
+            && !features_are_satisfied(features, context)
+        {
+            action = !action;
         }
 
         action

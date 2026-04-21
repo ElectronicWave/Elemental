@@ -36,3 +36,9 @@ impl ObjectContext {
             .await;
     }
 }
+
+impl Default for ObjectContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}

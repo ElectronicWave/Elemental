@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use elemental::{
     core::{auth::authorizers::offline::OfflineAuthorizer, storage::Storage},
     driver::{
-        drivers::quilt::{config::QuiltLaunchConfig, driver::QuiltDriver},
+        drivers::forge::{config::ForgeLaunchConfig, driver::ForgeDriver},
         families::version_json::{BaseLayout, VersionJsonGameStorageExt},
     },
 };
@@ -21,13 +21,13 @@ pub async fn run(config: DemoConfig) -> Result<()> {
     let loader_version = config
         .loader_version
         .clone()
-        .context("quilt demo requires a loader version")?;
+        .context("forge demo requires a loader version")?;
     let storage = Storage::new(config.storage_root.clone(), BaseLayout);
     let instance = storage
         .ensure_instance(config.instance_name.clone(), BaseLayout)
         .await?;
-    let driver = QuiltDriver::with_defaults()?;
-    let launch_config = QuiltLaunchConfig::new();
+    let driver = ForgeDriver::with_defaults()?;
+    let launch_config = ForgeLaunchConfig::new();
     let authorizer = OfflineAuthorizer {
         username: "Player".to_owned(),
     };
@@ -42,7 +42,8 @@ pub async fn run(config: DemoConfig) -> Result<()> {
         .await?;
     let prepare_elapsed = started_at.elapsed();
 
-    let diagnostics = collect_version_diagnostics(&prepared.resolved_version.version)?;
+    let diagnostics =
+        collect_version_diagnostics(&prepared.launch_version.resolved_version.version)?;
     let (runtime, command) = driver
         .build_launch_command(authorizer, &prepared, &launch_config)
         .await?;

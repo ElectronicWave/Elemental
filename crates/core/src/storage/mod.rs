@@ -1,4 +1,4 @@
 pub mod layout;
-pub mod storage;
+pub mod store;
 
-pub use storage::Storage;
+pub use store::Storage;

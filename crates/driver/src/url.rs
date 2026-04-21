@@ -82,10 +82,10 @@ impl<O: Origin> OriginPolicy<O> {
                 return self.resolve(*origin, &suffix).map(Some);
             }
 
-            if let Some(override_base) = self.overrides.get(origin) {
-                if let Some(suffix) = origin_suffix(&parsed, override_base) {
-                    return self.resolve(*origin, &suffix).map(Some);
-                }
+            if let Some(override_base) = self.overrides.get(origin)
+                && let Some(suffix) = origin_suffix(&parsed, override_base)
+            {
+                return self.resolve(*origin, &suffix).map(Some);
             }
         }
 
@@ -108,12 +108,12 @@ impl<O: Origin> OriginPolicy<O> {
                 }
             }
 
-            if let Some(override_base) = self.overrides.get(origin) {
-                if same_origin(&parsed, override_base) {
-                    matched_known_origin = true;
-                    if let Some(suffix) = origin_suffix(&parsed, override_base) {
-                        return self.resolve(*origin, &suffix).map(Some);
-                    }
+            if let Some(override_base) = self.overrides.get(origin)
+                && same_origin(&parsed, override_base)
+            {
+                matched_known_origin = true;
+                if let Some(suffix) = origin_suffix(&parsed, override_base) {
+                    return self.resolve(*origin, &suffix).map(Some);
                 }
             }
         }

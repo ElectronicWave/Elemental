@@ -7,6 +7,7 @@ pub enum DemoDriver {
     LegacyFabric,
     Babric,
     Quilt,
+    Forge,
 }
 
 #[derive(Clone, Debug)]
@@ -26,6 +27,7 @@ impl DemoDriver {
             Self::LegacyFabric => "LegacyFabric",
             Self::Babric => "Babric",
             Self::Quilt => "Quilt",
+            Self::Forge => "Forge",
         }
     }
 }

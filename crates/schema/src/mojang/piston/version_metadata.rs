@@ -125,7 +125,8 @@ pub struct PistonMetaLibrariesDownloadsArtifact {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PistonMetaLogging {
-    pub client: PistonMetaLoggingSide,
+    #[serde(default)]
+    pub client: Option<PistonMetaLoggingSide>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

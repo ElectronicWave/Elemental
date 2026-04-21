@@ -14,13 +14,13 @@ use crate::{context::CONTEXT, instant::InstantObject};
 /// Fast try to get a value from the pool, if not exists, return error immediately.
 pub async fn require<T: Any + Send + Sync>() -> Result<Arc<T>> {
     let pool = CONTEXT.try_with(|pool| pool.clone());
-    if let Ok(pool) = pool {
-        if let Ok(value) = pool.get_async::<T>().await.context(format!(
+    if let Ok(pool) = pool
+        && let Ok(value) = pool.get_async::<T>().await.context(format!(
             "Cannot get object `{}` from pool",
             type_name::<T>()
-        )) {
-            return Ok(value);
-        }
+        ))
+    {
+        return Ok(value);
     }
 
     POOL.get_async::<T>().await.context(format!(

@@ -6,8 +6,9 @@ use serde::de::DeserializeOwned;
 
 use crate::url::{Origin, OriginPolicy};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum FabricFlavor {
+    #[default]
     Fabric,
     LegacyFabric,
     Babric,
@@ -34,12 +35,6 @@ pub struct FabricEndpoints {
 pub struct FabricSource {
     client: reqwest::Client,
     endpoints: FabricEndpoints,
-}
-
-impl Default for FabricFlavor {
-    fn default() -> Self {
-        Self::Fabric
-    }
 }
 
 impl Default for FabricEndpoints {

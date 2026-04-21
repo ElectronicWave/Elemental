@@ -1,4 +1,5 @@
 use std::{
+    fmt::Debug,
     fs,
     path::{Path, PathBuf},
     process::ExitStatus,
@@ -25,6 +26,29 @@ pub struct VersionDiagnostics {
     pub metadata_id: String,
     pub inherited_game_version: Option<String>,
     pub main_class: String,
+}
+
+pub struct LaunchDiagnostics<'a> {
+    pub driver_name: &'a str,
+    pub loader_version: Option<&'a str>,
+    pub instance_name: &'a str,
+    pub game_version: &'a str,
+    pub prepared_ms: u128,
+    pub install_status: &'a dyn Debug,
+    pub runtime_executable: &'a Path,
+    pub diagnostics: &'a VersionDiagnostics,
+    pub command: &'a LaunchCommand,
+}
+
+pub struct LaunchSummary<'a> {
+    pub driver_name: &'a str,
+    pub game_version: &'a str,
+    pub loader_version: Option<&'a str>,
+    pub runtime_executable: &'a Path,
+    pub version_root: &'a Path,
+    pub install_status: &'a dyn Debug,
+    pub prepared_ms: u128,
+    pub exit_status: ExitStatus,
 }
 
 pub fn collect_version_diagnostics<L, VL>(
@@ -68,78 +92,98 @@ pub async fn run_logged_process(command: LaunchCommand) -> Result<ExitStatus> {
     Ok(exit_status)
 }
 
-pub fn print_launch_diagnostics(
-    driver_name: &str,
-    loader_version: Option<&str>,
-    instance_name: &str,
-    game_version: &str,
-    prepared_ms: u128,
-    install_status: &impl std::fmt::Debug,
-    runtime_executable: &Path,
-    diagnostics: &VersionDiagnostics,
-    command: &LaunchCommand,
-) {
-    println!("instance: {}", instance_name);
-    println!("driver: {}", driver_name);
-    println!("game version: {}", game_version);
-    if let Some(loader_version) = loader_version {
+pub fn print_launch_diagnostics(diagnostics_input: &LaunchDiagnostics<'_>) {
+    println!("instance: {}", diagnostics_input.instance_name);
+    println!("driver: {}", diagnostics_input.driver_name);
+    println!("game version: {}", diagnostics_input.game_version);
+    if let Some(loader_version) = diagnostics_input.loader_version {
         println!("loader version: {}", loader_version);
     }
-    println!("metadata id: {}", diagnostics.metadata_id);
+    println!("metadata id: {}", diagnostics_input.diagnostics.metadata_id);
     println!(
         "metadata inherits_from: {}",
-        diagnostics
+        diagnostics_input
+            .diagnostics
             .inherited_game_version
             .as_deref()
             .unwrap_or("<none>")
     );
-    println!("metadata main class: {}", diagnostics.main_class);
-    println!("Using java executable: {}", runtime_executable.display());
-    println!("command executable: {}", command.program.display());
+    println!(
+        "metadata main class: {}",
+        diagnostics_input.diagnostics.main_class
+    );
+    println!(
+        "Using java executable: {}",
+        diagnostics_input.runtime_executable.display()
+    );
+    println!(
+        "command executable: {}",
+        diagnostics_input.command.program.display()
+    );
     println!(
         "command cwd: {}",
-        command
+        diagnostics_input
+            .command
             .cwd
             .as_ref()
             .map_or_else(|| "<none>".to_owned(), |cwd| cwd.display().to_string())
     );
-    println!("command args count: {}", command.args.len());
-    println!("version root: {}", diagnostics.version_root.display());
-    println!("metadata path: {}", diagnostics.metadata_path.display());
-    println!("version jar: {}", diagnostics.version_jar_path.display());
-    println!("natives root: {}", diagnostics.natives_root.display());
-    println!("natives root exists: {}", diagnostics.natives_root.exists());
+    println!(
+        "command args count: {}",
+        diagnostics_input.command.args.len()
+    );
+    println!(
+        "version root: {}",
+        diagnostics_input.diagnostics.version_root.display()
+    );
+    println!(
+        "metadata path: {}",
+        diagnostics_input.diagnostics.metadata_path.display()
+    );
+    println!(
+        "version jar: {}",
+        diagnostics_input.diagnostics.version_jar_path.display()
+    );
+    println!(
+        "natives root: {}",
+        diagnostics_input.diagnostics.natives_root.display()
+    );
+    println!(
+        "natives root exists: {}",
+        diagnostics_input.diagnostics.natives_root.exists()
+    );
     println!(
         "natives root file count: {}",
-        diagnostics.natives_root_binaries.len()
+        diagnostics_input.diagnostics.natives_root_binaries.len()
     );
     println!(
         "natives recursive binary count: {}",
-        diagnostics.natives_nested_binaries.len()
+        diagnostics_input.diagnostics.natives_nested_binaries.len()
     );
     println!(
         "natives root files: {}",
         format_path_list(
-            &diagnostics.natives_root_binaries,
-            &diagnostics.natives_root
+            &diagnostics_input.diagnostics.natives_root_binaries,
+            &diagnostics_input.diagnostics.natives_root
         )
     );
     println!(
         "natives recursive binaries: {}",
         format_path_list(
-            &diagnostics.natives_nested_binaries,
-            &diagnostics.natives_root
+            &diagnostics_input.diagnostics.natives_nested_binaries,
+            &diagnostics_input.diagnostics.natives_root
         )
     );
     println!(
         "natives probe exists (lwjgl): {}",
-        diagnostics
+        diagnostics_input
+            .diagnostics
             .natives_root
             .join(expected_lwjgl_binary_name())
             .exists()
     );
-    println!("install status: {:?}", install_status);
-    println!("prepared in {}ms", prepared_ms);
+    println!("install status: {:?}", diagnostics_input.install_status);
+    println!("prepared in {}ms", diagnostics_input.prepared_ms);
 
     for prefix in [
         "-Djava.library.path=",
@@ -148,12 +192,12 @@ pub fn print_launch_diagnostics(
         "-Djna.tmpdir=",
         "-Dio.netty.native.workdir=",
     ] {
-        if let Some(argument) = find_argument_with_prefix(&command.args, prefix) {
+        if let Some(argument) = find_argument_with_prefix(&diagnostics_input.command.args, prefix) {
             println!("launch arg {}{}", prefix, argument);
         }
     }
 
-    if let Some(classpath_entries) = classpath_entries(&command.args) {
+    if let Some(classpath_entries) = classpath_entries(&diagnostics_input.command.args) {
         println!("classpath entries: {}", classpath_entries.len());
         println!(
             "classpath preview: {}",
@@ -167,26 +211,20 @@ pub fn print_launch_diagnostics(
     }
 }
 
-pub fn print_summary(
-    driver_name: &str,
-    game_version: &str,
-    loader_version: Option<&str>,
-    runtime_executable: &Path,
-    version_root: &Path,
-    install_status: &impl std::fmt::Debug,
-    prepared_ms: u128,
-    exit_status: ExitStatus,
-) {
-    println!("Using java executable: {}", runtime_executable.display());
-    println!("version root: {}", version_root.display());
-    println!("driver: {}", driver_name);
-    println!("game version: {}", game_version);
-    if let Some(loader_version) = loader_version {
+pub fn print_summary(summary: &LaunchSummary<'_>) {
+    println!(
+        "Using java executable: {}",
+        summary.runtime_executable.display()
+    );
+    println!("version root: {}", summary.version_root.display());
+    println!("driver: {}", summary.driver_name);
+    println!("game version: {}", summary.game_version);
+    if let Some(loader_version) = summary.loader_version {
         println!("loader version: {}", loader_version);
     }
-    println!("install status: {:?}", install_status);
-    println!("prepared in {}ms", prepared_ms);
-    println!("process exited with: {}", exit_status);
+    println!("install status: {:?}", summary.install_status);
+    println!("prepared in {}ms", summary.prepared_ms);
+    println!("process exited with: {}", summary.exit_status);
 }
 
 fn collect_root_files(root: &Path) -> Result<Vec<PathBuf>> {

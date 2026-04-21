@@ -10,7 +10,7 @@ use elemental_core::{
 use crate::launch_arguments::parse_argument_string;
 
 use super::{
-    classpath::join_classpath,
+    classpath::{classpath_separator, join_classpath},
     extensions::{PistonMetaDataExt, PistonMetaLibrariesExt},
     layout::{VersionJsonInstanceLayout, VersionJsonRootLayout},
     rules::VersionJsonRuleContext,
@@ -150,7 +150,14 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
         self.inner.assets_index_name = metadata.assets.clone();
         self.inner.auth_uuid = credential.uuid;
         self.inner.auth_access_token = credential.access_token;
+        self.inner.user_type = if self.inner.auth_access_token.is_empty() {
+            crate::families::version_json::variables::UserType::Legacy
+        } else {
+            crate::families::version_json::variables::UserType::Msa
+        };
         self.inner.version_type = metadata.release_type.clone();
+        self.inner.library_directory = global_root.join("libraries").to_string_lossy().to_string();
+        self.inner.classpath_separator = classpath_separator().to_owned();
         self.inner.natives_directory = self
             .version
             .platform_natives_path()
@@ -184,11 +191,10 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
             jvm_args.extend(self.inner.apply(legacy_jvm_arguments())?);
         }
 
-        if let Some(logging) = &metadata.logging {
-            let log_config_path = self
-                .version
-                .parent
-                .logging_config_path(&logging.client.file.id)?;
+        if let Some(logging) = &metadata.logging
+            && let Some(client) = &logging.client
+        {
+            let log_config_path = self.version.parent.logging_config_path(&client.file.id)?;
 
             if !log_config_path.exists() {
                 bail!(
@@ -198,7 +204,7 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
             }
 
             jvm_args.extend(self.inner.apply_with(
-                vec![logging.client.argument.clone()],
+                vec![client.argument.clone()],
                 &HashMap::from([(
                     "path".to_owned(),
                     log_config_path.to_string_lossy().to_string(),

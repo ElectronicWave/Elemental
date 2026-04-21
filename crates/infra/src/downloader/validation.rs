@@ -55,15 +55,15 @@ impl StreamingValidator {
     }
 
     pub fn finish(self, path: &Path) -> Result<()> {
-        if let Some(expected_size) = self.validation.expected_size {
-            if self.actual_size != expected_size {
-                bail!(
-                    "downloaded file size mismatch for '{}': expected {}, got {}",
-                    path.display(),
-                    expected_size,
-                    self.actual_size
-                );
-            }
+        if let Some(expected_size) = self.validation.expected_size
+            && self.actual_size != expected_size
+        {
+            bail!(
+                "downloaded file size mismatch for '{}': expected {}, got {}",
+                path.display(),
+                expected_size,
+                self.actual_size
+            );
         }
 
         if let Some(expected_sha1) = self.validation.expected_sha1 {
@@ -115,10 +115,10 @@ pub async fn target_matches_task(path: &Path, task: &DownloadTask) -> Result<boo
         Err(error) => return Err(error.into()),
     };
 
-    if let Some(expected_size) = validation.expected_size {
-        if metadata.len() != expected_size {
-            return Ok(false);
-        }
+    if let Some(expected_size) = validation.expected_size
+        && metadata.len() != expected_size
+    {
+        return Ok(false);
     }
 
     if validation.expected_sha1.is_none() {

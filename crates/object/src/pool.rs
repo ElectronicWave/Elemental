@@ -10,7 +10,7 @@ use std::{
 #[cfg(feature = "notify")]
 use tokio::sync::Notify;
 
-pub static POOL: LazyLock<ObjectPool> = LazyLock::new(|| ObjectPool::new());
+pub static POOL: LazyLock<ObjectPool> = LazyLock::new(ObjectPool::new);
 pub type ShutdownFn<T> =
     Box<dyn Fn(Arc<T>) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
 pub struct PoolEntry<T: Any + Send + Sync + ?Sized> {
@@ -67,6 +67,12 @@ impl<T: Any + Send + Sync + ?Sized> PoolEntry<T> {
 
 pub struct ObjectPool {
     inner: HashMap<TypeId, PoolEntry<dyn Any + Send + Sync>>,
+}
+
+impl Default for ObjectPool {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ObjectPool {
@@ -145,10 +151,11 @@ impl ObjectPool {
             return;
         }
 
-        if let Some(_) = self
+        if self
             .inner
             .read_async(&type_id, |_, v| v.value.clone())
             .await
+            .is_some()
         {
             // If the value exists, return immediately.
             return;

@@ -7,7 +7,7 @@ pub trait RuntimeProvider {
 
     #[inline(always)]
     fn name(&self) -> &'static str {
-        return "Provider";
+        "Provider"
     }
 
     fn box_default() -> Box<Self>

@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
 use anyhow::{Context, Result, bail};
 
@@ -164,6 +167,9 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
             .to_string_lossy()
             .to_string();
 
+        let raw_jvm_arguments = metadata.jvm_arguments(&rule_context);
+        let module_path_entries =
+            collect_module_path_entries(raw_jvm_arguments.as_slice(), &self.inner)?;
         let classpath = metadata
             .libraries
             .iter()
@@ -174,13 +180,16 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
                     return None;
                 }
 
-                Some(
-                    global_root
-                        .join("libraries")
-                        .join(&artifact.path)
-                        .to_string_lossy()
-                        .to_string(),
-                )
+                let path = global_root
+                    .join("libraries")
+                    .join(&artifact.path)
+                    .to_string_lossy()
+                    .to_string();
+                if module_path_entries.contains(&normalize_path_string(path.as_str())) {
+                    return None;
+                }
+
+                Some(path)
             })
             .chain(std::iter::once(version_jar.to_string_lossy().to_string()))
             .collect::<Vec<String>>();
@@ -212,7 +221,7 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
             )?);
         }
 
-        jvm_args.extend(self.inner.apply(metadata.jvm_arguments(&rule_context))?);
+        jvm_args.extend(self.inner.apply(raw_jvm_arguments)?);
         jvm_args.extend(self.inner.apply(self.extra_jvm_arguments)?);
         let mut game_args = self.inner.apply(metadata.game_arguments(&rule_context))?;
         game_args.extend(self.inner.apply(self.extra_game_arguments)?);
@@ -237,4 +246,65 @@ fn legacy_jvm_arguments() -> Vec<String> {
         "-cp".to_owned(),
         "${classpath}".to_owned(),
     ]
+}
+
+fn collect_module_path_entries(
+    jvm_arguments: &[String],
+    variables: &LauncherVariables,
+) -> Result<HashSet<String>> {
+    let mut entries = HashSet::new();
+    let mut index = 0usize;
+
+    while index < jvm_arguments.len() {
+        let argument = &jvm_arguments[index];
+        if let Some(raw_value) = argument
+            .strip_prefix("--module-path=")
+            .or_else(|| argument.strip_prefix("-p="))
+        {
+            let resolved = variables
+                .apply(vec![raw_value.to_owned()])?
+                .into_iter()
+                .next()
+                .context("resolve inline module path argument failed")?;
+            entries.extend(
+                resolved
+                    .split(classpath_separator())
+                    .filter(|value| !value.is_empty())
+                    .map(normalize_path_string),
+            );
+            index += 1;
+            continue;
+        }
+
+        if argument == "-p" || argument == "--module-path" {
+            let Some(raw_value) = jvm_arguments.get(index + 1) else {
+                bail!("module path argument is missing its value");
+            };
+            let resolved = variables
+                .apply(vec![raw_value.clone()])?
+                .into_iter()
+                .next()
+                .context("resolve module path argument failed")?;
+            entries.extend(
+                resolved
+                    .split(classpath_separator())
+                    .filter(|value| !value.is_empty())
+                    .map(normalize_path_string),
+            );
+            index += 2;
+            continue;
+        }
+
+        index += 1;
+    }
+
+    Ok(entries)
+}
+
+fn normalize_path_string(path: &str) -> String {
+    PathBuf::from(path)
+        .components()
+        .collect::<PathBuf>()
+        .to_string_lossy()
+        .to_string()
 }

@@ -13,13 +13,13 @@ use elemental_infra::downloader::core::ElementalDownloader;
 use crate::{
     driver::{Driver, DriverDescriptor, InstalledDriver},
     drivers::{
-        forge::{
-            config::ForgeLaunchConfig,
+        neoforge::{
+            config::NeoForgeLaunchConfig,
             prepared::{
-                ForgeRemoteResolver, PreparedForgeLaunchVersion, PreparedForgeVersion,
-                ResolvedForgeVersion,
+                NeoForgeRemoteResolver, PreparedNeoForgeLaunchVersion, PreparedNeoForgeVersion,
+                ResolvedNeoForgeVersion,
             },
-            source::ForgeSource,
+            source::NeoForgeSource,
         },
         vanilla::source::VanillaSource,
     },
@@ -30,30 +30,30 @@ use crate::{
     runtime::resolve_runtime,
 };
 
-const FORGE_DRIVER: DriverDescriptor = DriverDescriptor {
-    id: "forge",
-    name: "Forge",
+const NEOFORGE_DRIVER: DriverDescriptor = DriverDescriptor {
+    id: "neoforge",
+    name: "NeoForge",
 };
 
-pub struct ForgeDriver {
-    source: ForgeSource,
+pub struct NeoForgeDriver {
+    source: NeoForgeSource,
     vanilla_source: VanillaSource,
     downloader: Arc<ElementalDownloader>,
 }
 
-pub struct LaunchedForgeVersion<L, VL>
+pub struct LaunchedNeoForgeVersion<L, VL>
 where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    pub prepared_version: PreparedForgeVersion<L, VL>,
+    pub prepared_version: PreparedNeoForgeVersion<L, VL>,
     pub runtime: Distribution,
     pub child: tokio::process::Child,
 }
 
-impl ForgeDriver {
+impl NeoForgeDriver {
     pub fn new(
-        source: ForgeSource,
+        source: NeoForgeSource,
         vanilla_source: VanillaSource,
         downloader: Arc<ElementalDownloader>,
     ) -> Self {
@@ -66,14 +66,14 @@ impl ForgeDriver {
 
     pub fn with_defaults() -> Result<Self> {
         Ok(Self::new(
-            ForgeSource::default(),
+            NeoForgeSource::default(),
             VanillaSource::default(),
             ElementalDownloader::with_config_default()
                 .context("create default elemental downloader failed")?,
         ))
     }
 
-    pub fn source(&self) -> &ForgeSource {
+    pub fn source(&self) -> &NeoForgeSource {
         &self.source
     }
 
@@ -93,12 +93,12 @@ impl ForgeDriver {
         instance: &Storage<VL, Storage<L>>,
         game_version: String,
         loader_version: String,
-    ) -> Result<PreparedForgeVersion<L, VL>> {
+    ) -> Result<PreparedNeoForgeVersion<L, VL>> {
         self.prepare_with_config(
             instance,
             game_version,
             loader_version,
-            &ForgeLaunchConfig::new(),
+            &NeoForgeLaunchConfig::new(),
         )
         .await
     }
@@ -111,13 +111,13 @@ impl ForgeDriver {
         instance: &Storage<VL, Storage<L>>,
         game_version: String,
         loader_version: String,
-        config: &ForgeLaunchConfig,
-    ) -> Result<PreparedForgeVersion<L, VL>> {
+        config: &NeoForgeLaunchConfig,
+    ) -> Result<PreparedNeoForgeVersion<L, VL>> {
         let installer_artifact =
             self.source
                 .installer_artifact(&instance.parent, &game_version, &loader_version)?;
 
-        ResolvedForgeVersion {
+        ResolvedNeoForgeVersion {
             source: self.source.clone(),
             instance: instance.clone(),
             game_version,
@@ -139,8 +139,8 @@ impl ForgeDriver {
     >(
         &self,
         instance: &Storage<VL, Storage<L>>,
-    ) -> Result<PreparedForgeVersion<L, VL>> {
-        ResolvedForgeVersion::load(
+    ) -> Result<PreparedNeoForgeVersion<L, VL>> {
+        ResolvedNeoForgeVersion::load(
             self.source.clone(),
             self.remote_resolver(),
             instance.clone(),
@@ -154,10 +154,10 @@ impl ForgeDriver {
         VL: VersionJsonInstanceLayout + Clone,
     >(
         &self,
-        prepared_version: PreparedForgeVersion<L, VL>,
-        config: &ForgeLaunchConfig,
+        prepared_version: PreparedNeoForgeVersion<L, VL>,
+        config: &NeoForgeLaunchConfig,
         authorizer: A,
-    ) -> Result<LaunchedForgeVersion<L, VL>>
+    ) -> Result<LaunchedNeoForgeVersion<L, VL>>
     where
         A: Authorizer,
     {
@@ -166,7 +166,7 @@ impl ForgeDriver {
             .await?;
         let child = process::spawn_command(command)?;
 
-        Ok(LaunchedForgeVersion {
+        Ok(LaunchedNeoForgeVersion {
             prepared_version,
             runtime,
             child,
@@ -180,8 +180,8 @@ impl ForgeDriver {
     >(
         &self,
         authorizer: A,
-        prepared_version: &PreparedForgeVersion<L, VL>,
-        config: &ForgeLaunchConfig,
+        prepared_version: &PreparedNeoForgeVersion<L, VL>,
+        config: &NeoForgeLaunchConfig,
     ) -> Result<(Distribution, LaunchCommand)>
     where
         A: Authorizer,
@@ -208,7 +208,7 @@ impl ForgeDriver {
 
     async fn runtime_for_prepared_version<L, VL>(
         &self,
-        prepared_version: &PreparedForgeLaunchVersion<L, VL>,
+        prepared_version: &PreparedNeoForgeLaunchVersion<L, VL>,
         runtime_major_version: Option<usize>,
         runtime_executable_path: Option<&std::path::Path>,
     ) -> Result<Distribution>
@@ -230,8 +230,8 @@ impl ForgeDriver {
         &self,
         authorizer: A,
         runtime: Distribution,
-        prepared_version: &PreparedForgeLaunchVersion<L, VL>,
-        config: &ForgeLaunchConfig,
+        prepared_version: &PreparedNeoForgeLaunchVersion<L, VL>,
+        config: &NeoForgeLaunchConfig,
     ) -> Result<VersionJsonLaunchBuilder<A, L, VL>>
     where
         A: Authorizer,
@@ -274,8 +274,8 @@ impl ForgeDriver {
         Ok(builder)
     }
 
-    fn remote_resolver(&self) -> ForgeRemoteResolver {
-        ForgeRemoteResolver::new(
+    fn remote_resolver(&self) -> NeoForgeRemoteResolver {
+        NeoForgeRemoteResolver::new(
             self.vanilla_source.endpoints().clone(),
             self.source.endpoints().clone(),
         )
@@ -283,9 +283,9 @@ impl ForgeDriver {
 }
 
 #[async_trait]
-impl<L: Layout, VL: Layout> Driver<L, VL> for ForgeDriver {
+impl<L: Layout, VL: Layout> Driver<L, VL> for NeoForgeDriver {
     fn descriptor(&self) -> DriverDescriptor {
-        FORGE_DRIVER
+        NEOFORGE_DRIVER
     }
 
     async fn inspect(&self, probe: &InstanceProbe<L, VL>) -> Result<Option<InstalledDriver>> {
@@ -296,7 +296,11 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for ForgeDriver {
             .libraries
             .iter()
             .map(|library| library.name.as_str())
-            .find(|name| name.starts_with("net.minecraftforge:fmlloader:"));
+            .find(|name| {
+                name.starts_with("net.neoforged:neoforge:")
+                    || name.starts_with("net.neoforged:forge:")
+                    || name.starts_with("net.neoforged:fmlloader:")
+            });
 
         let Some(library_name) = library_name else {
             return Ok(None);
@@ -305,7 +309,7 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for ForgeDriver {
         let driver_version = library_name.split(':').nth(2).map(ToOwned::to_owned);
 
         Ok(Some(InstalledDriver {
-            driver: FORGE_DRIVER,
+            driver: NEOFORGE_DRIVER,
             driver_version,
             game_version: metadata
                 .inherits_from

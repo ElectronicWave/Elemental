@@ -15,11 +15,11 @@ use tokio::fs::create_dir_all;
 
 use crate::{
     drivers::{
-        forge::{
+        neoforge::{
             processor::{
                 client_processors_ready, ensure_profile_libraries_downloaded, run_client_processors,
             },
-            source::{ForgeEndpoints, ForgeSource, parse_installer_version},
+            source::{NeoForgeEndpoints, NeoForgeSource},
         },
         vanilla::source::{VanillaEndpoints, VanillaSource},
     },
@@ -37,7 +37,7 @@ use crate::{
 const INSTALL_PROFILE_ENTRY: &str = "install_profile.json";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ForgeInstallStatus {
+pub struct NeoForgeInstallStatus {
     pub installer_downloaded: bool,
     pub install_profile_persisted: bool,
     pub embedded_version_persisted: bool,
@@ -47,24 +47,24 @@ pub struct ForgeInstallStatus {
 }
 
 #[derive(Debug, Clone)]
-pub struct ForgeRemoteResolver {
+pub struct NeoForgeRemoteResolver {
     vanilla_endpoints: VanillaEndpoints,
-    forge_endpoints: ForgeEndpoints,
+    neoforge_endpoints: NeoForgeEndpoints,
 }
 
-pub type ResolvedForgeMetadata = ResolvedVersionJsonMetadata<ForgeRemoteResolver>;
-pub type ResolvedForgeLaunchVersion<L, VL> =
-    ResolvedVersionJsonInstance<ForgeRemoteResolver, L, VL>;
-pub type PreparedForgeLaunchVersion<L, VL> =
-    PreparedVersionJsonInstance<ForgeRemoteResolver, L, VL>;
+pub type ResolvedNeoForgeMetadata = ResolvedVersionJsonMetadata<NeoForgeRemoteResolver>;
+pub type ResolvedNeoForgeLaunchVersion<L, VL> =
+    ResolvedVersionJsonInstance<NeoForgeRemoteResolver, L, VL>;
+pub type PreparedNeoForgeLaunchVersion<L, VL> =
+    PreparedVersionJsonInstance<NeoForgeRemoteResolver, L, VL>;
 
 #[derive(Debug, Clone)]
-pub struct ResolvedForgeVersion<L, VL>
+pub struct ResolvedNeoForgeVersion<L, VL>
 where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    pub source: ForgeSource,
+    pub source: NeoForgeSource,
     pub instance: Storage<VL, Storage<L>>,
     pub game_version: String,
     pub loader_version: String,
@@ -72,44 +72,44 @@ where
 }
 
 #[derive(Debug, Clone)]
-pub struct PreparedForgeVersion<L, VL>
+pub struct PreparedNeoForgeVersion<L, VL>
 where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    pub resolved_version: ResolvedForgeVersion<L, VL>,
+    pub resolved_version: ResolvedNeoForgeVersion<L, VL>,
     pub install_profile: ForgeInstallerProfile,
     pub embedded_version: Option<serde_json::Value>,
-    pub launch_version: PreparedForgeLaunchVersion<L, VL>,
-    pub install_status: ForgeInstallStatus,
+    pub launch_version: PreparedNeoForgeLaunchVersion<L, VL>,
+    pub install_status: NeoForgeInstallStatus,
 }
 
-impl ForgeRemoteResolver {
-    pub fn new(vanilla_endpoints: VanillaEndpoints, forge_endpoints: ForgeEndpoints) -> Self {
+impl NeoForgeRemoteResolver {
+    pub fn new(vanilla_endpoints: VanillaEndpoints, neoforge_endpoints: NeoForgeEndpoints) -> Self {
         Self {
             vanilla_endpoints,
-            forge_endpoints,
+            neoforge_endpoints,
         }
     }
 
-    pub fn forge_artifact_url(&self, raw_url: &str, artifact_path: &str) -> Result<String> {
+    pub fn neoforge_artifact_url(&self, raw_url: &str, artifact_path: &str) -> Result<String> {
         if raw_url.trim().is_empty() {
-            return self.forge_endpoints.maven_artifact_url(artifact_path);
+            return self.neoforge_endpoints.maven_artifact_url(artifact_path);
         }
 
-        self.forge_endpoints.rewrite_upstream(raw_url)
+        self.neoforge_endpoints.rewrite_upstream(raw_url)
     }
 }
 
-impl VersionJsonRemoteResolver for ForgeRemoteResolver {
+impl VersionJsonRemoteResolver for NeoForgeRemoteResolver {
     fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
         if let Ok(rewritten) = self.vanilla_endpoints.rewrite_upstream(raw_url) {
             return Ok(rewritten);
         }
 
-        self.forge_endpoints
+        self.neoforge_endpoints
             .rewrite_upstream(raw_url)
-            .with_context(|| format!("rewrite forge upstream url failed for '{raw_url}'"))
+            .with_context(|| format!("rewrite neoforge upstream url failed for '{raw_url}'"))
     }
 
     fn object_url(&self, hash: &str) -> Result<String> {
@@ -117,7 +117,7 @@ impl VersionJsonRemoteResolver for ForgeRemoteResolver {
     }
 }
 
-impl<L, VL> ResolvedForgeVersion<L, VL>
+impl<L, VL> ResolvedNeoForgeVersion<L, VL>
 where
     L: VersionJsonRootLayout + Clone,
     VL: VersionJsonInstanceLayout + Clone,
@@ -126,15 +126,15 @@ where
         &self,
         downloader: &ElementalDownloader,
         vanilla_source: &VanillaSource,
-        remote_resolver: &ForgeRemoteResolver,
+        remote_resolver: &NeoForgeRemoteResolver,
         runtime_executable_path: Option<&Path>,
-    ) -> Result<PreparedForgeVersion<L, VL>> {
+    ) -> Result<PreparedNeoForgeVersion<L, VL>> {
         ensure_installer_downloaded(downloader, &self.installer_artifact).await?;
 
         let archive = InstallerArchive::new(self.installer_artifact.path.clone());
         let install_profile = archive
             .read_json::<ForgeInstallerProfile>(INSTALL_PROFILE_ENTRY)
-            .context("read forge install_profile.json from installer failed")?;
+            .context("read neoforge install_profile.json from installer failed")?;
         validate_profile_identity(self, &install_profile)?;
         let embedded_version = read_embedded_version(&archive, &install_profile)?;
 
@@ -142,7 +142,7 @@ where
         persist_embedded_version(&self.instance.path, embedded_version.as_ref()).await?;
         archive
             .extract_maven_artifacts(&self.instance.parent.path.join("libraries"))
-            .context("extract forge embedded maven artifacts failed")?;
+            .context("extract neoforge embedded maven artifacts failed")?;
 
         let launch_version = prepare_launch_version(
             self,
@@ -172,7 +172,7 @@ where
         let install_status =
             install_status(self, &install_profile, &launch_version.resolved_version).await?;
 
-        Ok(PreparedForgeVersion {
+        Ok(PreparedNeoForgeVersion {
             resolved_version: self.clone(),
             install_profile,
             embedded_version,
@@ -182,15 +182,15 @@ where
     }
 
     pub async fn load(
-        source: ForgeSource,
-        remote_resolver: ForgeRemoteResolver,
+        source: NeoForgeSource,
+        remote_resolver: NeoForgeRemoteResolver,
         instance: Storage<VL, Storage<L>>,
-    ) -> Result<PreparedForgeVersion<L, VL>> {
+    ) -> Result<PreparedNeoForgeVersion<L, VL>> {
         let install_profile_path = install_profile_path(&instance.path);
         let install_profile = serde_json::from_reader(std::fs::File::open(&install_profile_path)?)
             .with_context(|| {
                 format!(
-                    "read persisted forge install profile failed: {}",
+                    "read persisted neoforge install profile failed: {}",
                     install_profile_path.display()
                 )
             })?;
@@ -201,7 +201,7 @@ where
                 serde_json::from_reader(std::fs::File::open(&embedded_version_path)?)
                     .with_context(|| {
                         format!(
-                            "read persisted forge embedded version failed: {}",
+                            "read persisted neoforge embedded version failed: {}",
                             embedded_version_path.display()
                         )
                     })?,
@@ -213,16 +213,17 @@ where
         let (game_version, loader_version) = profile_identity(&install_profile)?;
         let installer_artifact =
             source.installer_artifact(&instance.parent, &game_version, &loader_version)?;
-        let resolved_version = ResolvedForgeVersion {
+        let resolved_version = ResolvedNeoForgeVersion {
             source,
             instance: instance.clone(),
             game_version,
             loader_version,
             installer_artifact,
         };
-        let launch_version = ResolvedForgeLaunchVersion::load(remote_resolver, instance.clone())?
-            .into_prepared()
-            .await?;
+        let launch_version =
+            ResolvedNeoForgeLaunchVersion::load(remote_resolver, instance.clone())?
+                .into_prepared()
+                .await?;
         let install_status = install_status(
             &resolved_version,
             &install_profile,
@@ -232,13 +233,15 @@ where
 
         if !install_status.processors_completed {
             bail!(
-                "local forge instance '{}' is not fully prepared: {:?}",
-                instance.name().context("get forge instance name failed")?,
+                "local neoforge instance '{}' is not fully prepared: {:?}",
+                instance
+                    .name()
+                    .context("get neoforge instance name failed")?,
                 install_status
             );
         }
 
-        Ok(PreparedForgeVersion {
+        Ok(PreparedNeoForgeVersion {
             resolved_version,
             install_profile,
             embedded_version,
@@ -248,7 +251,7 @@ where
     }
 }
 
-impl<L, VL> PreparedForgeVersion<L, VL>
+impl<L, VL> PreparedNeoForgeVersion<L, VL>
 where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
@@ -281,7 +284,7 @@ fn read_embedded_version<P: AsRef<Path>>(
     Ok(Some(
         archive
             .read_json::<serde_json::Value>(json_path)
-            .with_context(|| format!("read forge embedded version json failed: {json_path}"))?,
+            .with_context(|| format!("read neoforge embedded version json failed: {json_path}"))?,
     ))
 }
 
@@ -291,11 +294,11 @@ async fn ensure_installer_downloaded(
 ) -> Result<()> {
     let report = downloader
         .run_plan(DownloadPlan::named(
-            format!("forge-installer-{}", installer_artifact.coordinate),
+            format!("neoforge-installer-{}", installer_artifact.coordinate),
             vec![installer_artifact.download_task()],
         ))
         .await
-        .context("download forge installer failed")?;
+        .context("download neoforge installer failed")?;
 
     if report.failed > 0 {
         let failures = report
@@ -304,25 +307,25 @@ async fn ensure_installer_downloaded(
             .map(|failure| format!("{}: {}", failure.task_id, failure.error))
             .collect::<Vec<String>>()
             .join("\n");
-        bail!("forge installer download failed:\n{failures}");
+        bail!("neoforge installer download failed:\n{failures}");
     }
 
     Ok(())
 }
 
 async fn prepare_launch_version<L, VL>(
-    resolved_version: &ResolvedForgeVersion<L, VL>,
+    resolved_version: &ResolvedNeoForgeVersion<L, VL>,
     vanilla_source: &VanillaSource,
-    remote_resolver: &ForgeRemoteResolver,
+    remote_resolver: &NeoForgeRemoteResolver,
     downloader: &ElementalDownloader,
     embedded_version: Option<&serde_json::Value>,
-) -> Result<PreparedForgeLaunchVersion<L, VL>>
+) -> Result<PreparedNeoForgeLaunchVersion<L, VL>>
 where
     L: VersionJsonRootLayout + Clone,
     VL: VersionJsonInstanceLayout + Clone,
 {
     let embedded_version = embedded_version
-        .context("forge installer is missing an embedded version json; launchable forge preparation is not available")?;
+        .context("neoforge installer is missing an embedded version json; launchable neoforge preparation is not available")?;
     let base_metadata =
         resolve_vanilla_metadata(vanilla_source, &resolved_version.game_version).await?;
     let merged_metadata = merge_embedded_version(
@@ -330,7 +333,7 @@ where
         embedded_version,
         resolved_version.source.endpoints(),
     )?;
-    let launch_version = ResolvedForgeMetadata::new(
+    let launch_version = ResolvedNeoForgeMetadata::new(
         remote_resolver.clone(),
         merged_metadata,
         base_metadata.asset_index_objects,
@@ -342,7 +345,7 @@ where
 }
 
 async fn processor_runtime<L, VL>(
-    launch_version: &PreparedForgeLaunchVersion<L, VL>,
+    launch_version: &PreparedNeoForgeLaunchVersion<L, VL>,
     runtime_executable_path: Option<&Path>,
 ) -> Result<Distribution>
 where
@@ -353,7 +356,7 @@ where
     resolve_runtime(
         required_major_version,
         runtime_executable_path,
-        "forge processors",
+        "neoforge processors",
     )
     .await
 }
@@ -385,15 +388,15 @@ async fn resolve_vanilla_metadata(
 }
 
 async fn install_status<L, VL>(
-    resolved_version: &ResolvedForgeVersion<L, VL>,
+    resolved_version: &ResolvedNeoForgeVersion<L, VL>,
     install_profile: &ForgeInstallerProfile,
-    launch_version: &ResolvedForgeLaunchVersion<L, VL>,
-) -> Result<ForgeInstallStatus>
+    launch_version: &ResolvedNeoForgeLaunchVersion<L, VL>,
+) -> Result<NeoForgeInstallStatus>
 where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    Ok(ForgeInstallStatus {
+    Ok(NeoForgeInstallStatus {
         installer_downloaded: resolved_version.installer_artifact.path.exists(),
         install_profile_persisted: install_profile_path(&resolved_version.instance.path).exists(),
         embedded_version_persisted: embedded_version_path(&resolved_version.instance.path).exists(),
@@ -451,7 +454,7 @@ async fn persist_install_profile(
     let path = install_profile_path(instance_root);
     let parent = path
         .parent()
-        .context("forge install profile path has no parent directory")?;
+        .context("neoforge install profile path has no parent directory")?;
     create_dir_all(parent).await?;
     tokio::fs::write(path, serde_json::to_vec_pretty(install_profile)?).await?;
     Ok(())
@@ -465,7 +468,7 @@ async fn persist_embedded_version(
     if let Some(version) = embedded_version {
         let parent = path
             .parent()
-            .context("forge embedded version path has no parent directory")?;
+            .context("neoforge embedded version path has no parent directory")?;
         create_dir_all(parent).await?;
         tokio::fs::write(path, serde_json::to_vec_pretty(version)?).await?;
         return Ok(());
@@ -478,16 +481,16 @@ async fn persist_embedded_version(
     Ok(())
 }
 
-fn forge_state_root(instance_root: &Path) -> PathBuf {
-    instance_root.join(".elemental").join("forge")
+fn neoforge_state_root(instance_root: &Path) -> PathBuf {
+    instance_root.join(".elemental").join("neoforge")
 }
 
 fn install_profile_path(instance_root: &Path) -> PathBuf {
-    forge_state_root(instance_root).join("install_profile.json")
+    neoforge_state_root(instance_root).join("install_profile.json")
 }
 
 fn embedded_version_path(instance_root: &Path) -> PathBuf {
-    forge_state_root(instance_root).join("version.json")
+    neoforge_state_root(instance_root).join("version.json")
 }
 
 fn profile_identity(install_profile: &ForgeInstallerProfile) -> Result<(String, String)> {
@@ -500,7 +503,7 @@ fn profile_identity(install_profile: &ForgeInstallerProfile) -> Result<(String, 
                 .as_ref()
                 .and_then(|legacy| legacy.minecraft.clone())
         })
-        .context("forge install profile is missing minecraft version")?;
+        .context("neoforge install profile is missing minecraft version")?;
 
     let raw_version = install_profile
         .path
@@ -513,14 +516,13 @@ fn profile_identity(install_profile: &ForgeInstallerProfile) -> Result<(String, 
         })
         .and_then(|coordinate| coordinate.split(':').nth(2).map(ToOwned::to_owned))
         .or_else(|| install_profile.version.clone())
-        .context("forge install profile is missing forge version identity")?;
+        .context("neoforge install profile is missing neoforge version identity")?;
 
-    let (_, loader_version) = parse_installer_version(&raw_version)?;
-    Ok((game_version, loader_version))
+    Ok((game_version, raw_version))
 }
 
 fn validate_profile_identity<L, VL>(
-    resolved_version: &ResolvedForgeVersion<L, VL>,
+    resolved_version: &ResolvedNeoForgeVersion<L, VL>,
     install_profile: &ForgeInstallerProfile,
 ) -> Result<()>
 where
@@ -531,7 +533,7 @@ where
 
     if profile_game_version != resolved_version.game_version {
         bail!(
-            "forge installer game version '{}' does not match requested game version '{}'",
+            "neoforge installer game version '{}' does not match requested game version '{}'",
             profile_game_version,
             resolved_version.game_version
         );
@@ -539,7 +541,7 @@ where
 
     if profile_loader_version != resolved_version.loader_version {
         bail!(
-            "forge installer loader version '{}' does not match requested loader version '{}'",
+            "neoforge installer loader version '{}' does not match requested loader version '{}'",
             profile_loader_version,
             resolved_version.loader_version
         );
@@ -587,11 +589,11 @@ struct EmbeddedVersionData {
 fn merge_embedded_version(
     base_metadata: elemental_schema::mojang::piston::PistonMetaData,
     embedded_version: &serde_json::Value,
-    forge_endpoints: &ForgeEndpoints,
+    neoforge_endpoints: &NeoForgeEndpoints,
 ) -> Result<elemental_schema::mojang::piston::PistonMetaData> {
     let mut embedded = serde_json::from_value::<EmbeddedVersionData>(embedded_version.clone())
-        .context("decode forge embedded version json failed")?;
-    embedded.libraries = normalize_forge_library_urls(embedded.libraries, forge_endpoints)?;
+        .context("decode neoforge embedded version json failed")?;
+    embedded.libraries = normalize_neoforge_library_urls(embedded.libraries, neoforge_endpoints)?;
     let (merged_arguments, merged_minecraft_arguments) = merge_arguments(
         base_metadata.arguments.clone(),
         base_metadata.minecraft_arguments.clone(),
@@ -659,12 +661,12 @@ fn merge_arguments(
     }
 }
 
-fn normalize_forge_library_urls(
+fn normalize_neoforge_library_urls(
     libraries: Vec<PistonMetaLibraries>,
-    forge_endpoints: &ForgeEndpoints,
+    neoforge_endpoints: &NeoForgeEndpoints,
 ) -> Result<Vec<PistonMetaLibraries>> {
     normalize_library_urls(libraries, |artifact_path| {
-        forge_endpoints.maven_artifact_url(artifact_path)
+        neoforge_endpoints.maven_artifact_url(artifact_path)
     })
 }
 

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::path::PathBuf;
 
 use crate::launch_arguments::parse_argument_string;
 
@@ -19,6 +20,7 @@ pub struct QuickPlayOptions {
 #[derive(Clone)]
 pub struct VanillaLaunchConfig {
     pub runtime_major_version: Option<usize>,
+    pub runtime_executable_path: Option<PathBuf>,
     pub launcher_name: Option<String>,
     pub launcher_version: Option<String>,
     pub client_id: Option<String>,
@@ -54,6 +56,7 @@ impl VanillaLaunchConfig {
     pub fn new() -> Self {
         Self {
             runtime_major_version: None,
+            runtime_executable_path: None,
             launcher_name: None,
             launcher_version: None,
             client_id: None,
@@ -66,6 +69,11 @@ impl VanillaLaunchConfig {
 
     pub fn set_extra_jvm_arguments(mut self, extra_jvm_arguments: Vec<String>) -> Self {
         self.extra_jvm_arguments = extra_jvm_arguments;
+        self
+    }
+
+    pub fn set_runtime_executable_path(mut self, runtime_executable_path: PathBuf) -> Self {
+        self.runtime_executable_path = Some(runtime_executable_path);
         self
     }
 

@@ -1,12 +1,13 @@
 use std::env::consts::EXE_SUFFIX;
 use std::path::{Path, PathBuf};
 
+use anyhow::{Context, Result, bail};
 use futures::future::join_all;
 use tokio::fs;
 use tokio::process::Command;
 use tokio::sync::OnceCell;
 
-use crate::runtime::provider::{RuntimeProvider, all_providers};
+use crate::runtime::provider::{RuntimeProvider, runtime_providers};
 
 static DISTRIBUTION_CACHE: OnceCell<Vec<Distribution>> = OnceCell::const_new();
 
@@ -34,16 +35,23 @@ pub struct Distribution {
     /// Path to the runtime installation
     pub path: PathBuf,
 
+    /// Explicit executable path when launch should use a specific java/javaw binary
+    pub executable_override: Option<PathBuf>,
+
     // Discovery Data
     /// Elemental Provider used to discover this runtime
     pub provider: &'static str,
 }
 
 impl DistributionReleaseData {
-    pub fn matches_java_major_version(&self, major_version: usize) -> bool {
+    pub fn java_major_version(&self) -> Option<usize> {
         self.major_version
             .as_deref()
             .and_then(parse_java_major_version)
+    }
+
+    pub fn matches_java_major_version(&self, major_version: usize) -> bool {
+        self.java_major_version()
             .is_some_and(|current| current == major_version)
     }
 
@@ -170,11 +178,27 @@ impl Distribution {
         Self {
             release: Some(DistributionReleaseData::parse(&root).await),
             path: root,
+            executable_override: None,
             provider,
         }
     }
 
-    pub async fn from_providers<O>(providers: Vec<Box<dyn RuntimeProvider>>) -> O
+    pub async fn build_from_executable(
+        executable: PathBuf,
+        provider: &'static str,
+    ) -> Result<Self> {
+        let normalized_executable = normalize_executable_path(executable)?;
+        let runtime_root = infer_runtime_root(&normalized_executable)?;
+
+        Ok(Self {
+            release: Some(DistributionReleaseData::parse(&runtime_root).await),
+            path: runtime_root,
+            executable_override: Some(normalized_executable),
+            provider,
+        })
+    }
+
+    pub async fn from_providers<O>(providers: Vec<std::sync::Arc<dyn RuntimeProvider>>) -> O
     where
         O: FromIterator<Self>,
     {
@@ -192,7 +216,9 @@ impl Distribution {
 
     pub async fn cached() -> Vec<Self> {
         DISTRIBUTION_CACHE
-            .get_or_init(|| async { Distribution::from_providers::<Vec<_>>(all_providers()).await })
+            .get_or_init(|| async {
+                Distribution::from_providers::<Vec<_>>(runtime_providers()).await
+            })
             .await
             .clone()
     }
@@ -203,6 +229,12 @@ impl Distribution {
             .is_some_and(|release| release.matches_java_major_version(major_version))
     }
 
+    pub fn java_major_version(&self) -> Option<usize> {
+        self.release
+            .as_ref()
+            .and_then(DistributionReleaseData::java_major_version)
+    }
+
     pub async fn find_cached_by_java_major(major_version: usize) -> Option<Self> {
         Self::cached()
             .await
@@ -211,8 +243,56 @@ impl Distribution {
     }
 
     pub fn executable(&self) -> PathBuf {
-        self.path.join("bin").join(format!("java{}", EXE_SUFFIX))
+        self.executable_override
+            .clone()
+            .unwrap_or_else(|| self.path.join("bin").join(format!("java{}", EXE_SUFFIX)))
     }
+}
+
+fn normalize_executable_path(executable: PathBuf) -> Result<PathBuf> {
+    let normalized = if executable.is_absolute() {
+        executable
+    } else {
+        std::env::current_dir()
+            .context("resolve current directory for runtime executable failed")?
+            .join(executable)
+    };
+
+    if !normalized.is_file() {
+        bail!(
+            "runtime executable path is not a file: {}",
+            normalized.display()
+        );
+    }
+
+    let executable_name = normalized
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .context(format!(
+            "runtime executable path has no valid file stem: {}",
+            normalized.display()
+        ))?;
+    if executable_name != "java" && executable_name != "javaw" {
+        bail!(
+            "runtime executable must point to java or javaw: {}",
+            normalized.display()
+        );
+    }
+
+    Ok(normalized)
+}
+
+fn infer_runtime_root(executable: &Path) -> Result<PathBuf> {
+    let bin_directory = executable.parent().context(format!(
+        "runtime executable has no parent directory: {}",
+        executable.display()
+    ))?;
+    let runtime_root = bin_directory.parent().context(format!(
+        "runtime executable is not inside a bin directory: {}",
+        executable.display()
+    ))?;
+
+    Ok(runtime_root.to_path_buf())
 }
 
 fn parse_java_major_version(version: &str) -> Option<usize> {
@@ -232,7 +312,7 @@ fn parse_java_major_version(version: &str) -> Option<usize> {
 
 #[tokio::test]
 async fn test_distribution_build() {
-    use super::provider::all_providers;
-    let a: Vec<_> = Distribution::from_providers(all_providers()).await;
+    use super::provider::default_providers;
+    let a: Vec<_> = Distribution::from_providers(default_providers()).await;
     println!("{:#?}", a);
 }

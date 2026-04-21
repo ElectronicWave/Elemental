@@ -27,7 +27,9 @@ pub async fn run(config: DemoConfig) -> Result<()> {
         .ensure_instance(config.instance_name.clone(), BaseLayout)
         .await?;
     let driver = QuiltDriver::with_defaults()?;
-    let launch_config = QuiltLaunchConfig::new();
+    let mut launch_config = QuiltLaunchConfig::new();
+    launch_config.runtime_major_version = config.runtime_major_version;
+    launch_config.runtime_executable_path = config.runtime_executable_path.clone();
     let authorizer = OfflineAuthorizer {
         username: "Player".to_owned(),
     };

@@ -22,7 +22,7 @@ Elemental is a Modern Minecraft Launcher SDK⚛
 | Babric          | ✅       | ✅       | ✅       | ✅              | ✅      |
 | Quilt           | ✅       | ✅       | ✅       | ✅              | ✅      |
 | Forge           | ✅       | ✅       | ✅       | ✅              | ✅      |
-| NeoForge        | ❌       | ✅       | ❌       | ❌              | ❌      |
+| NeoForge        | ✅       | ✅       | ✅       | ✅              | ✅      |
 | LiteLoader      | ❌       | ❌       | ❌       | ❌              | ❌      |
 | CleanroomMC     | ❌       | ❌       | ❌       | ❌              | ❌      |
 
@@ -31,6 +31,8 @@ Development is actively in progress. The matrix reflects the current workspace s
 The `fabric-like` substrate now backs multiple verified drivers. Modern Fabric, LegacyFabric, Babric, and Quilt all have verified end-to-end smoke coverage on representative anchors.
 
 Forge now has verified installer-family anchors on `1.12.2 / 14.23.5.2860` and `1.20.1 / 47.3.1`. Broader Forge ranges are still not claimed yet.
+
+NeoForge now has a verified installer-family anchor on `1.21.1 / 21.1.199`. Broader NeoForge ranges are still not claimed yet, and catalog-side game-version grouping should still be treated as a heuristic rather than an upstream API guarantee.
 
 ## Why Elemental
 

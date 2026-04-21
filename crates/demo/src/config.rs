@@ -8,6 +8,7 @@ pub enum DemoDriver {
     Babric,
     Quilt,
     Forge,
+    NeoForge,
 }
 
 #[derive(Clone, Debug)]
@@ -17,6 +18,9 @@ pub struct DemoConfig {
     pub instance_name: String,
     pub game_version: String,
     pub loader_version: Option<String>,
+    pub runtime_major_version: Option<usize>,
+    pub runtime_paths: Vec<PathBuf>,
+    pub runtime_executable_path: Option<PathBuf>,
 }
 
 impl DemoDriver {
@@ -28,6 +32,7 @@ impl DemoDriver {
             Self::Babric => "Babric",
             Self::Quilt => "Quilt",
             Self::Forge => "Forge",
+            Self::NeoForge => "NeoForge",
         }
     }
 }

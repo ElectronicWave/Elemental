@@ -27,7 +27,9 @@ pub async fn run(config: DemoConfig) -> Result<()> {
         .ensure_instance(config.instance_name.clone(), BaseLayout)
         .await?;
     let driver = FabricDriver::for_flavor(fabric_flavor(config.driver)?)?;
-    let launch_config = FabricLaunchConfig::new();
+    let mut launch_config = FabricLaunchConfig::new();
+    launch_config.runtime_major_version = config.runtime_major_version;
+    launch_config.runtime_executable_path = config.runtime_executable_path.clone();
     let authorizer = OfflineAuthorizer {
         username: "Player".to_owned(),
     };
@@ -80,7 +82,7 @@ fn fabric_flavor(driver: DemoDriver) -> Result<FabricFlavor> {
         DemoDriver::Fabric => Ok(FabricFlavor::Fabric),
         DemoDriver::LegacyFabric => Ok(FabricFlavor::LegacyFabric),
         DemoDriver::Babric => Ok(FabricFlavor::Babric),
-        DemoDriver::Vanilla | DemoDriver::Quilt | DemoDriver::Forge => {
+        DemoDriver::Vanilla | DemoDriver::Quilt | DemoDriver::Forge | DemoDriver::NeoForge => {
             bail!("unsupported fabric-like demo driver: {}", driver.as_str())
         }
     }

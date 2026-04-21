@@ -28,6 +28,7 @@ use crate::{
         VersionJsonInstanceLayout, VersionJsonRootLayout, builder::VersionJsonLaunchBuilder,
     },
     inspect::InstanceProbe,
+    runtime::resolve_runtime,
 };
 
 pub struct FabricDriver {
@@ -169,7 +170,11 @@ impl FabricDriver {
         A: Authorizer,
     {
         let runtime = self
-            .runtime_for_prepared_version(prepared_version, config.runtime_major_version)
+            .runtime_for_prepared_version(
+                prepared_version,
+                config.runtime_major_version,
+                config.runtime_executable_path.as_deref(),
+            )
             .await?;
         let command = self
             .build_launch_builder(authorizer, runtime.clone(), prepared_version, config)?
@@ -186,18 +191,12 @@ impl FabricDriver {
         &self,
         prepared_version: &PreparedFabricVersion<L, VL>,
         runtime_major_version: Option<usize>,
+        runtime_executable_path: Option<&std::path::Path>,
     ) -> Result<Distribution> {
         let required_major_version =
             runtime_major_version.unwrap_or_else(|| prepared_version.required_java_major_version());
 
-        Distribution::find_cached_by_java_major(required_major_version)
-            .await
-            .with_context(|| {
-                format!(
-                    "can't find a local Java runtime with major version {}",
-                    required_major_version
-                )
-            })
+        resolve_runtime(required_major_version, runtime_executable_path, "launch").await
     }
 
     fn build_launch_builder<

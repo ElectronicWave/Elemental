@@ -22,16 +22,30 @@ enum DriverCommand {
     Babric(LoaderArgs),
     Quilt(LoaderArgs),
     Forge(LoaderArgs),
+    #[command(name = "neoforge", alias = "neo-forge")]
+    NeoForge(LoaderArgs),
 }
 
 #[derive(Clone, Debug, Default, Args)]
 struct VanillaArgs {
+    #[arg(long)]
+    runtime_major_version: Option<usize>,
+    #[arg(long = "runtime-path", value_name = "PATH")]
+    runtime_paths: Vec<PathBuf>,
+    #[arg(long = "runtime-executable", value_name = "PATH")]
+    runtime_executable_path: Option<PathBuf>,
     game_version: Option<String>,
     instance_name: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Args)]
 struct LoaderArgs {
+    #[arg(long)]
+    runtime_major_version: Option<usize>,
+    #[arg(long = "runtime-path", value_name = "PATH")]
+    runtime_paths: Vec<PathBuf>,
+    #[arg(long = "runtime-executable", value_name = "PATH")]
+    runtime_executable_path: Option<PathBuf>,
     game_version: Option<String>,
     loader_version: Option<String>,
     instance_name: Option<String>,
@@ -49,12 +63,18 @@ impl Cli {
         {
             DriverCommand::Vanilla(arguments) => build_vanilla_config(
                 storage_root,
+                arguments.runtime_major_version,
+                arguments.runtime_paths,
+                arguments.runtime_executable_path,
                 arguments.game_version,
                 arguments.instance_name,
             ),
             DriverCommand::Fabric(arguments) => build_loader_config(
                 DemoDriver::Fabric,
                 storage_root,
+                arguments.runtime_major_version,
+                arguments.runtime_paths,
+                arguments.runtime_executable_path,
                 arguments.game_version,
                 arguments.loader_version,
                 arguments.instance_name,
@@ -62,6 +82,9 @@ impl Cli {
             DriverCommand::LegacyFabric(arguments) => build_loader_config(
                 DemoDriver::LegacyFabric,
                 storage_root,
+                arguments.runtime_major_version,
+                arguments.runtime_paths,
+                arguments.runtime_executable_path,
                 arguments.game_version,
                 arguments.loader_version,
                 arguments.instance_name,
@@ -69,6 +92,9 @@ impl Cli {
             DriverCommand::Babric(arguments) => build_loader_config(
                 DemoDriver::Babric,
                 storage_root,
+                arguments.runtime_major_version,
+                arguments.runtime_paths,
+                arguments.runtime_executable_path,
                 arguments.game_version,
                 arguments.loader_version,
                 arguments.instance_name,
@@ -76,6 +102,9 @@ impl Cli {
             DriverCommand::Quilt(arguments) => build_loader_config(
                 DemoDriver::Quilt,
                 storage_root,
+                arguments.runtime_major_version,
+                arguments.runtime_paths,
+                arguments.runtime_executable_path,
                 arguments.game_version,
                 arguments.loader_version,
                 arguments.instance_name,
@@ -83,6 +112,19 @@ impl Cli {
             DriverCommand::Forge(arguments) => build_loader_config(
                 DemoDriver::Forge,
                 storage_root,
+                arguments.runtime_major_version,
+                arguments.runtime_paths,
+                arguments.runtime_executable_path,
+                arguments.game_version,
+                arguments.loader_version,
+                arguments.instance_name,
+            ),
+            DriverCommand::NeoForge(arguments) => build_loader_config(
+                DemoDriver::NeoForge,
+                storage_root,
+                arguments.runtime_major_version,
+                arguments.runtime_paths,
+                arguments.runtime_executable_path,
                 arguments.game_version,
                 arguments.loader_version,
                 arguments.instance_name,
@@ -93,6 +135,9 @@ impl Cli {
 
 fn build_vanilla_config(
     storage_root: PathBuf,
+    runtime_major_version: Option<usize>,
+    runtime_paths: Vec<PathBuf>,
+    runtime_executable_path: Option<PathBuf>,
     game_version: Option<String>,
     instance_name: Option<String>,
 ) -> DemoConfig {
@@ -106,12 +151,18 @@ fn build_vanilla_config(
         instance_name: resolved_instance_name,
         game_version: resolved_game_version,
         loader_version: None,
+        runtime_major_version,
+        runtime_paths,
+        runtime_executable_path,
     }
 }
 
 fn build_loader_config(
     driver: DemoDriver,
     storage_root: PathBuf,
+    runtime_major_version: Option<usize>,
+    runtime_paths: Vec<PathBuf>,
+    runtime_executable_path: Option<PathBuf>,
     game_version: Option<String>,
     loader_version: Option<String>,
     instance_name: Option<String>,
@@ -127,6 +178,9 @@ fn build_loader_config(
         instance_name: resolved_instance_name,
         game_version: resolved_game_version,
         loader_version: Some(resolved_loader_version),
+        runtime_major_version,
+        runtime_paths,
+        runtime_executable_path,
     }
 }
 
@@ -137,6 +191,7 @@ fn default_loader_game_version(driver: DemoDriver, game_version: Option<String>)
         DemoDriver::Babric => "1.20.1".to_owned(),
         DemoDriver::Quilt => "1.20.1".to_owned(),
         DemoDriver::Forge => "1.20.1".to_owned(),
+        DemoDriver::NeoForge => "1.21.1".to_owned(),
         DemoDriver::Vanilla => unreachable!("vanilla is handled separately"),
     })
 }
@@ -148,6 +203,7 @@ fn default_loader_version(driver: DemoDriver, loader_version: Option<String>) ->
         DemoDriver::Babric => "0.16.10".to_owned(),
         DemoDriver::Quilt => "0.24.0".to_owned(),
         DemoDriver::Forge => "47.3.1".to_owned(),
+        DemoDriver::NeoForge => "21.1.199".to_owned(),
         DemoDriver::Vanilla => unreachable!("vanilla is handled separately"),
     })
 }
@@ -159,6 +215,7 @@ fn default_loader_instance_name(driver: DemoDriver, game_version: &str) -> Strin
         DemoDriver::Babric => format!("MyBabric-{game_version}"),
         DemoDriver::Quilt => format!("MyQuilt-{game_version}"),
         DemoDriver::Forge => format!("MyForge-{game_version}"),
+        DemoDriver::NeoForge => format!("MyNeoForge-{game_version}"),
         DemoDriver::Vanilla => unreachable!("vanilla is handled separately"),
     }
 }

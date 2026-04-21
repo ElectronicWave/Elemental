@@ -22,7 +22,7 @@ It is intended as a working architecture reference, not as a release guarantee.
 | Babric          | Yes     | Yes     | Yes     | Yes            | Yes     | End-to-end flow is working and smoke-verified on a representative beta anchor     |
 | Quilt           | Yes     | Yes     | Yes     | Yes            | Yes     | Independent fabric-like driver implemented and smoke-verified on a representative anchor |
 | Forge           | Yes     | Yes     | Yes     | Yes            | Yes     | Installer-family driver now reaches a verified modern launch anchor               |
-| NeoForge        | No      | Yes     | No      | No             | No      | Inspect only                                                                      |
+| NeoForge        | Yes     | Yes     | Yes     | Yes            | Yes     | Installer-family driver now reaches a verified modern launch anchor; catalog game-version grouping remains heuristic |
 | CleanroomMC     | No      | No      | No      | No             | No      | Not started                                                                       |
 | LiteLoader      | No      | No      | No      | No             | No      | Not started                                                                       |
 | Rift            | No      | No      | No      | No             | No      | Not started                                                                       |
@@ -42,6 +42,7 @@ These anchors should be read as verified points inside the support range, not as
 | Babric          | `b1.7.3`                              | Confirms the flavor-aware family path on a representative beta-era Babric anchor               |
 | Quilt           | `1.20.1`                              | Confirms a second independent fabric-like driver on the shared profile-driven substrate         |
 | Forge           | `1.12.2 / 14.23.5.2860`, `1.20.1 / 47.3.1` | Confirms the installer-family pipeline across a classic legacy-era anchor and a modern Forge anchor |
+| NeoForge        | `1.21.1 / 21.1.199`                   | Confirms the installer-family pipeline on a modern NeoForge anchor; catalog grouping is still version-name heuristic |
 
 Rolling targets such as the latest release, latest snapshot, and latest stable loader should still be treated as recurring regression checks rather than one-time milestones.
 
@@ -60,7 +61,7 @@ These are the ranges I would claim today based on the current code, upstream doc
 | Babric          | `b1.7.3` verified, broader range not claimed yet          | Medium       | The current workspace now has an end-to-end verified anchor on `b1.7.3`, but broader Babric-supported beta coverage still needs systematic smoke coverage |
 | Quilt           | `1.20.1` verified, broader range not claimed yet          | Medium       | The current workspace now has an end-to-end verified anchor on `1.20.1`, but broader Quilt-supported version coverage still needs systematic smoke coverage |
 | Forge           | `1.12.2 / 14.23.5.2860` and `1.20.1 / 47.3.1` verified, broader range not claimed yet | High  | The installer-family pipeline now has verified anchors on both a classic `1.12.2` generation and a modern `1.20.1` generation, but broader Forge coverage still needs systematic validation |
-| NeoForge        | no install or launch claim yet                            | High         | Only inspect exists                                                                                                                                        |
+| NeoForge        | `1.21.1 / 21.1.199` verified, broader range not claimed yet | High       | The installer-family pipeline now has a verified modern NeoForge anchor, but broader NeoForge coverage still needs systematic validation and catalog grouping still relies on version-name heuristics |
 | CleanroomMC     | no install or launch claim yet                            | High         | Not implemented                                                                                                                                            |
 
 ## Upstream Findings
@@ -382,6 +383,8 @@ Current status:
 
 - the installer-family substrate exists
 - Forge has verified launch anchors at `1.12.2 / 14.23.5.2860` and `1.20.1 / 47.3.1`
+- NeoForge has a verified launch anchor at `1.21.1 / 21.1.199`
+- NeoForge catalog grouping currently uses version-name heuristics and should not be treated as an upstream truth source
 - broader Forge coverage is still unclaimed until more installer generations are smoke-validated
 
 ## Phase 4: Create Legacy Family

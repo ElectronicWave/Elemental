@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use elemental::{
     core::{auth::authorizers::offline::OfflineAuthorizer, storage::Storage},
     driver::{
-        drivers::forge::{config::ForgeLaunchConfig, driver::ForgeDriver},
+        drivers::neoforge::{config::NeoForgeLaunchConfig, driver::NeoForgeDriver},
         families::version_json::{BaseLayout, VersionJsonGameStorageExt},
     },
 };
@@ -21,13 +21,13 @@ pub async fn run(config: DemoConfig) -> Result<()> {
     let loader_version = config
         .loader_version
         .clone()
-        .context("forge demo requires a loader version")?;
+        .context("neoforge demo requires a loader version")?;
     let storage = Storage::new(config.storage_root.clone(), BaseLayout);
     let instance = storage
         .ensure_instance(config.instance_name.clone(), BaseLayout)
         .await?;
-    let driver = ForgeDriver::with_defaults()?;
-    let mut launch_config = ForgeLaunchConfig::new();
+    let driver = NeoForgeDriver::with_defaults()?;
+    let mut launch_config = NeoForgeLaunchConfig::new();
     launch_config.runtime_major_version = config.runtime_major_version;
     launch_config.runtime_executable_path = config.runtime_executable_path.clone();
     let authorizer = OfflineAuthorizer {

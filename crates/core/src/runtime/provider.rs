@@ -1,8 +1,11 @@
 use async_trait::async_trait;
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    sync::{Arc, OnceLock, RwLock},
+};
 
 #[async_trait]
-pub trait RuntimeProvider {
+pub trait RuntimeProvider: Send + Sync {
     async fn list(&self) -> Vec<PathBuf>;
 
     #[inline(always)]
@@ -10,11 +13,11 @@ pub trait RuntimeProvider {
         "Provider"
     }
 
-    fn box_default() -> Box<Self>
+    fn arc_default() -> Arc<Self>
     where
         Self: Sized + Default,
     {
-        Box::new(Self::default())
+        Arc::new(Self::default())
     }
 }
 
@@ -24,11 +27,32 @@ use super::providers::{
     registry::RegistryProvider,
 };
 
-pub fn all_providers() -> Vec<Box<dyn RuntimeProvider>> {
+static RUNTIME_PROVIDER_OVERRIDE: OnceLock<RwLock<Option<Vec<Arc<dyn RuntimeProvider>>>>> =
+    OnceLock::new();
+
+pub fn default_providers() -> Vec<Arc<dyn RuntimeProvider>> {
     vec![
-        RegistryProvider::box_default(),
-        EnvPathProvider::box_default(),
-        PackageManagerProvider::box_default(),
-        EnvJavaHomeProvider::box_default(),
+        RegistryProvider::arc_default(),
+        EnvPathProvider::arc_default(),
+        PackageManagerProvider::arc_default(),
+        EnvJavaHomeProvider::arc_default(),
     ]
+}
+
+pub fn runtime_providers() -> Vec<Arc<dyn RuntimeProvider>> {
+    let storage = RUNTIME_PROVIDER_OVERRIDE.get_or_init(|| RwLock::new(None));
+    let Ok(guard) = storage.read() else {
+        return default_providers();
+    };
+
+    guard.clone().unwrap_or_else(default_providers)
+}
+
+pub fn with_runtime_providers(providers: Vec<Arc<dyn RuntimeProvider>>) -> anyhow::Result<()> {
+    let storage = RUNTIME_PROVIDER_OVERRIDE.get_or_init(|| RwLock::new(None));
+    let mut guard = storage
+        .write()
+        .map_err(|_| anyhow::anyhow!("lock runtime provider override for writing failed"))?;
+    *guard = Some(providers);
+    Ok(())
 }

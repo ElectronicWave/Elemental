@@ -1,5 +1,6 @@
 pub mod builder;
 pub mod classpath;
+pub mod driver;
 pub mod extensions;
 pub mod launch;
 pub mod layout;
@@ -13,6 +14,7 @@ mod state;
 pub mod storage;
 pub mod variables;
 
+pub use driver::{ProfiledVersionJsonDriver, ProfiledVersionJsonFamily};
 pub use extensions::{PistonMetaDataExt, PistonMetaLibrariesExt};
 pub use launch::{
     LaunchResolution, QuickPlayOptions, VersionJsonLaunchConfig, build_version_json_launch_builder,

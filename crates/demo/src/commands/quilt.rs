@@ -1,10 +1,10 @@
 use anyhow::Result;
-use elemental::driver::drivers::quilt::{config::QuiltLaunchConfig, driver::QuiltDriver};
+use elemental::driver::drivers::quilt::{config::QuiltLaunchConfig, driver::QuiltDriverFamily};
 
 use crate::{commands::run_loader_demo, config::DemoConfig};
 
 pub async fn run(config: DemoConfig) -> Result<()> {
-    let driver = QuiltDriver::with_defaults()?;
+    let driver = QuiltDriverFamily::new_driver_with_defaults()?;
 
     run_loader_demo(
         config,

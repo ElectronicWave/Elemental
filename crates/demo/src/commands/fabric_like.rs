@@ -1,6 +1,6 @@
 use anyhow::{Result, bail};
 use elemental::driver::drivers::fabric::{
-    config::FabricLaunchConfig, driver::FabricDriver, source::FabricFlavor,
+    config::FabricLaunchConfig, driver::FabricDriverFamily, source::FabricFlavor,
 };
 
 use crate::{
@@ -10,7 +10,7 @@ use crate::{
 
 pub async fn run(config: DemoConfig) -> Result<()> {
     let driver_kind = config.driver;
-    let driver = FabricDriver::for_flavor(fabric_flavor(driver_kind)?)?;
+    let driver = FabricDriverFamily::new(fabric_flavor(driver_kind)?).new_driver_with_defaults()?;
 
     run_loader_demo(
         config,

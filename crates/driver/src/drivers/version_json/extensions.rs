@@ -78,7 +78,7 @@ impl PistonMetaLibrariesExt for PistonMetaLibraries {
         &'a self,
         platform: &VersionJsonPlatform,
     ) -> Option<&'a PistonMetaLibrariesDownloadsArtifact> {
-        let artifact = &self.downloads.artifact;
+        let artifact = self.downloads.artifact.as_ref()?;
         if artifact
             .path
             .ends_with(&format!("-natives-{}.jar", platform.os()))

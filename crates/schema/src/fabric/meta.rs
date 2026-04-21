@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::mojang::piston::PistonMetaArguments;
@@ -69,6 +71,28 @@ pub struct LoaderProfile {
 pub struct ProfileLibrary {
     pub name: String,
     pub url: String,
+    pub downloads: Option<ProfileLibraryDownloads>,
+    pub natives: Option<HashMap<String, String>>,
+    pub extract: Option<ProfileLibraryExtract>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ProfileLibraryDownloads {
+    pub artifact: Option<ProfileLibraryArtifact>,
+    pub classifiers: Option<HashMap<String, ProfileLibraryArtifact>>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ProfileLibraryArtifact {
+    pub path: String,
+    pub url: String,
+    pub size: Option<usize>,
+    pub sha1: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ProfileLibraryExtract {
+    pub exclude: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

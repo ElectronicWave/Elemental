@@ -64,6 +64,14 @@ impl<O: Origin> OriginPolicy<O> {
     }
 
     pub fn rewrite_origin_url(&self, raw_url: &str) -> Result<String> {
+        let Some(rewritten) = self.try_rewrite_origin_url(raw_url)? else {
+            bail!("can't map url to a known origin: {raw_url}")
+        };
+
+        Ok(rewritten)
+    }
+
+    pub fn try_rewrite_origin_url(&self, raw_url: &str) -> Result<Option<String>> {
         let parsed = Url::parse(raw_url).with_context(|| format!("parse url failed: {raw_url}"))?;
 
         for origin in O::all() {
@@ -71,17 +79,50 @@ impl<O: Origin> OriginPolicy<O> {
                 format!("parse canonical origin failed: {}", origin.canonical())
             })?;
             if let Some(suffix) = origin_suffix(&parsed, &canonical) {
-                return self.resolve(*origin, &suffix);
+                return self.resolve(*origin, &suffix).map(Some);
             }
 
             if let Some(override_base) = self.overrides.get(origin) {
                 if let Some(suffix) = origin_suffix(&parsed, override_base) {
-                    return self.resolve(*origin, &suffix);
+                    return self.resolve(*origin, &suffix).map(Some);
                 }
             }
         }
 
-        bail!("can't map url to a known origin: {raw_url}")
+        Ok(None)
+    }
+
+    pub fn rewrite_known_origin_url(&self, raw_url: &str) -> Result<Option<String>> {
+        let parsed = Url::parse(raw_url).with_context(|| format!("parse url failed: {raw_url}"))?;
+        let mut matched_known_origin = false;
+
+        for origin in O::all() {
+            let canonical = Url::parse(origin.canonical()).with_context(|| {
+                format!("parse canonical origin failed: {}", origin.canonical())
+            })?;
+
+            if same_origin(&parsed, &canonical) {
+                matched_known_origin = true;
+                if let Some(suffix) = origin_suffix(&parsed, &canonical) {
+                    return self.resolve(*origin, &suffix).map(Some);
+                }
+            }
+
+            if let Some(override_base) = self.overrides.get(origin) {
+                if same_origin(&parsed, override_base) {
+                    matched_known_origin = true;
+                    if let Some(suffix) = origin_suffix(&parsed, override_base) {
+                        return self.resolve(*origin, &suffix).map(Some);
+                    }
+                }
+            }
+        }
+
+        if matched_known_origin {
+            bail!("url matches a known origin host but not a configured base path: {raw_url}");
+        }
+
+        Ok(None)
     }
 }
 
@@ -90,19 +131,17 @@ fn trim_trailing_slash(raw_url: &str) -> &str {
 }
 
 fn origin_suffix(raw_url: &Url, base_url: &Url) -> Option<String> {
-    if raw_url.scheme() != base_url.scheme() {
-        return None;
-    }
-
-    if raw_url.host_str() != base_url.host_str() {
-        return None;
-    }
-
-    if raw_url.port_or_known_default() != base_url.port_or_known_default() {
+    if !same_origin(raw_url, base_url) {
         return None;
     }
 
     let raw = raw_url.as_str();
     let base = trim_trailing_slash(base_url.as_str());
     raw.strip_prefix(base).map(ToOwned::to_owned)
+}
+
+fn same_origin(raw_url: &Url, base_url: &Url) -> bool {
+    raw_url.scheme() == base_url.scheme()
+        && raw_url.host_str() == base_url.host_str()
+        && raw_url.port_or_known_default() == base_url.port_or_known_default()
 }

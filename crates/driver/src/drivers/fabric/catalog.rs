@@ -5,7 +5,7 @@ use async_trait::async_trait;
 
 use crate::catalog::{Catalog, GameVersions, Release, ReleaseInfo};
 
-use super::source::{FabricFlavor, FabricSource};
+use super::source::{FabricEndpointOverrides, FabricFlavor, FabricSource};
 
 pub struct FabricCatalog {
     source: FabricSource,
@@ -39,6 +39,10 @@ impl FabricCatalog {
 
     pub fn for_flavor(flavor: FabricFlavor) -> Result<Self> {
         Ok(Self::new(FabricSource::for_flavor(flavor)?))
+    }
+
+    pub fn with_overrides(overrides: FabricEndpointOverrides) -> Result<Self> {
+        Ok(Self::new(FabricSource::with_overrides(overrides)?))
     }
 }
 

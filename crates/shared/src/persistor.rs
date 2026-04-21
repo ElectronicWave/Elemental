@@ -122,7 +122,7 @@ pub fn json_persistor<V: Serialize + DeserializeOwned>(
         |s: &String| Ok(serde_json::from_str(s)?),
         id,
         scope,
-        Some(".json".to_string()),
+        Some("json".to_string()),
     )
 }
 
@@ -142,6 +142,6 @@ pub fn toml_persistor<V: Serialize + DeserializeOwned>(
         |s: &String| Ok(toml::from_str(s)?),
         id,
         scope,
-        Some(".toml".to_string()),
+        Some("toml".to_string()),
     )
 }

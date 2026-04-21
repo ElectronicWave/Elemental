@@ -7,6 +7,8 @@ use elemental_core::{
     runtime::distribution::Distribution, storage::Storage,
 };
 
+use crate::launch_arguments::parse_argument_string;
+
 use super::{
     classpath::join_classpath,
     extensions::{PistonMetaDataExt, PistonMetaLibrariesExt},
@@ -25,6 +27,8 @@ pub struct VersionJsonLaunchBuilder<
     pub runtime: Distribution,
     pub version: Storage<VL, Storage<L>>,
     inner: LauncherVariables,
+    extra_jvm_arguments: Vec<String>,
+    extra_game_arguments: Vec<String>,
 }
 
 impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
@@ -36,6 +40,8 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
             runtime,
             version,
             inner: LauncherVariables::default(),
+            extra_jvm_arguments: Vec::new(),
+            extra_game_arguments: Vec::new(),
         }
     }
 
@@ -73,6 +79,32 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
         self.inner.launcher_name = name;
         self.inner.launcher_version = version;
         self
+    }
+
+    pub fn set_extra_jvm_arguments(mut self, extra_jvm_arguments: Vec<String>) -> Self {
+        self.extra_jvm_arguments = extra_jvm_arguments;
+        self
+    }
+
+    pub fn set_extra_game_arguments(mut self, extra_game_arguments: Vec<String>) -> Self {
+        self.extra_game_arguments = extra_game_arguments;
+        self
+    }
+
+    pub fn try_set_extra_jvm_argument_string(
+        mut self,
+        extra_jvm_argument_string: String,
+    ) -> Result<Self> {
+        self.extra_jvm_arguments = parse_argument_string(extra_jvm_argument_string.as_str())?;
+        Ok(self)
+    }
+
+    pub fn try_set_extra_game_argument_string(
+        mut self,
+        extra_game_argument_string: String,
+    ) -> Result<Self> {
+        self.extra_game_arguments = parse_argument_string(extra_game_argument_string.as_str())?;
+        Ok(self)
     }
 
     pub async fn build_command(mut self) -> Result<LaunchCommand> {
@@ -130,23 +162,28 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
             .iter()
             .filter(|library| library.is_allowed(&rule_context))
             .filter_map(|library| {
-                if library.downloads.artifact.path.contains("natives") {
-                    None
-                } else {
-                    Some(
-                        global_root
-                            .join("libraries")
-                            .join(&library.downloads.artifact.path)
-                            .to_string_lossy()
-                            .to_string(),
-                    )
+                let artifact = library.downloads.artifact.as_ref()?;
+                if artifact.path.contains("natives") {
+                    return None;
                 }
+
+                Some(
+                    global_root
+                        .join("libraries")
+                        .join(&artifact.path)
+                        .to_string_lossy()
+                        .to_string(),
+                )
             })
             .chain(std::iter::once(version_jar.to_string_lossy().to_string()))
             .collect::<Vec<String>>();
         self.inner.classpath = join_classpath(classpath);
 
         let mut jvm_args = Vec::new();
+        if metadata.arguments.is_none() {
+            jvm_args.extend(self.inner.apply(legacy_jvm_arguments())?);
+        }
+
         if let Some(logging) = &metadata.logging {
             let log_config_path = self
                 .version
@@ -170,7 +207,9 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
         }
 
         jvm_args.extend(self.inner.apply(metadata.jvm_arguments(&rule_context))?);
-        let game_args = self.inner.apply(metadata.game_arguments(&rule_context))?;
+        jvm_args.extend(self.inner.apply(self.extra_jvm_arguments)?);
+        let mut game_args = self.inner.apply(metadata.game_arguments(&rule_context))?;
+        game_args.extend(self.inner.apply(self.extra_game_arguments)?);
 
         let mut args = jvm_args;
         args.push(metadata.main_class);
@@ -182,4 +221,14 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
     pub fn variables(self) -> LauncherVariables {
         self.inner
     }
+}
+
+fn legacy_jvm_arguments() -> Vec<String> {
+    vec![
+        "-Djava.library.path=${natives_directory}".to_owned(),
+        "-Dminecraft.launcher.brand=${launcher_name}".to_owned(),
+        "-Dminecraft.launcher.version=${launcher_version}".to_owned(),
+        "-cp".to_owned(),
+        "${classpath}".to_owned(),
+    ]
 }

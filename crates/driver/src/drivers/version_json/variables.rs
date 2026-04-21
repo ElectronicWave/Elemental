@@ -95,17 +95,18 @@ impl LauncherVariables {
             .iter()
             .filter(|library| library.is_allowed(&rule_context))
             .filter_map(|library| {
-                if library.downloads.artifact.path.contains("natives") {
-                    None
-                } else {
-                    Some(
-                        Path::new(&game_directory)
-                            .join("libraries")
-                            .join(&library.downloads.artifact.path)
-                            .to_string_lossy()
-                            .to_string(),
-                    )
+                let artifact = library.downloads.artifact.as_ref()?;
+                if artifact.path.contains("natives") {
+                    return None;
                 }
+
+                Some(
+                    Path::new(&game_directory)
+                        .join("libraries")
+                        .join(&artifact.path)
+                        .to_string_lossy()
+                        .to_string(),
+                )
             })
             .chain(std::iter::once(version_jar.to_string_lossy().to_string()))
             .collect::<Vec<String>>();

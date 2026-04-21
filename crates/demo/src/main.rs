@@ -1,10 +1,11 @@
 use std::{
-    fs,
+    env, fs,
     path::{Path, PathBuf},
+    process::ExitStatus,
     time::Instant,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use elemental::{
     core::{
         auth::authorizers::offline::OfflineAuthorizer,
@@ -12,22 +13,188 @@ use elemental::{
         storage::Storage,
     },
     driver::drivers::{
-        fabric::{config::FabricLaunchConfig, driver::FabricDriver},
-        version_json::{BaseLayout, VersionJsonGameStorageExt, VersionJsonVersionStorageExt},
+        fabric::{config::FabricLaunchConfig, driver::FabricDriver, source::FabricFlavor},
+        vanilla::{config::VanillaLaunchConfig, driver::VanillaDriver},
+        version_json::{
+            BaseLayout, VersionJsonGameStorageExt, VersionJsonInstanceLayout,
+            VersionJsonRootLayout, VersionJsonVersionStorageExt,
+        },
     },
 };
 
+#[derive(Clone, Copy)]
+enum DemoDriver {
+    Vanilla,
+    Fabric,
+    LegacyFabric,
+    Babric,
+}
+
+struct DemoConfig {
+    driver: DemoDriver,
+    storage_root: PathBuf,
+    instance_name: String,
+    game_version: String,
+    loader_version: Option<String>,
+}
+
+struct VersionDiagnostics {
+    version_root: PathBuf,
+    metadata_path: PathBuf,
+    version_jar_path: PathBuf,
+    natives_root: PathBuf,
+    natives_root_binaries: Vec<PathBuf>,
+    natives_nested_binaries: Vec<PathBuf>,
+    metadata_id: String,
+    inherited_game_version: Option<String>,
+    main_class: String,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    let storage_root = PathBuf::from(".minecraft");
-    let instance_name = "MyFabric-1.20.1".to_owned();
-    let game_version = "1.20.1".to_owned();
-    let loader_version = "0.16.10".to_owned();
-    let storage = Storage::new(storage_root, BaseLayout);
+    let config = parse_demo_config(env::args().skip(1).collect())?;
+
+    match config.driver {
+        DemoDriver::Vanilla => run_vanilla_demo(config).await,
+        DemoDriver::Fabric | DemoDriver::LegacyFabric | DemoDriver::Babric => {
+            run_fabric_demo(config).await
+        }
+    }
+}
+
+fn parse_demo_config(arguments: Vec<String>) -> Result<DemoConfig> {
+    let driver = arguments
+        .first()
+        .map(|value| parse_demo_driver(value.as_str()))
+        .transpose()?
+        .unwrap_or(DemoDriver::Fabric);
+
+    match driver {
+        DemoDriver::Vanilla => {
+            let game_version = arguments
+                .get(1)
+                .cloned()
+                .unwrap_or_else(|| "1.20.1".to_owned());
+            let instance_name = arguments
+                .get(2)
+                .cloned()
+                .unwrap_or_else(|| format!("MyVanilla-{game_version}"));
+
+            Ok(DemoConfig {
+                driver,
+                storage_root: PathBuf::from(".minecraft"),
+                instance_name,
+                game_version,
+                loader_version: None,
+            })
+        }
+        DemoDriver::Fabric | DemoDriver::LegacyFabric | DemoDriver::Babric => {
+            let game_version = arguments
+                .get(1)
+                .cloned()
+                .unwrap_or_else(|| "1.20.1".to_owned());
+            let loader_version = arguments
+                .get(2)
+                .cloned()
+                .unwrap_or_else(|| "0.16.10".to_owned());
+            let instance_name = arguments
+                .get(3)
+                .cloned()
+                .unwrap_or_else(|| format!("MyFabric-{game_version}"));
+
+            Ok(DemoConfig {
+                driver,
+                storage_root: PathBuf::from(".minecraft"),
+                instance_name,
+                game_version,
+                loader_version: Some(loader_version),
+            })
+        }
+    }
+}
+
+fn parse_demo_driver(value: &str) -> Result<DemoDriver> {
+    match value {
+        "vanilla" => Ok(DemoDriver::Vanilla),
+        "fabric" => Ok(DemoDriver::Fabric),
+        "legacyfabric" => Ok(DemoDriver::LegacyFabric),
+        "babric" => Ok(DemoDriver::Babric),
+        _ => bail!("unsupported demo driver: {value}"),
+    }
+}
+
+impl DemoDriver {
+    fn as_str(self) -> &'static str {
+        match self {
+            DemoDriver::Vanilla => "Vanilla",
+            DemoDriver::Fabric => "Fabric",
+            DemoDriver::LegacyFabric => "LegacyFabric",
+            DemoDriver::Babric => "Babric",
+        }
+    }
+}
+
+async fn run_vanilla_demo(config: DemoConfig) -> Result<()> {
+    let storage = Storage::new(config.storage_root.clone(), BaseLayout);
     let instance = storage
-        .ensure_instance(instance_name.clone(), BaseLayout)
+        .ensure_instance(config.instance_name.clone(), BaseLayout)
         .await?;
-    let fabric = FabricDriver::with_defaults()?;
+    let vanilla = VanillaDriver::with_defaults()?;
+    let launch_config = VanillaLaunchConfig::new();
+    let authorizer = OfflineAuthorizer {
+        username: "Player".to_owned(),
+    };
+
+    let started_at = Instant::now();
+    let prepared = vanilla
+        .prepare(&instance, config.game_version.clone())
+        .await?;
+    let prepare_elapsed = started_at.elapsed();
+
+    let diagnostics = collect_version_diagnostics(&prepared.resolved_version.version)?;
+    let install_status = prepared.install_status.clone();
+    let (runtime, command) = vanilla
+        .build_launch_command(authorizer, &prepared, &launch_config)
+        .await?;
+    let runtime_executable = runtime.executable().to_path_buf();
+
+    print_launch_diagnostics(
+        config.driver.as_str(),
+        None,
+        &config.instance_name,
+        &config.game_version,
+        prepare_elapsed.as_millis(),
+        &install_status,
+        runtime_executable.as_path(),
+        &diagnostics,
+        &command,
+    );
+
+    let exit_status = run_logged_process(command).await?;
+    print_summary(
+        config.driver.as_str(),
+        &config.game_version,
+        None,
+        runtime_executable.as_path(),
+        diagnostics.version_root.as_path(),
+        &install_status,
+        prepare_elapsed.as_millis(),
+        exit_status,
+    );
+
+    Ok(())
+}
+
+async fn run_fabric_demo(config: DemoConfig) -> Result<()> {
+    let loader_version = config
+        .loader_version
+        .clone()
+        .context("fabric demo requires a loader version")?;
+    let storage = Storage::new(config.storage_root.clone(), BaseLayout);
+    let instance = storage
+        .ensure_instance(config.instance_name.clone(), BaseLayout)
+        .await?;
+    let fabric = FabricDriver::for_flavor(fabric_flavor(config.driver))?;
     let launch_config = FabricLaunchConfig::new();
     let authorizer = OfflineAuthorizer {
         username: "Player".to_owned(),
@@ -35,45 +202,86 @@ async fn main() -> Result<()> {
 
     let started_at = Instant::now();
     let prepared = fabric
-        .prepare(&instance, game_version.clone(), loader_version.clone())
+        .prepare(
+            &instance,
+            config.game_version.clone(),
+            loader_version.clone(),
+        )
         .await?;
     let prepare_elapsed = started_at.elapsed();
 
-    let version = prepared.resolved_version.version.clone();
-    let version_root = version.path.clone();
-    let metadata = version.metadata()?;
-    let metadata_path = version.metadata_path()?;
-    let version_jar_path = version.jar_path()?;
-    let natives_root = version.platform_natives_path();
-    let natives_root_binaries = collect_root_files(&natives_root)?;
-    let natives_nested_binaries = collect_recursive_native_files(&natives_root)?;
+    let diagnostics = collect_version_diagnostics(&prepared.resolved_version.version)?;
     let install_status = prepared.install_status.clone();
-
     let (runtime, command) = fabric
         .build_launch_command(authorizer, &prepared, &launch_config)
         .await?;
     let runtime_executable = runtime.executable().to_path_buf();
 
     print_launch_diagnostics(
-        runtime_executable.as_path(),
-        &version_root,
-        metadata_path.as_path(),
-        version_jar_path.as_path(),
-        natives_root.as_path(),
-        &natives_root_binaries,
-        &natives_nested_binaries,
-        &metadata.main_class,
-        metadata.inherits_from.as_deref(),
-        metadata.id.as_str(),
-        command.args.len(),
-        &command,
-        &game_version,
-        &loader_version,
+        config.driver.as_str(),
+        Some(loader_version.as_str()),
+        &config.instance_name,
+        &config.game_version,
         prepare_elapsed.as_millis(),
-        &instance_name,
         &install_status,
+        runtime_executable.as_path(),
+        &diagnostics,
+        &command,
     );
 
+    let exit_status = run_logged_process(command).await?;
+    print_summary(
+        config.driver.as_str(),
+        &config.game_version,
+        Some(loader_version.as_str()),
+        runtime_executable.as_path(),
+        diagnostics.version_root.as_path(),
+        &install_status,
+        prepare_elapsed.as_millis(),
+        exit_status,
+    );
+
+    Ok(())
+}
+
+fn fabric_flavor(driver: DemoDriver) -> FabricFlavor {
+    match driver {
+        DemoDriver::Vanilla => FabricFlavor::Fabric,
+        DemoDriver::Fabric => FabricFlavor::Fabric,
+        DemoDriver::LegacyFabric => FabricFlavor::LegacyFabric,
+        DemoDriver::Babric => FabricFlavor::Babric,
+    }
+}
+
+fn collect_version_diagnostics<L, VL>(
+    version: &Storage<VL, Storage<L>>,
+) -> Result<VersionDiagnostics>
+where
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+{
+    let metadata = version.metadata()?;
+    let version_root = version.path.clone();
+    let metadata_path = version.metadata_path()?;
+    let version_jar_path = version.jar_path()?;
+    let natives_root = version.platform_natives_path();
+    let natives_root_binaries = collect_root_files(&natives_root)?;
+    let natives_nested_binaries = collect_recursive_native_files(&natives_root)?;
+
+    Ok(VersionDiagnostics {
+        version_root,
+        metadata_path,
+        version_jar_path,
+        natives_root,
+        natives_root_binaries,
+        natives_nested_binaries,
+        metadata_id: metadata.id,
+        inherited_game_version: metadata.inherits_from,
+        main_class: metadata.main_class,
+    })
+}
+
+async fn run_logged_process(command: LaunchCommand) -> Result<ExitStatus> {
     let mut launched = process::spawn_command_logged(command)?;
     let mut lines = launched.lines;
     let log_task = tokio::spawn(async move {
@@ -83,51 +291,35 @@ async fn main() -> Result<()> {
     });
     let exit_status = launched.child.wait().await?;
     log_task.await.context("join process log task failed")?;
-
-    println!(
-        "Using java executable: {}",
-        runtime_executable.to_string_lossy()
-    );
-    println!("version root: {}", version_root.display());
-    println!("driver: Fabric");
-    println!("game version: {}", game_version);
-    println!("loader version: {}", loader_version);
-    println!("install status: {:?}", install_status);
-    println!("prepared in {}ms", prepare_elapsed.as_millis());
-    println!("process exited with: {}", exit_status);
-
-    Ok(())
+    Ok(exit_status)
 }
 
 fn print_launch_diagnostics(
-    runtime_executable: &Path,
-    version_root: &Path,
-    metadata_path: &Path,
-    version_jar_path: &Path,
-    natives_root: &Path,
-    natives_root_binaries: &[PathBuf],
-    natives_nested_binaries: &[PathBuf],
-    main_class: &str,
-    inherited_game_version: Option<&str>,
-    metadata_id: &str,
-    argument_count: usize,
-    command: &LaunchCommand,
-    game_version: &str,
-    loader_version: &str,
-    prepared_ms: u128,
+    driver_name: &str,
+    loader_version: Option<&str>,
     instance_name: &str,
+    game_version: &str,
+    prepared_ms: u128,
     install_status: &impl std::fmt::Debug,
+    runtime_executable: &Path,
+    diagnostics: &VersionDiagnostics,
+    command: &LaunchCommand,
 ) {
     println!("instance: {}", instance_name);
-    println!("driver: Fabric");
+    println!("driver: {}", driver_name);
     println!("game version: {}", game_version);
-    println!("loader version: {}", loader_version);
-    println!("metadata id: {}", metadata_id);
+    if let Some(loader_version) = loader_version {
+        println!("loader version: {}", loader_version);
+    }
+    println!("metadata id: {}", diagnostics.metadata_id);
     println!(
         "metadata inherits_from: {}",
-        inherited_game_version.unwrap_or("<none>")
+        diagnostics
+            .inherited_game_version
+            .as_deref()
+            .unwrap_or("<none>")
     );
-    println!("metadata main class: {}", main_class);
+    println!("metadata main class: {}", diagnostics.main_class);
     println!("Using java executable: {}", runtime_executable.display());
     println!("command executable: {}", command.program.display());
     println!(
@@ -137,28 +329,40 @@ fn print_launch_diagnostics(
             .as_ref()
             .map_or_else(|| "<none>".to_owned(), |cwd| cwd.display().to_string())
     );
-    println!("command args count: {}", argument_count);
-    println!("version root: {}", version_root.display());
-    println!("metadata path: {}", metadata_path.display());
-    println!("version jar: {}", version_jar_path.display());
-    println!("natives root: {}", natives_root.display());
-    println!("natives root exists: {}", natives_root.exists());
-    println!("natives root file count: {}", natives_root_binaries.len());
+    println!("command args count: {}", command.args.len());
+    println!("version root: {}", diagnostics.version_root.display());
+    println!("metadata path: {}", diagnostics.metadata_path.display());
+    println!("version jar: {}", diagnostics.version_jar_path.display());
+    println!("natives root: {}", diagnostics.natives_root.display());
+    println!("natives root exists: {}", diagnostics.natives_root.exists());
+    println!(
+        "natives root file count: {}",
+        diagnostics.natives_root_binaries.len()
+    );
     println!(
         "natives recursive binary count: {}",
-        natives_nested_binaries.len()
+        diagnostics.natives_nested_binaries.len()
     );
     println!(
         "natives root files: {}",
-        format_path_list(natives_root_binaries, natives_root)
+        format_path_list(
+            &diagnostics.natives_root_binaries,
+            &diagnostics.natives_root
+        )
     );
     println!(
         "natives recursive binaries: {}",
-        format_path_list(natives_nested_binaries, natives_root)
+        format_path_list(
+            &diagnostics.natives_nested_binaries,
+            &diagnostics.natives_root
+        )
     );
     println!(
         "natives probe exists (lwjgl): {}",
-        natives_root.join(expected_lwjgl_binary_name()).exists()
+        diagnostics
+            .natives_root
+            .join(expected_lwjgl_binary_name())
+            .exists()
     );
     println!("install status: {:?}", install_status);
     println!("prepared in {}ms", prepared_ms);
@@ -187,6 +391,28 @@ fn print_launch_diagnostics(
                 .join(" | ")
         );
     }
+}
+
+fn print_summary(
+    driver_name: &str,
+    game_version: &str,
+    loader_version: Option<&str>,
+    runtime_executable: &Path,
+    version_root: &Path,
+    install_status: &impl std::fmt::Debug,
+    prepared_ms: u128,
+    exit_status: ExitStatus,
+) {
+    println!("Using java executable: {}", runtime_executable.display());
+    println!("version root: {}", version_root.display());
+    println!("driver: {}", driver_name);
+    println!("game version: {}", game_version);
+    if let Some(loader_version) = loader_version {
+        println!("loader version: {}", loader_version);
+    }
+    println!("install status: {:?}", install_status);
+    println!("prepared in {}ms", prepared_ms);
+    println!("process exited with: {}", exit_status);
 }
 
 fn collect_root_files(root: &Path) -> Result<Vec<PathBuf>> {

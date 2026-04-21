@@ -6,22 +6,17 @@ use serde::de::DeserializeOwned;
 
 use crate::url::{Origin, OriginPolicy};
 
-const FABRIC_META_ORIGIN: &str = "https://meta.fabricmc.net";
-const FABRIC_MAVEN_ORIGIN: &str = "https://maven.fabricmc.net";
-const LEGACY_FABRIC_META_ORIGIN: &str = "https://meta.legacyfabric.net";
-const LEGACY_FABRIC_MAVEN_ORIGIN: &str = "https://maven.legacyfabric.net";
-const BABRIC_META_ORIGIN: &str = "https://meta.babric.glass-launcher.net";
-const BABRIC_MAVEN_ORIGIN: &str = "https://maven.glass-launcher.net/babric";
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FabricFlavor {
     Fabric,
     LegacyFabric,
     Babric,
-    Custom {
-        meta_origin: String,
-        maven_origin: String,
-    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FabricEndpointOverrides {
+    pub meta_origin: String,
+    pub maven_origin: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -56,34 +51,14 @@ impl Default for FabricEndpoints {
 impl Origin for FabricOrigin {
     fn canonical(self) -> &'static str {
         match self {
-            FabricOrigin::Meta => FABRIC_META_ORIGIN,
-            FabricOrigin::Maven => FABRIC_MAVEN_ORIGIN,
+            FabricOrigin::Meta => "https://meta.fabricmc.net",
+            FabricOrigin::Maven => "https://maven.fabricmc.net",
         }
     }
 
     fn all() -> &'static [Self] {
         const ALL: &[FabricOrigin] = &[FabricOrigin::Meta, FabricOrigin::Maven];
         ALL
-    }
-}
-
-impl FabricFlavor {
-    fn override_origins(&self) -> Option<(String, String)> {
-        match self {
-            FabricFlavor::Fabric => None,
-            FabricFlavor::LegacyFabric => Some((
-                LEGACY_FABRIC_META_ORIGIN.to_owned(),
-                LEGACY_FABRIC_MAVEN_ORIGIN.to_owned(),
-            )),
-            FabricFlavor::Babric => Some((
-                BABRIC_META_ORIGIN.to_owned(),
-                BABRIC_MAVEN_ORIGIN.to_owned(),
-            )),
-            FabricFlavor::Custom {
-                meta_origin,
-                maven_origin,
-            } => Some((meta_origin.clone(), maven_origin.clone())),
-        }
     }
 }
 
@@ -97,13 +72,17 @@ impl FabricEndpoints {
     }
 
     pub fn for_flavor(flavor: FabricFlavor) -> Result<Self> {
-        let Some((meta_origin, maven_origin)) = flavor.override_origins() else {
-            return Ok(Self::official());
-        };
-
+        let spec = super::flavors::flavor_spec(&flavor);
         let policy = OriginPolicy::default()
-            .with_override(FabricOrigin::Meta, meta_origin)?
-            .with_override(FabricOrigin::Maven, maven_origin)?;
+            .with_override(FabricOrigin::Meta, spec.meta_origin().to_owned())?
+            .with_override(FabricOrigin::Maven, spec.maven_origin().to_owned())?;
+        Ok(Self::new(policy))
+    }
+
+    pub fn with_overrides(overrides: FabricEndpointOverrides) -> Result<Self> {
+        let policy = OriginPolicy::default()
+            .with_override(FabricOrigin::Meta, overrides.meta_origin)?
+            .with_override(FabricOrigin::Maven, overrides.maven_origin)?;
         Ok(Self::new(policy))
     }
 
@@ -136,7 +115,10 @@ impl FabricEndpoints {
     }
 
     pub fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
-        self.origin_policy.rewrite_origin_url(raw_url)
+        Ok(self
+            .origin_policy
+            .rewrite_known_origin_url(raw_url)?
+            .unwrap_or_else(|| raw_url.to_owned()))
     }
 
     fn resolve_meta_segments<const N: usize>(&self, segments: [&str; N]) -> Result<String> {
@@ -185,6 +167,10 @@ impl FabricSource {
 
     pub fn for_flavor(flavor: FabricFlavor) -> Result<Self> {
         Ok(Self::new(FabricEndpoints::for_flavor(flavor)?))
+    }
+
+    pub fn with_overrides(overrides: FabricEndpointOverrides) -> Result<Self> {
+        Ok(Self::new(FabricEndpoints::with_overrides(overrides)?))
     }
 
     pub fn with_client(endpoints: FabricEndpoints, client: reqwest::Client) -> Self {

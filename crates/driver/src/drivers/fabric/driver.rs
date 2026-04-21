@@ -15,11 +15,12 @@ use crate::{
     drivers::{
         fabric::{
             config::FabricLaunchConfig,
+            flavors::flavor_spec,
             prepared::{
                 FabricRemoteResolver, LaunchedFabricVersion, PreparedFabricVersion,
-                ResolvedFabricMetadata, ResolvedFabricVersion, merge_fabric_profile,
+                ResolvedFabricMetadata, ResolvedFabricVersion,
             },
-            source::FabricSource,
+            source::{FabricEndpointOverrides, FabricFlavor, FabricSource},
         },
         vanilla::source::VanillaSource,
         version_json::{
@@ -30,6 +31,7 @@ use crate::{
 };
 
 pub struct FabricDriver {
+    flavor: FabricFlavor,
     source: FabricSource,
     vanilla_source: VanillaSource,
     downloader: Arc<ElementalDownloader>,
@@ -37,11 +39,13 @@ pub struct FabricDriver {
 
 impl FabricDriver {
     pub fn new(
+        flavor: FabricFlavor,
         source: FabricSource,
         vanilla_source: VanillaSource,
         downloader: Arc<ElementalDownloader>,
     ) -> Self {
         Self {
+            flavor,
             source,
             vanilla_source,
             downloader,
@@ -49,8 +53,34 @@ impl FabricDriver {
     }
 
     pub fn with_defaults() -> Result<Self> {
+        Self::for_flavor(FabricFlavor::Fabric)
+    }
+
+    pub fn for_flavor(flavor: FabricFlavor) -> Result<Self> {
         Ok(Self::new(
-            FabricSource::default(),
+            flavor.clone(),
+            FabricSource::for_flavor(flavor)?,
+            VanillaSource::default(),
+            ElementalDownloader::with_config_default()
+                .context("create default elemental downloader failed")?,
+        ))
+    }
+
+    pub fn legacy_fabric() -> Result<Self> {
+        Self::for_flavor(FabricFlavor::LegacyFabric)
+    }
+
+    pub fn babric() -> Result<Self> {
+        Self::for_flavor(FabricFlavor::Babric)
+    }
+
+    pub fn with_overrides(
+        flavor: FabricFlavor,
+        overrides: FabricEndpointOverrides,
+    ) -> Result<Self> {
+        Ok(Self::new(
+            flavor,
+            FabricSource::with_overrides(overrides)?,
             VanillaSource::default(),
             ElementalDownloader::with_config_default()
                 .context("create default elemental downloader failed")?,
@@ -59,6 +89,10 @@ impl FabricDriver {
 
     pub fn source(&self) -> &FabricSource {
         &self.source
+    }
+
+    pub fn flavor(&self) -> &FabricFlavor {
+        &self.flavor
     }
 
     pub fn vanilla_source(&self) -> &VanillaSource {
@@ -207,6 +241,14 @@ impl FabricDriver {
             );
         }
 
+        if !config.extra_jvm_arguments.is_empty() {
+            builder = builder.set_extra_jvm_arguments(config.extra_jvm_arguments.clone());
+        }
+
+        if !config.extra_game_arguments.is_empty() {
+            builder = builder.set_extra_game_arguments(config.extra_game_arguments.clone());
+        }
+
         Ok(builder)
     }
 
@@ -228,7 +270,17 @@ impl FabricDriver {
     ) -> Result<ResolvedFabricVersion<L, VL>> {
         if let Ok(resolved) = ResolvedFabricVersion::load(self.remote_resolver(), instance.clone())
         {
-            return Ok(resolved);
+            let status = resolved.status().await?;
+            let flavor = flavor_spec(self.flavor());
+            if status.is_downloaded()
+                && !flavor.local_metadata_needs_refresh(
+                    &resolved.metadata,
+                    game_version.as_str(),
+                    loader_version.as_str(),
+                )
+            {
+                return Ok(resolved);
+            }
         }
 
         self.resolve_version(instance, game_version, loader_version)
@@ -260,7 +312,7 @@ impl FabricDriver {
             .source
             .profile_json(game_version.as_str(), loader_version.as_str())
             .await?;
-        let metadata = merge_fabric_profile(base_metadata.metadata, profile)?;
+        let metadata = flavor_spec(self.flavor()).merge_profile(base_metadata.metadata, profile)?;
 
         Ok(ResolvedFabricMetadata::new(
             self.remote_resolver(),
@@ -300,31 +352,21 @@ impl FabricDriver {
 #[async_trait]
 impl<L: Layout, VL: Layout> Driver<L, VL> for FabricDriver {
     fn descriptor(&self) -> DriverDescriptor {
-        DriverDescriptor {
-            id: "fabric",
-            name: "Fabric",
-        }
+        flavor_spec(self.flavor()).descriptor()
     }
 
     async fn inspect(&self, probe: &InstanceProbe<L, VL>) -> Result<Option<InstalledDriver>> {
         let Some(metadata) = &probe.metadata else {
             return Ok(None);
         };
-        let library_name = metadata
-            .libraries
-            .iter()
-            .map(|library| library.name.as_str())
-            .find(|name| name.starts_with("net.fabricmc:fabric-loader:"));
-
-        let Some(library_name) = library_name else {
+        let flavor = flavor_spec(self.flavor());
+        let Some(driver_version) = flavor.inspect_driver_version(metadata) else {
             return Ok(None);
         };
 
-        let driver_version = library_name.split(':').nth(2).map(ToOwned::to_owned);
-
         Ok(Some(InstalledDriver {
-            driver: <Self as Driver<L, VL>>::descriptor(self),
-            driver_version,
+            driver: flavor.descriptor(),
+            driver_version: Some(driver_version),
             game_version: metadata
                 .inherits_from
                 .clone()

@@ -3,6 +3,7 @@ use elemental_core::{runtime::distribution::Distribution, storage::Storage};
 use elemental_infra::downloader::{
     core::ElementalDownloader,
     plan::DownloadPlanner,
+    report::SessionExecutionReport,
     task::{DownloadPlan, DownloadTask},
 };
 
@@ -195,7 +196,8 @@ where
     ) -> Result<PreparedVersionJsonInstance<R, L, VL>> {
         let status = self.status().await?;
         if !status.is_downloaded() {
-            downloader.execute_planner(&self.planner()).await?;
+            let reports = downloader.execute_planner(&self.planner()).await?;
+            ensure_download_reports_succeeded(&reports)?;
         }
 
         let status = self.status().await?;
@@ -216,13 +218,15 @@ where
                 continue;
             }
 
-            if !self
-                .version
-                .parent
-                .library_path(library.downloads.artifact.path.as_str())?
-                .exists()
-            {
-                return Ok(false);
+            if let Some(artifact) = &library.downloads.artifact {
+                if !self
+                    .version
+                    .parent
+                    .library_path(artifact.path.as_str())?
+                    .exists()
+                {
+                    return Ok(false);
+                }
             }
 
             if let Some(artifact) = library.classifiers_native_artifact(rule_context.platform()) {
@@ -265,6 +269,36 @@ where
 
         Ok(true)
     }
+}
+
+fn ensure_download_reports_succeeded(reports: &[SessionExecutionReport]) -> Result<()> {
+    let failures = reports
+        .iter()
+        .flat_map(|report| {
+            report
+                .failures
+                .iter()
+                .map(|failure| format!("{}: {}", failure.task_id, failure.error))
+        })
+        .collect::<Vec<String>>();
+
+    if !failures.is_empty() {
+        bail!("version artifact download failed:\n{}", failures.join("\n"));
+    }
+
+    let cancelled = reports
+        .iter()
+        .flat_map(|report| report.cancelled_task_ids.iter().map(ToString::to_string))
+        .collect::<Vec<String>>();
+
+    if !cancelled.is_empty() {
+        bail!(
+            "version artifact download was cancelled:\n{}",
+            cancelled.join("\n")
+        );
+    }
+
+    Ok(())
 }
 
 impl<R, L, VL> PreparedVersionJsonInstance<R, L, VL>
@@ -323,7 +357,9 @@ where
         }
 
         let mut tasks = Vec::new();
-        tasks.push(self.plan_library_artifact_task(&library.downloads.artifact)?);
+        if let Some(artifact) = &library.downloads.artifact {
+            tasks.push(self.plan_library_artifact_task(artifact)?);
+        }
 
         if let Some(artifact) = library.classifiers_native_artifact(self.rule_context.platform()) {
             tasks.push(self.plan_library_artifact_task(artifact)?);

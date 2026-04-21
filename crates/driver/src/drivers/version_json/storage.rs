@@ -273,6 +273,10 @@ where
             return false;
         }
 
+        if expected_artifacts.is_empty() {
+            return true;
+        }
+
         if state.value.extracted_files.is_empty() {
             return false;
         }

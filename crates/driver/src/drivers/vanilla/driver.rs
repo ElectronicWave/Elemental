@@ -190,6 +190,14 @@ impl VanillaDriver {
             );
         }
 
+        if !config.extra_jvm_arguments.is_empty() {
+            builder = builder.set_extra_jvm_arguments(config.extra_jvm_arguments.clone());
+        }
+
+        if !config.extra_game_arguments.is_empty() {
+            builder = builder.set_extra_game_arguments(config.extra_game_arguments.clone());
+        }
+
         Ok(builder)
     }
 

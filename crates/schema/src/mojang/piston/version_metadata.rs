@@ -109,7 +109,7 @@ pub struct PistonMetaLibrariesExtract {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PistonMetaLibrariesDownloads {
-    pub artifact: PistonMetaLibrariesDownloadsArtifact,
+    pub artifact: Option<PistonMetaLibrariesDownloadsArtifact>,
     pub classifiers: Option<HashMap<String, PistonMetaLibrariesDownloadsArtifact>>,
 }
 

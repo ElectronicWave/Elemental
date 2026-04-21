@@ -16,10 +16,10 @@ Elemental is a Modern Minecraft Launcher SDK⚛
 | Family / Driver | Catalog | Inspect | Install | Load Installed | Launch |
 | --------------- | ------- | ------- | ------- | -------------- | ------ |
 | Vanilla         | ✅       | ✅       | ✅       | ✅              | ✅      |
-| Fabric-like     | 🟡       | 🟡       | 🟡       | 🟡              | 🟡      |
+| Fabric-like     | ✅       | ✅       | ✅       | ✅              | ✅      |
 | Fabric          | ✅       | ✅       | ✅       | ✅              | ✅      |
-| LegacyFabric    | 🟡       | 🟡       | 🟡       | 🟡              | 🟡      |
-| Babric          | 🟡       | 🟡       | 🟡       | 🟡              | 🟡      |
+| LegacyFabric    | ✅       | ✅       | ✅       | ✅              | ✅      |
+| Babric          | ✅       | ✅       | ✅       | ✅              | ✅      |
 | Quilt           | ❌       | ❌       | ❌       | ❌              | ❌      |
 | Forge           | ✅       | ✅       | ❌       | ❌              | ❌      |
 | NeoForge        | ❌       | ✅       | ❌       | ❌              | ❌      |
@@ -27,6 +27,8 @@ Elemental is a Modern Minecraft Launcher SDK⚛
 | CleanroomMC     | ❌       | ❌       | ❌       | ❌              | ❌      |
 
 Development is actively in progress. The matrix reflects the current workspace state rather than a stability guarantee.
+
+The `fabric-like` substrate is now flavor-aware. Modern Fabric, LegacyFabric, and Babric all have verified end-to-end smoke coverage on representative anchors.
 
 ## Why Elemental
 

@@ -1,6 +1,10 @@
-use std::{collections::HashMap, path::Path};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Context, Result};
+use elemental_core::storage::layout::Layout;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -8,7 +12,9 @@ use serde_json::{Map, Value};
 use super::{
     classpath::{classpath_separator, join_classpath},
     extensions::PistonMetaLibrariesExt,
+    layout::{BaseInstanceLayout, BaseRootLayout},
     meta::PistonMetaData,
+    resource::{VersionJsonInstanceResource, VersionJsonRootResource},
     rules::VersionJsonRuleContext,
 };
 
@@ -90,30 +96,44 @@ impl LauncherVariables {
         pistonmeta: &PistonMetaData,
     ) -> Result<Self> {
         let rule_context = VersionJsonRuleContext::current();
-        let version_name = Path::new(&version_root)
+        let game_root = Path::new(&game_directory);
+        let root_layout = BaseRootLayout;
+        let instance_layout = BaseInstanceLayout;
+        let assets_root =
+            root_layout.try_get_resource(game_root, VersionJsonRootResource::Assets)?;
+        let version_root_path = Path::new(&version_root);
+        let libraries_root =
+            root_layout.try_get_resource(game_root, VersionJsonRootResource::Libraries(None))?;
+        let version_name = version_root_path
             .file_name()
             .context("version root has no file name")?
             .to_string_lossy()
             .to_string();
-        let version_jar = Path::new(&version_root).join(format!("{version_name}.jar"));
+        let version_jar = instance_layout
+            .try_get_resource(version_root_path, VersionJsonInstanceResource::Jar)?;
         let classpath = pistonmeta
             .libraries
             .iter()
             .filter(|library| library.is_allowed(&rule_context))
-            .filter_map(|library| {
+            .filter_map(|library| -> Option<Result<String>> {
                 let artifact = library.downloads.artifact.as_ref()?;
                 if artifact.path.contains("natives") {
                     return None;
                 }
 
                 Some(
-                    Path::new(&game_directory)
-                        .join("libraries")
-                        .join(&artifact.path)
-                        .to_string_lossy()
-                        .to_string(),
+                    root_layout
+                        .try_get_resource(
+                            game_root,
+                            VersionJsonRootResource::Libraries(Some(PathBuf::from(
+                                artifact.path.as_str(),
+                            ))),
+                        )
+                        .map(|path| path.to_string_lossy().to_string()),
                 )
             })
+            .collect::<Result<Vec<String>>>()?
+            .into_iter()
             .chain(std::iter::once(version_jar.to_string_lossy().to_string()))
             .collect::<Vec<String>>();
         let classpath = join_classpath(classpath);
@@ -122,10 +142,7 @@ impl LauncherVariables {
             auth_player_name: player_name,
             version_name,
             game_directory: game_directory.clone(),
-            assets_root: Path::new(&game_directory)
-                .join("assets")
-                .to_string_lossy()
-                .to_string(),
+            assets_root: assets_root.to_string_lossy().to_string(),
             assets_index_name: pistonmeta.assets.clone(),
             auth_uuid: String::new(),
             auth_access_token: String::new(),
@@ -142,10 +159,7 @@ impl LauncherVariables {
             natives_directory,
             launcher_name: "Elemental".to_owned(),
             launcher_version: env!("CARGO_PKG_VERSION").to_owned(),
-            library_directory: Path::new(&game_directory)
-                .join("libraries")
-                .to_string_lossy()
-                .to_string(),
+            library_directory: libraries_root.to_string_lossy().to_string(),
             classpath_separator: classpath_separator().to_owned(),
             classpath,
         })

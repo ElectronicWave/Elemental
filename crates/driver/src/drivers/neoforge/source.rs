@@ -1,12 +1,15 @@
 use std::path::PathBuf;
 
 use crate::{
-    families::{installer::InstallerArtifact, version_json::VersionJsonGameStorageExt},
+    families::{
+        installer::InstallerArtifact,
+        version_json::{VersionJsonRootLayout, VersionJsonRootResource},
+    },
     http::{build_default_client, fetch_text},
     url::{Origin, OriginPolicy},
 };
 use anyhow::{Context, Result};
-use elemental_core::storage::Storage;
+use elemental_core::storage::{Storage, layout::Layoutable};
 use elemental_schema::forge::MavenMetadataBody;
 use quick_xml::de::from_str;
 
@@ -122,7 +125,7 @@ impl NeoForgeSource {
         loader_version: &str,
     ) -> Result<InstallerArtifact>
     where
-        L: crate::families::version_json::VersionJsonRootLayout,
+        L: VersionJsonRootLayout,
     {
         let version = release_version(loader_version);
         let library_relative_path = neoforge_installer_relative_path(&version);
@@ -130,7 +133,9 @@ impl NeoForgeSource {
         Ok(InstallerArtifact {
             coordinate: format!("net.neoforged:neoforge:{version}:installer"),
             url: self.endpoints.installer_url(loader_version)?,
-            path: game_storage.library_path(&library_relative_path)?,
+            path: game_storage.try_get_resource(VersionJsonRootResource::Libraries(Some(
+                library_relative_path,
+            )))?,
             expected_size: None,
             sha1: None,
         })

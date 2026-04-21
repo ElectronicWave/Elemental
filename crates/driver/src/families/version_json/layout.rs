@@ -2,86 +2,90 @@ use std::path::{Path, PathBuf};
 
 use elemental_core::storage::layout::Layout;
 
-use super::resource::Resource;
+use super::resource::{VersionJsonInstanceResource, VersionJsonRootResource};
 
 #[derive(Debug, Clone, Default)]
-pub struct BaseLayout;
+pub struct BaseRootLayout;
 
-impl Layout for BaseLayout {
-    type Resource = Resource;
+#[derive(Debug, Clone, Default)]
+pub struct BaseInstanceLayout;
+
+impl Layout for BaseRootLayout {
+    type Resource = VersionJsonRootResource;
 
     fn get_resource(&self, root: &Path, resource: Self::Resource) -> Option<PathBuf> {
+        let assets_root = root.join("assets");
+        let asset_indexes_root = assets_root.join("indexes");
+        let asset_objects_root = assets_root.join("objects");
+        let asset_log_configs_root = assets_root.join("log_configs");
+        let versions_root = root.join("versions");
+        let libraries_root = root.join("libraries");
+
         match resource {
-            Resource::AssetsIndexes => Some(root.join("assets").join("indexes")),
-            Resource::AssetsObjects => Some(root.join("assets").join("objects")),
-            Resource::AssetsLogConfigs => Some(root.join("assets").join("log_configs")),
-            Resource::Versions => Some(root.join("versions")),
-            Resource::Logs => Some(root.join("logs")),
-            Resource::Configs => Some(root.join("config")),
-            Resource::ShaderPacks => Some(root.join("shaderpacks")),
-            Resource::ResourcePacks => Some(root.join("resourcepacks")),
-            Resource::Saves => Some(root.join("saves")),
-            Resource::Libraries => Some(root.join("libraries")),
-            Resource::Natives => Some(root.join("natives")),
-            Resource::Mods => Some(root.join("mods")),
-            Resource::Dot => Some(root.to_path_buf()),
-            Resource::Subdir(subdir) => Some(root.join(subdir)),
-            Resource::Custom(path) => Some(root.join(path)),
+            VersionJsonRootResource::Assets => Some(assets_root),
+            VersionJsonRootResource::AssetIndexes(id) => match id.filter(|id| !id.is_empty()) {
+                Some(id) => Some(asset_indexes_root.join(format!("{id}.json"))),
+                None => Some(asset_indexes_root),
+            },
+            VersionJsonRootResource::AssetObjects(hash) => {
+                match hash.filter(|hash| !hash.is_empty()) {
+                    Some(hash) => {
+                        let prefix = hash.get(0..2)?;
+                        Some(asset_objects_root.join(prefix).join(hash))
+                    }
+                    None => Some(asset_objects_root),
+                }
+            }
+            VersionJsonRootResource::AssetLogConfigs(id) => match id.filter(|id| !id.is_empty()) {
+                Some(id) => Some(asset_log_configs_root.join(id)),
+                None => Some(asset_log_configs_root),
+            },
+            VersionJsonRootResource::Versions(name) => match name.filter(|name| !name.is_empty()) {
+                Some(name) => Some(versions_root.join(name)),
+                None => Some(versions_root),
+            },
+            VersionJsonRootResource::Libraries(path) => {
+                match path.filter(|path| !path.as_os_str().is_empty()) {
+                    Some(path) => Some(libraries_root.join(path)),
+                    None => Some(libraries_root),
+                }
+            }
         }
     }
 
     fn name(&self) -> &'static str {
-        "Base"
+        "BaseRoot"
     }
 }
 
-pub trait VersionJsonRootLayout: Layout {
-    fn instances_root_path(&self, root: &Path) -> PathBuf;
-    fn asset_index_path(&self, root: &Path, id: &str) -> PathBuf;
-    fn asset_object_path(&self, root: &Path, hash: &str) -> PathBuf;
-    fn library_path(&self, root: &Path, path: &Path) -> PathBuf;
-    fn logging_config_path(&self, root: &Path, file_id: &str) -> PathBuf;
-}
+impl Layout for BaseInstanceLayout {
+    type Resource = VersionJsonInstanceResource;
 
-pub trait VersionJsonInstanceLayout: Layout {
-    fn metadata_path(&self, root: &Path, name: &str) -> PathBuf {
-        root.join(format!("{name}.json"))
+    fn get_resource(&self, root: &Path, resource: Self::Resource) -> Option<PathBuf> {
+        let name = root.file_name()?.to_string_lossy().to_string();
+
+        match resource {
+            VersionJsonInstanceResource::Metadata => Some(root.join(format!("{name}.json"))),
+            VersionJsonInstanceResource::Jar => Some(root.join(format!("{name}.jar"))),
+            VersionJsonInstanceResource::Natives => Some(root.join("natives")),
+            VersionJsonInstanceResource::Logs => Some(root.join("logs")),
+            VersionJsonInstanceResource::Configs => Some(root.join("config")),
+            VersionJsonInstanceResource::ShaderPacks => Some(root.join("shaderpacks")),
+            VersionJsonInstanceResource::ResourcePacks => Some(root.join("resourcepacks")),
+            VersionJsonInstanceResource::Saves => Some(root.join("saves")),
+            VersionJsonInstanceResource::Mods => Some(root.join("mods")),
+        }
     }
 
-    fn jar_path(&self, root: &Path, name: &str) -> PathBuf {
-        root.join(format!("{name}.jar"))
-    }
-
-    fn platform_natives_path(&self, root: &Path) -> PathBuf {
-        root.join("natives")
-    }
-}
-
-impl VersionJsonRootLayout for BaseLayout {
-    fn instances_root_path(&self, root: &Path) -> PathBuf {
-        root.join("versions")
-    }
-
-    fn asset_index_path(&self, root: &Path, id: &str) -> PathBuf {
-        root.join("assets")
-            .join("indexes")
-            .join(format!("{id}.json"))
-    }
-
-    fn asset_object_path(&self, root: &Path, hash: &str) -> PathBuf {
-        let prefix = hash
-            .get(0..2)
-            .expect("asset hash is too short for version-json layout");
-        root.join("assets").join("objects").join(prefix).join(hash)
-    }
-
-    fn library_path(&self, root: &Path, path: &Path) -> PathBuf {
-        root.join("libraries").join(path)
-    }
-
-    fn logging_config_path(&self, root: &Path, file_id: &str) -> PathBuf {
-        root.join("assets").join("log_configs").join(file_id)
+    fn name(&self) -> &'static str {
+        "BaseInstance"
     }
 }
 
-impl<L: Layout> VersionJsonInstanceLayout for L {}
+pub trait VersionJsonRootLayout: Layout<Resource = VersionJsonRootResource> {}
+
+pub trait VersionJsonInstanceLayout: Layout<Resource = VersionJsonInstanceResource> {}
+
+impl<L> VersionJsonRootLayout for L where L: Layout<Resource = VersionJsonRootResource> {}
+
+impl<L> VersionJsonInstanceLayout for L where L: Layout<Resource = VersionJsonInstanceResource> {}

@@ -1,5 +1,10 @@
+use std::path::PathBuf;
+
 use anyhow::{Context, Result, bail};
-use elemental_core::{runtime::distribution::Distribution, storage::Storage};
+use elemental_core::{
+    runtime::distribution::Distribution,
+    storage::{Storage, layout::Layoutable},
+};
 use elemental_infra::downloader::{
     core::ElementalDownloader,
     plan::DownloadPlanner,
@@ -10,8 +15,9 @@ use elemental_infra::downloader::{
 use crate::families::version_json::{
     PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaLibraries,
     PistonMetaLibrariesDownloadsArtifact, PistonMetaLibrariesExt, VersionJsonGameStorageExt,
-    VersionJsonInstanceLayout, VersionJsonRootLayout, VersionJsonRuleContext,
-    VersionJsonVersionStorageExt, remote::VersionJsonRemoteResolver,
+    VersionJsonInstanceLayout, VersionJsonInstanceResource, VersionJsonRootLayout,
+    VersionJsonRootResource, VersionJsonRuleContext, VersionJsonVersionStorageExt,
+    remote::VersionJsonRemoteResolver,
 };
 
 #[derive(Debug, Clone)]
@@ -178,11 +184,16 @@ where
         let rule_context = VersionJsonRuleContext::current();
 
         Ok(VersionJsonInstallStatus {
-            metadata_persisted: self.version.metadata_path()?.exists(),
+            metadata_persisted: self
+                .version
+                .try_get_resource(VersionJsonInstanceResource::Metadata)?
+                .exists(),
             asset_index_persisted: self
                 .version
                 .parent
-                .asset_index_path(self.metadata.asset_index.id.as_str())?
+                .try_get_resource(VersionJsonRootResource::AssetIndexes(Some(
+                    self.metadata.asset_index.id.clone(),
+                )))?
                 .exists(),
             version_artifacts_ready: self.version_artifacts_ready(&rule_context)?,
             assets_ready: self.assets_ready()?,
@@ -209,7 +220,11 @@ where
     }
 
     fn version_artifacts_ready(&self, rule_context: &VersionJsonRuleContext) -> Result<bool> {
-        if !self.version.jar_path()?.exists() {
+        if !self
+            .version
+            .try_get_resource(VersionJsonInstanceResource::Jar)?
+            .exists()
+        {
             return Ok(false);
         }
 
@@ -222,7 +237,9 @@ where
                 && !self
                     .version
                     .parent
-                    .library_path(artifact.path.as_str())?
+                    .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
+                        artifact.path.as_str(),
+                    ))))?
                     .exists()
             {
                 return Ok(false);
@@ -232,7 +249,9 @@ where
                 && !self
                     .version
                     .parent
-                    .library_path(artifact.path.as_str())?
+                    .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
+                        artifact.path.as_str(),
+                    ))))?
                     .exists()
             {
                 return Ok(false);
@@ -244,7 +263,9 @@ where
             && !self
                 .version
                 .parent
-                .logging_config_path(client.file.id.as_str())?
+                .try_get_resource(VersionJsonRootResource::AssetLogConfigs(Some(
+                    client.file.id.clone(),
+                )))?
                 .exists()
         {
             return Ok(false);
@@ -258,7 +279,9 @@ where
             if !self
                 .version
                 .parent
-                .asset_object_path(object.hash.as_str())?
+                .try_get_resource(VersionJsonRootResource::AssetObjects(Some(
+                    object.hash.clone(),
+                )))?
                 .exists()
             {
                 return Ok(false);
@@ -325,7 +348,8 @@ where
         tasks.push(DownloadTask::new(
             self.remote_resolver
                 .rewrite_upstream(self.metadata.downloads.client.url.as_str())?,
-            self.version.jar_path()?,
+            self.version
+                .try_get_resource(VersionJsonInstanceResource::Jar)?,
             Some(self.metadata.downloads.client.size as u64),
             Some(self.metadata.downloads.client.sha1.clone()),
         ));
@@ -342,7 +366,9 @@ where
                     .rewrite_upstream(client.file.url.as_str())?,
                 self.version
                     .parent
-                    .logging_config_path(client.file.id.as_str())?,
+                    .try_get_resource(VersionJsonRootResource::AssetLogConfigs(Some(
+                        client.file.id.clone(),
+                    )))?,
                 Some(client.file.size as u64),
                 Some(client.file.sha1.clone()),
             ));
@@ -375,7 +401,11 @@ where
         Ok(DownloadTask::new(
             self.remote_resolver
                 .rewrite_upstream(artifact.url.as_str())?,
-            self.version.parent.library_path(artifact.path.as_str())?,
+            self.version
+                .parent
+                .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
+                    artifact.path.as_str(),
+                ))))?,
             artifact.size.map(|size| size as u64),
             artifact.sha1.clone(),
         ))
@@ -383,21 +413,21 @@ where
 
     fn plan_assets(&self) -> Result<DownloadPlan> {
         let version_name = self.version_name()?;
-        let tasks = self
-            .asset_index_objects
-            .objects
-            .values()
-            .map(|object| {
-                Ok(DownloadTask::new(
-                    self.remote_resolver.object_url(object.hash.as_str())?,
-                    self.version
-                        .parent
-                        .asset_object_path(object.hash.as_str())?,
-                    Some(object.size as u64),
-                    Some(object.hash.clone()),
-                ))
-            })
-            .collect::<Result<Vec<DownloadTask>>>()?;
+        let tasks =
+            self.asset_index_objects
+                .objects
+                .values()
+                .map(|object| {
+                    Ok(DownloadTask::new(
+                        self.remote_resolver.object_url(object.hash.as_str())?,
+                        self.version.parent.try_get_resource(
+                            VersionJsonRootResource::AssetObjects(Some(object.hash.clone())),
+                        )?,
+                        Some(object.size as u64),
+                        Some(object.hash.clone()),
+                    ))
+                })
+                .collect::<Result<Vec<DownloadTask>>>()?;
 
         Ok(DownloadPlan::named(format!("{version_name}-assets"), tasks))
     }

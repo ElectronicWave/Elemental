@@ -4,7 +4,10 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail};
-use elemental_core::{runtime::distribution::Distribution, storage::Storage};
+use elemental_core::{
+    runtime::distribution::Distribution,
+    storage::{Storage, layout::Layoutable},
+};
 use elemental_infra::{
     downloader::{
         core::ElementalDownloader,
@@ -19,8 +22,8 @@ use tokio::{fs::create_dir_all, process::Command};
 use crate::families::{
     installer::{InstallerArchive, InstallerArtifact, installer_coordinate_path},
     version_json::{
-        VersionJsonGameStorageExt, VersionJsonInstanceLayout, VersionJsonRootLayout,
-        VersionJsonVersionStorageExt, classpath::join_classpath,
+        VersionJsonInstanceLayout, VersionJsonInstanceResource, VersionJsonRootLayout,
+        VersionJsonRootResource, classpath::join_classpath,
     },
 };
 
@@ -51,7 +54,11 @@ where
 
     for library in &install_profile.libraries {
         if let Some(artifact) = &library.downloads.artifact {
-            let path = instance.parent.library_path(artifact.path.as_str())?;
+            let path = instance
+                .parent
+                .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
+                    artifact.path.as_str(),
+                ))))?;
             if seen.insert(path.clone()) {
                 tasks.push(DownloadTask::new(
                     artifact_url(artifact.url.as_str(), artifact.path.as_str())?,
@@ -64,7 +71,11 @@ where
 
         if let Some(classifiers) = &library.downloads.classifiers {
             for artifact in classifiers.values() {
-                let path = instance.parent.library_path(artifact.path.as_str())?;
+                let path = instance
+                    .parent
+                    .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
+                        artifact.path.as_str(),
+                    ))))?;
                 if seen.insert(path.clone()) {
                     tasks.push(DownloadTask::new(
                         artifact_url(artifact.url.as_str(), artifact.path.as_str())?,
@@ -122,17 +133,22 @@ where
     if client_processors.is_empty() {
         return Ok(());
     }
-
     let context = InstallerProcessorContext {
         installer_artifact,
         install_profile,
         archive,
         root_directory: absolute_path(&instance.parent.path)?,
-        libraries_directory: absolute_path(&instance.parent.path.join("libraries"))?,
+        libraries_directory: absolute_path(
+            &instance
+                .parent
+                .try_get_resource(VersionJsonRootResource::Libraries(None))?,
+        )?,
         state_directory: absolute_path(&instance.path)?
             .join(".elemental")
             .join(family_name),
-        minecraft_jar_path: absolute_path(&instance.jar_path()?)?,
+        minecraft_jar_path: absolute_path(
+            &instance.try_get_resource(VersionJsonInstanceResource::Jar)?,
+        )?,
         family_name,
     };
 
@@ -172,18 +188,23 @@ where
     {
         return Ok(true);
     }
-
     let archive = InstallerArchive::new(installer_artifact.path.clone());
     let context = InstallerProcessorContext {
         installer_artifact,
         install_profile,
         archive,
         root_directory: absolute_path(&instance.parent.path)?,
-        libraries_directory: absolute_path(&instance.parent.path.join("libraries"))?,
+        libraries_directory: absolute_path(
+            &instance
+                .parent
+                .try_get_resource(VersionJsonRootResource::Libraries(None))?,
+        )?,
         state_directory: absolute_path(&instance.path)?
             .join(".elemental")
             .join(family_name),
-        minecraft_jar_path: absolute_path(&instance.jar_path()?)?,
+        minecraft_jar_path: absolute_path(
+            &instance.try_get_resource(VersionJsonInstanceResource::Jar)?,
+        )?,
         family_name,
     };
     context.client_outputs_ready()

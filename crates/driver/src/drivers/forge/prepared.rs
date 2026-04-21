@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use elemental_core::storage::Storage;
+use elemental_core::storage::{Storage, layout::Layoutable};
 use elemental_infra::downloader::core::ElementalDownloader;
 use elemental_schema::{forge::ForgeInstallerProfile, mojang::piston::PistonMetaLibraries};
 
@@ -25,6 +25,7 @@ use crate::{
         version_json::{
             PreparedVersionJsonInstance, ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata,
             VersionJsonInstanceLayout, VersionJsonRemoteResolver, VersionJsonRootLayout,
+            VersionJsonRootResource,
         },
     },
 };
@@ -110,11 +111,15 @@ where
         remote_resolver: &ForgeRemoteResolver,
         runtime_executable_path: Option<&Path>,
     ) -> Result<PreparedForgeVersion<L, VL>> {
+        let libraries_root = self
+            .instance
+            .parent
+            .try_get_resource(VersionJsonRootResource::Libraries(None))?;
         let installer_state = prepare_installer_state(
             downloader,
             &self.installer_artifact,
             &self.instance.path,
-            &self.instance.parent.path.join("libraries"),
+            &libraries_root,
             "forge",
             |install_profile| validate_profile_identity(self, install_profile),
         )

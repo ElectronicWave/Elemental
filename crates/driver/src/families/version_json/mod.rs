@@ -14,7 +14,9 @@ pub mod storage;
 pub mod variables;
 
 pub use extensions::{PistonMetaDataExt, PistonMetaLibrariesExt};
-pub use layout::{BaseLayout, VersionJsonInstanceLayout, VersionJsonRootLayout};
+pub use layout::{
+    BaseInstanceLayout, BaseRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
+};
 pub use meta::{
     ContinuousArgument, LaunchMetaData, LaunchMetaLatestData, LaunchMetaVersionData,
     OperatingSystem, PistonMetaArguments, PistonMetaAssetIndex, PistonMetaAssetIndexObject,
@@ -34,7 +36,7 @@ pub use profile::{
     ProfileMergeBehavior, merge_profile_with_behavior, metadata_has_replaced_library_conflicts,
 };
 pub use remote::VersionJsonRemoteResolver;
-pub use resource::Resource;
+pub use resource::{VersionJsonInstanceResource, VersionJsonRootResource};
 pub use rules::{
     OperatingSystemExt, PistonMetaRuleExt, PistonMetaRulesExt, VersionJsonRuleContext,
 };

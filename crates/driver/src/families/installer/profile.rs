@@ -4,7 +4,10 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail};
-use elemental_core::{runtime::distribution::Distribution, storage::Storage};
+use elemental_core::{
+    runtime::distribution::Distribution,
+    storage::{Storage, layout::Layoutable},
+};
 use elemental_infra::downloader::{core::ElementalDownloader, task::DownloadPlan};
 use elemental_schema::{
     forge::ForgeInstallerProfile,
@@ -22,8 +25,8 @@ use crate::{
         installer::{InstallerArchive, InstallerArtifact, installer_client_processors_ready},
         version_json::{
             PreparedVersionJsonInstance, ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata,
-            VersionJsonGameStorageExt, VersionJsonInstanceLayout, VersionJsonRemoteResolver,
-            VersionJsonRootLayout,
+            VersionJsonInstanceLayout, VersionJsonRemoteResolver, VersionJsonRootLayout,
+            VersionJsonRootResource,
         },
     },
     runtime::resolve_runtime,
@@ -309,7 +312,9 @@ where
         if let Some(artifact) = &library.downloads.artifact
             && !instance
                 .parent
-                .library_path(artifact.path.as_str())?
+                .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
+                    artifact.path.as_str(),
+                ))))?
                 .exists()
         {
             return Ok(false);
@@ -319,7 +324,9 @@ where
             for artifact in classifiers.values() {
                 if !instance
                     .parent
-                    .library_path(artifact.path.as_str())?
+                    .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
+                        artifact.path.as_str(),
+                    ))))?
                     .exists()
                 {
                     return Ok(false);

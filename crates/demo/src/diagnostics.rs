@@ -9,10 +9,11 @@ use anyhow::{Context, Result};
 use elemental::{
     core::{
         launcher::{command::LaunchCommand, process},
-        storage::Storage,
+        storage::{Storage, layout::Layoutable},
     },
     driver::families::version_json::{
-        VersionJsonInstanceLayout, VersionJsonRootLayout, VersionJsonVersionStorageExt,
+        VersionJsonInstanceLayout, VersionJsonInstanceResource, VersionJsonRootLayout,
+        VersionJsonVersionStorageExt,
     },
 };
 
@@ -60,9 +61,9 @@ where
 {
     let metadata = version.metadata()?;
     let version_root = version.path.clone();
-    let metadata_path = version.metadata_path()?;
-    let version_jar_path = version.jar_path()?;
-    let natives_root = version.platform_natives_path();
+    let metadata_path = version.try_get_resource(VersionJsonInstanceResource::Metadata)?;
+    let version_jar_path = version.try_get_resource(VersionJsonInstanceResource::Jar)?;
+    let natives_root = version.try_get_resource(VersionJsonInstanceResource::Natives)?;
     let natives_root_binaries = collect_root_files(&natives_root)?;
     let natives_nested_binaries = collect_recursive_native_files(&natives_root)?;
 

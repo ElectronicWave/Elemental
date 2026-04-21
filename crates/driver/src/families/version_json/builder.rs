@@ -6,8 +6,10 @@ use std::{
 use anyhow::{Context, Result, bail};
 
 use elemental_core::{
-    auth::authorizer::Authorizer, launcher::command::LaunchCommand,
-    runtime::distribution::Distribution, storage::Storage,
+    auth::authorizer::Authorizer,
+    launcher::command::LaunchCommand,
+    runtime::distribution::Distribution,
+    storage::{Storage, layout::Layoutable},
 };
 
 use crate::launch_arguments::parse_argument_string;
@@ -16,8 +18,9 @@ use super::{
     classpath::{classpath_separator, join_classpath},
     extensions::{PistonMetaDataExt, PistonMetaLibrariesExt},
     layout::{VersionJsonInstanceLayout, VersionJsonRootLayout},
+    resource::{VersionJsonInstanceResource, VersionJsonRootResource},
     rules::VersionJsonRuleContext,
-    storage::{VersionJsonGameStorageExt, VersionJsonVersionStorageExt},
+    storage::VersionJsonVersionStorageExt,
     variables::LauncherVariables,
 };
 
@@ -113,8 +116,17 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
     pub async fn build_command(mut self) -> Result<LaunchCommand> {
         let version_name = self.version.name().context("get version name failed")?;
         let version_root = self.version.path.clone();
-        let global_root = self.version.parent.path.clone();
-        let version_jar = self.version.jar_path()?;
+        let version_jar = self
+            .version
+            .try_get_resource(VersionJsonInstanceResource::Jar)?;
+        let assets_root = self
+            .version
+            .parent
+            .try_get_resource(VersionJsonRootResource::Assets)?;
+        let libraries_root = self
+            .version
+            .parent
+            .try_get_resource(VersionJsonRootResource::Libraries(None))?;
 
         if !version_jar.exists() {
             bail!("version jar not found: {}", version_jar.to_string_lossy());
@@ -149,7 +161,7 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
 
         self.inner.version_name = version_name;
         self.inner.game_directory = version_root.to_string_lossy().to_string();
-        self.inner.assets_root = global_root.join("assets").to_string_lossy().to_string();
+        self.inner.assets_root = assets_root.to_string_lossy().to_string();
         self.inner.assets_index_name = metadata.assets.clone();
         self.inner.auth_uuid = credential.uuid;
         self.inner.auth_access_token = credential.access_token;
@@ -159,11 +171,11 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
             crate::families::version_json::variables::UserType::Msa
         };
         self.inner.version_type = metadata.release_type.clone();
-        self.inner.library_directory = global_root.join("libraries").to_string_lossy().to_string();
+        self.inner.library_directory = libraries_root.to_string_lossy().to_string();
         self.inner.classpath_separator = classpath_separator().to_owned();
         self.inner.natives_directory = self
             .version
-            .platform_natives_path()
+            .try_get_resource(VersionJsonInstanceResource::Natives)?
             .to_string_lossy()
             .to_string();
 
@@ -173,24 +185,35 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
         let classpath = metadata
             .libraries
             .iter()
-            .filter(|library| library.is_allowed(&rule_context))
-            .filter_map(|library| {
-                let artifact = library.downloads.artifact.as_ref()?;
-                if artifact.path.contains("natives") {
-                    return None;
+            .map(|library| -> Result<Option<String>> {
+                if !library.is_allowed(&rule_context) {
+                    return Ok(None);
                 }
 
-                let path = global_root
-                    .join("libraries")
-                    .join(&artifact.path)
+                let Some(artifact) = library.downloads.artifact.as_ref() else {
+                    return Ok(None);
+                };
+                if artifact.path.contains("natives") {
+                    return Ok(None);
+                }
+
+                let path = self
+                    .version
+                    .parent
+                    .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
+                        artifact.path.as_str(),
+                    ))))?
                     .to_string_lossy()
                     .to_string();
                 if module_path_entries.contains(&normalize_path_string(path.as_str())) {
-                    return None;
+                    return Ok(None);
                 }
 
-                Some(path)
+                Ok(Some(path))
             })
+            .collect::<Result<Vec<Option<String>>>>()?
+            .into_iter()
+            .flatten()
             .chain(std::iter::once(version_jar.to_string_lossy().to_string()))
             .collect::<Vec<String>>();
         self.inner.classpath = join_classpath(classpath);
@@ -203,7 +226,12 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
         if let Some(logging) = &metadata.logging
             && let Some(client) = &logging.client
         {
-            let log_config_path = self.version.parent.logging_config_path(&client.file.id)?;
+            let log_config_path =
+                self.version
+                    .parent
+                    .try_get_resource(VersionJsonRootResource::AssetLogConfigs(Some(
+                        client.file.id.clone(),
+                    )))?;
 
             if !log_config_path.exists() {
                 bail!(

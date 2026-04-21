@@ -1,6 +1,9 @@
-use std::path::{Path, PathBuf};
+use std::{
+    fmt::Debug,
+    path::{Path, PathBuf},
+};
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use tokio::fs::create_dir_all;
 
 pub trait Layout: Send + Sync {
@@ -8,6 +11,21 @@ pub trait Layout: Send + Sync {
 
     fn get_resource(&self, root: &Path, resource: Self::Resource) -> Option<PathBuf>;
     fn name(&self) -> &'static str;
+
+    fn try_get_resource(&self, root: &Path, resource: Self::Resource) -> Result<PathBuf>
+    where
+        Self::Resource: Debug,
+    {
+        let resource_name = format!("{resource:?}");
+        self.get_resource(root, resource).ok_or_else(|| {
+            anyhow!(
+                "layout '{}' is missing resource {} for '{}'",
+                self.name(),
+                resource_name,
+                root.display()
+            )
+        })
+    }
 }
 
 #[async_trait::async_trait]
@@ -17,6 +35,13 @@ pub trait Layoutable<L: Layout> {
 
     fn get_resource(&self, resource: L::Resource) -> Option<PathBuf> {
         self.layout().get_resource(self.root_path(), resource)
+    }
+
+    fn try_get_resource(&self, resource: L::Resource) -> Result<PathBuf>
+    where
+        L::Resource: Debug,
+    {
+        self.layout().try_get_resource(self.root_path(), resource)
     }
 
     fn get_existing_resource(&self, resource: L::Resource) -> Option<PathBuf> {

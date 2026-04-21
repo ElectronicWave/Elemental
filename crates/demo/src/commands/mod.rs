@@ -15,7 +15,8 @@ use elemental::{
     driver::{
         drivers::vanilla::config::VanillaLaunchConfig,
         families::version_json::{
-            BaseLayout, VersionJsonGameStorageExt, VersionJsonInstanceLayout, VersionJsonRootLayout,
+            BaseInstanceLayout, BaseRootLayout, VersionJsonGameStorageExt,
+            VersionJsonInstanceLayout, VersionJsonRootLayout,
         },
     },
 };
@@ -40,10 +41,10 @@ pub async fn run(config: DemoConfig) -> Result<()> {
 
 pub(super) async fn ensure_instance(
     config: &DemoConfig,
-) -> Result<Storage<BaseLayout, Storage<BaseLayout>>> {
-    let storage = Storage::new(config.storage_root.clone(), BaseLayout);
+) -> Result<Storage<BaseInstanceLayout, Storage<BaseRootLayout>>> {
+    let storage = Storage::new(config.storage_root.clone(), BaseRootLayout);
     storage
-        .ensure_instance(config.instance_name.clone(), BaseLayout)
+        .ensure_instance(config.instance_name.clone(), BaseInstanceLayout)
         .await
 }
 

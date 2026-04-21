@@ -1,7 +1,8 @@
-use std::{path::PathBuf, time::Duration};
+use std::path::PathBuf;
 
 use crate::{
     families::{installer::InstallerArtifact, version_json::VersionJsonGameStorageExt},
+    http::{build_default_client, fetch_text},
     url::{Origin, OriginPolicy},
 };
 use anyhow::{Context, Result};
@@ -85,11 +86,7 @@ impl ForgeEndpoints {
 impl Default for ForgeSource {
     fn default() -> Self {
         Self {
-            client: reqwest::Client::builder()
-                .timeout(Duration::from_secs(30))
-                .user_agent(format!("Elemental/{}", env!("CARGO_PKG_VERSION")))
-                .build()
-                .expect("build forge source client failed"),
+            client: build_default_client("forge source"),
             endpoints: ForgeEndpoints::default(),
         }
     }
@@ -109,17 +106,7 @@ impl ForgeSource {
 
     pub async fn maven_metadata(&self) -> Result<MavenMetadataBody> {
         let url = self.endpoints.maven_metadata_url()?;
-        let raw = self
-            .client
-            .get(url.as_str())
-            .send()
-            .await
-            .with_context(|| format!("request forge source resource failed: {url}"))?
-            .error_for_status()
-            .with_context(|| format!("forge source returned error status: {url}"))?
-            .text()
-            .await
-            .with_context(|| format!("decode forge source resource failed: {url}"))?;
+        let raw = fetch_text(&self.client, url.as_str(), "forge source").await?;
 
         from_str(&raw).with_context(|| format!("decode forge maven metadata failed: {url}"))
     }

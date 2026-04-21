@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use elemental_core::{
     auth::authorizer::Authorizer,
-    launcher::{command::LaunchCommand, process},
+    launcher::command::LaunchCommand,
     runtime::distribution::Distribution,
     storage::{Storage, layout::Layout},
 };
@@ -22,14 +22,17 @@ use crate::{
             },
             source::QuiltSource,
         },
+        shared::{
+            build_version_json_launch_command, find_library_version, installed_version_json_driver,
+            launch_version_json_instance, load_prepared_version_json, resolve_vanilla_metadata,
+        },
         vanilla::source::VanillaSource,
     },
     families::version_json::{
         PASSTHROUGH_PROFILE_BEHAVIOR, VersionJsonInstanceLayout, VersionJsonRootLayout,
-        builder::VersionJsonLaunchBuilder, merge_profile_with_behavior,
+        merge_profile_with_behavior,
     },
     inspect::InstanceProbe,
-    launch::{build_version_json_launch_builder, resolve_prepared_version_runtime},
 };
 
 const QUILT_DRIVER: DriverDescriptor = DriverDescriptor {
@@ -99,9 +102,7 @@ impl QuiltDriver {
         &self,
         instance: &Storage<VL, Storage<L>>,
     ) -> Result<PreparedQuiltVersion<L, VL>> {
-        ResolvedQuiltVersion::load(self.remote_resolver(), instance.clone())?
-            .into_prepared()
-            .await
+        load_prepared_version_json(self.remote_resolver(), instance).await
     }
 
     pub async fn launch<
@@ -117,16 +118,7 @@ impl QuiltDriver {
     where
         A: Authorizer,
     {
-        let (runtime, command) = self
-            .build_launch_command(authorizer, &prepared_version, config)
-            .await?;
-        let child = process::spawn_command(command)?;
-
-        Ok(LaunchedQuiltVersion {
-            prepared_version,
-            runtime,
-            child,
-        })
+        launch_version_json_instance(authorizer, prepared_version, config).await
     }
 
     pub async fn build_launch_command<
@@ -142,35 +134,7 @@ impl QuiltDriver {
     where
         A: Authorizer,
     {
-        let runtime = resolve_prepared_version_runtime(
-            prepared_version,
-            config.runtime_major_version,
-            config.runtime_executable_path.as_deref(),
-        )
-        .await?;
-        let command = self
-            .build_launch_builder(authorizer, runtime.clone(), prepared_version, config)?
-            .build_command()
-            .await?;
-
-        Ok((runtime, command))
-    }
-
-    fn build_launch_builder<
-        A,
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    >(
-        &self,
-        authorizer: A,
-        runtime: Distribution,
-        prepared_version: &PreparedQuiltVersion<L, VL>,
-        config: &QuiltLaunchConfig,
-    ) -> Result<VersionJsonLaunchBuilder<A, L, VL>>
-    where
-        A: Authorizer,
-    {
-        build_version_json_launch_builder(authorizer, runtime, prepared_version, config)
+        build_version_json_launch_command(authorizer, prepared_version, config).await
     }
 
     fn remote_resolver(&self) -> QuiltRemoteResolver {
@@ -244,27 +208,7 @@ impl QuiltDriver {
         &self,
         game_version: String,
     ) -> Result<crate::drivers::vanilla::prepared::ResolvedVanillaMetadata> {
-        let launchmeta = self.vanilla_source.launch_meta().await?;
-        let metadata_url = launchmeta
-            .versions
-            .iter()
-            .find(|version| version.id == game_version)
-            .context(format!("Can't find version named `{game_version}`"))?
-            .url
-            .clone();
-        let metadata = self.vanilla_source.piston_meta(metadata_url).await?;
-        let asset_index_objects = self
-            .vanilla_source
-            .asset_index_objects(&metadata.asset_index.url)
-            .await?;
-
-        Ok(
-            crate::drivers::vanilla::prepared::ResolvedVanillaMetadata::new(
-                self.vanilla_source.endpoints().clone(),
-                metadata,
-                asset_index_objects,
-            ),
-        )
+        resolve_vanilla_metadata(self.vanilla_source(), game_version.as_str()).await
     }
 }
 
@@ -282,15 +226,11 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for QuiltDriver {
             return Ok(None);
         };
 
-        Ok(Some(InstalledDriver {
-            driver: QUILT_DRIVER,
-            driver_version: Some(driver_version),
-            game_version: metadata
-                .inherits_from
-                .clone()
-                .or_else(|| Some(metadata.id.clone())),
-            description: Some(metadata.release_type.clone()),
-        }))
+        Ok(Some(installed_version_json_driver(
+            metadata,
+            QUILT_DRIVER,
+            Some(driver_version),
+        )))
     }
 }
 
@@ -315,10 +255,5 @@ fn local_metadata_needs_refresh(
 fn inspect_driver_version(
     metadata: &crate::families::version_json::PistonMetaData,
 ) -> Option<String> {
-    metadata
-        .libraries
-        .iter()
-        .map(|library| library.name.as_str())
-        .find(|name| name.starts_with("org.quiltmc:quilt-loader:"))
-        .and_then(|name| name.split(':').nth(2).map(ToOwned::to_owned))
+    find_library_version(metadata, &["org.quiltmc:quilt-loader:"])
 }

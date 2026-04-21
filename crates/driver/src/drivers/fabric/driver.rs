@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use elemental_core::{
     auth::authorizer::Authorizer,
-    launcher::{command::LaunchCommand, process},
+    launcher::command::LaunchCommand,
     runtime::distribution::Distribution,
     storage::{Storage, layout::Layout},
 };
@@ -22,13 +22,14 @@ use crate::{
             },
             source::{FabricEndpointOverrides, FabricFlavor, FabricSource},
         },
+        shared::{
+            build_version_json_launch_command, installed_version_json_driver,
+            launch_version_json_instance, load_prepared_version_json, resolve_vanilla_metadata,
+        },
         vanilla::source::VanillaSource,
     },
-    families::version_json::{
-        VersionJsonInstanceLayout, VersionJsonRootLayout, builder::VersionJsonLaunchBuilder,
-    },
+    families::version_json::{VersionJsonInstanceLayout, VersionJsonRootLayout},
     inspect::InstanceProbe,
-    launch::{build_version_json_launch_builder, resolve_prepared_version_runtime},
 };
 
 pub struct FabricDriver {
@@ -126,9 +127,7 @@ impl FabricDriver {
         &self,
         instance: &Storage<VL, Storage<L>>,
     ) -> Result<PreparedFabricVersion<L, VL>> {
-        ResolvedFabricVersion::load(self.remote_resolver(), instance.clone())?
-            .into_prepared()
-            .await
+        load_prepared_version_json(self.remote_resolver(), instance).await
     }
 
     pub async fn launch<
@@ -144,16 +143,7 @@ impl FabricDriver {
     where
         A: Authorizer,
     {
-        let (runtime, command) = self
-            .build_launch_command(authorizer, &prepared_version, config)
-            .await?;
-        let child = process::spawn_command(command)?;
-
-        Ok(LaunchedFabricVersion {
-            prepared_version,
-            runtime,
-            child,
-        })
+        launch_version_json_instance(authorizer, prepared_version, config).await
     }
 
     pub async fn build_launch_command<
@@ -169,35 +159,7 @@ impl FabricDriver {
     where
         A: Authorizer,
     {
-        let runtime = resolve_prepared_version_runtime(
-            prepared_version,
-            config.runtime_major_version,
-            config.runtime_executable_path.as_deref(),
-        )
-        .await?;
-        let command = self
-            .build_launch_builder(authorizer, runtime.clone(), prepared_version, config)?
-            .build_command()
-            .await?;
-
-        Ok((runtime, command))
-    }
-
-    fn build_launch_builder<
-        A,
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    >(
-        &self,
-        authorizer: A,
-        runtime: Distribution,
-        prepared_version: &PreparedFabricVersion<L, VL>,
-        config: &FabricLaunchConfig,
-    ) -> Result<VersionJsonLaunchBuilder<A, L, VL>>
-    where
-        A: Authorizer,
-    {
-        build_version_json_launch_builder(authorizer, runtime, prepared_version, config)
+        build_version_json_launch_command(authorizer, prepared_version, config).await
     }
 
     fn remote_resolver(&self) -> FabricRemoteResolver {
@@ -273,27 +235,7 @@ impl FabricDriver {
         &self,
         game_version: String,
     ) -> Result<crate::drivers::vanilla::prepared::ResolvedVanillaMetadata> {
-        let launchmeta = self.vanilla_source.launch_meta().await?;
-        let metadata_url = launchmeta
-            .versions
-            .iter()
-            .find(|version| version.id == game_version)
-            .context(format!("Can't find version named `{game_version}`"))?
-            .url
-            .clone();
-        let metadata = self.vanilla_source.piston_meta(metadata_url).await?;
-        let asset_index_objects = self
-            .vanilla_source
-            .asset_index_objects(&metadata.asset_index.url)
-            .await?;
-
-        Ok(
-            crate::drivers::vanilla::prepared::ResolvedVanillaMetadata::new(
-                self.vanilla_source.endpoints().clone(),
-                metadata,
-                asset_index_objects,
-            ),
-        )
+        resolve_vanilla_metadata(self.vanilla_source(), game_version.as_str()).await
     }
 }
 
@@ -312,14 +254,10 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for FabricDriver {
             return Ok(None);
         };
 
-        Ok(Some(InstalledDriver {
-            driver: flavor.descriptor(),
-            driver_version: Some(driver_version),
-            game_version: metadata
-                .inherits_from
-                .clone()
-                .or_else(|| Some(metadata.id.clone())),
-            description: Some(metadata.release_type.clone()),
-        }))
+        Ok(Some(installed_version_json_driver(
+            metadata,
+            flavor.descriptor(),
+            Some(driver_version),
+        )))
     }
 }

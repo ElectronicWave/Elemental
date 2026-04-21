@@ -1,6 +1,9 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 
-use crate::drivers::{fabric::source::FabricEndpoints, vanilla::source::VanillaEndpoints};
+use crate::drivers::{
+    fabric::source::FabricEndpoints, shared::rewrite_upstream_with_vanilla_fallback,
+    vanilla::source::VanillaEndpoints,
+};
 use crate::families::version_json::{
     LaunchedVersionJsonInstance, PreparedVersionJsonInstance, ResolvedVersionJsonInstance,
     ResolvedVersionJsonMetadata, VersionJsonInstallStatus, VersionJsonRemoteResolver,
@@ -29,13 +32,9 @@ impl FabricRemoteResolver {
 
 impl VersionJsonRemoteResolver for FabricRemoteResolver {
     fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
-        if let Ok(rewritten) = self.vanilla_endpoints.rewrite_upstream(raw_url) {
-            return Ok(rewritten);
-        }
-
-        self.fabric_endpoints
-            .rewrite_upstream(raw_url)
-            .with_context(|| format!("rewrite fabric upstream url failed for '{raw_url}'"))
+        rewrite_upstream_with_vanilla_fallback(&self.vanilla_endpoints, raw_url, "fabric", || {
+            self.fabric_endpoints.rewrite_upstream(raw_url)
+        })
     }
 
     fn object_url(&self, hash: &str) -> Result<String> {

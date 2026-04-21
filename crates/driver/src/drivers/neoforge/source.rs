@@ -1,7 +1,8 @@
-use std::{path::PathBuf, time::Duration};
+use std::path::PathBuf;
 
 use crate::{
     families::{installer::InstallerArtifact, version_json::VersionJsonGameStorageExt},
+    http::{build_default_client, fetch_text},
     url::{Origin, OriginPolicy},
 };
 use anyhow::{Context, Result};
@@ -89,11 +90,7 @@ impl NeoForgeEndpoints {
 impl Default for NeoForgeSource {
     fn default() -> Self {
         Self {
-            client: reqwest::Client::builder()
-                .timeout(Duration::from_secs(30))
-                .user_agent(format!("Elemental/{}", env!("CARGO_PKG_VERSION")))
-                .build()
-                .expect("build neoforge source client failed"),
+            client: build_default_client("neoforge source"),
             endpoints: NeoForgeEndpoints::default(),
         }
     }
@@ -113,17 +110,7 @@ impl NeoForgeSource {
 
     pub async fn maven_metadata(&self) -> Result<MavenMetadataBody> {
         let url = self.endpoints.maven_metadata_url()?;
-        let raw = self
-            .client
-            .get(url.as_str())
-            .send()
-            .await
-            .with_context(|| format!("request neoforge source resource failed: {url}"))?
-            .error_for_status()
-            .with_context(|| format!("neoforge source returned error status: {url}"))?
-            .text()
-            .await
-            .with_context(|| format!("decode neoforge source resource failed: {url}"))?;
+        let raw = fetch_text(&self.client, url.as_str(), "neoforge source").await?;
 
         from_str(&raw).with_context(|| format!("decode neoforge maven metadata failed: {url}"))
     }

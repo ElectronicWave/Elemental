@@ -63,6 +63,24 @@ impl<O: Origin> OriginPolicy<O> {
         .map(|url| url.to_string())
     }
 
+    pub fn resolve_segments<const N: usize>(
+        &self,
+        origin: O,
+        segments: [&str; N],
+    ) -> Result<String> {
+        let mut url = self.base_url(origin)?;
+        {
+            let mut path_segments = url
+                .path_segments_mut()
+                .map_err(|_| anyhow::anyhow!("origin url cannot be used as a path base"))?;
+            for segment in segments {
+                path_segments.push(segment);
+            }
+        }
+
+        Ok(url.to_string())
+    }
+
     pub fn rewrite_origin_url(&self, raw_url: &str) -> Result<String> {
         let Some(rewritten) = self.try_rewrite_origin_url(raw_url)? else {
             bail!("can't map url to a known origin: {raw_url}")

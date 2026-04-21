@@ -1,10 +1,11 @@
-use std::time::Duration;
-
-use anyhow::{Context, Result};
+use anyhow::Result;
 use elemental_schema::fabric::{GameVersion, LoaderGameVersion, LoaderProfile, ProfileJson};
 use serde::de::DeserializeOwned;
 
-use crate::url::{Origin, OriginPolicy};
+use crate::{
+    http::{build_default_client, fetch_json},
+    url::{Origin, OriginPolicy},
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum FabricFlavor {
@@ -114,36 +115,15 @@ impl FabricEndpoints {
     }
 
     fn resolve_meta_segments<const N: usize>(&self, segments: [&str; N]) -> Result<String> {
-        self.resolve_segments(FabricOrigin::Meta, segments)
-    }
-
-    fn resolve_segments<const N: usize>(
-        &self,
-        origin: FabricOrigin,
-        segments: [&str; N],
-    ) -> Result<String> {
-        let mut url = self.origin_policy.base_url(origin)?;
-        {
-            let mut path_segments = url
-                .path_segments_mut()
-                .map_err(|_| anyhow::anyhow!("origin url cannot be used as a path base"))?;
-            for segment in segments {
-                path_segments.push(segment);
-            }
-        }
-
-        Ok(url.to_string())
+        self.origin_policy
+            .resolve_segments(FabricOrigin::Meta, segments)
     }
 }
 
 impl Default for FabricSource {
     fn default() -> Self {
         Self {
-            client: reqwest::Client::builder()
-                .timeout(Duration::from_secs(30))
-                .user_agent(format!("Elemental/{}", env!("CARGO_PKG_VERSION")))
-                .build()
-                .expect("build fabric source client failed"),
+            client: build_default_client("fabric source"),
             endpoints: FabricEndpoints::default(),
         }
     }
@@ -209,15 +189,6 @@ impl FabricSource {
     where
         T: DeserializeOwned,
     {
-        self.client
-            .get(url)
-            .send()
-            .await
-            .with_context(|| format!("request fabric source resource failed: {url}"))?
-            .error_for_status()
-            .with_context(|| format!("fabric source returned error status: {url}"))?
-            .json::<T>()
-            .await
-            .with_context(|| format!("decode fabric source resource failed: {url}"))
+        fetch_json(&self.client, url, "fabric source").await
     }
 }

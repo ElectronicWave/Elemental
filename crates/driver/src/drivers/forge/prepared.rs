@@ -8,6 +8,7 @@ use elemental_schema::{forge::ForgeInstallerProfile, mojang::piston::PistonMetaL
 use crate::{
     drivers::{
         forge::source::{ForgeEndpoints, ForgeSource, parse_installer_version},
+        shared::rewrite_upstream_with_vanilla_fallback,
         vanilla::source::{VanillaEndpoints, VanillaSource},
     },
     families::{
@@ -87,13 +88,9 @@ impl ForgeRemoteResolver {
 
 impl VersionJsonRemoteResolver for ForgeRemoteResolver {
     fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
-        if let Ok(rewritten) = self.vanilla_endpoints.rewrite_upstream(raw_url) {
-            return Ok(rewritten);
-        }
-
-        self.forge_endpoints
-            .rewrite_upstream(raw_url)
-            .with_context(|| format!("rewrite forge upstream url failed for '{raw_url}'"))
+        rewrite_upstream_with_vanilla_fallback(&self.vanilla_endpoints, raw_url, "forge", || {
+            self.forge_endpoints.rewrite_upstream(raw_url)
+        })
     }
 
     fn object_url(&self, hash: &str) -> Result<String> {

@@ -4,7 +4,7 @@ mod neoforge;
 mod quilt;
 mod vanilla;
 
-use std::fmt::Debug;
+use std::{fmt::Debug, future::Future, time::Duration};
 
 use anyhow::{Context, Result};
 use elemental::{
@@ -65,6 +65,15 @@ pub(super) fn require_loader_version(config: &DemoConfig, driver_label: &str) ->
         .loader_version
         .clone()
         .with_context(|| format!("{driver_label} demo requires a loader version"))
+}
+
+pub(super) async fn time_operation<T, Fut>(operation: Fut) -> Result<(T, Duration)>
+where
+    Fut: Future<Output = Result<T>>,
+{
+    let started_at = std::time::Instant::now();
+    let result = operation.await?;
+    Ok((result, started_at.elapsed()))
 }
 
 pub(super) async fn finalize_launch<L, VL>(

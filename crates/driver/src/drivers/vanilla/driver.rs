@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use elemental_core::{
     auth::authorizer::Authorizer,
-    launcher::{command::LaunchCommand, process},
+    launcher::command::LaunchCommand,
     runtime::distribution::Distribution,
     storage::{Storage, layout::Layout},
 };
@@ -12,6 +12,10 @@ use elemental_infra::downloader::core::ElementalDownloader;
 
 use crate::{
     driver::{Driver, DriverDescriptor, InstalledDriver},
+    drivers::shared::{
+        build_version_json_launch_command, installed_version_json_driver,
+        launch_version_json_instance, load_prepared_version_json, metadata_contains_library_prefix,
+    },
     drivers::vanilla::{
         config::VanillaLaunchConfig,
         prepared::{
@@ -20,12 +24,8 @@ use crate::{
         },
         source::VanillaSource,
     },
-    families::version_json::{
-        PistonMetaData, VersionJsonInstanceLayout, VersionJsonRootLayout,
-        builder::VersionJsonLaunchBuilder,
-    },
+    families::version_json::{PistonMetaData, VersionJsonInstanceLayout, VersionJsonRootLayout},
     inspect::InstanceProbe,
-    launch::{build_version_json_launch_builder, resolve_prepared_version_runtime},
 };
 
 pub struct VanillaDriver {
@@ -73,9 +73,7 @@ impl VanillaDriver {
         &self,
         instance: &Storage<VL, Storage<L>>,
     ) -> Result<PreparedVanillaVersion<L, VL>> {
-        ResolvedVanillaVersion::load(self.source.endpoints().clone(), instance.clone())?
-            .into_prepared()
-            .await
+        load_prepared_version_json(self.source.endpoints().clone(), instance).await
     }
 
     pub async fn launch<
@@ -91,16 +89,7 @@ impl VanillaDriver {
     where
         A: Authorizer,
     {
-        let (runtime, command) = self
-            .build_launch_command(authorizer, &prepared_version, config)
-            .await?;
-        let child = process::spawn_command(command)?;
-
-        Ok(LaunchedVanillaVersion {
-            prepared_version,
-            runtime,
-            child,
-        })
+        launch_version_json_instance(authorizer, prepared_version, config).await
     }
 
     pub async fn build_launch_command<
@@ -116,35 +105,7 @@ impl VanillaDriver {
     where
         A: Authorizer,
     {
-        let runtime = resolve_prepared_version_runtime(
-            prepared_version,
-            config.runtime_major_version,
-            config.runtime_executable_path.as_deref(),
-        )
-        .await?;
-        let command = self
-            .build_launch_builder(authorizer, runtime.clone(), prepared_version, config)?
-            .build_command()
-            .await?;
-
-        Ok((runtime, command))
-    }
-
-    fn build_launch_builder<
-        A,
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    >(
-        &self,
-        authorizer: A,
-        runtime: Distribution,
-        prepared_version: &PreparedVanillaVersion<L, VL>,
-        config: &VanillaLaunchConfig,
-    ) -> Result<VersionJsonLaunchBuilder<A, L, VL>>
-    where
-        A: Authorizer,
-    {
-        build_version_json_launch_builder(authorizer, runtime, prepared_version, config)
+        build_version_json_launch_command(authorizer, prepared_version, config).await
     }
 
     async fn resolve_or_load<
@@ -218,21 +179,22 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for VanillaDriver {
             return Ok(None);
         }
 
-        Ok(Some(InstalledDriver {
-            driver: <Self as Driver<L, VL>>::descriptor(self),
-            driver_version: None,
-            game_version: Some(metadata.id.clone()),
-            description: Some(metadata.release_type.clone()),
-        }))
+        Ok(Some(installed_version_json_driver(
+            metadata,
+            <Self as Driver<L, VL>>::descriptor(self),
+            None,
+        )))
     }
 }
 
 fn has_loader_marker(metadata: &PistonMetaData) -> bool {
-    metadata.libraries.iter().any(|library| {
-        let name = library.name.as_str();
-        name.starts_with("net.minecraftforge:forge:")
-            || name.starts_with("net.neoforged:forge:")
-            || name.starts_with("net.neoforged:neoforge:")
-            || name.starts_with("net.fabricmc:fabric-loader:")
-    })
+    metadata_contains_library_prefix(
+        metadata,
+        &[
+            "net.minecraftforge:forge:",
+            "net.neoforged:forge:",
+            "net.neoforged:neoforge:",
+            "net.fabricmc:fabric-loader:",
+        ],
+    )
 }

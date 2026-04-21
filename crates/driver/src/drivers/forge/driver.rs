@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use elemental_core::{
     auth::authorizer::Authorizer,
-    launcher::{command::LaunchCommand, process},
+    launcher::command::LaunchCommand,
     runtime::distribution::Distribution,
     storage::{Storage, layout::Layout},
 };
@@ -15,19 +15,17 @@ use crate::{
     drivers::{
         forge::{
             config::ForgeLaunchConfig,
-            prepared::{
-                ForgeRemoteResolver, PreparedForgeLaunchVersion, PreparedForgeVersion,
-                ResolvedForgeVersion,
-            },
+            prepared::{ForgeRemoteResolver, PreparedForgeVersion, ResolvedForgeVersion},
             source::ForgeSource,
+        },
+        shared::{
+            build_version_json_launch_command, find_library_version, installed_version_json_driver,
+            launch_wrapped_version,
         },
         vanilla::source::VanillaSource,
     },
-    families::version_json::{
-        VersionJsonInstanceLayout, VersionJsonRootLayout, builder::VersionJsonLaunchBuilder,
-    },
+    families::version_json::{VersionJsonInstanceLayout, VersionJsonRootLayout},
     inspect::InstanceProbe,
-    launch::{build_version_json_launch_builder, resolve_prepared_version_runtime},
 };
 
 const FORGE_DRIVER: DriverDescriptor = DriverDescriptor {
@@ -161,16 +159,18 @@ impl ForgeDriver {
     where
         A: Authorizer,
     {
-        let (runtime, command) = self
-            .build_launch_command(authorizer, &prepared_version, config)
-            .await?;
-        let child = process::spawn_command(command)?;
-
-        Ok(LaunchedForgeVersion {
+        launch_wrapped_version(
+            authorizer,
             prepared_version,
-            runtime,
-            child,
-        })
+            config,
+            |prepared_version| &prepared_version.launch_version,
+            |prepared_version, runtime, child| LaunchedForgeVersion {
+                prepared_version,
+                runtime,
+                child,
+            },
+        )
+        .await
     }
 
     pub async fn build_launch_command<
@@ -186,40 +186,8 @@ impl ForgeDriver {
     where
         A: Authorizer,
     {
-        let runtime = resolve_prepared_version_runtime(
-            &prepared_version.launch_version,
-            config.runtime_major_version,
-            config.runtime_executable_path.as_deref(),
-        )
-        .await?;
-        let command = self
-            .build_launch_builder(
-                authorizer,
-                runtime.clone(),
-                &prepared_version.launch_version,
-                config,
-            )?
-            .build_command()
-            .await?;
-
-        Ok((runtime, command))
-    }
-
-    fn build_launch_builder<
-        A,
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    >(
-        &self,
-        authorizer: A,
-        runtime: Distribution,
-        prepared_version: &PreparedForgeLaunchVersion<L, VL>,
-        config: &ForgeLaunchConfig,
-    ) -> Result<VersionJsonLaunchBuilder<A, L, VL>>
-    where
-        A: Authorizer,
-    {
-        build_version_json_launch_builder(authorizer, runtime, prepared_version, config)
+        build_version_json_launch_command(authorizer, &prepared_version.launch_version, config)
+            .await
     }
 
     fn remote_resolver(&self) -> ForgeRemoteResolver {
@@ -240,26 +208,16 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for ForgeDriver {
         let Some(metadata) = &probe.metadata else {
             return Ok(None);
         };
-        let library_name = metadata
-            .libraries
-            .iter()
-            .map(|library| library.name.as_str())
-            .find(|name| name.starts_with("net.minecraftforge:fmlloader:"));
-
-        let Some(library_name) = library_name else {
+        let Some(driver_version) =
+            find_library_version(metadata, &["net.minecraftforge:fmlloader:"])
+        else {
             return Ok(None);
         };
 
-        let driver_version = library_name.split(':').nth(2).map(ToOwned::to_owned);
-
-        Ok(Some(InstalledDriver {
-            driver: FORGE_DRIVER,
-            driver_version,
-            game_version: metadata
-                .inherits_from
-                .clone()
-                .or_else(|| Some(metadata.id.clone())),
-            description: Some(metadata.release_type.clone()),
-        }))
+        Ok(Some(installed_version_json_driver(
+            metadata,
+            FORGE_DRIVER,
+            Some(driver_version),
+        )))
     }
 }

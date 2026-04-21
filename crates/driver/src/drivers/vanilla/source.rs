@@ -1,11 +1,10 @@
-use std::time::Duration;
-
 use anyhow::{Context, Result};
 use serde::de::DeserializeOwned;
 
 use crate::{
     families::version_json::VersionJsonRemoteResolver,
     families::version_json::{LaunchMetaData, PistonMetaAssetIndexObjects, PistonMetaData},
+    http::{build_default_client, fetch_json},
     url::{Origin, OriginPolicy},
 };
 
@@ -125,11 +124,7 @@ impl VersionJsonRemoteResolver for VanillaEndpoints {
 impl Default for VanillaSource {
     fn default() -> Self {
         Self {
-            client: reqwest::Client::builder()
-                .timeout(Duration::from_secs(30))
-                .user_agent(format!("Elemental/{}", env!("CARGO_PKG_VERSION")))
-                .build()
-                .expect("build vanilla source client failed"),
+            client: build_default_client("vanilla source"),
             endpoints: VanillaEndpoints::default(),
         }
     }
@@ -173,15 +168,6 @@ impl VanillaSource {
     where
         T: DeserializeOwned,
     {
-        self.client
-            .get(url)
-            .send()
-            .await
-            .with_context(|| format!("request vanilla source resource failed: {url}"))?
-            .error_for_status()
-            .with_context(|| format!("vanilla source returned error status: {url}"))?
-            .json::<T>()
-            .await
-            .with_context(|| format!("decode vanilla source resource failed: {url}"))
+        fetch_json(&self.client, url, "vanilla source").await
     }
 }

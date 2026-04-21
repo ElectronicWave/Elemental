@@ -8,13 +8,12 @@ use std::{
 use anyhow::{Context, Result};
 
 pub use crate::context::ObjectContext;
-use crate::pool::{POOL, ShutdownFn};
+use crate::pool::{ObjectPool, POOL, ShutdownFn};
 use crate::{context::CONTEXT, instant::InstantObject};
 
 /// Fast try to get a value from the pool, if not exists, return error immediately.
 pub async fn require<T: Any + Send + Sync>() -> Result<Arc<T>> {
-    let pool = CONTEXT.try_with(|pool| pool.clone());
-    if let Ok(pool) = pool
+    if let Some(pool) = context_pool()
         && let Ok(value) = pool.get_async::<T>().await.context(format!(
             "Cannot get object `{}` from pool",
             type_name::<T>()
@@ -67,33 +66,14 @@ pub async fn provide_instant<T>()
 where
     T: InstantObject,
 {
-    let instant_value = T::create().await;
-    let shutdown = |value: Arc<T::Output>| async move {
-        T::destroy(value).await;
-    };
-    provide_arc(
-        Arc::new(instant_value),
-        Some(convert_shutdown_fn(shutdown)),
-        false,
-    )
-    .await;
+    provide_instant_impl::<T>(false).await;
 }
 
 pub async fn provide_instant_context<T>()
 where
     T: InstantObject,
 {
-    let instant_value = T::create().await;
-    let shutdown = |value: Arc<T::Output>| async move {
-        T::destroy(value).await;
-    };
-
-    provide_arc(
-        Arc::new(instant_value),
-        Some(convert_shutdown_fn(shutdown)),
-        true,
-    )
-    .await;
+    provide_instant_impl::<T>(true).await;
 }
 
 fn convert_shutdown_fn<T, F, Fut>(shutdown: F) -> ShutdownFn<T>
@@ -112,12 +92,9 @@ where
     T: Any + Send + Sync,
 {
     // Try to set value in context first, if context exists, otherwise set it in global pool.
-    if context {
-        let pool = CONTEXT.try_with(|pool| pool.clone());
-        if let Ok(pool) = pool {
-            pool.set_value(value, shutdown).await;
-            return;
-        }
+    if let Some(pool) = selected_context_pool(context) {
+        pool.set_value(value, shutdown).await;
+        return;
     }
 
     POOL.set_value(value, shutdown).await;
@@ -128,8 +105,7 @@ pub async fn drop_value<T: Any + Send + Sync>() {
 }
 
 pub async fn drop_context_value<T: Any + Send + Sync>() {
-    let pool = CONTEXT.try_with(|pool| pool.clone());
-    if let Ok(pool) = pool {
+    if let Some(pool) = context_pool() {
         pool.remove_value::<T>().await;
     }
 }
@@ -139,8 +115,7 @@ pub async fn drop_entry<T: Any + Send + Sync>() {
 }
 
 pub async fn drop_context_entry<T: Any + Send + Sync>() {
-    let pool = CONTEXT.try_with(|pool| pool.clone());
-    if let Ok(pool) = pool {
+    if let Some(pool) = context_pool() {
         pool.remove_entry::<T>().await;
     }
 }
@@ -151,9 +126,8 @@ pub async fn drop_context_entry<T: Any + Send + Sync>() {
 /// If you want to use it as a subscriber, you may got some value lost in the scenario that the value is frequently provided and comsumer is slow.
 #[cfg(feature = "notify")]
 pub async fn acquire<T: Any + Send + Sync>() -> Result<Arc<T>> {
-    let pool = CONTEXT.try_with(|pool| pool.clone());
     // If context exists, wait value in context, otherwise wait value in global pool.
-    if let Ok(pool) = pool {
+    if let Some(pool) = context_pool() {
         pool.wait_value::<T>().await;
     } else {
         POOL.wait_value::<T>().await;
@@ -193,12 +167,9 @@ async fn fulfill_arc<T: Any + Send + Sync>(
     shutdown: Option<ShutdownFn<T>>,
     context: bool,
 ) {
-    if context {
-        let pool = CONTEXT.try_with(|pool| pool.clone());
-        if let Ok(pool) = pool {
-            pool.fulfill_value(value, shutdown).await;
-            return;
-        }
+    if let Some(pool) = selected_context_pool(context) {
+        pool.fulfill_value(value, shutdown).await;
+        return;
     }
     POOL.fulfill_value(value, shutdown).await;
 }
@@ -208,8 +179,36 @@ pub async fn shutdown() {
 }
 
 pub async fn shutdown_local() {
-    let pool = CONTEXT.try_with(|pool| pool.clone());
-    if let Ok(pool) = pool {
+    if let Some(pool) = context_pool() {
         pool.shutdown().await;
     }
+}
+
+fn context_pool() -> Option<Arc<ObjectPool>> {
+    CONTEXT.try_with(|pool| pool.clone()).ok()
+}
+
+fn selected_context_pool(context: bool) -> Option<Arc<ObjectPool>> {
+    if context {
+        return context_pool();
+    }
+
+    None
+}
+
+async fn provide_instant_impl<T>(context: bool)
+where
+    T: InstantObject,
+{
+    let instant_value = T::create().await;
+    let shutdown = |value: Arc<T::Output>| async move {
+        T::destroy(value).await;
+    };
+
+    provide_arc(
+        Arc::new(instant_value),
+        Some(convert_shutdown_fn(shutdown)),
+        context,
+    )
+    .await;
 }

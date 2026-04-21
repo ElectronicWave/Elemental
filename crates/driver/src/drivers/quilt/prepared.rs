@@ -1,6 +1,9 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 
-use crate::drivers::{quilt::source::QuiltEndpoints, vanilla::source::VanillaEndpoints};
+use crate::drivers::{
+    quilt::source::QuiltEndpoints, shared::rewrite_upstream_with_vanilla_fallback,
+    vanilla::source::VanillaEndpoints,
+};
 use crate::families::version_json::{
     LaunchedVersionJsonInstance, PreparedVersionJsonInstance, ResolvedVersionJsonInstance,
     ResolvedVersionJsonMetadata, VersionJsonInstallStatus, VersionJsonRemoteResolver,
@@ -29,13 +32,9 @@ impl QuiltRemoteResolver {
 
 impl VersionJsonRemoteResolver for QuiltRemoteResolver {
     fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
-        if let Ok(rewritten) = self.vanilla_endpoints.rewrite_upstream(raw_url) {
-            return Ok(rewritten);
-        }
-
-        self.quilt_endpoints
-            .rewrite_upstream(raw_url)
-            .with_context(|| format!("rewrite quilt upstream url failed for '{raw_url}'"))
+        rewrite_upstream_with_vanilla_fallback(&self.vanilla_endpoints, raw_url, "quilt", || {
+            self.quilt_endpoints.rewrite_upstream(raw_url)
+        })
     }
 
     fn object_url(&self, hash: &str) -> Result<String> {

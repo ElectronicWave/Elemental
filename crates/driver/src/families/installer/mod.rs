@@ -1,5 +1,6 @@
 mod archive;
 mod artifact;
+mod driver;
 mod family;
 mod libraries;
 mod processor;
@@ -9,6 +10,9 @@ pub use archive::InstallerArchive;
 pub use artifact::{
     InstallerArtifact, build_installer_artifact, installer_coordinate_file_name,
     installer_coordinate_path,
+};
+pub use driver::{
+    InstallerFamilyDriver, InstallerFamilyDriverSpec, LaunchedInstallerFamilyVersion,
 };
 pub use family::{
     InstallerFamily, InstallerFamilyInstallStatus, InstallerFamilyRemoteResolver,

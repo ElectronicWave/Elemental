@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use anyhow::{Result, bail};
 use elemental::driver::drivers::fabric::{
     config::FabricLaunchConfig, driver::FabricDriver, source::FabricFlavor,
@@ -12,20 +10,16 @@ use crate::{
 
 pub async fn run(config: DemoConfig) -> Result<()> {
     let driver_kind = config.driver;
-    let driver = Arc::new(FabricDriver::for_flavor(fabric_flavor(driver_kind)?)?);
-    let prepare_driver = driver.clone();
-    let build_driver = driver.clone();
+    let driver = FabricDriver::for_flavor(fabric_flavor(driver_kind)?)?;
 
     run_loader_demo(
         config,
         "fabric-like",
-        move |instance, game_version, loader_version, launch_config: &FabricLaunchConfig| {
-            let _ = launch_config;
-            let driver = prepare_driver.clone();
+        &driver,
+        |driver, instance, game_version, loader_version, _launch_config: &FabricLaunchConfig| {
             Box::pin(async move { driver.prepare(instance, game_version, loader_version).await })
         },
-        move |authorizer, prepared, launch_config: &FabricLaunchConfig| {
-            let driver = build_driver.clone();
+        |driver, authorizer, prepared, launch_config: &FabricLaunchConfig| {
             Box::pin(async move {
                 driver
                     .build_launch_command(authorizer, prepared, launch_config)

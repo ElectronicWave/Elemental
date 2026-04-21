@@ -83,9 +83,10 @@ pub(super) async fn prepare_loader_demo(
     Ok((loader_version, instance, launch_config))
 }
 
-pub(super) async fn run_loader_demo<Prepared, PrepareFn, BuildFn, StatusFn, VersionFn, L, VL>(
+pub(super) async fn run_loader_demo<D, Prepared, PrepareFn, BuildFn, StatusFn, VersionFn, L, VL>(
     config: DemoConfig,
     driver_label: &str,
+    driver: &D,
     prepare: PrepareFn,
     build_launch_command: BuildFn,
     install_status: StatusFn,
@@ -93,12 +94,14 @@ pub(super) async fn run_loader_demo<Prepared, PrepareFn, BuildFn, StatusFn, Vers
 ) -> Result<()>
 where
     PrepareFn: for<'a> Fn(
+        &'a D,
         &'a Storage<BaseInstanceLayout, Storage<BaseRootLayout>>,
         String,
         String,
         &'a VanillaLaunchConfig,
     ) -> Pin<Box<dyn Future<Output = Result<Prepared>> + 'a>>,
     BuildFn: for<'a> Fn(
+        &'a D,
         OfflineAuthorizer,
         &'a Prepared,
         &'a VanillaLaunchConfig,
@@ -113,6 +116,7 @@ where
     let (loader_version, instance, launch_config) =
         prepare_loader_demo(&config, driver_label).await?;
     let (prepared, prepare_elapsed) = time_operation(prepare(
+        driver,
         &instance,
         config.game_version.clone(),
         loader_version.clone(),
@@ -120,7 +124,7 @@ where
     ))
     .await?;
     let (runtime, command) =
-        build_launch_command(offline_authorizer(), &prepared, &launch_config).await?;
+        build_launch_command(driver, offline_authorizer(), &prepared, &launch_config).await?;
 
     finalize_launch(
         &config,

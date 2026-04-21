@@ -61,126 +61,141 @@ impl Cli {
             .command
             .unwrap_or(DriverCommand::Fabric(LoaderArgs::default()))
         {
-            DriverCommand::Vanilla(arguments) => build_vanilla_config(
+            DriverCommand::Vanilla(arguments) => build_vanilla_config(CommonConfigInput {
                 storage_root,
-                arguments.runtime_major_version,
-                arguments.runtime_paths,
-                arguments.runtime_executable_path,
-                arguments.game_version,
-                arguments.instance_name,
-            ),
-            DriverCommand::Fabric(arguments) => build_loader_config(
-                DemoDriver::Fabric,
-                storage_root,
-                arguments.runtime_major_version,
-                arguments.runtime_paths,
-                arguments.runtime_executable_path,
-                arguments.game_version,
-                arguments.loader_version,
-                arguments.instance_name,
-            ),
-            DriverCommand::LegacyFabric(arguments) => build_loader_config(
-                DemoDriver::LegacyFabric,
-                storage_root,
-                arguments.runtime_major_version,
-                arguments.runtime_paths,
-                arguments.runtime_executable_path,
-                arguments.game_version,
-                arguments.loader_version,
-                arguments.instance_name,
-            ),
-            DriverCommand::Babric(arguments) => build_loader_config(
-                DemoDriver::Babric,
-                storage_root,
-                arguments.runtime_major_version,
-                arguments.runtime_paths,
-                arguments.runtime_executable_path,
-                arguments.game_version,
-                arguments.loader_version,
-                arguments.instance_name,
-            ),
-            DriverCommand::Quilt(arguments) => build_loader_config(
-                DemoDriver::Quilt,
-                storage_root,
-                arguments.runtime_major_version,
-                arguments.runtime_paths,
-                arguments.runtime_executable_path,
-                arguments.game_version,
-                arguments.loader_version,
-                arguments.instance_name,
-            ),
-            DriverCommand::Forge(arguments) => build_loader_config(
-                DemoDriver::Forge,
-                storage_root,
-                arguments.runtime_major_version,
-                arguments.runtime_paths,
-                arguments.runtime_executable_path,
-                arguments.game_version,
-                arguments.loader_version,
-                arguments.instance_name,
-            ),
-            DriverCommand::NeoForge(arguments) => build_loader_config(
-                DemoDriver::NeoForge,
-                storage_root,
-                arguments.runtime_major_version,
-                arguments.runtime_paths,
-                arguments.runtime_executable_path,
-                arguments.game_version,
-                arguments.loader_version,
-                arguments.instance_name,
-            ),
+                runtime_major_version: arguments.runtime_major_version,
+                runtime_paths: arguments.runtime_paths,
+                runtime_executable_path: arguments.runtime_executable_path,
+                game_version: arguments.game_version,
+                instance_name: arguments.instance_name,
+            }),
+            DriverCommand::Fabric(arguments) => build_loader_config(LoaderConfigInput {
+                driver: DemoDriver::Fabric,
+                common: CommonConfigInput {
+                    storage_root,
+                    runtime_major_version: arguments.runtime_major_version,
+                    runtime_paths: arguments.runtime_paths,
+                    runtime_executable_path: arguments.runtime_executable_path,
+                    game_version: arguments.game_version,
+                    instance_name: arguments.instance_name,
+                },
+                loader_version: arguments.loader_version,
+            }),
+            DriverCommand::LegacyFabric(arguments) => build_loader_config(LoaderConfigInput {
+                driver: DemoDriver::LegacyFabric,
+                common: CommonConfigInput {
+                    storage_root,
+                    runtime_major_version: arguments.runtime_major_version,
+                    runtime_paths: arguments.runtime_paths,
+                    runtime_executable_path: arguments.runtime_executable_path,
+                    game_version: arguments.game_version,
+                    instance_name: arguments.instance_name,
+                },
+                loader_version: arguments.loader_version,
+            }),
+            DriverCommand::Babric(arguments) => build_loader_config(LoaderConfigInput {
+                driver: DemoDriver::Babric,
+                common: CommonConfigInput {
+                    storage_root,
+                    runtime_major_version: arguments.runtime_major_version,
+                    runtime_paths: arguments.runtime_paths,
+                    runtime_executable_path: arguments.runtime_executable_path,
+                    game_version: arguments.game_version,
+                    instance_name: arguments.instance_name,
+                },
+                loader_version: arguments.loader_version,
+            }),
+            DriverCommand::Quilt(arguments) => build_loader_config(LoaderConfigInput {
+                driver: DemoDriver::Quilt,
+                common: CommonConfigInput {
+                    storage_root,
+                    runtime_major_version: arguments.runtime_major_version,
+                    runtime_paths: arguments.runtime_paths,
+                    runtime_executable_path: arguments.runtime_executable_path,
+                    game_version: arguments.game_version,
+                    instance_name: arguments.instance_name,
+                },
+                loader_version: arguments.loader_version,
+            }),
+            DriverCommand::Forge(arguments) => build_loader_config(LoaderConfigInput {
+                driver: DemoDriver::Forge,
+                common: CommonConfigInput {
+                    storage_root,
+                    runtime_major_version: arguments.runtime_major_version,
+                    runtime_paths: arguments.runtime_paths,
+                    runtime_executable_path: arguments.runtime_executable_path,
+                    game_version: arguments.game_version,
+                    instance_name: arguments.instance_name,
+                },
+                loader_version: arguments.loader_version,
+            }),
+            DriverCommand::NeoForge(arguments) => build_loader_config(LoaderConfigInput {
+                driver: DemoDriver::NeoForge,
+                common: CommonConfigInput {
+                    storage_root,
+                    runtime_major_version: arguments.runtime_major_version,
+                    runtime_paths: arguments.runtime_paths,
+                    runtime_executable_path: arguments.runtime_executable_path,
+                    game_version: arguments.game_version,
+                    instance_name: arguments.instance_name,
+                },
+                loader_version: arguments.loader_version,
+            }),
         }
     }
 }
 
-fn build_vanilla_config(
+struct CommonConfigInput {
     storage_root: PathBuf,
     runtime_major_version: Option<usize>,
     runtime_paths: Vec<PathBuf>,
     runtime_executable_path: Option<PathBuf>,
     game_version: Option<String>,
     instance_name: Option<String>,
-) -> DemoConfig {
-    let resolved_game_version = game_version.unwrap_or_else(|| "1.20.1".to_owned());
-    let resolved_instance_name =
-        instance_name.unwrap_or_else(|| format!("MyVanilla-{resolved_game_version}"));
+}
+
+struct LoaderConfigInput {
+    driver: DemoDriver,
+    common: CommonConfigInput,
+    loader_version: Option<String>,
+}
+
+fn build_vanilla_config(input: CommonConfigInput) -> DemoConfig {
+    let resolved_game_version = input.game_version.unwrap_or_else(|| "1.20.1".to_owned());
+    let resolved_instance_name = input
+        .instance_name
+        .unwrap_or_else(|| format!("MyVanilla-{resolved_game_version}"));
 
     DemoConfig {
         driver: DemoDriver::Vanilla,
-        storage_root,
+        storage_root: input.storage_root,
         instance_name: resolved_instance_name,
         game_version: resolved_game_version,
         loader_version: None,
-        runtime_major_version,
-        runtime_paths,
-        runtime_executable_path,
+        runtime_major_version: input.runtime_major_version,
+        runtime_paths: input.runtime_paths,
+        runtime_executable_path: input.runtime_executable_path,
     }
 }
 
-fn build_loader_config(
-    driver: DemoDriver,
-    storage_root: PathBuf,
-    runtime_major_version: Option<usize>,
-    runtime_paths: Vec<PathBuf>,
-    runtime_executable_path: Option<PathBuf>,
-    game_version: Option<String>,
-    loader_version: Option<String>,
-    instance_name: Option<String>,
-) -> DemoConfig {
-    let resolved_game_version = default_loader_game_version(driver, game_version);
-    let resolved_loader_version = default_loader_version(driver, loader_version);
-    let resolved_instance_name = instance_name
-        .unwrap_or_else(|| default_loader_instance_name(driver, &resolved_game_version));
+fn build_loader_config(input: LoaderConfigInput) -> DemoConfig {
+    let resolved_game_version =
+        default_loader_game_version(input.driver, input.common.game_version);
+    let resolved_loader_version = default_loader_version(input.driver, input.loader_version);
+    let resolved_instance_name = input
+        .common
+        .instance_name
+        .unwrap_or_else(|| default_loader_instance_name(input.driver, &resolved_game_version));
 
     DemoConfig {
-        driver,
-        storage_root,
+        driver: input.driver,
+        storage_root: input.common.storage_root,
         instance_name: resolved_instance_name,
         game_version: resolved_game_version,
         loader_version: Some(resolved_loader_version),
-        runtime_major_version,
-        runtime_paths,
-        runtime_executable_path,
+        runtime_major_version: input.common.runtime_major_version,
+        runtime_paths: input.common.runtime_paths,
+        runtime_executable_path: input.common.runtime_executable_path,
     }
 }
 

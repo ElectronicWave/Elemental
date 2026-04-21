@@ -27,3 +27,26 @@ pub enum GameVersions {
     Multi(Vec<String>),
     Ignore,
 }
+
+pub fn single_game_release_info(
+    name: String,
+    game_version: String,
+    description: Option<String>,
+) -> ReleaseInfo {
+    ReleaseInfo {
+        name,
+        game_versions: GameVersions::Single(game_version),
+        description,
+    }
+}
+
+pub fn push_single_game_release<R>(
+    releases: &mut HashMap<GameVersions, Vec<R>>,
+    game_version: String,
+    release: R,
+) {
+    releases
+        .entry(GameVersions::Single(game_version))
+        .or_default()
+        .push(release);
+}

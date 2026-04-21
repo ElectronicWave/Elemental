@@ -1,70 +1,34 @@
 use std::time::Instant;
 
 use anyhow::Result;
-use elemental::{
-    core::{auth::authorizers::offline::OfflineAuthorizer, storage::Storage},
-    driver::{
-        drivers::vanilla::{config::VanillaLaunchConfig, driver::VanillaDriver},
-        families::version_json::{BaseLayout, VersionJsonGameStorageExt},
-    },
-};
+use elemental::driver::drivers::vanilla::{config::VanillaLaunchConfig, driver::VanillaDriver};
 
 use crate::{
+    commands::{build_launch_config, ensure_instance, finalize_launch, offline_authorizer},
     config::DemoConfig,
-    diagnostics::{
-        LaunchDiagnostics, LaunchSummary, collect_version_diagnostics, print_launch_diagnostics,
-        print_summary, run_logged_process,
-    },
 };
 
 pub async fn run(config: DemoConfig) -> Result<()> {
-    let storage = Storage::new(config.storage_root.clone(), BaseLayout);
-    let instance = storage
-        .ensure_instance(config.instance_name.clone(), BaseLayout)
-        .await?;
+    let instance = ensure_instance(&config).await?;
     let driver = VanillaDriver::with_defaults()?;
-    let mut launch_config = VanillaLaunchConfig::new();
-    launch_config.runtime_major_version = config.runtime_major_version;
-    launch_config.runtime_executable_path = config.runtime_executable_path.clone();
-    let authorizer = OfflineAuthorizer {
-        username: "Player".to_owned(),
-    };
+    let launch_config: VanillaLaunchConfig = build_launch_config(&config);
 
     let started_at = Instant::now();
     let prepared = driver
         .prepare(&instance, config.game_version.clone())
         .await?;
     let prepare_elapsed = started_at.elapsed();
-
-    let diagnostics = collect_version_diagnostics(&prepared.resolved_version.version)?;
     let (runtime, command) = driver
-        .build_launch_command(authorizer, &prepared, &launch_config)
+        .build_launch_command(offline_authorizer(), &prepared, &launch_config)
         .await?;
-    let runtime_executable = runtime.executable().to_path_buf();
-
-    print_launch_diagnostics(&LaunchDiagnostics {
-        driver_name: config.driver.as_str(),
-        loader_version: None,
-        instance_name: &config.instance_name,
-        game_version: &config.game_version,
-        prepared_ms: prepare_elapsed.as_millis(),
-        install_status: &prepared.install_status,
-        runtime_executable: runtime_executable.as_path(),
-        diagnostics: &diagnostics,
-        command: &command,
-    });
-
-    let exit_status = run_logged_process(command).await?;
-    print_summary(&LaunchSummary {
-        driver_name: config.driver.as_str(),
-        game_version: &config.game_version,
-        loader_version: None,
-        runtime_executable: runtime_executable.as_path(),
-        version_root: diagnostics.version_root.as_path(),
-        install_status: &prepared.install_status,
-        prepared_ms: prepare_elapsed.as_millis(),
-        exit_status,
-    });
-
-    Ok(())
+    finalize_launch(
+        &config,
+        None,
+        prepare_elapsed.as_millis(),
+        &prepared.install_status,
+        &prepared.resolved_version.version,
+        runtime,
+        command,
+    )
+    .await
 }

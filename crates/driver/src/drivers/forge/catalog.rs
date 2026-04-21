@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use anyhow::Result;
 use async_trait::async_trait;
 
-use crate::catalog::{Catalog, GameVersions, Release, ReleaseInfo};
+use crate::catalog::{
+    Catalog, GameVersions, Release, ReleaseInfo, push_single_game_release, single_game_release_info,
+};
 
 use super::source::ForgeSource;
 
@@ -38,11 +40,11 @@ impl ForgeCatalog {
 #[async_trait]
 impl Release for ForgeRelease {
     async fn info(&self) -> ReleaseInfo {
-        ReleaseInfo {
-            name: self.loader.clone(),
-            game_versions: GameVersions::Single(self.game.clone()),
-            description: self.description.clone(),
-        }
+        single_game_release_info(
+            self.loader.clone(),
+            self.game.clone(),
+            self.description.clone(),
+        )
     }
 }
 
@@ -59,14 +61,15 @@ impl Catalog for ForgeCatalog {
                 continue;
             };
 
-            releases
-                .entry(GameVersions::Single(game_version.to_owned()))
-                .or_insert_with(Vec::new)
-                .push(ForgeRelease {
+            push_single_game_release(
+                &mut releases,
+                game_version.to_owned(),
+                ForgeRelease {
                     loader: loader_version.to_owned(),
                     game: game_version.to_owned(),
                     description: None,
-                });
+                },
+            );
         }
 
         Ok(releases)

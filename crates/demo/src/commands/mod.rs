@@ -4,9 +4,27 @@ mod neoforge;
 mod quilt;
 mod vanilla;
 
-use anyhow::Result;
+use std::fmt::Debug;
+
+use anyhow::{Context, Result};
+use elemental::{
+    core::{
+        auth::authorizers::offline::OfflineAuthorizer, launcher::command::LaunchCommand,
+        runtime::distribution::Distribution, storage::Storage,
+    },
+    driver::{
+        drivers::vanilla::config::VanillaLaunchConfig,
+        families::version_json::{
+            BaseLayout, VersionJsonGameStorageExt, VersionJsonInstanceLayout, VersionJsonRootLayout,
+        },
+    },
+};
 
 use crate::config::{DemoConfig, DemoDriver};
+use crate::diagnostics::{
+    LaunchDiagnostics, LaunchSummary, collect_version_diagnostics, print_launch_diagnostics,
+    print_summary, run_logged_process,
+};
 
 pub async fn run(config: DemoConfig) -> Result<()> {
     match config.driver {
@@ -18,4 +36,76 @@ pub async fn run(config: DemoConfig) -> Result<()> {
         DemoDriver::Forge => forge::run(config).await,
         DemoDriver::NeoForge => neoforge::run(config).await,
     }
+}
+
+pub(super) async fn ensure_instance(
+    config: &DemoConfig,
+) -> Result<Storage<BaseLayout, Storage<BaseLayout>>> {
+    let storage = Storage::new(config.storage_root.clone(), BaseLayout);
+    storage
+        .ensure_instance(config.instance_name.clone(), BaseLayout)
+        .await
+}
+
+pub(super) fn build_launch_config(config: &DemoConfig) -> VanillaLaunchConfig {
+    let mut launch_config = VanillaLaunchConfig::new();
+    launch_config.runtime_major_version = config.runtime_major_version;
+    launch_config.runtime_executable_path = config.runtime_executable_path.clone();
+    launch_config
+}
+
+pub(super) fn offline_authorizer() -> OfflineAuthorizer {
+    OfflineAuthorizer {
+        username: "Player".to_owned(),
+    }
+}
+
+pub(super) fn require_loader_version(config: &DemoConfig, driver_label: &str) -> Result<String> {
+    config
+        .loader_version
+        .clone()
+        .with_context(|| format!("{driver_label} demo requires a loader version"))
+}
+
+pub(super) async fn finalize_launch<L, VL>(
+    config: &DemoConfig,
+    loader_version: Option<&str>,
+    prepared_ms: u128,
+    install_status: &dyn Debug,
+    version: &Storage<VL, Storage<L>>,
+    runtime: Distribution,
+    command: LaunchCommand,
+) -> Result<()>
+where
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+{
+    let diagnostics = collect_version_diagnostics(version)?;
+    let runtime_executable = runtime.executable().to_path_buf();
+
+    print_launch_diagnostics(&LaunchDiagnostics {
+        driver_name: config.driver.as_str(),
+        loader_version,
+        instance_name: &config.instance_name,
+        game_version: &config.game_version,
+        prepared_ms,
+        install_status,
+        runtime_executable: runtime_executable.as_path(),
+        diagnostics: &diagnostics,
+        command: &command,
+    });
+
+    let exit_status = run_logged_process(command).await?;
+    print_summary(&LaunchSummary {
+        driver_name: config.driver.as_str(),
+        game_version: &config.game_version,
+        loader_version,
+        runtime_executable: runtime_executable.as_path(),
+        version_root: diagnostics.version_root.as_path(),
+        install_status,
+        prepared_ms,
+        exit_status,
+    });
+
+    Ok(())
 }

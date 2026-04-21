@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use anyhow::Result;
 use async_trait::async_trait;
 
-use crate::catalog::{Catalog, GameVersions, Release, ReleaseInfo};
+use crate::catalog::{
+    Catalog, GameVersions, Release, ReleaseInfo, push_single_game_release, single_game_release_info,
+};
 
 use super::source::VanillaSource;
 
@@ -19,11 +21,11 @@ pub struct VanillaRelease {
 #[async_trait]
 impl Release for VanillaRelease {
     async fn info(&self) -> ReleaseInfo {
-        ReleaseInfo {
-            name: self.version_id.clone(),
-            game_versions: GameVersions::Single(self.version_id.clone()),
-            description: self.description.clone(),
-        }
+        single_game_release_info(
+            self.version_id.clone(),
+            self.version_id.clone(),
+            self.description.clone(),
+        )
     }
 }
 
@@ -46,13 +48,15 @@ impl Catalog for VanillaCatalog {
         let manifest = self.source.launch_meta().await?;
 
         for version in manifest.versions {
-            releases
-                .entry(GameVersions::Single(version.id.clone()))
-                .or_insert(Vec::new())
-                .push(VanillaRelease {
-                    version_id: version.id,
+            let version_id = version.id;
+            push_single_game_release(
+                &mut releases,
+                version_id.clone(),
+                VanillaRelease {
+                    version_id,
                     description: Some(version.release_type),
-                });
+                },
+            );
         }
 
         Ok(releases)

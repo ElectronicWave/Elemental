@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use async_trait::async_trait;
 
-use crate::catalog::{Catalog, GameVersions, Release, ReleaseInfo};
+use crate::catalog::{Catalog, GameVersions, Release, ReleaseInfo, single_game_release_info};
 
 use super::source::{FabricEndpointOverrides, FabricFlavor, FabricSource};
 
@@ -20,11 +20,11 @@ pub struct FabricRelease {
 #[async_trait]
 impl Release for FabricRelease {
     async fn info(&self) -> ReleaseInfo {
-        ReleaseInfo {
-            name: self.loader_version.clone(),
-            game_versions: GameVersions::Single(self.game_version.clone()),
-            description: self.description.clone(),
-        }
+        single_game_release_info(
+            self.loader_version.clone(),
+            self.game_version.clone(),
+            self.description.clone(),
+        )
     }
 }
 

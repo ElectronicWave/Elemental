@@ -27,10 +27,13 @@ use super::providers::{
     registry::RegistryProvider,
 };
 
-static RUNTIME_PROVIDER_OVERRIDE: OnceLock<RwLock<Option<Vec<Arc<dyn RuntimeProvider>>>>> =
-    OnceLock::new();
+type RuntimeProviderList = Vec<Arc<dyn RuntimeProvider>>;
+type RuntimeProviderOverride = Option<RuntimeProviderList>;
+type RuntimeProviderOverrideLock = RwLock<RuntimeProviderOverride>;
 
-pub fn default_providers() -> Vec<Arc<dyn RuntimeProvider>> {
+static RUNTIME_PROVIDER_OVERRIDE: OnceLock<RuntimeProviderOverrideLock> = OnceLock::new();
+
+pub fn default_providers() -> RuntimeProviderList {
     vec![
         RegistryProvider::arc_default(),
         EnvPathProvider::arc_default(),
@@ -39,7 +42,7 @@ pub fn default_providers() -> Vec<Arc<dyn RuntimeProvider>> {
     ]
 }
 
-pub fn runtime_providers() -> Vec<Arc<dyn RuntimeProvider>> {
+pub fn runtime_providers() -> RuntimeProviderList {
     let storage = RUNTIME_PROVIDER_OVERRIDE.get_or_init(|| RwLock::new(None));
     let Ok(guard) = storage.read() else {
         return default_providers();
@@ -48,7 +51,7 @@ pub fn runtime_providers() -> Vec<Arc<dyn RuntimeProvider>> {
     guard.clone().unwrap_or_else(default_providers)
 }
 
-pub fn with_runtime_providers(providers: Vec<Arc<dyn RuntimeProvider>>) -> anyhow::Result<()> {
+pub fn with_runtime_providers(providers: RuntimeProviderList) -> anyhow::Result<()> {
     let storage = RUNTIME_PROVIDER_OVERRIDE.get_or_init(|| RwLock::new(None));
     let mut guard = storage
         .write()

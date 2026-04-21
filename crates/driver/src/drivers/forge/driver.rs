@@ -27,7 +27,7 @@ use crate::{
         VersionJsonInstanceLayout, VersionJsonRootLayout, builder::VersionJsonLaunchBuilder,
     },
     inspect::InstanceProbe,
-    runtime::resolve_runtime,
+    launch::{build_version_json_launch_builder, resolve_prepared_version_runtime},
 };
 
 const FORGE_DRIVER: DriverDescriptor = DriverDescriptor {
@@ -186,13 +186,12 @@ impl ForgeDriver {
     where
         A: Authorizer,
     {
-        let runtime = self
-            .runtime_for_prepared_version(
-                &prepared_version.launch_version,
-                config.runtime_major_version,
-                config.runtime_executable_path.as_deref(),
-            )
-            .await?;
+        let runtime = resolve_prepared_version_runtime(
+            &prepared_version.launch_version,
+            config.runtime_major_version,
+            config.runtime_executable_path.as_deref(),
+        )
+        .await?;
         let command = self
             .build_launch_builder(
                 authorizer,
@@ -204,22 +203,6 @@ impl ForgeDriver {
             .await?;
 
         Ok((runtime, command))
-    }
-
-    async fn runtime_for_prepared_version<L, VL>(
-        &self,
-        prepared_version: &PreparedForgeLaunchVersion<L, VL>,
-        runtime_major_version: Option<usize>,
-        runtime_executable_path: Option<&std::path::Path>,
-    ) -> Result<Distribution>
-    where
-        L: VersionJsonRootLayout,
-        VL: VersionJsonInstanceLayout,
-    {
-        let required_major_version =
-            runtime_major_version.unwrap_or_else(|| prepared_version.required_java_major_version());
-
-        resolve_runtime(required_major_version, runtime_executable_path, "launch").await
     }
 
     fn build_launch_builder<
@@ -236,42 +219,7 @@ impl ForgeDriver {
     where
         A: Authorizer,
     {
-        let mut builder = VersionJsonLaunchBuilder::new(
-            authorizer,
-            runtime,
-            prepared_version.resolved_version.version.clone(),
-        );
-
-        if let Some(client_id) = &config.client_id {
-            builder = builder.set_client_id(client_id.clone());
-        }
-
-        if let Some(resolution) = &config.resolution {
-            builder = builder.set_resolution(resolution.width.clone(), resolution.height.clone());
-        }
-
-        if let (Some(name), Some(version)) = (&config.launcher_name, &config.launcher_version) {
-            builder = builder.set_launcher(name.clone(), version.clone());
-        }
-
-        if let Some(quick_play) = &config.quick_play {
-            builder = builder.set_quick_play(
-                quick_play.path.clone(),
-                quick_play.multiplayer.clone(),
-                quick_play.singleplayer.clone(),
-                quick_play.realms.clone(),
-            );
-        }
-
-        if !config.extra_jvm_arguments.is_empty() {
-            builder = builder.set_extra_jvm_arguments(config.extra_jvm_arguments.clone());
-        }
-
-        if !config.extra_game_arguments.is_empty() {
-            builder = builder.set_extra_game_arguments(config.extra_game_arguments.clone());
-        }
-
-        Ok(builder)
+        build_version_json_launch_builder(authorizer, runtime, prepared_version, config)
     }
 
     fn remote_resolver(&self) -> ForgeRemoteResolver {

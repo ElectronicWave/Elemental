@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use anyhow::Result;
 use async_trait::async_trait;
 
-use crate::catalog::{Catalog, GameVersions, Release, ReleaseInfo};
+use crate::catalog::{
+    Catalog, GameVersions, Release, ReleaseInfo, push_single_game_release, single_game_release_info,
+};
 
 use super::source::NeoForgeSource;
 
@@ -40,11 +42,11 @@ impl NeoForgeCatalog {
 #[async_trait]
 impl Release for NeoForgeRelease {
     async fn info(&self) -> ReleaseInfo {
-        ReleaseInfo {
-            name: self.loader.clone(),
-            game_versions: GameVersions::Single(self.game_version_hint.clone()),
-            description: self.description.clone(),
-        }
+        single_game_release_info(
+            self.loader.clone(),
+            self.game_version_hint.clone(),
+            self.description.clone(),
+        )
     }
 }
 
@@ -62,14 +64,15 @@ impl Catalog for NeoForgeCatalog {
                 continue;
             };
 
-            releases
-                .entry(GameVersions::Single(game_version_hint.clone()))
-                .or_insert_with(Vec::new)
-                .push(NeoForgeRelease {
+            push_single_game_release(
+                &mut releases,
+                game_version_hint.clone(),
+                NeoForgeRelease {
                     loader: version,
                     game_version_hint,
                     description: Some(GAME_VERSION_HEURISTIC_DESCRIPTION.to_owned()),
-                });
+                },
+            );
         }
 
         Ok(releases)

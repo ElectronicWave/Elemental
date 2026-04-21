@@ -5,7 +5,7 @@ use elemental_core::storage::{Storage, layout::Layout};
 
 use crate::{
     driver::{Driver, InstalledDriver},
-    drivers::version_json::PistonMetaData,
+    families::version_json::PistonMetaData,
 };
 
 #[derive(Debug, Clone)]

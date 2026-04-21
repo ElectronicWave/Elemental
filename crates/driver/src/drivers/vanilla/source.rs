@@ -4,8 +4,8 @@ use anyhow::{Context, Result};
 use serde::de::DeserializeOwned;
 
 use crate::{
-    drivers::version_json::VersionJsonRemoteResolver,
-    drivers::version_json::{LaunchMetaData, PistonMetaAssetIndexObjects, PistonMetaData},
+    families::version_json::VersionJsonRemoteResolver,
+    families::version_json::{LaunchMetaData, PistonMetaAssetIndexObjects, PistonMetaData},
     url::{Origin, OriginPolicy},
 };
 

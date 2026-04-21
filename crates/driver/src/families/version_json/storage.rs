@@ -12,7 +12,7 @@ use tokio::fs::create_dir_all;
 use super::layout::{VersionJsonInstanceLayout, VersionJsonRootLayout};
 use crate::{
     driver::Driver,
-    drivers::version_json::{
+    families::version_json::{
         PistonMetaAssetIndexObjects, PistonMetaData,
         extensions::PistonMetaLibrariesExt,
         rules::VersionJsonRuleContext,

@@ -1,9 +1,7 @@
-use crate::drivers::{
-    vanilla::source::VanillaEndpoints,
-    version_json::{
-        LaunchedVersionJsonInstance, PreparedVersionJsonInstance, ResolvedVersionJsonInstance,
-        ResolvedVersionJsonMetadata, VersionJsonInstallStatus, prepared::VersionJsonInstallPlanner,
-    },
+use crate::drivers::vanilla::source::VanillaEndpoints;
+use crate::families::version_json::{
+    LaunchedVersionJsonInstance, PreparedVersionJsonInstance, ResolvedVersionJsonInstance,
+    ResolvedVersionJsonMetadata, VersionJsonInstallStatus, prepared::VersionJsonInstallPlanner,
 };
 
 pub type ResolvedVanillaMetadata = ResolvedVersionJsonMetadata<VanillaEndpoints>;

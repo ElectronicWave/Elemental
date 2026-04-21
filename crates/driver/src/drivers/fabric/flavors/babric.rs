@@ -1,10 +1,13 @@
-use super::common::{FlavorBehavior, LibraryReplacementFamily};
+use super::common::FlavorBehavior;
+use crate::families::version_json::{LibraryReplacementFamily, ProfileMergeBehavior};
 
 pub(super) static BEHAVIOR: BabricBehavior = BabricBehavior;
 
 pub(super) struct BabricBehavior;
 
-impl FlavorBehavior for BabricBehavior {
+impl FlavorBehavior for BabricBehavior {}
+
+impl ProfileMergeBehavior for BabricBehavior {
     fn profile_replacement_family(&self, library_name: &str) -> Option<LibraryReplacementFamily> {
         if library_name.starts_with("org.ow2.asm:") {
             return Some(LibraryReplacementFamily::Asm);

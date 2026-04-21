@@ -20,7 +20,7 @@ It is intended as a working architecture reference, not as a release guarantee.
 | Fabric          | Yes     | Yes     | Yes     | Yes            | Yes     | Modern Fabric mainline implemented and smoke-verified on representative anchors   |
 | LegacyFabric    | Yes     | Yes     | Yes     | Yes            | Yes     | End-to-end flow is working and smoke-verified on a representative legacy anchor   |
 | Babric          | Yes     | Yes     | Yes     | Yes            | Yes     | End-to-end flow is working and smoke-verified on a representative beta anchor     |
-| Quilt           | No      | No      | No      | No             | No      | Not started                                                                       |
+| Quilt           | Yes     | Yes     | Yes     | Yes            | Yes     | Independent fabric-like driver implemented and smoke-verified on a representative anchor |
 | Forge           | Yes     | Yes     | No      | No             | No      | Catalog and inspect only                                                          |
 | NeoForge        | No      | Yes     | No      | No             | No      | Inspect only                                                                      |
 | CleanroomMC     | No      | No      | No      | No             | No      | Not started                                                                       |
@@ -40,6 +40,7 @@ These anchors should be read as verified points inside the support range, not as
 | Fabric          | `1.14.4`, `1.16.5`, `1.20.1`          | Confirms the modern Fabric profile flow across early, mid, and current supported release lines |
 | LegacyFabric    | `1.13.2`                              | Confirms the flavor-aware family path on the modern edge of the LegacyFabric-supported band    |
 | Babric          | `b1.7.3`                              | Confirms the flavor-aware family path on a representative beta-era Babric anchor               |
+| Quilt           | `1.20.1`                              | Confirms a second independent fabric-like driver on the shared profile-driven substrate         |
 
 Rolling targets such as the latest release, latest snapshot, and latest stable loader should still be treated as recurring regression checks rather than one-time milestones.
 
@@ -56,7 +57,7 @@ These are the ranges I would claim today based on the current code, upstream doc
 | Fabric          | modern official Fabric line, practically `1.14.4+`        | High         | The current workspace has successful smoke anchors on `1.14.4`, `1.16.5`, and `1.20.1`, and the implementation consumes official Fabric profile metadata   |
 | LegacyFabric    | `1.13.2` verified, broader range not claimed yet          | Medium       | The current workspace now has an end-to-end verified anchor on `1.13.2`, but older LegacyFabric-supported releases and snapshots still need systematic smoke coverage |
 | Babric          | `b1.7.3` verified, broader range not claimed yet          | Medium       | The current workspace now has an end-to-end verified anchor on `b1.7.3`, but broader Babric-supported beta coverage still needs systematic smoke coverage |
-| Quilt           | not claimed yet                                           | Low          | Not implemented                                                                                                                                            |
+| Quilt           | `1.20.1` verified, broader range not claimed yet          | Medium       | The current workspace now has an end-to-end verified anchor on `1.20.1`, but broader Quilt-supported version coverage still needs systematic smoke coverage |
 | Forge           | no install or launch claim yet                            | High         | Only catalog and inspect exist                                                                                                                             |
 | NeoForge        | no install or launch claim yet                            | High         | Only inspect exists                                                                                                                                        |
 | CleanroomMC     | no install or launch claim yet                            | High         | Not implemented                                                                                                                                            |
@@ -338,7 +339,8 @@ Work:
 - keep LegacyFabric green after the `1.13.2` verified anchor
 - continue active runtime validation for:
   - Babric
-- leave Quilt as a planned target but do not overclaim early
+- implement Quilt as an independent fabric-like driver
+- verify Quilt on at least one representative stable anchor
 
 Why this phase matters:
 
@@ -350,6 +352,7 @@ Current status:
 - Modern Fabric is stable on the currently verified release anchors
 - LegacyFabric now has a verified end-to-end anchor at `1.13.2`
 - Babric now has a verified end-to-end anchor at `b1.7.3`
+- Quilt now has a verified end-to-end anchor at `1.20.1`
 
 ## Phase 3: Create Installer Family
 

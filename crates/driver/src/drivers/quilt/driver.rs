@@ -9,43 +9,46 @@ use elemental_core::{
     storage::{Storage, layout::Layout},
 };
 use elemental_infra::downloader::core::ElementalDownloader;
+use elemental_schema::quilt::ProfileJson;
 
 use crate::{
     driver::{Driver, DriverDescriptor, InstalledDriver},
     drivers::{
-        fabric::{
-            config::FabricLaunchConfig,
-            flavors::flavor_spec,
+        quilt::{
+            config::QuiltLaunchConfig,
             prepared::{
-                FabricRemoteResolver, LaunchedFabricVersion, PreparedFabricVersion,
-                ResolvedFabricMetadata, ResolvedFabricVersion,
+                LaunchedQuiltVersion, PreparedQuiltVersion, QuiltRemoteResolver,
+                ResolvedQuiltMetadata, ResolvedQuiltVersion,
             },
-            source::{FabricEndpointOverrides, FabricFlavor, FabricSource},
+            source::QuiltSource,
         },
         vanilla::source::VanillaSource,
     },
     families::version_json::{
-        VersionJsonInstanceLayout, VersionJsonRootLayout, builder::VersionJsonLaunchBuilder,
+        PASSTHROUGH_PROFILE_BEHAVIOR, VersionJsonInstanceLayout, VersionJsonRootLayout,
+        builder::VersionJsonLaunchBuilder, merge_profile_with_behavior,
     },
     inspect::InstanceProbe,
 };
 
-pub struct FabricDriver {
-    flavor: FabricFlavor,
-    source: FabricSource,
+const QUILT_DRIVER: DriverDescriptor = DriverDescriptor {
+    id: "quilt",
+    name: "Quilt",
+};
+
+pub struct QuiltDriver {
+    source: QuiltSource,
     vanilla_source: VanillaSource,
     downloader: Arc<ElementalDownloader>,
 }
 
-impl FabricDriver {
+impl QuiltDriver {
     pub fn new(
-        flavor: FabricFlavor,
-        source: FabricSource,
+        source: QuiltSource,
         vanilla_source: VanillaSource,
         downloader: Arc<ElementalDownloader>,
     ) -> Self {
         Self {
-            flavor,
             source,
             vanilla_source,
             downloader,
@@ -53,46 +56,16 @@ impl FabricDriver {
     }
 
     pub fn with_defaults() -> Result<Self> {
-        Self::for_flavor(FabricFlavor::Fabric)
-    }
-
-    pub fn for_flavor(flavor: FabricFlavor) -> Result<Self> {
         Ok(Self::new(
-            flavor.clone(),
-            FabricSource::for_flavor(flavor)?,
+            QuiltSource::default(),
             VanillaSource::default(),
             ElementalDownloader::with_config_default()
                 .context("create default elemental downloader failed")?,
         ))
     }
 
-    pub fn legacy_fabric() -> Result<Self> {
-        Self::for_flavor(FabricFlavor::LegacyFabric)
-    }
-
-    pub fn babric() -> Result<Self> {
-        Self::for_flavor(FabricFlavor::Babric)
-    }
-
-    pub fn with_overrides(
-        flavor: FabricFlavor,
-        overrides: FabricEndpointOverrides,
-    ) -> Result<Self> {
-        Ok(Self::new(
-            flavor,
-            FabricSource::with_overrides(overrides)?,
-            VanillaSource::default(),
-            ElementalDownloader::with_config_default()
-                .context("create default elemental downloader failed")?,
-        ))
-    }
-
-    pub fn source(&self) -> &FabricSource {
+    pub fn source(&self) -> &QuiltSource {
         &self.source
-    }
-
-    pub fn flavor(&self) -> &FabricFlavor {
-        &self.flavor
     }
 
     pub fn vanilla_source(&self) -> &VanillaSource {
@@ -111,7 +84,7 @@ impl FabricDriver {
         instance: &Storage<VL, Storage<L>>,
         game_version: String,
         loader_version: String,
-    ) -> Result<PreparedFabricVersion<L, VL>> {
+    ) -> Result<PreparedQuiltVersion<L, VL>> {
         let resolved = self
             .resolve_or_load(instance, game_version, loader_version)
             .await?;
@@ -124,8 +97,8 @@ impl FabricDriver {
     >(
         &self,
         instance: &Storage<VL, Storage<L>>,
-    ) -> Result<PreparedFabricVersion<L, VL>> {
-        ResolvedFabricVersion::load(self.remote_resolver(), instance.clone())?
+    ) -> Result<PreparedQuiltVersion<L, VL>> {
+        ResolvedQuiltVersion::load(self.remote_resolver(), instance.clone())?
             .into_prepared()
             .await
     }
@@ -136,10 +109,10 @@ impl FabricDriver {
         VL: VersionJsonInstanceLayout + Clone,
     >(
         &self,
-        prepared_version: PreparedFabricVersion<L, VL>,
-        config: &FabricLaunchConfig,
+        prepared_version: PreparedQuiltVersion<L, VL>,
+        config: &QuiltLaunchConfig,
         authorizer: A,
-    ) -> Result<LaunchedFabricVersion<L, VL>>
+    ) -> Result<LaunchedQuiltVersion<L, VL>>
     where
         A: Authorizer,
     {
@@ -148,7 +121,7 @@ impl FabricDriver {
             .await?;
         let child = process::spawn_command(command)?;
 
-        Ok(LaunchedFabricVersion {
+        Ok(LaunchedQuiltVersion {
             prepared_version,
             runtime,
             child,
@@ -162,8 +135,8 @@ impl FabricDriver {
     >(
         &self,
         authorizer: A,
-        prepared_version: &PreparedFabricVersion<L, VL>,
-        config: &FabricLaunchConfig,
+        prepared_version: &PreparedQuiltVersion<L, VL>,
+        config: &QuiltLaunchConfig,
     ) -> Result<(Distribution, LaunchCommand)>
     where
         A: Authorizer,
@@ -184,7 +157,7 @@ impl FabricDriver {
         VL: VersionJsonInstanceLayout,
     >(
         &self,
-        prepared_version: &PreparedFabricVersion<L, VL>,
+        prepared_version: &PreparedQuiltVersion<L, VL>,
         runtime_major_version: Option<usize>,
     ) -> Result<Distribution> {
         let required_major_version =
@@ -208,8 +181,8 @@ impl FabricDriver {
         &self,
         authorizer: A,
         runtime: Distribution,
-        prepared_version: &PreparedFabricVersion<L, VL>,
-        config: &FabricLaunchConfig,
+        prepared_version: &PreparedQuiltVersion<L, VL>,
+        config: &QuiltLaunchConfig,
     ) -> Result<VersionJsonLaunchBuilder<A, L, VL>>
     where
         A: Authorizer,
@@ -252,8 +225,8 @@ impl FabricDriver {
         Ok(builder)
     }
 
-    fn remote_resolver(&self) -> FabricRemoteResolver {
-        FabricRemoteResolver::new(
+    fn remote_resolver(&self) -> QuiltRemoteResolver {
+        QuiltRemoteResolver::new(
             self.vanilla_source.endpoints().clone(),
             self.source.endpoints().clone(),
         )
@@ -267,13 +240,11 @@ impl FabricDriver {
         instance: &Storage<VL, Storage<L>>,
         game_version: String,
         loader_version: String,
-    ) -> Result<ResolvedFabricVersion<L, VL>> {
-        if let Ok(resolved) = ResolvedFabricVersion::load(self.remote_resolver(), instance.clone())
-        {
+    ) -> Result<ResolvedQuiltVersion<L, VL>> {
+        if let Ok(resolved) = ResolvedQuiltVersion::load(self.remote_resolver(), instance.clone()) {
             let status = resolved.status().await?;
-            let flavor = flavor_spec(self.flavor());
             if status.is_downloaded()
-                && !flavor.local_metadata_needs_refresh(
+                && !local_metadata_needs_refresh(
                     &resolved.metadata,
                     game_version.as_str(),
                     loader_version.as_str(),
@@ -295,7 +266,7 @@ impl FabricDriver {
         instance: &Storage<VL, Storage<L>>,
         game_version: String,
         loader_version: String,
-    ) -> Result<ResolvedFabricVersion<L, VL>> {
+    ) -> Result<ResolvedQuiltVersion<L, VL>> {
         self.resolve_metadata(game_version, loader_version)
             .await?
             .persist(instance)
@@ -306,15 +277,15 @@ impl FabricDriver {
         &self,
         game_version: String,
         loader_version: String,
-    ) -> Result<ResolvedFabricMetadata> {
+    ) -> Result<ResolvedQuiltMetadata> {
         let base_metadata = self.resolve_vanilla_metadata(game_version.clone()).await?;
         let profile = self
             .source
             .profile_json(game_version.as_str(), loader_version.as_str())
             .await?;
-        let metadata = flavor_spec(self.flavor()).merge_profile(base_metadata.metadata, profile)?;
+        let metadata = merge_profile(profile, base_metadata.metadata)?;
 
-        Ok(ResolvedFabricMetadata::new(
+        Ok(ResolvedQuiltMetadata::new(
             self.remote_resolver(),
             metadata,
             base_metadata.asset_index_objects,
@@ -350,22 +321,21 @@ impl FabricDriver {
 }
 
 #[async_trait]
-impl<L: Layout, VL: Layout> Driver<L, VL> for FabricDriver {
+impl<L: Layout, VL: Layout> Driver<L, VL> for QuiltDriver {
     fn descriptor(&self) -> DriverDescriptor {
-        flavor_spec(self.flavor()).descriptor()
+        QUILT_DRIVER
     }
 
     async fn inspect(&self, probe: &InstanceProbe<L, VL>) -> Result<Option<InstalledDriver>> {
         let Some(metadata) = &probe.metadata else {
             return Ok(None);
         };
-        let flavor = flavor_spec(self.flavor());
-        let Some(driver_version) = flavor.inspect_driver_version(metadata) else {
+        let Some(driver_version) = inspect_driver_version(metadata) else {
             return Ok(None);
         };
 
         Ok(Some(InstalledDriver {
-            driver: flavor.descriptor(),
+            driver: QUILT_DRIVER,
             driver_version: Some(driver_version),
             game_version: metadata
                 .inherits_from
@@ -374,4 +344,33 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for FabricDriver {
             description: Some(metadata.release_type.clone()),
         }))
     }
+}
+
+fn merge_profile(
+    profile: ProfileJson,
+    base_metadata: crate::families::version_json::PistonMetaData,
+) -> Result<crate::families::version_json::PistonMetaData> {
+    merge_profile_with_behavior(&PASSTHROUGH_PROFILE_BEHAVIOR, base_metadata, profile)
+}
+
+fn local_metadata_needs_refresh(
+    metadata: &crate::families::version_json::PistonMetaData,
+    game_version: &str,
+    loader_version: &str,
+) -> bool {
+    let expected_id = format!("quilt-loader-{loader_version}-{game_version}");
+    metadata.id != expected_id
+        || metadata.inherits_from.as_deref() != Some(game_version)
+        || inspect_driver_version(metadata).is_none_or(|installed| installed != loader_version)
+}
+
+fn inspect_driver_version(
+    metadata: &crate::families::version_json::PistonMetaData,
+) -> Option<String> {
+    metadata
+        .libraries
+        .iter()
+        .map(|library| library.name.as_str())
+        .find(|name| name.starts_with("org.quiltmc:quilt-loader:"))
+        .and_then(|name| name.split(':').nth(2).map(ToOwned::to_owned))
 }

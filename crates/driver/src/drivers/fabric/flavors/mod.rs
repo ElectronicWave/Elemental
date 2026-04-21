@@ -6,8 +6,8 @@ use anyhow::Result;
 use elemental_schema::fabric::ProfileJson;
 
 use crate::{
-    driver::DriverDescriptor,
-    drivers::{fabric::source::FabricFlavor, version_json::PistonMetaData},
+    driver::DriverDescriptor, drivers::fabric::source::FabricFlavor,
+    families::version_json::PistonMetaData,
 };
 
 use self::common::FlavorBehavior;
@@ -117,7 +117,7 @@ impl FabricFlavorSpec {
         base_metadata: PistonMetaData,
         profile: ProfileJson,
     ) -> Result<PistonMetaData> {
-        common::merge_profile_with_behavior(self.behavior, base_metadata, profile)
+        common::merge_profile(self.behavior, base_metadata, profile)
     }
 
     pub(crate) fn local_metadata_needs_refresh(

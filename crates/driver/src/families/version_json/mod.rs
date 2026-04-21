@@ -5,6 +5,7 @@ pub mod layout;
 pub mod meta;
 pub mod platform;
 pub mod prepared;
+pub mod profile;
 pub mod remote;
 pub mod resource;
 pub mod rules;
@@ -27,6 +28,10 @@ pub use platform::VersionJsonPlatform;
 pub use prepared::{
     LaunchedVersionJsonInstance, PreparedVersionJsonInstance, ResolvedVersionJsonInstance,
     ResolvedVersionJsonMetadata, VersionJsonInstallStatus,
+};
+pub use profile::{
+    LibraryReplacementFamily, PASSTHROUGH_PROFILE_BEHAVIOR, PassthroughProfileBehavior,
+    ProfileMergeBehavior, merge_profile_with_behavior, metadata_has_replaced_library_conflicts,
 };
 pub use remote::VersionJsonRemoteResolver;
 pub use resource::Resource;

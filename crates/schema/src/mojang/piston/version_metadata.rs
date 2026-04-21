@@ -36,7 +36,9 @@ pub struct PistonMetaData {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PistonMetaArguments {
+    #[serde(default)]
     pub game: Vec<PistonMetaGenericArgument>,
+    #[serde(default)]
     pub jvm: Vec<PistonMetaGenericArgument>,
 }
 

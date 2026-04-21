@@ -1,7 +1,3 @@
-use super::common::FlavorBehavior;
+use crate::families::version_json::PassthroughProfileBehavior;
 
-pub(super) static BEHAVIOR: PassthroughBehavior = PassthroughBehavior;
-
-pub(super) struct PassthroughBehavior;
-
-impl FlavorBehavior for PassthroughBehavior {}
+pub(super) static BEHAVIOR: PassthroughProfileBehavior = PassthroughProfileBehavior;

@@ -12,19 +12,17 @@ use elemental_infra::downloader::core::ElementalDownloader;
 
 use crate::{
     driver::{Driver, DriverDescriptor, InstalledDriver},
-    drivers::{
-        vanilla::{
-            config::VanillaLaunchConfig,
-            prepared::{
-                LaunchedVanillaVersion, PreparedVanillaVersion, ResolvedVanillaMetadata,
-                ResolvedVanillaVersion,
-            },
-            source::VanillaSource,
+    drivers::vanilla::{
+        config::VanillaLaunchConfig,
+        prepared::{
+            LaunchedVanillaVersion, PreparedVanillaVersion, ResolvedVanillaMetadata,
+            ResolvedVanillaVersion,
         },
-        version_json::{
-            PistonMetaData, VersionJsonInstanceLayout, VersionJsonRootLayout,
-            builder::VersionJsonLaunchBuilder,
-        },
+        source::VanillaSource,
+    },
+    families::version_json::{
+        PistonMetaData, VersionJsonInstanceLayout, VersionJsonRootLayout,
+        builder::VersionJsonLaunchBuilder,
     },
     inspect::InstanceProbe,
 };

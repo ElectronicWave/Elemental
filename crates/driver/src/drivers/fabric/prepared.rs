@@ -1,12 +1,9 @@
 use anyhow::{Context, Result};
 
-use crate::drivers::{
-    fabric::source::FabricEndpoints,
-    vanilla::source::VanillaEndpoints,
-    version_json::{
-        LaunchedVersionJsonInstance, PreparedVersionJsonInstance, ResolvedVersionJsonInstance,
-        ResolvedVersionJsonMetadata, VersionJsonInstallStatus, VersionJsonRemoteResolver,
-    },
+use crate::drivers::{fabric::source::FabricEndpoints, vanilla::source::VanillaEndpoints};
+use crate::families::version_json::{
+    LaunchedVersionJsonInstance, PreparedVersionJsonInstance, ResolvedVersionJsonInstance,
+    ResolvedVersionJsonMetadata, VersionJsonInstallStatus, VersionJsonRemoteResolver,
 };
 
 #[derive(Debug, Clone)]

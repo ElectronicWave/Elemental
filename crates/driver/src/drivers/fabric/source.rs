@@ -115,10 +115,7 @@ impl FabricEndpoints {
     }
 
     pub fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
-        Ok(self
-            .origin_policy
-            .rewrite_known_origin_url(raw_url)?
-            .unwrap_or_else(|| raw_url.to_owned()))
+        Ok(raw_url.to_owned())
     }
 
     fn resolve_meta_segments<const N: usize>(&self, segments: [&str; N]) -> Result<String> {

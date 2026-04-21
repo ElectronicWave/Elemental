@@ -1,8 +1,9 @@
-use super::{
+use elemental_schema::mojang::piston::{
     ContinuousArgument, PistonMetaData, PistonMetaGenericArgument, PistonMetaLibraries,
-    PistonMetaLibrariesDownloadsArtifact, PistonMetaRuleArgument, PistonMetaRulesExt,
-    VersionJsonPlatform, VersionJsonRuleContext,
+    PistonMetaLibrariesDownloadsArtifact, PistonMetaRuleArgument,
 };
+
+use super::{PistonMetaRulesExt, VersionJsonPlatform, VersionJsonRuleContext};
 
 pub trait PistonMetaDataExt {
     fn jvm_arguments(&self, context: &VersionJsonRuleContext) -> Vec<String>;

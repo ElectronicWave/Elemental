@@ -18,14 +18,13 @@ use crate::{
             prepared::{NeoForgeRemoteResolver, PreparedNeoForgeVersion, ResolvedNeoForgeVersion},
             source::NeoForgeSource,
         },
-        shared::{
-            build_version_json_launch_command, find_library_version, installed_version_json_driver,
-            launch_wrapped_version,
-        },
         vanilla::source::VanillaSource,
     },
-    families::version_json::{VersionJsonInstanceLayout, VersionJsonRootLayout},
-    inspect::InstanceProbe,
+    families::version_json::{
+        VersionJsonInstanceLayout, VersionJsonRootLayout, build_version_json_launch_command,
+        launch_wrapped_version,
+    },
+    inspect::{InstanceProbe, inspect_driver_version_from_libraries},
 };
 
 const NEOFORGE_DRIVER: DriverDescriptor = DriverDescriptor {
@@ -111,17 +110,12 @@ impl NeoForgeDriver {
         loader_version: String,
         config: &NeoForgeLaunchConfig,
     ) -> Result<PreparedNeoForgeVersion<L, VL>> {
-        let installer_artifact =
-            self.source
-                .installer_artifact(&instance.parent, &game_version, &loader_version)?;
-
-        ResolvedNeoForgeVersion {
-            source: self.source.clone(),
-            instance: instance.clone(),
+        ResolvedNeoForgeVersion::new(
+            self.source.clone(),
+            instance.clone(),
             game_version,
             loader_version,
-            installer_artifact,
-        }
+        )?
         .prepare(
             self.downloader(),
             self.vanilla_source(),
@@ -208,21 +202,14 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for NeoForgeDriver {
         let Some(metadata) = &probe.metadata else {
             return Ok(None);
         };
-        let Some(driver_version) = find_library_version(
+        Ok(inspect_driver_version_from_libraries(
             metadata,
+            NEOFORGE_DRIVER,
             &[
                 "net.neoforged:neoforge:",
                 "net.neoforged:forge:",
                 "net.neoforged:fmlloader:",
             ],
-        ) else {
-            return Ok(None);
-        };
-
-        Ok(Some(installed_version_json_driver(
-            metadata,
-            NEOFORGE_DRIVER,
-            Some(driver_version),
-        )))
+        ))
     }
 }

@@ -15,27 +15,31 @@ pub async fn fetch_json<T>(client: &reqwest::Client, url: &str, source_name: &st
 where
     T: DeserializeOwned,
 {
-    client
-        .get(url)
-        .send()
-        .await
-        .with_context(|| format!("request {source_name} resource failed: {url}"))?
-        .error_for_status()
-        .with_context(|| format!("{source_name} returned error status: {url}"))?
+    send_ok(client, url, source_name)
+        .await?
         .json::<T>()
         .await
         .with_context(|| format!("decode {source_name} resource failed: {url}"))
 }
 
 pub async fn fetch_text(client: &reqwest::Client, url: &str, source_name: &str) -> Result<String> {
+    send_ok(client, url, source_name)
+        .await?
+        .text()
+        .await
+        .with_context(|| format!("decode {source_name} resource failed: {url}"))
+}
+
+async fn send_ok(
+    client: &reqwest::Client,
+    url: &str,
+    source_name: &str,
+) -> Result<reqwest::Response> {
     client
         .get(url)
         .send()
         .await
         .with_context(|| format!("request {source_name} resource failed: {url}"))?
         .error_for_status()
-        .with_context(|| format!("{source_name} returned error status: {url}"))?
-        .text()
-        .await
-        .with_context(|| format!("decode {source_name} resource failed: {url}"))
+        .with_context(|| format!("{source_name} returned error status: {url}"))
 }

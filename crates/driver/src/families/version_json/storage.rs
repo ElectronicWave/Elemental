@@ -8,6 +8,7 @@ use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use elemental_core::storage::{Storage, layout::Layoutable};
 use elemental_infra::jar::JarFile;
+use elemental_schema::mojang::piston::{PistonMetaAssetIndexObjects, PistonMetaData};
 use tokio::fs::create_dir_all;
 
 use super::{
@@ -17,7 +18,6 @@ use super::{
 use crate::{
     driver::Driver,
     families::version_json::{
-        PistonMetaAssetIndexObjects, PistonMetaData,
         extensions::PistonMetaLibrariesExt,
         rules::VersionJsonRuleContext,
         state::{NativesState, natives_state_store},

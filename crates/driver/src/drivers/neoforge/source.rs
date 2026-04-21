@@ -2,16 +2,16 @@ use std::path::PathBuf;
 
 use crate::{
     families::{
-        installer::InstallerArtifact,
-        version_json::{VersionJsonRootLayout, VersionJsonRootResource},
+        installer::{InstallerArtifact, build_installer_artifact},
+        version_json::VersionJsonRootLayout,
     },
-    http::{build_default_client, fetch_text},
+    http::build_default_client,
+    maven::fetch_maven_metadata,
     url::{Origin, OriginPolicy},
 };
-use anyhow::{Context, Result};
-use elemental_core::storage::{Storage, layout::Layoutable};
+use anyhow::Result;
+use elemental_core::storage::Storage;
 use elemental_schema::forge::MavenMetadataBody;
-use quick_xml::de::from_str;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NeoForgeOrigin {
@@ -113,9 +113,7 @@ impl NeoForgeSource {
 
     pub async fn maven_metadata(&self) -> Result<MavenMetadataBody> {
         let url = self.endpoints.maven_metadata_url()?;
-        let raw = fetch_text(&self.client, url.as_str(), "neoforge source").await?;
-
-        from_str(&raw).with_context(|| format!("decode neoforge maven metadata failed: {url}"))
+        fetch_maven_metadata(&self.client, url, "neoforge source").await
     }
 
     pub fn installer_artifact<L>(
@@ -130,15 +128,12 @@ impl NeoForgeSource {
         let version = release_version(loader_version);
         let library_relative_path = neoforge_installer_relative_path(&version);
 
-        Ok(InstallerArtifact {
-            coordinate: format!("net.neoforged:neoforge:{version}:installer"),
-            url: self.endpoints.installer_url(loader_version)?,
-            path: game_storage.try_get_resource(VersionJsonRootResource::Libraries(Some(
-                library_relative_path,
-            )))?,
-            expected_size: None,
-            sha1: None,
-        })
+        build_installer_artifact(
+            game_storage,
+            format!("net.neoforged:neoforge:{version}:installer"),
+            self.endpoints.installer_url(loader_version)?,
+            library_relative_path,
+        )
     }
 }
 

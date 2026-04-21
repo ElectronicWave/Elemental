@@ -1,38 +1,33 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use elemental::driver::drivers::quilt::{config::QuiltLaunchConfig, driver::QuiltDriver};
 
-use crate::{
-    commands::{
-        build_launch_config, ensure_instance, finalize_launch, offline_authorizer,
-        require_loader_version, time_operation,
-    },
-    config::DemoConfig,
-};
+use crate::{commands::run_loader_demo, config::DemoConfig};
 
 pub async fn run(config: DemoConfig) -> Result<()> {
-    let loader_version = require_loader_version(&config, "quilt")?;
-    let instance = ensure_instance(&config).await?;
-    let driver = QuiltDriver::with_defaults()?;
-    let launch_config: QuiltLaunchConfig = build_launch_config(&config);
+    let driver = Arc::new(QuiltDriver::with_defaults()?);
+    let prepare_driver = driver.clone();
+    let build_driver = driver.clone();
 
-    let (prepared, prepare_elapsed) = time_operation(driver.prepare(
-        &instance,
-        config.game_version.clone(),
-        loader_version.clone(),
-    ))
-    .await?;
-    let (runtime, command) = driver
-        .build_launch_command(offline_authorizer(), &prepared, &launch_config)
-        .await?;
-
-    finalize_launch(
-        &config,
-        Some(loader_version.as_str()),
-        prepare_elapsed.as_millis(),
-        &prepared.install_status,
-        &prepared.resolved_version.version,
-        runtime,
-        command,
+    run_loader_demo(
+        config,
+        "quilt",
+        move |instance, game_version, loader_version, launch_config: &QuiltLaunchConfig| {
+            let _ = launch_config;
+            let driver = prepare_driver.clone();
+            Box::pin(async move { driver.prepare(instance, game_version, loader_version).await })
+        },
+        move |authorizer, prepared, launch_config: &QuiltLaunchConfig| {
+            let driver = build_driver.clone();
+            Box::pin(async move {
+                driver
+                    .build_launch_command(authorizer, prepared, launch_config)
+                    .await
+            })
+        },
+        |prepared| &prepared.install_status,
+        |prepared| &prepared.resolved_version.version,
     )
     .await
 }

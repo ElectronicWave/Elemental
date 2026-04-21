@@ -4,11 +4,9 @@ mod passthrough;
 
 use anyhow::Result;
 use elemental_schema::fabric::ProfileJson;
+use elemental_schema::mojang::piston::PistonMetaData;
 
-use crate::{
-    driver::DriverDescriptor, drivers::fabric::source::FabricFlavor,
-    families::version_json::PistonMetaData,
-};
+use crate::{driver::DriverDescriptor, drivers::fabric::source::FabricFlavor};
 
 use self::common::FlavorBehavior;
 

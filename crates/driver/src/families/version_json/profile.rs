@@ -1,22 +1,23 @@
 use std::collections::{HashMap, HashSet};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use reqwest::Url;
 
 use elemental_schema::fabric::{
     ProfileJson, ProfileLibrary, ProfileLibraryArtifact, ProfileLibraryDownloads,
     ProfileLibraryExtract, ProfileLogging,
 };
-
-use crate::{
-    families::version_json::{
-        PistonMetaArguments, PistonMetaData, PistonMetaGenericArgument, PistonMetaLibraries,
-        PistonMetaLibrariesDownloads, PistonMetaLibrariesDownloadsArtifact,
-        PistonMetaLibrariesExtract, PistonMetaLogging, PistonMetaLoggingSide,
-        PistonMetaLoggingSideFile,
-    },
-    launch_arguments::parse_argument_string,
+use elemental_schema::mojang::piston::{
+    PistonMetaArguments, PistonMetaData, PistonMetaGenericArgument, PistonMetaLibraries,
+    PistonMetaLibrariesDownloads, PistonMetaLibrariesDownloadsArtifact, PistonMetaLibrariesExtract,
+    PistonMetaLogging, PistonMetaLoggingSide, PistonMetaLoggingSideFile,
 };
+
+use crate::maven::{
+    artifact_path as maven_artifact_path, classifier_notation as maven_classifier_notation,
+};
+
+use super::launch::parse_argument_string;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LibraryReplacementFamily {
@@ -200,7 +201,7 @@ fn profile_library_to_piston(profile_library: &ProfileLibrary) -> Result<PistonM
 fn profile_library_downloads_from_maven(
     profile_library: &ProfileLibrary,
 ) -> Result<PistonMetaLibrariesDownloads> {
-    let artifact_path = maven_artifact_path(profile_library.name.as_str())?;
+    let artifact_path = maven_artifact_path(profile_library.name.as_str(), "maven artifact")?;
     let artifact_url = maven_artifact_url(profile_library.url.as_str(), artifact_path.as_str())?;
     let classifiers = profile_library
         .natives
@@ -216,7 +217,7 @@ fn profile_library_downloads_from_maven(
                         profile_library.name.as_str(),
                         classifier.as_str(),
                     );
-                    let path = maven_artifact_path(classifier_notation.as_str())?;
+                    let path = maven_artifact_path(classifier_notation.as_str(), "maven artifact")?;
                     let url = maven_artifact_url(profile_library.url.as_str(), path.as_str())?;
 
                     Ok((
@@ -280,25 +281,6 @@ fn profile_library_extract_to_piston(
     }
 }
 
-fn maven_artifact_path(notation: &str) -> Result<String> {
-    let (coordinates, extension) = notation.split_once('@').unwrap_or((notation, "jar"));
-    let segments = coordinates.split(':').collect::<Vec<&str>>();
-
-    let (group, artifact, version, classifier) = match segments.as_slice() {
-        [group, artifact, version] => (*group, *artifact, *version, None),
-        [group, artifact, version, classifier] => (*group, *artifact, *version, Some(*classifier)),
-        _ => bail!("invalid maven artifact notation: {notation}"),
-    };
-
-    let group_path = group.replace('.', "/");
-    let file_name = match classifier {
-        Some(classifier) => format!("{artifact}-{version}-{classifier}.{extension}"),
-        None => format!("{artifact}-{version}.{extension}"),
-    };
-
-    Ok(format!("{group_path}/{artifact}/{version}/{file_name}"))
-}
-
 fn maven_artifact_url(base_url: &str, artifact_path: &str) -> Result<String> {
     let normalized_base_url = if base_url.ends_with('/') {
         base_url.to_owned()
@@ -311,11 +293,6 @@ fn maven_artifact_url(base_url: &str, artifact_path: &str) -> Result<String> {
     base.join(artifact_path)
         .with_context(|| format!("join library artifact url failed: {base_url} + {artifact_path}"))
         .map(|url| url.to_string())
-}
-
-fn maven_classifier_notation(notation: &str, classifier: &str) -> String {
-    let (coordinates, extension) = notation.split_once('@').unwrap_or((notation, "jar"));
-    format!("{coordinates}:{classifier}@{extension}")
 }
 
 fn profile_logging_to_piston(logging: &ProfileLogging) -> PistonMetaLogging {

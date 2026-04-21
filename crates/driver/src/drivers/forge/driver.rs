@@ -18,14 +18,13 @@ use crate::{
             prepared::{ForgeRemoteResolver, PreparedForgeVersion, ResolvedForgeVersion},
             source::ForgeSource,
         },
-        shared::{
-            build_version_json_launch_command, find_library_version, installed_version_json_driver,
-            launch_wrapped_version,
-        },
         vanilla::source::VanillaSource,
     },
-    families::version_json::{VersionJsonInstanceLayout, VersionJsonRootLayout},
-    inspect::InstanceProbe,
+    families::version_json::{
+        VersionJsonInstanceLayout, VersionJsonRootLayout, build_version_json_launch_command,
+        launch_wrapped_version,
+    },
+    inspect::{InstanceProbe, inspect_driver_version_from_libraries},
 };
 
 const FORGE_DRIVER: DriverDescriptor = DriverDescriptor {
@@ -111,17 +110,12 @@ impl ForgeDriver {
         loader_version: String,
         config: &ForgeLaunchConfig,
     ) -> Result<PreparedForgeVersion<L, VL>> {
-        let installer_artifact =
-            self.source
-                .installer_artifact(&instance.parent, &game_version, &loader_version)?;
-
-        ResolvedForgeVersion {
-            source: self.source.clone(),
-            instance: instance.clone(),
+        ResolvedForgeVersion::new(
+            self.source.clone(),
+            instance.clone(),
             game_version,
             loader_version,
-            installer_artifact,
-        }
+        )?
         .prepare(
             self.downloader(),
             self.vanilla_source(),
@@ -208,16 +202,10 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for ForgeDriver {
         let Some(metadata) = &probe.metadata else {
             return Ok(None);
         };
-        let Some(driver_version) =
-            find_library_version(metadata, &["net.minecraftforge:fmlloader:"])
-        else {
-            return Ok(None);
-        };
-
-        Ok(Some(installed_version_json_driver(
+        Ok(inspect_driver_version_from_libraries(
             metadata,
             FORGE_DRIVER,
-            Some(driver_version),
-        )))
+            &["net.minecraftforge:fmlloader:"],
+        ))
     }
 }

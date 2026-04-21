@@ -1,3 +1,1 @@
-pub use crate::drivers::vanilla::config::{LaunchResolution, QuickPlayOptions};
-
-pub type QuiltLaunchConfig = crate::drivers::vanilla::config::VanillaLaunchConfig;
+pub type QuiltLaunchConfig = crate::families::version_json::VersionJsonLaunchConfig;

@@ -9,7 +9,7 @@ use elemental_core::{
     storage::{Storage, layout::Layout},
 };
 use elemental_infra::downloader::core::ElementalDownloader;
-use elemental_schema::quilt::ProfileJson;
+use elemental_schema::{mojang::piston::PistonMetaData, quilt::ProfileJson};
 
 use crate::{
     driver::{Driver, DriverDescriptor, InstalledDriver},
@@ -22,17 +22,15 @@ use crate::{
             },
             source::QuiltSource,
         },
-        shared::{
-            build_version_json_launch_command, find_library_version, installed_version_json_driver,
-            launch_version_json_instance, load_prepared_version_json, resolve_vanilla_metadata,
-        },
-        vanilla::source::VanillaSource,
+        vanilla::source::{VanillaSource, resolve_vanilla_metadata},
     },
     families::version_json::{
         PASSTHROUGH_PROFILE_BEHAVIOR, VersionJsonInstanceLayout, VersionJsonRootLayout,
-        merge_profile_with_behavior,
+        build_version_json_launch_command, launch_version_json_instance,
+        load_prepared_version_json, merge_profile_with_behavior, persist_version_json,
+        prepare_version_json,
     },
-    inspect::InstanceProbe,
+    inspect::{InstanceProbe, find_library_version, inspect_driver_version_from_libraries},
 };
 
 const QUILT_DRIVER: DriverDescriptor = DriverDescriptor {
@@ -89,10 +87,10 @@ impl QuiltDriver {
         game_version: String,
         loader_version: String,
     ) -> Result<PreparedQuiltVersion<L, VL>> {
-        let resolved = self
-            .resolve_or_load(instance, game_version, loader_version)
-            .await?;
-        resolved.prepare(self.downloader()).await
+        prepare_version_json(self.downloader(), || {
+            self.resolve_or_load(instance, game_version, loader_version)
+        })
+        .await
     }
 
     pub async fn load_prepared<
@@ -179,10 +177,10 @@ impl QuiltDriver {
         game_version: String,
         loader_version: String,
     ) -> Result<ResolvedQuiltVersion<L, VL>> {
-        self.resolve_metadata(game_version, loader_version)
-            .await?
-            .persist(instance)
-            .await
+        persist_version_json(instance, || {
+            self.resolve_metadata(game_version, loader_version)
+        })
+        .await
     }
 
     async fn resolve_metadata(
@@ -190,7 +188,8 @@ impl QuiltDriver {
         game_version: String,
         loader_version: String,
     ) -> Result<ResolvedQuiltMetadata> {
-        let base_metadata = self.resolve_vanilla_metadata(game_version.clone()).await?;
+        let base_metadata =
+            resolve_vanilla_metadata(self.vanilla_source(), game_version.as_str()).await?;
         let profile = self
             .source
             .profile_json(game_version.as_str(), loader_version.as_str())
@@ -202,13 +201,6 @@ impl QuiltDriver {
             metadata,
             base_metadata.asset_index_objects,
         ))
-    }
-
-    async fn resolve_vanilla_metadata(
-        &self,
-        game_version: String,
-    ) -> Result<crate::drivers::vanilla::prepared::ResolvedVanillaMetadata> {
-        resolve_vanilla_metadata(self.vanilla_source(), game_version.as_str()).await
     }
 }
 
@@ -222,27 +214,20 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for QuiltDriver {
         let Some(metadata) = &probe.metadata else {
             return Ok(None);
         };
-        let Some(driver_version) = inspect_driver_version(metadata) else {
-            return Ok(None);
-        };
-
-        Ok(Some(installed_version_json_driver(
+        Ok(inspect_driver_version_from_libraries(
             metadata,
             QUILT_DRIVER,
-            Some(driver_version),
-        )))
+            &["org.quiltmc:quilt-loader:"],
+        ))
     }
 }
 
-fn merge_profile(
-    profile: ProfileJson,
-    base_metadata: crate::families::version_json::PistonMetaData,
-) -> Result<crate::families::version_json::PistonMetaData> {
+fn merge_profile(profile: ProfileJson, base_metadata: PistonMetaData) -> Result<PistonMetaData> {
     merge_profile_with_behavior(&PASSTHROUGH_PROFILE_BEHAVIOR, base_metadata, profile)
 }
 
 fn local_metadata_needs_refresh(
-    metadata: &crate::families::version_json::PistonMetaData,
+    metadata: &PistonMetaData,
     game_version: &str,
     loader_version: &str,
 ) -> bool {
@@ -252,8 +237,6 @@ fn local_metadata_needs_refresh(
         || inspect_driver_version(metadata).is_none_or(|installed| installed != loader_version)
 }
 
-fn inspect_driver_version(
-    metadata: &crate::families::version_json::PistonMetaData,
-) -> Option<String> {
+fn inspect_driver_version(metadata: &PistonMetaData) -> Option<String> {
     find_library_version(metadata, &["org.quiltmc:quilt-loader:"])
 }

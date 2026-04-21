@@ -1,9 +1,12 @@
 use anyhow::{Context, Result};
-use serde::de::DeserializeOwned;
+use elemental_schema::mojang::{
+    launcher::LaunchMetaData,
+    piston::{PistonMetaAssetIndexObjects, PistonMetaData},
+};
 
 use crate::{
+    drivers::vanilla::prepared::ResolvedVanillaMetadata,
     families::version_json::VersionJsonRemoteResolver,
-    families::version_json::{LaunchMetaData, PistonMetaAssetIndexObjects, PistonMetaData},
     http::{build_default_client, fetch_json},
     url::{Origin, OriginPolicy},
 };
@@ -148,12 +151,12 @@ impl VanillaSource {
 
     pub async fn launch_meta(&self) -> Result<LaunchMetaData> {
         let url = self.endpoints.version_manifest_url()?;
-        self.fetch_json(url.as_str()).await
+        fetch_json(&self.client, url.as_str(), "vanilla source").await
     }
 
     pub async fn piston_meta(&self, url: impl AsRef<str>) -> Result<PistonMetaData> {
         let url = self.endpoints.rewrite_upstream(url.as_ref())?;
-        self.fetch_json(url.as_str()).await
+        fetch_json(&self.client, url.as_str(), "vanilla source").await
     }
 
     pub async fn asset_index_objects(
@@ -161,13 +164,47 @@ impl VanillaSource {
         url: impl AsRef<str>,
     ) -> Result<PistonMetaAssetIndexObjects> {
         let url = self.endpoints.rewrite_upstream(url.as_ref())?;
-        self.fetch_json(url.as_str()).await
+        fetch_json(&self.client, url.as_str(), "vanilla source").await
+    }
+}
+
+pub async fn resolve_vanilla_metadata(
+    vanilla_source: &VanillaSource,
+    game_version: &str,
+) -> Result<ResolvedVanillaMetadata> {
+    let launchmeta = vanilla_source.launch_meta().await?;
+    let metadata_url = launchmeta
+        .versions
+        .iter()
+        .find(|version| version.id == game_version)
+        .with_context(|| format!("can't find vanilla version named '{game_version}'"))?
+        .url
+        .clone();
+    let metadata = vanilla_source.piston_meta(metadata_url).await?;
+    let asset_index_objects = vanilla_source
+        .asset_index_objects(&metadata.asset_index.url)
+        .await?;
+
+    Ok(ResolvedVanillaMetadata::new(
+        vanilla_source.endpoints().clone(),
+        metadata,
+        asset_index_objects,
+    ))
+}
+
+pub fn rewrite_upstream_with_vanilla_fallback<RewriteFn>(
+    vanilla_endpoints: &VanillaEndpoints,
+    raw_url: &str,
+    family_name: &str,
+    rewrite_family: RewriteFn,
+) -> Result<String>
+where
+    RewriteFn: FnOnce() -> Result<String>,
+{
+    if let Ok(rewritten) = vanilla_endpoints.rewrite_upstream(raw_url) {
+        return Ok(rewritten);
     }
 
-    async fn fetch_json<T>(&self, url: &str) -> Result<T>
-    where
-        T: DeserializeOwned,
-    {
-        fetch_json(&self.client, url, "vanilla source").await
-    }
+    rewrite_family()
+        .with_context(|| format!("rewrite {family_name} upstream url failed for '{raw_url}'"))
 }

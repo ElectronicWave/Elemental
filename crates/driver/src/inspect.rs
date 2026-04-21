@@ -2,11 +2,9 @@ use std::{fs::File, path::PathBuf};
 
 use anyhow::Result;
 use elemental_core::storage::{Storage, layout::Layout};
+use elemental_schema::mojang::piston::PistonMetaData;
 
-use crate::{
-    driver::{Driver, InstalledDriver},
-    families::version_json::PistonMetaData,
-};
+use crate::driver::{Driver, DriverDescriptor, InstalledDriver};
 
 #[derive(Debug, Clone)]
 pub struct InstanceProbe<L: Layout, VL: Layout> {
@@ -73,6 +71,48 @@ where
     }
 
     Ok(None)
+}
+
+pub fn installed_version_json_driver(
+    metadata: &PistonMetaData,
+    descriptor: DriverDescriptor,
+    driver_version: Option<String>,
+) -> InstalledDriver {
+    InstalledDriver {
+        driver: descriptor,
+        driver_version,
+        game_version: metadata
+            .inherits_from
+            .clone()
+            .or_else(|| Some(metadata.id.clone())),
+        description: Some(metadata.release_type.clone()),
+    }
+}
+
+pub fn metadata_contains_library_prefix(metadata: &PistonMetaData, prefixes: &[&str]) -> bool {
+    metadata.libraries.iter().any(|library| {
+        let name = library.name.as_str();
+        prefixes.iter().any(|prefix| name.starts_with(prefix))
+    })
+}
+
+pub fn find_library_version(metadata: &PistonMetaData, prefixes: &[&str]) -> Option<String> {
+    metadata
+        .libraries
+        .iter()
+        .map(|library| library.name.as_str())
+        .find(|name| prefixes.iter().any(|prefix| name.starts_with(prefix)))
+        .and_then(|name| name.split(':').nth(2).map(ToOwned::to_owned))
+}
+
+pub fn inspect_driver_version_from_libraries(
+    metadata: &PistonMetaData,
+    descriptor: DriverDescriptor,
+    prefixes: &[&str],
+) -> Option<InstalledDriver> {
+    find_library_version(metadata, prefixes).map(|driver_version| {
+        installed_version_json_driver(metadata, descriptor, Some(driver_version))
+    })
 }
 
 fn detect_metadata_path<L: Layout, VL: Layout>(

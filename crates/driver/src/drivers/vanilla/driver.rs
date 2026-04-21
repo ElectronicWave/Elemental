@@ -9,23 +9,24 @@ use elemental_core::{
     storage::{Storage, layout::Layout},
 };
 use elemental_infra::downloader::core::ElementalDownloader;
+use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::{
     driver::{Driver, DriverDescriptor, InstalledDriver},
-    drivers::shared::{
-        build_version_json_launch_command, installed_version_json_driver,
-        launch_version_json_instance, load_prepared_version_json, metadata_contains_library_prefix,
-    },
     drivers::vanilla::{
         config::VanillaLaunchConfig,
         prepared::{
             LaunchedVanillaVersion, PreparedVanillaVersion, ResolvedVanillaMetadata,
             ResolvedVanillaVersion,
         },
-        source::VanillaSource,
+        source::{VanillaSource, resolve_vanilla_metadata},
     },
-    families::version_json::{PistonMetaData, VersionJsonInstanceLayout, VersionJsonRootLayout},
-    inspect::InstanceProbe,
+    families::version_json::{
+        VersionJsonInstanceLayout, VersionJsonRootLayout, build_version_json_launch_command,
+        launch_version_json_instance, load_prepared_version_json, persist_version_json,
+        prepare_version_json,
+    },
+    inspect::{InstanceProbe, installed_version_json_driver, metadata_contains_library_prefix},
 };
 
 pub struct VanillaDriver {
@@ -62,8 +63,10 @@ impl VanillaDriver {
         instance: &Storage<VL, Storage<L>>,
         version_id: String,
     ) -> Result<PreparedVanillaVersion<L, VL>> {
-        let resolved = self.resolve_or_load(instance, version_id).await?;
-        resolved.prepare(self.downloader()).await
+        prepare_version_json(self.downloader(), || {
+            self.resolve_or_load(instance, version_id)
+        })
+        .await
     }
 
     pub async fn load_prepared<
@@ -133,32 +136,11 @@ impl VanillaDriver {
         instance: &Storage<VL, Storage<L>>,
         version_id: String,
     ) -> Result<ResolvedVanillaVersion<L, VL>> {
-        self.resolve_metadata(version_id)
-            .await?
-            .persist(instance)
-            .await
+        persist_version_json(instance, || self.resolve_metadata(version_id)).await
     }
 
     async fn resolve_metadata(&self, version_id: String) -> Result<ResolvedVanillaMetadata> {
-        let launchmeta = self.source.launch_meta().await?;
-        let metadata_url = launchmeta
-            .versions
-            .iter()
-            .find(|version| version.id == version_id)
-            .context(format!("Can't find version named `{version_id}`"))?
-            .url
-            .clone();
-        let metadata = self.source.piston_meta(metadata_url).await?;
-        let asset_index_objects = self
-            .source
-            .asset_index_objects(&metadata.asset_index.url)
-            .await?;
-
-        Ok(ResolvedVanillaMetadata::new(
-            self.source.endpoints().clone(),
-            metadata,
-            asset_index_objects,
-        ))
+        resolve_vanilla_metadata(self.source(), version_id.as_str()).await
     }
 }
 

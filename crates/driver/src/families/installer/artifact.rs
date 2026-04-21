@@ -1,7 +1,13 @@
 use std::path::PathBuf;
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow};
+use elemental_core::storage::{Storage, layout::Layoutable};
 use elemental_infra::downloader::task::DownloadTask;
+
+use crate::{
+    families::version_json::{VersionJsonRootLayout, VersionJsonRootResource},
+    maven::artifact_path,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstallerArtifact {
@@ -24,7 +30,10 @@ impl InstallerArtifact {
 }
 
 pub fn installer_coordinate_path(notation: &str) -> Result<PathBuf> {
-    Ok(PathBuf::from(maven_artifact_path(notation)?))
+    Ok(PathBuf::from(artifact_path(
+        notation,
+        "installer artifact",
+    )?))
 }
 
 pub fn installer_coordinate_file_name(notation: &str) -> Result<String> {
@@ -37,21 +46,22 @@ pub fn installer_coordinate_file_name(notation: &str) -> Result<String> {
     Ok(file_name)
 }
 
-fn maven_artifact_path(notation: &str) -> Result<String> {
-    let (coordinates, extension) = notation.split_once('@').unwrap_or((notation, "jar"));
-    let segments = coordinates.split(':').collect::<Vec<&str>>();
-
-    let (group, artifact, version, classifier) = match segments.as_slice() {
-        [group, artifact, version] => (*group, *artifact, *version, None),
-        [group, artifact, version, classifier] => (*group, *artifact, *version, Some(*classifier)),
-        _ => bail!("invalid installer artifact notation: {notation}"),
-    };
-
-    let group_path = group.replace('.', "/");
-    let file_name = match classifier {
-        Some(classifier) => format!("{artifact}-{version}-{classifier}.{extension}"),
-        None => format!("{artifact}-{version}.{extension}"),
-    };
-
-    Ok(format!("{group_path}/{artifact}/{version}/{file_name}"))
+pub fn build_installer_artifact<L>(
+    game_storage: &Storage<L>,
+    coordinate: String,
+    url: String,
+    library_relative_path: PathBuf,
+) -> Result<InstallerArtifact>
+where
+    L: VersionJsonRootLayout,
+{
+    Ok(InstallerArtifact {
+        coordinate,
+        url,
+        path: game_storage.try_get_resource(VersionJsonRootResource::Libraries(Some(
+            library_relative_path,
+        )))?,
+        expected_size: None,
+        sha1: None,
+    })
 }

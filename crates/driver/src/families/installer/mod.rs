@@ -1,11 +1,21 @@
 mod archive;
 mod artifact;
+mod family;
 mod libraries;
 mod processor;
 mod profile;
 
 pub use archive::InstallerArchive;
-pub use artifact::{InstallerArtifact, installer_coordinate_file_name, installer_coordinate_path};
+pub use artifact::{
+    InstallerArtifact, build_installer_artifact, installer_coordinate_file_name,
+    installer_coordinate_path,
+};
+pub use family::{
+    InstallerFamily, InstallerFamilyInstallStatus, InstallerFamilyRemoteResolver,
+    PreparedInstallerFamilyLaunchVersion, PreparedInstallerFamilyVersion,
+    ResolvedInstallerFamilyLaunchVersion, ResolvedInstallerFamilyMetadata,
+    ResolvedInstallerFamilyVersion,
+};
 pub use libraries::normalize_library_urls;
 pub use processor::{
     ensure_installer_profile_libraries_downloaded, installer_client_processors_ready,

@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use anyhow::Result;
 use async_trait::async_trait;
 
-use crate::catalog::{Catalog, GameVersions, Release, ReleaseInfo, single_game_release_info};
+use crate::catalog::{
+    Catalog, GameVersions, Release, ReleaseInfo, collect_single_game_loader_releases,
+    single_game_release_info,
+};
 
 use super::source::QuiltSource;
 
@@ -38,23 +41,22 @@ impl Catalog for QuiltCatalog {
     type Release = QuiltRelease;
 
     async fn releases(&self) -> Result<HashMap<GameVersions, Vec<Self::Release>>> {
-        let mut releases = HashMap::new();
+        let game_versions = self
+            .source
+            .game_versions()
+            .await?
+            .into_iter()
+            .map(|game_version| game_version.version)
+            .collect::<Vec<String>>();
 
-        for game_version in self.source.game_versions().await? {
-            let game_releases = self
-                .source
-                .loader_versions(game_version.version.as_str())
-                .await?
-                .into_iter()
-                .map(|loader| QuiltRelease {
-                    game_version: game_version.version.clone(),
-                    loader_version: loader.loader.version,
-                })
-                .collect::<Vec<QuiltRelease>>();
-
-            releases.insert(GameVersions::Single(game_version.version), game_releases);
-        }
-
-        Ok(releases)
+        collect_single_game_loader_releases(
+            game_versions,
+            |game_version| async move { self.source.loader_versions(game_version.as_str()).await },
+            |game_version, loader| QuiltRelease {
+                game_version: game_version.to_owned(),
+                loader_version: loader.loader.version,
+            },
+        )
+        .await
     }
 }

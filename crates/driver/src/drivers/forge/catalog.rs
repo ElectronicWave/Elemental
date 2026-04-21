@@ -4,7 +4,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 
 use crate::catalog::{
-    Catalog, GameVersions, Release, ReleaseInfo, push_single_game_release, single_game_release_info,
+    Catalog, GameVersions, Release, ReleaseInfo, collect_single_game_releases,
+    single_game_release_info,
 };
 
 use super::source::ForgeSource;
@@ -53,25 +54,20 @@ impl Catalog for ForgeCatalog {
     type Release = ForgeRelease;
 
     async fn releases(&self) -> Result<HashMap<GameVersions, Vec<Self::Release>>> {
-        let mut releases = HashMap::new();
         let metadata = self.source.maven_metadata().await?;
-
-        for version in metadata.versioning.versions.version {
-            let Some((game_version, loader_version)) = version.split_once('-') else {
-                continue;
-            };
-
-            push_single_game_release(
-                &mut releases,
-                game_version.to_owned(),
-                ForgeRelease {
-                    loader: loader_version.to_owned(),
-                    game: game_version.to_owned(),
-                    description: None,
-                },
-            );
-        }
-
-        Ok(releases)
+        Ok(collect_single_game_releases(
+            metadata.versioning.versions.version,
+            |version| {
+                let (game_version, loader_version) = version.split_once('-')?;
+                Some((
+                    game_version.to_owned(),
+                    ForgeRelease {
+                        loader: loader_version.to_owned(),
+                        game: game_version.to_owned(),
+                        description: None,
+                    },
+                ))
+            },
+        ))
     }
 }

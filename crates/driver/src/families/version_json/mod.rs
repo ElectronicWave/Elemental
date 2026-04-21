@@ -1,8 +1,8 @@
 pub mod builder;
 pub mod classpath;
 pub mod extensions;
+pub mod launch;
 pub mod layout;
-pub mod meta;
 pub mod platform;
 pub mod prepared;
 pub mod profile;
@@ -14,22 +14,19 @@ pub mod storage;
 pub mod variables;
 
 pub use extensions::{PistonMetaDataExt, PistonMetaLibrariesExt};
+pub use launch::{
+    LaunchResolution, QuickPlayOptions, VersionJsonLaunchConfig, build_version_json_launch_builder,
+    build_version_json_launch_command, launch_version_json_instance, launch_wrapped_version,
+    parse_argument_string, resolve_prepared_version_runtime,
+};
 pub use layout::{
     BaseInstanceLayout, BaseRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
-};
-pub use meta::{
-    ContinuousArgument, LaunchMetaData, LaunchMetaLatestData, LaunchMetaVersionData,
-    OperatingSystem, PistonMetaArguments, PistonMetaAssetIndex, PistonMetaAssetIndexObject,
-    PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaDownload, PistonMetaDownloads,
-    PistonMetaGenericArgument, PistonMetaJavaVersion, PistonMetaLibraries,
-    PistonMetaLibrariesDownloads, PistonMetaLibrariesDownloadsArtifact, PistonMetaLibrariesExtract,
-    PistonMetaLogging, PistonMetaLoggingSide, PistonMetaLoggingSideFile, PistonMetaRuleArgument,
-    PistonMetaRuleArgumentRules,
 };
 pub use platform::VersionJsonPlatform;
 pub use prepared::{
     LaunchedVersionJsonInstance, PreparedVersionJsonInstance, ResolvedVersionJsonInstance,
-    ResolvedVersionJsonMetadata, VersionJsonInstallStatus,
+    ResolvedVersionJsonMetadata, VersionJsonInstallStatus, load_prepared_version_json,
+    persist_version_json, prepare_version_json,
 };
 pub use profile::{
     LibraryReplacementFamily, PASSTHROUGH_PROFILE_BEHAVIOR, PassthroughProfileBehavior,

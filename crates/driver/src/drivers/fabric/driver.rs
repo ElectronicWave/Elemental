@@ -22,14 +22,14 @@ use crate::{
             },
             source::{FabricEndpointOverrides, FabricFlavor, FabricSource},
         },
-        shared::{
-            build_version_json_launch_command, installed_version_json_driver,
-            launch_version_json_instance, load_prepared_version_json, resolve_vanilla_metadata,
-        },
-        vanilla::source::VanillaSource,
+        vanilla::source::{VanillaSource, resolve_vanilla_metadata},
     },
-    families::version_json::{VersionJsonInstanceLayout, VersionJsonRootLayout},
-    inspect::InstanceProbe,
+    families::version_json::{
+        VersionJsonInstanceLayout, VersionJsonRootLayout, build_version_json_launch_command,
+        launch_version_json_instance, load_prepared_version_json, persist_version_json,
+        prepare_version_json,
+    },
+    inspect::{InstanceProbe, installed_version_json_driver},
 };
 
 pub struct FabricDriver {
@@ -114,10 +114,10 @@ impl FabricDriver {
         game_version: String,
         loader_version: String,
     ) -> Result<PreparedFabricVersion<L, VL>> {
-        let resolved = self
-            .resolve_or_load(instance, game_version, loader_version)
-            .await?;
-        resolved.prepare(self.downloader()).await
+        prepare_version_json(self.downloader(), || {
+            self.resolve_or_load(instance, game_version, loader_version)
+        })
+        .await
     }
 
     pub async fn load_prepared<
@@ -206,10 +206,10 @@ impl FabricDriver {
         game_version: String,
         loader_version: String,
     ) -> Result<ResolvedFabricVersion<L, VL>> {
-        self.resolve_metadata(game_version, loader_version)
-            .await?
-            .persist(instance)
-            .await
+        persist_version_json(instance, || {
+            self.resolve_metadata(game_version, loader_version)
+        })
+        .await
     }
 
     async fn resolve_metadata(
@@ -217,7 +217,8 @@ impl FabricDriver {
         game_version: String,
         loader_version: String,
     ) -> Result<ResolvedFabricMetadata> {
-        let base_metadata = self.resolve_vanilla_metadata(game_version.clone()).await?;
+        let base_metadata =
+            resolve_vanilla_metadata(self.vanilla_source(), game_version.as_str()).await?;
         let profile = self
             .source
             .profile_json(game_version.as_str(), loader_version.as_str())
@@ -229,13 +230,6 @@ impl FabricDriver {
             metadata,
             base_metadata.asset_index_objects,
         ))
-    }
-
-    async fn resolve_vanilla_metadata(
-        &self,
-        game_version: String,
-    ) -> Result<crate::drivers::vanilla::prepared::ResolvedVanillaMetadata> {
-        resolve_vanilla_metadata(self.vanilla_source(), game_version.as_str()).await
     }
 }
 

@@ -6,6 +6,7 @@ use std::{
 use anyhow::{Context, Result, bail};
 use elemental_core::{
     runtime::distribution::Distribution,
+    runtime::resolve_runtime,
     storage::{Storage, layout::Layoutable},
 };
 use elemental_infra::downloader::{core::ElementalDownloader, task::DownloadPlan};
@@ -20,7 +21,7 @@ use serde::Deserialize;
 use tokio::fs::create_dir_all;
 
 use crate::{
-    drivers::vanilla::{prepared::ResolvedVanillaMetadata, source::VanillaSource},
+    drivers::vanilla::source::{VanillaSource, resolve_vanilla_metadata},
     families::{
         installer::{InstallerArchive, InstallerArtifact, installer_client_processors_ready},
         version_json::{
@@ -29,7 +30,6 @@ use crate::{
             VersionJsonRootResource,
         },
     },
-    runtime::resolve_runtime,
 };
 
 const INSTALL_PROFILE_ENTRY: &str = "install_profile.json";
@@ -214,30 +214,6 @@ pub fn load_persisted_installer_state(
         install_profile,
         embedded_version,
     })
-}
-
-pub async fn resolve_vanilla_metadata(
-    vanilla_source: &VanillaSource,
-    game_version: &str,
-) -> Result<ResolvedVanillaMetadata> {
-    let launchmeta = vanilla_source.launch_meta().await?;
-    let metadata_url = launchmeta
-        .versions
-        .iter()
-        .find(|version| version.id == game_version)
-        .with_context(|| format!("can't find vanilla version named '{game_version}'"))?
-        .url
-        .clone();
-    let metadata = vanilla_source.piston_meta(metadata_url).await?;
-    let asset_index_objects = vanilla_source
-        .asset_index_objects(&metadata.asset_index.url)
-        .await?;
-
-    Ok(ResolvedVanillaMetadata::new(
-        vanilla_source.endpoints().clone(),
-        metadata,
-        asset_index_objects,
-    ))
 }
 
 pub fn profile_game_and_raw_loader_version(
@@ -526,7 +502,7 @@ fn merge_arguments(
     let base_arguments = match (base_arguments, base_minecraft_arguments) {
         (Some(arguments), _) => Some(arguments),
         (None, Some(arguments)) => Some(PistonMetaArguments {
-            game: crate::launch_arguments::parse_argument_string(arguments.as_str())?
+            game: crate::families::version_json::parse_argument_string(arguments.as_str())?
                 .into_iter()
                 .map(elemental_schema::mojang::piston::PistonMetaGenericArgument::Plain)
                 .collect(),

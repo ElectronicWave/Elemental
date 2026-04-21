@@ -1,8 +1,8 @@
 use anyhow::Result;
 
 use crate::drivers::{
-    fabric::source::FabricEndpoints, shared::rewrite_upstream_with_vanilla_fallback,
-    vanilla::source::VanillaEndpoints,
+    fabric::source::FabricEndpoints,
+    vanilla::source::{VanillaEndpoints, rewrite_upstream_with_vanilla_fallback},
 };
 use crate::families::version_json::{
     LaunchedVersionJsonInstance, PreparedVersionJsonInstance, ResolvedVersionJsonInstance,

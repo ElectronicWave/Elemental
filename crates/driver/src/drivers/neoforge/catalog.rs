@@ -4,7 +4,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 
 use crate::catalog::{
-    Catalog, GameVersions, Release, ReleaseInfo, push_single_game_release, single_game_release_info,
+    Catalog, GameVersions, Release, ReleaseInfo, collect_single_game_releases,
+    single_game_release_info,
 };
 
 use super::source::NeoForgeSource;
@@ -55,27 +56,21 @@ impl Catalog for NeoForgeCatalog {
     type Release = NeoForgeRelease;
 
     async fn releases(&self) -> Result<HashMap<GameVersions, Vec<Self::Release>>> {
-        let mut releases = HashMap::new();
         let metadata = self.source.maven_metadata().await?;
-
-        for version in metadata.versioning.versions.version {
-            let Some(game_version_hint) = infer_game_version_from_loader_version(version.as_str())
-            else {
-                continue;
-            };
-
-            push_single_game_release(
-                &mut releases,
-                game_version_hint.clone(),
-                NeoForgeRelease {
-                    loader: version,
-                    game_version_hint,
-                    description: Some(GAME_VERSION_HEURISTIC_DESCRIPTION.to_owned()),
-                },
-            );
-        }
-
-        Ok(releases)
+        Ok(collect_single_game_releases(
+            metadata.versioning.versions.version,
+            |version| {
+                let game_version_hint = infer_game_version_from_loader_version(version.as_str())?;
+                Some((
+                    game_version_hint.clone(),
+                    NeoForgeRelease {
+                        loader: version,
+                        game_version_hint,
+                        description: Some(GAME_VERSION_HEURISTIC_DESCRIPTION.to_owned()),
+                    },
+                ))
+            },
+        ))
     }
 }
 

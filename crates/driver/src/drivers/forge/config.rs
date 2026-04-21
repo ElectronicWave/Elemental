@@ -1,3 +1,1 @@
-pub use crate::drivers::vanilla::config::{LaunchResolution, QuickPlayOptions};
-
-pub type ForgeLaunchConfig = crate::drivers::vanilla::config::VanillaLaunchConfig;
+pub type ForgeLaunchConfig = crate::families::version_json::VersionJsonLaunchConfig;

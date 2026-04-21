@@ -5,6 +5,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use elemental_core::storage::layout::Layout;
+use elemental_schema::mojang::piston::PistonMetaData;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -13,7 +14,6 @@ use super::{
     classpath::{classpath_separator, join_classpath},
     extensions::PistonMetaLibrariesExt,
     layout::{BaseInstanceLayout, BaseRootLayout},
-    meta::PistonMetaData,
     resource::{VersionJsonInstanceResource, VersionJsonRootResource},
     rules::VersionJsonRuleContext,
 };

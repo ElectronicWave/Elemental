@@ -12,11 +12,10 @@ use elemental_core::{
     storage::{Storage, layout::Layoutable},
 };
 
-use crate::launch_arguments::parse_argument_string;
-
 use super::{
     classpath::{classpath_separator, join_classpath},
     extensions::{PistonMetaDataExt, PistonMetaLibrariesExt},
+    launch::parse_argument_string,
     layout::{VersionJsonInstanceLayout, VersionJsonRootLayout},
     resource::{VersionJsonInstanceResource, VersionJsonRootResource},
     rules::VersionJsonRuleContext,

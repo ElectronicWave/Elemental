@@ -1,41 +1,39 @@
+use std::sync::Arc;
+
 use anyhow::{Result, bail};
 use elemental::driver::drivers::fabric::{
     config::FabricLaunchConfig, driver::FabricDriver, source::FabricFlavor,
 };
 
 use crate::{
-    commands::{
-        build_launch_config, ensure_instance, finalize_launch, offline_authorizer,
-        require_loader_version, time_operation,
-    },
+    commands::run_loader_demo,
     config::{DemoConfig, DemoDriver},
 };
 
 pub async fn run(config: DemoConfig) -> Result<()> {
     let driver_kind = config.driver;
-    let loader_version = require_loader_version(&config, "fabric-like")?;
-    let instance = ensure_instance(&config).await?;
-    let driver = FabricDriver::for_flavor(fabric_flavor(driver_kind)?)?;
-    let launch_config: FabricLaunchConfig = build_launch_config(&config);
+    let driver = Arc::new(FabricDriver::for_flavor(fabric_flavor(driver_kind)?)?);
+    let prepare_driver = driver.clone();
+    let build_driver = driver.clone();
 
-    let (prepared, prepare_elapsed) = time_operation(driver.prepare(
-        &instance,
-        config.game_version.clone(),
-        loader_version.clone(),
-    ))
-    .await?;
-    let (runtime, command) = driver
-        .build_launch_command(offline_authorizer(), &prepared, &launch_config)
-        .await?;
-
-    finalize_launch(
-        &config,
-        Some(loader_version.as_str()),
-        prepare_elapsed.as_millis(),
-        &prepared.install_status,
-        &prepared.resolved_version.version,
-        runtime,
-        command,
+    run_loader_demo(
+        config,
+        "fabric-like",
+        move |instance, game_version, loader_version, launch_config: &FabricLaunchConfig| {
+            let _ = launch_config;
+            let driver = prepare_driver.clone();
+            Box::pin(async move { driver.prepare(instance, game_version, loader_version).await })
+        },
+        move |authorizer, prepared, launch_config: &FabricLaunchConfig| {
+            let driver = build_driver.clone();
+            Box::pin(async move {
+                driver
+                    .build_launch_command(authorizer, prepared, launch_config)
+                    .await
+            })
+        },
+        |prepared| &prepared.install_status,
+        |prepared| &prepared.resolved_version.version,
     )
     .await
 }

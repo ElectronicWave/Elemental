@@ -4,7 +4,7 @@ mod neoforge;
 mod quilt;
 mod vanilla;
 
-use std::{fmt::Debug, future::Future, time::Duration};
+use std::{fmt::Debug, future::Future, pin::Pin, time::Duration};
 
 use anyhow::{Context, Result};
 use elemental::{
@@ -66,6 +66,72 @@ pub(super) fn require_loader_version(config: &DemoConfig, driver_label: &str) ->
         .loader_version
         .clone()
         .with_context(|| format!("{driver_label} demo requires a loader version"))
+}
+
+pub(super) async fn prepare_loader_demo(
+    config: &DemoConfig,
+    driver_label: &str,
+) -> Result<(
+    String,
+    Storage<BaseInstanceLayout, Storage<BaseRootLayout>>,
+    VanillaLaunchConfig,
+)> {
+    let loader_version = require_loader_version(config, driver_label)?;
+    let instance = ensure_instance(config).await?;
+    let launch_config = build_launch_config(config);
+
+    Ok((loader_version, instance, launch_config))
+}
+
+pub(super) async fn run_loader_demo<Prepared, PrepareFn, BuildFn, StatusFn, VersionFn, L, VL>(
+    config: DemoConfig,
+    driver_label: &str,
+    prepare: PrepareFn,
+    build_launch_command: BuildFn,
+    install_status: StatusFn,
+    version: VersionFn,
+) -> Result<()>
+where
+    PrepareFn: for<'a> Fn(
+        &'a Storage<BaseInstanceLayout, Storage<BaseRootLayout>>,
+        String,
+        String,
+        &'a VanillaLaunchConfig,
+    ) -> Pin<Box<dyn Future<Output = Result<Prepared>> + 'a>>,
+    BuildFn: for<'a> Fn(
+        OfflineAuthorizer,
+        &'a Prepared,
+        &'a VanillaLaunchConfig,
+    ) -> Pin<
+        Box<dyn Future<Output = Result<(Distribution, LaunchCommand)>> + 'a>,
+    >,
+    StatusFn: for<'a> Fn(&'a Prepared) -> &'a dyn Debug,
+    VersionFn: for<'a> Fn(&'a Prepared) -> &'a Storage<VL, Storage<L>>,
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+{
+    let (loader_version, instance, launch_config) =
+        prepare_loader_demo(&config, driver_label).await?;
+    let (prepared, prepare_elapsed) = time_operation(prepare(
+        &instance,
+        config.game_version.clone(),
+        loader_version.clone(),
+        &launch_config,
+    ))
+    .await?;
+    let (runtime, command) =
+        build_launch_command(offline_authorizer(), &prepared, &launch_config).await?;
+
+    finalize_launch(
+        &config,
+        Some(loader_version.as_str()),
+        prepare_elapsed.as_millis(),
+        install_status(&prepared),
+        version(&prepared),
+        runtime,
+        command,
+    )
+    .await
 }
 
 pub(super) async fn time_operation<T, Fut>(operation: Fut) -> Result<(T, Duration)>

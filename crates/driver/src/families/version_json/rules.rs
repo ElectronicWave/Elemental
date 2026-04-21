@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use super::{OperatingSystem, PistonMetaRuleArgumentRules, VersionJsonPlatform};
+use elemental_schema::mojang::piston::{OperatingSystem, PistonMetaRuleArgumentRules};
+
+use super::VersionJsonPlatform;
 
 #[derive(Debug, Clone)]
 pub struct VersionJsonRuleContext {

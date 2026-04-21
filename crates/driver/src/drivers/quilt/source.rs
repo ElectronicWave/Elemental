@@ -1,6 +1,5 @@
 use anyhow::Result;
 use elemental_schema::quilt::{GameVersion, LoaderGameVersion, ProfileJson};
-use serde::de::DeserializeOwned;
 
 use crate::{
     http::{build_default_client, fetch_json},
@@ -114,12 +113,12 @@ impl QuiltSource {
 
     pub async fn game_versions(&self) -> Result<Vec<GameVersion>> {
         let url = self.endpoints.game_versions_url()?;
-        self.fetch_json(url.as_str()).await
+        fetch_json(&self.client, url.as_str(), "quilt source").await
     }
 
     pub async fn loader_versions(&self, game_version: &str) -> Result<Vec<LoaderGameVersion>> {
         let url = self.endpoints.loader_versions_url(game_version)?;
-        self.fetch_json(url.as_str()).await
+        fetch_json(&self.client, url.as_str(), "quilt source").await
     }
 
     pub async fn profile_json(
@@ -130,13 +129,6 @@ impl QuiltSource {
         let url = self
             .endpoints
             .profile_json_url(game_version, loader_version)?;
-        self.fetch_json(url.as_str()).await
-    }
-
-    async fn fetch_json<T>(&self, url: &str) -> Result<T>
-    where
-        T: DeserializeOwned,
-    {
-        fetch_json(&self.client, url, "quilt source").await
+        fetch_json(&self.client, url.as_str(), "quilt source").await
     }
 }

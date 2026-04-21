@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{future::Future, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
 use elemental_core::{
@@ -11,13 +11,15 @@ use elemental_infra::downloader::{
     report::SessionExecutionReport,
     task::{DownloadPlan, DownloadTask},
 };
+use elemental_schema::mojang::piston::{
+    PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaLibraries,
+    PistonMetaLibrariesDownloadsArtifact,
+};
 
 use crate::families::version_json::{
-    PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaLibraries,
-    PistonMetaLibrariesDownloadsArtifact, PistonMetaLibrariesExt, VersionJsonGameStorageExt,
-    VersionJsonInstanceLayout, VersionJsonInstanceResource, VersionJsonRootLayout,
-    VersionJsonRootResource, VersionJsonRuleContext, VersionJsonVersionStorageExt,
-    remote::VersionJsonRemoteResolver,
+    PistonMetaLibrariesExt, VersionJsonGameStorageExt, VersionJsonInstanceLayout,
+    VersionJsonInstanceResource, VersionJsonRootLayout, VersionJsonRootResource,
+    VersionJsonRuleContext, VersionJsonVersionStorageExt, remote::VersionJsonRemoteResolver,
 };
 
 #[derive(Debug, Clone)]
@@ -131,6 +133,49 @@ impl<R: VersionJsonRemoteResolver> ResolvedVersionJsonMetadata<R> {
             asset_index_objects: self.asset_index_objects,
         })
     }
+}
+
+pub async fn prepare_version_json<R, L, VL, ResolveFn, ResolveFut>(
+    downloader: &ElementalDownloader,
+    resolve_or_load: ResolveFn,
+) -> Result<PreparedVersionJsonInstance<R, L, VL>>
+where
+    R: VersionJsonRemoteResolver,
+    L: VersionJsonRootLayout + Clone,
+    VL: VersionJsonInstanceLayout + Clone,
+    ResolveFn: FnOnce() -> ResolveFut,
+    ResolveFut: Future<Output = Result<ResolvedVersionJsonInstance<R, L, VL>>>,
+{
+    let resolved = resolve_or_load().await?;
+    resolved.prepare(downloader).await
+}
+
+pub async fn persist_version_json<R, L, VL, ResolveFn, ResolveFut>(
+    instance: &Storage<VL, Storage<L>>,
+    resolve_metadata: ResolveFn,
+) -> Result<ResolvedVersionJsonInstance<R, L, VL>>
+where
+    R: VersionJsonRemoteResolver,
+    L: VersionJsonRootLayout + Clone,
+    VL: VersionJsonInstanceLayout + Clone,
+    ResolveFn: FnOnce() -> ResolveFut,
+    ResolveFut: Future<Output = Result<ResolvedVersionJsonMetadata<R>>>,
+{
+    resolve_metadata().await?.persist(instance).await
+}
+
+pub async fn load_prepared_version_json<R, L, VL>(
+    remote_resolver: R,
+    instance: &Storage<VL, Storage<L>>,
+) -> Result<PreparedVersionJsonInstance<R, L, VL>>
+where
+    R: VersionJsonRemoteResolver,
+    L: VersionJsonRootLayout + Clone,
+    VL: VersionJsonInstanceLayout + Clone,
+{
+    ResolvedVersionJsonInstance::load(remote_resolver, instance.clone())?
+        .into_prepared()
+        .await
 }
 
 impl<R, L, VL> ResolvedVersionJsonInstance<R, L, VL>

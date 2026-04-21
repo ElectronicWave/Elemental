@@ -1,9 +1,9 @@
 use anyhow::Result;
 use elemental_schema::fabric::ProfileJson;
+use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::families::version_json::{
-    PistonMetaData, ProfileMergeBehavior, merge_profile_with_behavior,
-    metadata_has_replaced_library_conflicts,
+    ProfileMergeBehavior, merge_profile_with_behavior, metadata_has_replaced_library_conflicts,
 };
 
 pub(super) trait FlavorBehavior: ProfileMergeBehavior {

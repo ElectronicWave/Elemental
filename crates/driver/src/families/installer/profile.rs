@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail};
-use elemental_core::storage::Storage;
+use elemental_core::{runtime::distribution::Distribution, storage::Storage};
 use elemental_infra::downloader::{core::ElementalDownloader, task::DownloadPlan};
 use elemental_schema::{
     forge::ForgeInstallerProfile,
@@ -19,15 +19,33 @@ use tokio::fs::create_dir_all;
 use crate::{
     drivers::vanilla::{prepared::ResolvedVanillaMetadata, source::VanillaSource},
     families::{
-        installer::{InstallerArchive, InstallerArtifact},
+        installer::{InstallerArchive, InstallerArtifact, installer_client_processors_ready},
         version_json::{
-            PreparedVersionJsonInstance, ResolvedVersionJsonMetadata, VersionJsonGameStorageExt,
-            VersionJsonInstanceLayout, VersionJsonRemoteResolver, VersionJsonRootLayout,
+            PreparedVersionJsonInstance, ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata,
+            VersionJsonGameStorageExt, VersionJsonInstanceLayout, VersionJsonRemoteResolver,
+            VersionJsonRootLayout,
         },
     },
+    runtime::resolve_runtime,
 };
 
 const INSTALL_PROFILE_ENTRY: &str = "install_profile.json";
+
+#[derive(Debug, Clone)]
+pub struct InstallerPersistedState {
+    pub install_profile: ForgeInstallerProfile,
+    pub embedded_version: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InstallerInstallStatus {
+    pub installer_downloaded: bool,
+    pub install_profile_persisted: bool,
+    pub embedded_version_persisted: bool,
+    pub profile_libraries_ready: bool,
+    pub processors_completed: bool,
+    pub launch_version_ready: bool,
+}
 
 pub fn read_embedded_version<P: AsRef<Path>>(
     archive: &InstallerArchive<P>,
@@ -77,6 +95,40 @@ pub async fn ensure_installer_artifact_downloaded(
     Ok(())
 }
 
+pub async fn prepare_installer_state<V>(
+    downloader: &ElementalDownloader,
+    installer_artifact: &InstallerArtifact,
+    instance_root: &Path,
+    libraries_root: &Path,
+    family_name: &str,
+    validate_profile: V,
+) -> Result<InstallerPersistedState>
+where
+    V: Fn(&ForgeInstallerProfile) -> Result<()>,
+{
+    ensure_installer_artifact_downloaded(downloader, installer_artifact, family_name).await?;
+
+    let archive = InstallerArchive::new(installer_artifact.path.clone());
+    let install_profile = archive
+        .read_json::<ForgeInstallerProfile>(INSTALL_PROFILE_ENTRY)
+        .with_context(|| {
+            format!("read {family_name} {INSTALL_PROFILE_ENTRY} from installer failed")
+        })?;
+    validate_profile(&install_profile)?;
+    let embedded_version = read_embedded_version(&archive, &install_profile, family_name)?;
+
+    persist_install_profile(instance_root, &install_profile, family_name).await?;
+    persist_embedded_version(instance_root, embedded_version.as_ref(), family_name).await?;
+    archive
+        .extract_maven_artifacts(libraries_root)
+        .with_context(|| format!("extract {family_name} embedded maven artifacts failed"))?;
+
+    Ok(InstallerPersistedState {
+        install_profile,
+        embedded_version,
+    })
+}
+
 pub async fn prepare_installer_launch_version<RR, L, VL, F>(
     request: InstallerLaunchVersionRequest<'_, RR, L, VL, F>,
 ) -> Result<PreparedVersionJsonInstance<RR, L, VL>>
@@ -124,6 +176,41 @@ where
     pub embedded_version: Option<&'a serde_json::Value>,
     pub normalize_libraries: F,
     pub family_name: &'a str,
+}
+
+pub fn load_persisted_installer_state(
+    instance_root: &Path,
+    family_name: &str,
+) -> Result<InstallerPersistedState> {
+    let install_profile_path = install_profile_path(instance_root, family_name);
+    let install_profile = serde_json::from_reader(std::fs::File::open(&install_profile_path)?)
+        .with_context(|| {
+            format!(
+                "read persisted {family_name} install profile failed: {}",
+                install_profile_path.display()
+            )
+        })?;
+
+    let embedded_version_path = embedded_version_path(instance_root, family_name);
+    let embedded_version = if embedded_version_path.exists() {
+        Some(
+            serde_json::from_reader(std::fs::File::open(&embedded_version_path)?).with_context(
+                || {
+                    format!(
+                        "read persisted {family_name} embedded version failed: {}",
+                        embedded_version_path.display()
+                    )
+                },
+            )?,
+        )
+    } else {
+        None
+    };
+
+    Ok(InstallerPersistedState {
+        install_profile,
+        embedded_version,
+    })
 }
 
 pub async fn resolve_vanilla_metadata(
@@ -242,6 +329,52 @@ where
     }
 
     Ok(true)
+}
+
+pub async fn resolve_installer_processor_runtime<RR, L, VL>(
+    launch_version: &PreparedVersionJsonInstance<RR, L, VL>,
+    runtime_executable_path: Option<&Path>,
+    operation_name: &str,
+) -> Result<Distribution>
+where
+    RR: VersionJsonRemoteResolver,
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+{
+    let required_major_version = launch_version.required_java_major_version();
+    resolve_runtime(
+        required_major_version,
+        runtime_executable_path,
+        operation_name,
+    )
+    .await
+}
+
+pub async fn installer_install_status<RR, L, VL>(
+    instance: &Storage<VL, Storage<L>>,
+    installer_artifact: &InstallerArtifact,
+    install_profile: &ForgeInstallerProfile,
+    launch_version: &ResolvedVersionJsonInstance<RR, L, VL>,
+    family_name: &str,
+) -> Result<InstallerInstallStatus>
+where
+    RR: VersionJsonRemoteResolver,
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+{
+    Ok(InstallerInstallStatus {
+        installer_downloaded: installer_artifact.path.exists(),
+        install_profile_persisted: install_profile_path(&instance.path, family_name).exists(),
+        embedded_version_persisted: embedded_version_path(&instance.path, family_name).exists(),
+        profile_libraries_ready: profile_libraries_ready(instance, install_profile)?,
+        processors_completed: installer_client_processors_ready(
+            instance,
+            installer_artifact,
+            install_profile,
+            family_name,
+        )?,
+        launch_version_ready: launch_version.status().await?.is_ready(),
+    })
 }
 
 pub async fn persist_install_profile(

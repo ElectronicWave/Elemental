@@ -1,47 +1,34 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use elemental_core::{runtime::distribution::Distribution, storage::Storage};
+use elemental_core::storage::Storage;
 use elemental_infra::downloader::core::ElementalDownloader;
 use elemental_schema::{forge::ForgeInstallerProfile, mojang::piston::PistonMetaLibraries};
 
 use crate::{
     drivers::{
-        neoforge::{
-            processor::{
-                client_processors_ready, ensure_profile_libraries_downloaded, run_client_processors,
-            },
-            source::{NeoForgeEndpoints, NeoForgeSource},
-        },
+        neoforge::source::{NeoForgeEndpoints, NeoForgeSource},
         vanilla::source::{VanillaEndpoints, VanillaSource},
     },
     families::{
         installer::{
-            InstallerArchive, InstallerArtifact, InstallerLaunchVersionRequest,
+            InstallerArtifact, InstallerInstallStatus, InstallerLaunchVersionRequest,
             embedded_version_path as installer_embedded_version_path,
-            ensure_installer_artifact_downloaded,
-            install_profile_path as installer_install_profile_path, normalize_library_urls,
-            persist_embedded_version, persist_install_profile, prepare_installer_launch_version,
-            profile_game_and_raw_loader_version, profile_libraries_ready, read_embedded_version,
-            validate_installer_profile_identity,
+            ensure_installer_profile_libraries_downloaded,
+            install_profile_path as installer_install_profile_path, installer_install_status,
+            load_persisted_installer_state, normalize_library_urls,
+            prepare_installer_launch_version, prepare_installer_state,
+            profile_game_and_raw_loader_version, resolve_installer_processor_runtime,
+            run_installer_client_processors, validate_installer_profile_identity,
         },
         version_json::{
             PreparedVersionJsonInstance, ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata,
             VersionJsonInstanceLayout, VersionJsonRemoteResolver, VersionJsonRootLayout,
         },
     },
-    runtime::resolve_runtime,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NeoForgeInstallStatus {
-    pub installer_downloaded: bool,
-    pub install_profile_persisted: bool,
-    pub embedded_version_persisted: bool,
-    pub profile_libraries_ready: bool,
-    pub processors_completed: bool,
-    pub launch_version_ready: bool,
-}
+pub type NeoForgeInstallStatus = InstallerInstallStatus;
 
 #[derive(Debug, Clone)]
 pub struct NeoForgeRemoteResolver {
@@ -126,22 +113,15 @@ where
         remote_resolver: &NeoForgeRemoteResolver,
         runtime_executable_path: Option<&Path>,
     ) -> Result<PreparedNeoForgeVersion<L, VL>> {
-        ensure_installer_artifact_downloaded(downloader, &self.installer_artifact, "neoforge")
-            .await?;
-
-        let archive = InstallerArchive::new(self.installer_artifact.path.clone());
-        let install_profile = archive
-            .read_json::<ForgeInstallerProfile>("install_profile.json")
-            .context("read neoforge install_profile.json from installer failed")?;
-        validate_profile_identity(self, &install_profile)?;
-        let embedded_version = read_embedded_version(&archive, &install_profile, "neoforge")?;
-
-        persist_install_profile(&self.instance.path, &install_profile, "neoforge").await?;
-        persist_embedded_version(&self.instance.path, embedded_version.as_ref(), "neoforge")
-            .await?;
-        archive
-            .extract_maven_artifacts(&self.instance.parent.path.join("libraries"))
-            .context("extract neoforge embedded maven artifacts failed")?;
+        let installer_state = prepare_installer_state(
+            downloader,
+            &self.installer_artifact,
+            &self.instance.path,
+            &self.instance.parent.path.join("libraries"),
+            "neoforge",
+            |install_profile| validate_profile_identity(self, install_profile),
+        )
+        .await?;
 
         let launch_version = prepare_installer_launch_version(InstallerLaunchVersionRequest {
             instance: &self.instance,
@@ -149,7 +129,7 @@ where
             remote_resolver,
             downloader,
             vanilla_source,
-            embedded_version: embedded_version.as_ref(),
+            embedded_version: installer_state.embedded_version.as_ref(),
             normalize_libraries: |libraries| {
                 normalize_neoforge_library_urls(libraries, self.source.endpoints())
             },
@@ -157,30 +137,43 @@ where
         })
         .await?;
 
-        ensure_profile_libraries_downloaded(
+        ensure_installer_profile_libraries_downloaded(
             downloader,
-            remote_resolver,
             &self.instance,
-            &install_profile,
+            &installer_state.install_profile,
+            "neoforge",
+            |raw_url, artifact_path| remote_resolver.neoforge_artifact_url(raw_url, artifact_path),
         )
         .await?;
 
-        let runtime = processor_runtime(&launch_version, runtime_executable_path).await?;
-        run_client_processors(
+        let runtime = resolve_installer_processor_runtime(
+            &launch_version,
+            runtime_executable_path,
+            "neoforge processors",
+        )
+        .await?;
+        run_installer_client_processors(
             &runtime,
             &self.instance,
             &self.installer_artifact,
-            &install_profile,
+            &installer_state.install_profile,
+            "neoforge",
         )
         .await?;
 
-        let install_status =
-            install_status(self, &install_profile, &launch_version.resolved_version).await?;
+        let install_status = installer_install_status(
+            &self.instance,
+            &self.installer_artifact,
+            &installer_state.install_profile,
+            &launch_version.resolved_version,
+            "neoforge",
+        )
+        .await?;
 
         Ok(PreparedNeoForgeVersion {
             resolved_version: self.clone(),
-            install_profile,
-            embedded_version,
+            install_profile: installer_state.install_profile,
+            embedded_version: installer_state.embedded_version,
             launch_version,
             install_status,
         })
@@ -191,31 +184,9 @@ where
         remote_resolver: NeoForgeRemoteResolver,
         instance: Storage<VL, Storage<L>>,
     ) -> Result<PreparedNeoForgeVersion<L, VL>> {
-        let install_profile_path = install_profile_path(&instance.path);
-        let install_profile = serde_json::from_reader(std::fs::File::open(&install_profile_path)?)
-            .with_context(|| {
-                format!(
-                    "read persisted neoforge install profile failed: {}",
-                    install_profile_path.display()
-                )
-            })?;
+        let installer_state = load_persisted_installer_state(&instance.path, "neoforge")?;
 
-        let embedded_version_path = embedded_version_path(&instance.path);
-        let embedded_version = if embedded_version_path.exists() {
-            Some(
-                serde_json::from_reader(std::fs::File::open(&embedded_version_path)?)
-                    .with_context(|| {
-                        format!(
-                            "read persisted neoforge embedded version failed: {}",
-                            embedded_version_path.display()
-                        )
-                    })?,
-            )
-        } else {
-            None
-        };
-
-        let (game_version, loader_version) = profile_identity(&install_profile)?;
+        let (game_version, loader_version) = profile_identity(&installer_state.install_profile)?;
         let installer_artifact =
             source.installer_artifact(&instance.parent, &game_version, &loader_version)?;
         let resolved_version = ResolvedNeoForgeVersion {
@@ -229,10 +200,12 @@ where
             ResolvedNeoForgeLaunchVersion::load(remote_resolver, instance.clone())?
                 .into_prepared()
                 .await?;
-        let install_status = install_status(
-            &resolved_version,
-            &install_profile,
+        let install_status = installer_install_status(
+            &resolved_version.instance,
+            &resolved_version.installer_artifact,
+            &installer_state.install_profile,
             &launch_version.resolved_version,
+            "neoforge",
         )
         .await?;
 
@@ -248,8 +221,8 @@ where
 
         Ok(PreparedNeoForgeVersion {
             resolved_version,
-            install_profile,
-            embedded_version,
+            install_profile: installer_state.install_profile,
+            embedded_version: installer_state.embedded_version,
             launch_version,
             install_status,
         })
@@ -272,49 +245,6 @@ where
     pub fn required_java_major_version(&self) -> usize {
         self.launch_version.required_java_major_version()
     }
-}
-
-async fn processor_runtime<L, VL>(
-    launch_version: &PreparedNeoForgeLaunchVersion<L, VL>,
-    runtime_executable_path: Option<&Path>,
-) -> Result<Distribution>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
-    let required_major_version = launch_version.required_java_major_version();
-    resolve_runtime(
-        required_major_version,
-        runtime_executable_path,
-        "neoforge processors",
-    )
-    .await
-}
-
-async fn install_status<L, VL>(
-    resolved_version: &ResolvedNeoForgeVersion<L, VL>,
-    install_profile: &ForgeInstallerProfile,
-    launch_version: &ResolvedNeoForgeLaunchVersion<L, VL>,
-) -> Result<NeoForgeInstallStatus>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
-    Ok(NeoForgeInstallStatus {
-        installer_downloaded: resolved_version.installer_artifact.path.exists(),
-        install_profile_persisted: install_profile_path(&resolved_version.instance.path).exists(),
-        embedded_version_persisted: embedded_version_path(&resolved_version.instance.path).exists(),
-        profile_libraries_ready: profile_libraries_ready(
-            &resolved_version.instance,
-            install_profile,
-        )?,
-        processors_completed: client_processors_ready(
-            &resolved_version.instance,
-            &resolved_version.installer_artifact,
-            install_profile,
-        )?,
-        launch_version_ready: launch_version.status().await?.is_ready(),
-    })
 }
 
 fn install_profile_path(instance_root: &Path) -> PathBuf {

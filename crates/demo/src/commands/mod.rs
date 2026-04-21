@@ -4,7 +4,7 @@ mod neoforge;
 mod quilt;
 mod vanilla;
 
-use std::{fmt::Debug, future::Future, pin::Pin, time::Duration};
+use std::{fmt::Debug, future::Future, time::Duration};
 
 use anyhow::{Context, Result};
 use elemental::{
@@ -14,9 +14,13 @@ use elemental::{
     },
     driver::{
         drivers::vanilla::config::VanillaLaunchConfig,
-        families::version_json::{
-            BaseInstanceLayout, BaseRootLayout, VersionJsonGameStorageExt,
-            VersionJsonInstanceLayout, VersionJsonRootLayout,
+        families::{
+            installer::{InstallerFamilyDriver, InstallerFamilyDriverSpec},
+            version_json::{
+                BaseInstanceLayout, BaseRootLayout, ProfiledVersionJsonDriver,
+                ProfiledVersionJsonFamily, VersionJsonGameStorageExt, VersionJsonInstanceLayout,
+                VersionJsonRootLayout,
+            },
         },
     },
 };
@@ -83,55 +87,65 @@ pub(super) async fn prepare_loader_demo(
     Ok((loader_version, instance, launch_config))
 }
 
-pub(super) async fn run_loader_demo<D, Prepared, PrepareFn, BuildFn, StatusFn, VersionFn, L, VL>(
+pub(super) async fn run_profiled_version_json_demo<F>(
     config: DemoConfig,
     driver_label: &str,
-    driver: &D,
-    prepare: PrepareFn,
-    build_launch_command: BuildFn,
-    install_status: StatusFn,
-    version: VersionFn,
+    driver: &ProfiledVersionJsonDriver<F>,
 ) -> Result<()>
 where
-    PrepareFn: for<'a> Fn(
-        &'a D,
-        &'a Storage<BaseInstanceLayout, Storage<BaseRootLayout>>,
-        String,
-        String,
-        &'a VanillaLaunchConfig,
-    ) -> Pin<Box<dyn Future<Output = Result<Prepared>> + 'a>>,
-    BuildFn: for<'a> Fn(
-        &'a D,
-        OfflineAuthorizer,
-        &'a Prepared,
-        &'a VanillaLaunchConfig,
-    ) -> Pin<
-        Box<dyn Future<Output = Result<(Distribution, LaunchCommand)>> + 'a>,
-    >,
-    StatusFn: for<'a> Fn(&'a Prepared) -> &'a dyn Debug,
-    VersionFn: for<'a> Fn(&'a Prepared) -> &'a Storage<VL, Storage<L>>,
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
+    F: ProfiledVersionJsonFamily,
 {
     let (loader_version, instance, launch_config) =
         prepare_loader_demo(&config, driver_label).await?;
-    let (prepared, prepare_elapsed) = time_operation(prepare(
-        driver,
+    let (prepared, prepare_elapsed) = time_operation(driver.prepare(
+        &instance,
+        config.game_version.clone(),
+        loader_version.clone(),
+    ))
+    .await?;
+    let (runtime, command) = driver
+        .build_launch_command(offline_authorizer(), &prepared, &launch_config)
+        .await?;
+
+    finalize_launch(
+        &config,
+        Some(loader_version.as_str()),
+        prepare_elapsed.as_millis(),
+        &prepared.install_status,
+        &prepared.resolved_version.version,
+        runtime,
+        command,
+    )
+    .await
+}
+
+pub(super) async fn run_installer_family_demo<F>(
+    config: DemoConfig,
+    driver_label: &str,
+    driver: &InstallerFamilyDriver<F>,
+) -> Result<()>
+where
+    F: InstallerFamilyDriverSpec,
+{
+    let (loader_version, instance, launch_config) =
+        prepare_loader_demo(&config, driver_label).await?;
+    let (prepared, prepare_elapsed) = time_operation(driver.prepare_with_config(
         &instance,
         config.game_version.clone(),
         loader_version.clone(),
         &launch_config,
     ))
     .await?;
-    let (runtime, command) =
-        build_launch_command(driver, offline_authorizer(), &prepared, &launch_config).await?;
+    let (runtime, command) = driver
+        .build_launch_command(offline_authorizer(), &prepared, &launch_config)
+        .await?;
 
     finalize_launch(
         &config,
         Some(loader_version.as_str()),
         prepare_elapsed.as_millis(),
-        install_status(&prepared),
-        version(&prepared),
+        &prepared.install_status,
+        &prepared.launch_version.resolved_version.version,
         runtime,
         command,
     )

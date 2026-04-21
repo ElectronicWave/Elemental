@@ -1,10 +1,8 @@
 use anyhow::{Result, bail};
-use elemental::driver::drivers::fabric::{
-    config::FabricLaunchConfig, driver::FabricDriverFamily, source::FabricFlavor,
-};
+use elemental::driver::drivers::fabric::{driver::FabricDriverFamily, source::FabricFlavor};
 
 use crate::{
-    commands::run_loader_demo,
+    commands::run_profiled_version_json_demo,
     config::{DemoConfig, DemoDriver},
 };
 
@@ -12,24 +10,7 @@ pub async fn run(config: DemoConfig) -> Result<()> {
     let driver_kind = config.driver;
     let driver = FabricDriverFamily::new(fabric_flavor(driver_kind)?).new_driver_with_defaults()?;
 
-    run_loader_demo(
-        config,
-        "fabric-like",
-        &driver,
-        |driver, instance, game_version, loader_version, _launch_config: &FabricLaunchConfig| {
-            Box::pin(async move { driver.prepare(instance, game_version, loader_version).await })
-        },
-        |driver, authorizer, prepared, launch_config: &FabricLaunchConfig| {
-            Box::pin(async move {
-                driver
-                    .build_launch_command(authorizer, prepared, launch_config)
-                    .await
-            })
-        },
-        |prepared| &prepared.install_status,
-        |prepared| &prepared.resolved_version.version,
-    )
-    .await
+    run_profiled_version_json_demo(config, "fabric-like", &driver).await
 }
 
 fn fabric_flavor(driver: DemoDriver) -> Result<FabricFlavor> {

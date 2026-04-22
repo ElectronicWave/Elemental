@@ -23,7 +23,7 @@ It is intended as a working architecture reference, not as a release guarantee.
 | Quilt           | Yes     | Yes     | Yes     | Yes            | Yes     | Independent fabric-like driver implemented and smoke-verified on a representative anchor |
 | Forge           | Yes     | Yes     | Yes     | Yes            | Yes     | Installer-family driver now reaches a verified modern launch anchor               |
 | NeoForge        | Yes     | Yes     | Yes     | Yes            | Yes     | Installer-family driver now reaches a verified modern launch anchor; catalog game-version grouping remains heuristic |
-| CleanroomMC     | No      | No      | No      | No             | No      | Not started                                                                       |
+| CleanroomMC     | Yes     | Yes     | Yes     | Yes            | Yes     | Installer-family driver is implemented and smoke-verified on a `1.12.2 / 0.5.8-alpha` anchor |
 | LiteLoader      | No      | No      | No      | No             | No      | Not started                                                                       |
 | Rift            | No      | No      | No      | No             | No      | Not started                                                                       |
 | OptiFine        | No      | No      | No      | No             | No      | Not started                                                                       |
@@ -43,6 +43,7 @@ These anchors should be read as verified points inside the support range, not as
 | Quilt           | `1.20.1`                              | Confirms a second independent fabric-like driver on the shared profile-driven substrate         |
 | Forge           | `1.12.2 / 14.23.5.2860`, `1.20.1 / 47.3.1` | Confirms the installer-family pipeline across a classic legacy-era anchor and a modern Forge anchor |
 | NeoForge        | `1.21.1 / 21.1.199`                   | Confirms the installer-family pipeline on a modern NeoForge anchor; catalog grouping is still version-name heuristic |
+| CleanroomMC     | `1.12.2 / 0.5.8-alpha`               | Confirms the installer-family pipeline on a Java 25-era Cleanroom anchor after legacy runtime cleanup |
 
 Rolling targets such as the latest release, latest snapshot, and latest stable loader should still be treated as recurring regression checks rather than one-time milestones.
 
@@ -62,7 +63,7 @@ These are the ranges I would claim today based on the current code, upstream doc
 | Quilt           | `1.20.1` verified, broader range not claimed yet          | Medium       | The current workspace now has an end-to-end verified anchor on `1.20.1`, but broader Quilt-supported version coverage still needs systematic smoke coverage |
 | Forge           | `1.12.2 / 14.23.5.2860` and `1.20.1 / 47.3.1` verified, broader range not claimed yet | High  | The installer-family pipeline now has verified anchors on both a classic `1.12.2` generation and a modern `1.20.1` generation, but broader Forge coverage still needs systematic validation |
 | NeoForge        | `1.21.1 / 21.1.199` verified, broader range not claimed yet | High       | The installer-family pipeline now has a verified modern NeoForge anchor, but broader NeoForge coverage still needs systematic validation and catalog grouping still relies on version-name heuristics |
-| CleanroomMC     | no install or launch claim yet                            | High         | Not implemented                                                                                                                                            |
+| CleanroomMC     | `1.12.2 / 0.5.8-alpha` verified, broader range not claimed yet | High     | The installer-family pipeline now has a verified Cleanroom anchor on the only currently targeted Minecraft line, but broader Cleanroom release coverage and companion-pack semantics still need systematic validation |
 
 ## Upstream Findings
 
@@ -145,7 +146,8 @@ Relevant sources:
 Architecture implication:
 
 - Cleanroom is not `fabric-like`.
-- It behaves like a `legacy-forge` or `cleanroom` family built on old FML and LaunchWrapper-era semantics.
+- Its published installer artifact fits naturally into the `installer` family.
+- The current workspace now treats Cleanroom as an installer-family driver on the `1.12.2` line, while MMC import semantics and wider companion-pack handling remain future work.
 
 ## Repositories Mentioned But Not Directly Verified
 
@@ -177,10 +179,9 @@ Recommended families:
 | --------------------- | ----------------------------------- | -------------------------------------------------------- |
 | `version_json` family | Vanilla                             | Modern metadata-driven install and launch                |
 | `fabric-like` family  | Fabric, LegacyFabric, Babric, Quilt | Profile-driven or version-json-derived boot              |
-| `installer` family    | Forge, NeoForge                     | Installer protocol and materialization                   |
+| `installer` family    | Forge, NeoForge, CleanroomMC        | Installer protocol and materialization, including legacy-derived installer distributions |
 | `legacy` family       | LiteLoader, Rift                    | LaunchWrapper, tweaker, relaunch, legacy bootstrap       |
 | `addon` family        | OptiFine, OptiFabric                | Patch or addon semantics layered on top of a base driver |
-| `cleanroom` family    | CleanroomMC                         | Forge-derived but distinct legacy boot semantics         |
 
 ## Should Elemental Support Driver Uninstall
 
@@ -409,22 +410,28 @@ Why this phase matters:
 
 - this is the step that moves Elemental from a modern launcher SDK to a broader launcher kernel
 
-## Phase 5: Add CleanroomMC
+## Phase 5: Broaden CleanroomMC Coverage
 
 Goal:
 
-- support Cleanroom as its own real target instead of misclassifying it as Forge or Fabric
+- keep Cleanroom green on the current installer-family path while deciding whether it needs a second distribution path beyond installer materialization
 
 Work:
 
-- start with `1.12.2` only
-- support MMC instance import semantics
-- support relauncher or installer-driven path separately if needed
-- model required companion pieces such as Fugue and Scalar explicitly
+- keep the `1.12.2` installer-driven path healthy under recurring regression checks
+- validate more Cleanroom releases when stable installer artifacts are available
+- decide whether MMC instance import should be added as a secondary path instead of a prerequisite
+- model companion pieces such as Fugue and Scalar explicitly if they prove necessary for wider pack compatibility
 
 Why this phase matters:
 
-- Cleanroom proves that Forge-derived ecosystems can still require their own family treatment
+- Cleanroom proves that installer-family drivers can still need substantial legacy runtime cleanup without becoming a fake top-level family of their own
+
+Current status:
+
+- a `CleanroomDriver` now exists on top of the installer-family substrate
+- `1.12.2 / 0.5.8-alpha` is smoke-verified with Java 25
+- broader Cleanroom release coverage and wider pack semantics are still unclaimed
 
 ## Phase 6: Add Addon Family
 
@@ -477,6 +484,7 @@ The current Elemental kernel is already in a strong position:
 - `core` is no longer bound to Mojang-specific world assumptions
 - `Vanilla` is a usable mainline driver
 - `Fabric` is attached as the second real family-backed driver
+- the installer family now hosts verified Forge, NeoForge, and Cleanroom anchors
 
 The next milestone is not UI polish.
 
@@ -486,6 +494,6 @@ The next milestone is proving that Elemental can cleanly host:
 - `installer`
 - `legacy`
 - `addon`
-- and eventually `cleanroom`
+- and broader Cleanroom coverage inside the installer family
 
 That is the step that turns it from a modern launcher SDK into a true launcher kernel.

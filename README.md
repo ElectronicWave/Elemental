@@ -23,31 +23,24 @@ Elemental is a Modern Minecraft Launcher SDK⚛
 | Quilt           | ✅       | ✅       | ✅       | ✅              | ✅      |
 | Forge           | ✅       | ✅       | ✅       | ✅              | ✅      |
 | NeoForge        | ✅       | ✅       | ✅       | ✅              | ✅      |
+| CleanroomMC     | ✅       | ✅       | ✅       | ✅              | ✅      |
 | LiteLoader      | ❌       | ❌       | ❌       | ❌              | ❌      |
-| CleanroomMC     | ❌       | ❌       | ❌       | ❌              | ❌      |
 
-Development is actively in progress. The matrix reflects the current workspace state rather than a stability guarantee.
-
-The `fabric-like` substrate now backs multiple verified drivers. Modern Fabric, LegacyFabric, Babric, and Quilt all have verified end-to-end smoke coverage on representative anchors.
-
-Forge now has verified installer-family anchors on `1.12.2 / 14.23.5.2860` and `1.20.1 / 47.3.1`. Broader Forge ranges are still not claimed yet.
-
-NeoForge now has a verified installer-family anchor on `1.21.1 / 21.1.199`. Broader NeoForge ranges are still not claimed yet, and catalog-side game-version grouping should still be treated as a heuristic rather than an upstream API guarantee.
+Development is actively in progress. The matrix reflects the current workspace state rather than a stability guarantee. Verified anchors and current range claims live in [ROADMAP.md](ROADMAP.md).
 
 ## Why Elemental
 
-- Built in Rust, so the launcher core gets native performance, predictable memory behavior, and strong typing instead of a large dynamic runtime.
-- The cache model is explicit. Artifacts, assets, natives, and instance state are tracked separately, so the launcher can reuse what is valid and only rebuild what is stale.
-- `Storage` + `Layout` separate storage semantics from physical paths, which makes migration, compatibility, and custom launcher layouts possible without hardcoding one global directory tree.
-- `Driver` is a first-class abstraction. Vanilla, Fabric-like, Forge, and future families are modeled as real distributions instead of hidden special cases layered on top of one default runtime.
-- The public flow is instance-first and product-friendly: open or create an instance, install into it, load installed state, then launch.
-- `version_json` is treated as a family layer, not as the center of the whole system. That keeps the core open to installer-driven and future non-`version_json` families.
-- The workspace is intentionally split by responsibility, so launcher products can reuse only the layers they need:
+- It treats Minecraft distributions as real families instead of flattening everything into one fake `version.json` model. Vanilla, Fabric-like loaders, Forge, NeoForge, and Cleanroom already land on different substrates without collapsing into special-case flags.
+- `Storage` + `Layout` make paths a typed capability, not stringly-typed launcher glue. Game roots, instances, libraries, assets, and version artifacts are resolved through explicit resource models, which keeps alternative layouts and migration work possible without hardcoding one `.minecraft` shape.
+- The instance lifecycle is explicit and product-friendly. Elemental separates catalog, inspect, install, load-installed, and launch so a launcher can discover local state, reopen prepared instances, and build launch commands without rerunning the whole install path every time.
+- Runtime handling is part of the kernel, not scattered around app code. The core can validate an explicit Java executable against the required major version or resolve a compatible local runtime automatically, which matters once old and new distributions coexist in the same launcher.
+- Installer-driven ecosystems are first-class. Forge, NeoForge, and now Cleanroom run on a shared installer-family flow with family-specific merge and runtime behavior, so the SDK can support legacy-derived installers without pretending they are just metadata overlays.
+- The workspace is split for reuse instead of forcing one monolith:
   - `schema` for protocol types
-  - `core` for launcher primitives
-  - `infra` for downloading
-  - `driver` for distribution logic
-  - `shared` for persisted state/config helpers
+  - `core` for storage, runtime, and launch primitives
+  - `infra` for downloading and archive work
+  - `driver` for catalogs, families, and distribution logic
+  - `shared` for persisted state helpers
 
 ## Workspace Layout
 
@@ -69,6 +62,8 @@ cargo run -p demo
 ```
 
 The current demo prepares and launches a Fabric instance.
+
+Loader-specific demo entry points are also available, including `cargo run -p demo -- cleanroom --help`.
 
 The default demo settings live in [crates/demo/src/main.rs](crates/demo/src/main.rs).
 

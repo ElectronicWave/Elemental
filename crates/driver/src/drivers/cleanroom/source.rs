@@ -77,11 +77,7 @@ impl CleanroomEndpoints {
     }
 
     pub fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
-        if let Some(rewritten) = self.origin_policy.rewrite_known_origin_url(raw_url)? {
-            return Ok(rewritten);
-        }
-
-        Ok(raw_url.to_owned())
+        self.origin_policy.rewrite_known_origin_url_or_keep(raw_url)
     }
 }
 

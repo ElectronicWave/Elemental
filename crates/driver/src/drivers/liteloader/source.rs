@@ -144,11 +144,7 @@ impl LiteLoaderEndpoints {
             return Ok(rewritten);
         }
 
-        if let Some(rewritten) = self.origin_policy.rewrite_known_origin_url(raw_url)? {
-            return Ok(rewritten);
-        }
-
-        Ok(raw_url.to_owned())
+        self.origin_policy.rewrite_known_origin_url_or_keep(raw_url)
     }
 }
 

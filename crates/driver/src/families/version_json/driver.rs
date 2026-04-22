@@ -10,19 +10,21 @@ use elemental_core::{
     storage::{Storage, layout::Layout},
 };
 use elemental_infra::downloader::core::ElementalDownloader;
+use elemental_schema::fabric::ProfileJson;
 use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::{
     driver::{Driver, DriverDescriptor, InstalledDriver},
     drivers::vanilla::source::{VanillaSource, resolve_vanilla_metadata},
     families::version_json::{
-        LaunchedVersionJsonInstance, PreparedVersionJsonInstance, ResolvedVersionJsonInstance,
-        ResolvedVersionJsonMetadata, VersionJsonInstanceLayout, VersionJsonLaunchConfig,
+        LaunchedVersionJsonInstance, PASSTHROUGH_PROFILE_BEHAVIOR, PreparedVersionJsonInstance,
+        ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata, UpstreamUrlRewriter,
+        VanillaFallbackRemoteResolver, VersionJsonInstanceLayout, VersionJsonLaunchConfig,
         VersionJsonRemoteResolver, VersionJsonRootLayout, build_version_json_launch_command,
-        launch_version_json_instance, load_prepared_version_json, persist_version_json,
-        prepare_version_json,
+        launch_version_json_instance, load_prepared_version_json, merge_profile_with_behavior,
+        persist_version_json, prepare_version_json,
     },
-    inspect::InstanceProbe,
+    inspect::{InstanceProbe, ProfiledDriverIdentity},
     loader_version::LoaderVersionId,
 };
 
@@ -81,6 +83,110 @@ pub trait ProfiledVersionJsonFamilyExt: ProfiledVersionJsonFamily + Sized {
 }
 
 impl<F> ProfiledVersionJsonFamilyExt for F where F: ProfiledVersionJsonFamily {}
+
+pub fn default_profiled_source<S>() -> Result<S>
+where
+    S: Default,
+{
+    Ok(S::default())
+}
+
+pub fn vanilla_fallback_remote_resolver<E>(
+    family_name: &'static str,
+    vanilla_source: &VanillaSource,
+    family_endpoints: &E,
+) -> VanillaFallbackRemoteResolver<E>
+where
+    E: UpstreamUrlRewriter,
+{
+    VanillaFallbackRemoteResolver::new(
+        family_name,
+        vanilla_source.endpoints().clone(),
+        family_endpoints.clone(),
+    )
+}
+
+#[async_trait(?Send)]
+pub trait PassthroughProfiledVersionJsonFamily:
+    Clone + std::fmt::Debug + Send + Sync + 'static
+{
+    type Source: Default + Clone + std::fmt::Debug + Send + Sync + 'static;
+    type Endpoints: UpstreamUrlRewriter;
+
+    const DRIVER: DriverDescriptor;
+    const FAMILY_NAME: &'static str;
+    const IDENTITY: ProfiledDriverIdentity;
+
+    fn source_endpoints(source: &Self::Source) -> &Self::Endpoints;
+
+    async fn profile(
+        &self,
+        source: &Self::Source,
+        game_version: &MinecraftVersionId,
+        loader_version: &LoaderVersionId,
+    ) -> Result<ProfileJson>;
+}
+
+#[async_trait(?Send)]
+impl<F> ProfiledVersionJsonFamily for F
+where
+    F: PassthroughProfiledVersionJsonFamily,
+{
+    type Source = F::Source;
+    type Profile = ProfileJson;
+    type RemoteResolver = VanillaFallbackRemoteResolver<F::Endpoints>;
+
+    fn descriptor(&self) -> DriverDescriptor {
+        F::DRIVER
+    }
+
+    fn default_source(&self) -> Result<Self::Source> {
+        default_profiled_source()
+    }
+
+    fn remote_resolver(
+        &self,
+        vanilla_source: &VanillaSource,
+        source: &Self::Source,
+    ) -> Self::RemoteResolver {
+        vanilla_fallback_remote_resolver(
+            F::FAMILY_NAME,
+            vanilla_source,
+            F::source_endpoints(source),
+        )
+    }
+
+    async fn profile(
+        &self,
+        source: &Self::Source,
+        game_version: &MinecraftVersionId,
+        loader_version: &LoaderVersionId,
+    ) -> Result<Self::Profile> {
+        PassthroughProfiledVersionJsonFamily::profile(self, source, game_version, loader_version)
+            .await
+    }
+
+    fn merge_profile(
+        &self,
+        base_metadata: PistonMetaData,
+        profile: Self::Profile,
+    ) -> Result<PistonMetaData> {
+        merge_profile_with_behavior(&PASSTHROUGH_PROFILE_BEHAVIOR, base_metadata, profile)
+    }
+
+    fn local_metadata_needs_refresh(
+        &self,
+        metadata: &PistonMetaData,
+        game_version: &MinecraftVersionId,
+        loader_version: &LoaderVersionId,
+    ) -> bool {
+        F::IDENTITY.local_metadata_needs_refresh(metadata, game_version, loader_version.as_str())
+    }
+
+    fn inspect_installed(&self, metadata: &PistonMetaData) -> Option<InstalledDriver> {
+        F::IDENTITY.inspect_installed(metadata)
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ProfiledVersionJsonDriver<F>

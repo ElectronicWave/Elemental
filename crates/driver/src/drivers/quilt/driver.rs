@@ -8,7 +8,7 @@ use crate::{
     drivers::{quilt::source::QuiltSource, vanilla::source::VanillaSource},
     families::version_json::{
         PASSTHROUGH_PROFILE_BEHAVIOR, ProfiledVersionJsonDriver, ProfiledVersionJsonFamily,
-        merge_profile_with_behavior,
+        default_profiled_source, merge_profile_with_behavior, vanilla_fallback_remote_resolver,
     },
     inspect::LibraryPrefixSet,
     loader_version::LoaderVersionId,
@@ -35,7 +35,7 @@ impl ProfiledVersionJsonFamily for QuiltDriverFamily {
     }
 
     fn default_source(&self) -> Result<Self::Source> {
-        Ok(QuiltSource::default())
+        default_profiled_source()
     }
 
     fn remote_resolver(
@@ -43,11 +43,7 @@ impl ProfiledVersionJsonFamily for QuiltDriverFamily {
         vanilla_source: &VanillaSource,
         source: &Self::Source,
     ) -> Self::RemoteResolver {
-        super::prepared::QuiltRemoteResolver::new(
-            "quilt",
-            vanilla_source.endpoints().clone(),
-            source.endpoints().clone(),
-        )
+        vanilla_fallback_remote_resolver("quilt", vanilla_source, source.endpoints())
     }
 
     async fn profile(

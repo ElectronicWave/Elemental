@@ -16,7 +16,8 @@ pub mod storage;
 pub mod variables;
 
 pub use driver::{
-    ProfiledVersionJsonDriver, ProfiledVersionJsonFamily, ProfiledVersionJsonFamilyExt,
+    PassthroughProfiledVersionJsonFamily, ProfiledVersionJsonDriver, ProfiledVersionJsonFamily,
+    ProfiledVersionJsonFamilyExt, default_profiled_source, vanilla_fallback_remote_resolver,
 };
 pub use extensions::{PistonMetaDataExt, PistonMetaLibrariesExt};
 pub use launch::{

@@ -142,6 +142,14 @@ impl<O: Origin> OriginPolicy<O> {
 
         Ok(None)
     }
+
+    pub fn rewrite_known_origin_url_or_keep(&self, raw_url: &str) -> Result<String> {
+        if let Some(rewritten) = self.rewrite_known_origin_url(raw_url)? {
+            return Ok(rewritten);
+        }
+
+        Ok(raw_url.to_owned())
+    }
 }
 
 fn trim_trailing_slash(raw_url: &str) -> &str {

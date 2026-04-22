@@ -8,7 +8,7 @@ use crate::{
         },
         version_json::VersionJsonRootLayout,
     },
-    http::build_default_client,
+    http::HttpSource,
     loader_version::LoaderVersionId,
     maven::fetch_maven_metadata,
     url::{Origin, OriginPolicy},
@@ -29,8 +29,7 @@ pub struct NeoForgeEndpoints {
 
 #[derive(Debug, Clone)]
 pub struct NeoForgeSource {
-    client: reqwest::Client,
-    endpoints: NeoForgeEndpoints,
+    inner: HttpSource<NeoForgeEndpoints>,
 }
 
 impl Origin for NeoForgeOrigin {
@@ -106,28 +105,30 @@ impl InstallerArtifactEndpoints for NeoForgeEndpoints {
 
 impl Default for NeoForgeSource {
     fn default() -> Self {
-        Self {
-            client: build_default_client("neoforge source"),
-            endpoints: NeoForgeEndpoints::default(),
-        }
+        Self::new(NeoForgeEndpoints::default())
     }
 }
 
 impl NeoForgeSource {
     pub fn new(endpoints: NeoForgeEndpoints) -> Self {
         Self {
-            endpoints,
-            ..Self::default()
+            inner: HttpSource::new(endpoints, "neoforge source"),
+        }
+    }
+
+    pub fn with_client(endpoints: NeoForgeEndpoints, client: reqwest::Client) -> Self {
+        Self {
+            inner: HttpSource::with_client(endpoints, client),
         }
     }
 
     pub fn endpoints(&self) -> &NeoForgeEndpoints {
-        &self.endpoints
+        self.inner.endpoints()
     }
 
     pub async fn maven_metadata(&self) -> Result<MavenMetadataBody> {
-        let url = self.endpoints.maven_metadata_url()?;
-        fetch_maven_metadata(&self.client, url, "neoforge source").await
+        let url = self.endpoints().maven_metadata_url()?;
+        fetch_maven_metadata(self.inner.client(), url, "neoforge source").await
     }
 
     pub fn installer_artifact<L>(
@@ -145,7 +146,7 @@ impl NeoForgeSource {
         build_installer_artifact(
             game_storage,
             format!("net.neoforged:neoforge:{version}:installer"),
-            self.endpoints.installer_url(loader_version.as_str())?,
+            self.endpoints().installer_url(loader_version.as_str())?,
             library_relative_path,
         )
     }

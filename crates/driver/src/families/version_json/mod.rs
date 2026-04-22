@@ -14,7 +14,9 @@ mod state;
 pub mod storage;
 pub mod variables;
 
-pub use driver::{ProfiledVersionJsonDriver, ProfiledVersionJsonFamily};
+pub use driver::{
+    ProfiledVersionJsonDriver, ProfiledVersionJsonFamily, ProfiledVersionJsonFamilyExt,
+};
 pub use extensions::{PistonMetaDataExt, PistonMetaLibrariesExt};
 pub use launch::{
     LaunchResolution, QuickPlayOptions, VersionJsonLaunchConfig, build_version_json_launch_builder,
@@ -34,7 +36,7 @@ pub use profile::{
     LibraryReplacementFamily, PASSTHROUGH_PROFILE_BEHAVIOR, PassthroughProfileBehavior,
     ProfileMergeBehavior, merge_profile_with_behavior, metadata_has_replaced_library_conflicts,
 };
-pub use remote::VersionJsonRemoteResolver;
+pub use remote::{UpstreamUrlRewriter, VanillaFallbackRemoteResolver, VersionJsonRemoteResolver};
 pub use resource::{VersionJsonInstanceResource, VersionJsonRootResource};
 pub use rules::{
     OperatingSystemExt, PistonMetaRuleExt, PistonMetaRulesExt, VersionJsonRuleContext,

@@ -103,17 +103,17 @@ impl LauncherVariables {
         let root_layout = BaseRootLayout;
         let instance_layout = BaseInstanceLayout;
         let assets_root =
-            root_layout.try_get_resource(game_root, VersionJsonRootResource::Assets)?;
+            root_layout.try_get_extended_resource(game_root, VersionJsonRootResource::Assets)?;
         let version_root_path = Path::new(&version_root);
-        let libraries_root =
-            root_layout.try_get_resource(game_root, VersionJsonRootResource::Libraries(None))?;
+        let libraries_root = root_layout
+            .try_get_extended_resource(game_root, VersionJsonRootResource::Libraries(None))?;
         let version_name = version_root_path
             .file_name()
             .context("version root has no file name")?
             .to_string_lossy()
             .to_string();
         let version_jar = instance_layout
-            .try_get_resource(version_root_path, VersionJsonInstanceResource::Jar)?;
+            .try_get_extended_resource(version_root_path, VersionJsonInstanceResource::Jar)?;
         let classpath = pistonmeta
             .libraries
             .iter()
@@ -126,7 +126,7 @@ impl LauncherVariables {
 
                 Some(
                     root_layout
-                        .try_get_resource(
+                        .try_get_extended_resource(
                             game_root,
                             VersionJsonRootResource::Libraries(Some(PathBuf::from(
                                 artifact.path.as_str(),

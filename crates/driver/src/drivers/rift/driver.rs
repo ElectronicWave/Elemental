@@ -1,9 +1,6 @@
-use std::sync::Arc;
-
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
-use elemental_infra::downloader::core::ElementalDownloader;
 use elemental_schema::{fabric::ProfileJson, mojang::piston::PistonMetaData};
 
 use crate::{
@@ -13,9 +10,7 @@ use crate::{
         PASSTHROUGH_PROFILE_BEHAVIOR, ProfiledVersionJsonDriver, ProfiledVersionJsonFamily,
         merge_profile_with_behavior,
     },
-    inspect::{
-        find_library_version, installed_version_json_driver, metadata_contains_library_prefix,
-    },
+    inspect::{LibraryPrefixSet, ProfileIdPattern, ProfiledDriverIdentity},
     loader_version::LoaderVersionId,
 };
 
@@ -23,6 +18,18 @@ const RIFT_DRIVER: DriverDescriptor = DriverDescriptor {
     id: "rift",
     name: "Rift",
 };
+const RIFT_PROFILE_ID: ProfileIdPattern = ProfileIdPattern::new("-rift-");
+const RIFT_LIBRARY_MARKERS: LibraryPrefixSet =
+    LibraryPrefixSet::new(&["org.dimdev:rift:", "com.github.Chocohead:Rift:"]);
+const RIFT_VERSION_LIBRARIES: LibraryPrefixSet = LibraryPrefixSet::new(&["org.dimdev:rift:"]);
+const RIFT_STALE_MARKERS: LibraryPrefixSet = LibraryPrefixSet::new(&["com.github.Chocohead:Rift:"]);
+const RIFT_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(
+    RIFT_DRIVER,
+    RIFT_LIBRARY_MARKERS,
+    RIFT_VERSION_LIBRARIES,
+    RIFT_PROFILE_ID,
+)
+.with_stale_markers(RIFT_STALE_MARKERS);
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RiftDriverFamily;
@@ -47,6 +54,7 @@ impl ProfiledVersionJsonFamily for RiftDriverFamily {
         source: &Self::Source,
     ) -> Self::RemoteResolver {
         super::prepared::RiftRemoteResolver::new(
+            "rift",
             vanilla_source.endpoints().clone(),
             source.endpoints().clone(),
         )
@@ -77,42 +85,15 @@ impl ProfiledVersionJsonFamily for RiftDriverFamily {
         game_version: &MinecraftVersionId,
         loader_version: &LoaderVersionId,
     ) -> bool {
-        let expected_id = build_profile_id(game_version.as_str(), loader_version.as_str());
-        metadata.id != expected_id
-            || metadata.inherits_from.as_deref() != Some(game_version.as_str())
-            || metadata_contains_library_prefix(metadata, &["com.github.Chocohead:Rift:"])
-            || inspect_driver_version(metadata)
-                .is_none_or(|installed| installed != loader_version.as_str())
+        RIFT_IDENTITY.local_metadata_needs_refresh(metadata, game_version, loader_version.as_str())
     }
 
     fn inspect_installed(&self, metadata: &PistonMetaData) -> Option<InstalledDriver> {
-        if !is_rift_metadata(metadata) {
-            return None;
-        }
-
-        Some(installed_version_json_driver(
-            metadata,
-            RIFT_DRIVER,
-            inspect_driver_version(metadata),
-        ))
+        RIFT_IDENTITY.inspect_installed(metadata)
     }
 }
 
 pub type RiftDriver = ProfiledVersionJsonDriver<RiftDriverFamily>;
-
-impl RiftDriverFamily {
-    pub fn new_driver(
-        source: RiftSource,
-        vanilla_source: VanillaSource,
-        downloader: Arc<ElementalDownloader>,
-    ) -> RiftDriver {
-        ProfiledVersionJsonDriver::new(RiftDriverFamily, source, vanilla_source, downloader)
-    }
-
-    pub fn new_driver_with_defaults() -> Result<RiftDriver> {
-        ProfiledVersionJsonDriver::with_defaults(RiftDriverFamily)
-    }
-}
 
 fn validate_requested_game_version(
     profile: &ProfileJson,
@@ -129,26 +110,4 @@ fn validate_requested_game_version(
         profile.inherits_from,
         requested_game_version.as_str(),
     )
-}
-
-fn build_profile_id(game_version: &str, loader_version: &str) -> String {
-    format!("{game_version}-rift-{loader_version}")
-}
-
-fn is_rift_metadata(metadata: &PistonMetaData) -> bool {
-    metadata_contains_library_prefix(
-        metadata,
-        &["org.dimdev:rift:", "com.github.Chocohead:Rift:"],
-    ) || extract_loader_version_from_profile_id(metadata.id.as_str()).is_some()
-}
-
-fn inspect_driver_version(metadata: &PistonMetaData) -> Option<String> {
-    find_library_version(metadata, &["org.dimdev:rift:"])
-        .or_else(|| extract_loader_version_from_profile_id(metadata.id.as_str()))
-}
-
-fn extract_loader_version_from_profile_id(metadata_id: &str) -> Option<String> {
-    metadata_id
-        .split_once("-rift-")
-        .map(|(_, loader_version)| loader_version.to_owned())
 }

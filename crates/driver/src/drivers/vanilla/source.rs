@@ -7,7 +7,7 @@ use elemental_schema::mojang::{
 use crate::{
     drivers::vanilla::prepared::ResolvedVanillaMetadata,
     families::version_json::VersionJsonRemoteResolver,
-    http::{build_default_client, fetch_json},
+    http::{HttpSource, fetch_json},
     url::{Origin, OriginPolicy},
 };
 
@@ -33,8 +33,7 @@ pub struct VanillaEndpoints {
 
 #[derive(Debug, Clone)]
 pub struct VanillaSource {
-    client: reqwest::Client,
-    endpoints: VanillaEndpoints,
+    inner: HttpSource<VanillaEndpoints>,
 }
 
 impl Default for VanillaEndpoints {
@@ -126,45 +125,43 @@ impl VersionJsonRemoteResolver for VanillaEndpoints {
 
 impl Default for VanillaSource {
     fn default() -> Self {
-        Self {
-            client: build_default_client("vanilla source"),
-            endpoints: VanillaEndpoints::default(),
-        }
+        Self::new(VanillaEndpoints::default())
     }
 }
 
 impl VanillaSource {
     pub fn new(endpoints: VanillaEndpoints) -> Self {
         Self {
-            endpoints,
-            ..Self::default()
+            inner: HttpSource::new(endpoints, "vanilla source"),
         }
     }
 
     pub fn with_client(endpoints: VanillaEndpoints, client: reqwest::Client) -> Self {
-        Self { client, endpoints }
+        Self {
+            inner: HttpSource::with_client(endpoints, client),
+        }
     }
 
     pub fn endpoints(&self) -> &VanillaEndpoints {
-        &self.endpoints
+        self.inner.endpoints()
     }
 
     pub async fn launch_meta(&self) -> Result<LaunchMetaData> {
-        let url = self.endpoints.version_manifest_url()?;
-        fetch_json(&self.client, url.as_str(), "vanilla source").await
+        let url = self.endpoints().version_manifest_url()?;
+        fetch_json(self.inner.client(), url.as_str(), "vanilla source").await
     }
 
     pub async fn piston_meta(&self, url: impl AsRef<str>) -> Result<PistonMetaData> {
-        let url = self.endpoints.rewrite_upstream(url.as_ref())?;
-        fetch_json(&self.client, url.as_str(), "vanilla source").await
+        let url = self.endpoints().rewrite_upstream(url.as_ref())?;
+        fetch_json(self.inner.client(), url.as_str(), "vanilla source").await
     }
 
     pub async fn asset_index_objects(
         &self,
         url: impl AsRef<str>,
     ) -> Result<PistonMetaAssetIndexObjects> {
-        let url = self.endpoints.rewrite_upstream(url.as_ref())?;
-        fetch_json(&self.client, url.as_str(), "vanilla source").await
+        let url = self.endpoints().rewrite_upstream(url.as_ref())?;
+        fetch_json(self.inner.client(), url.as_str(), "vanilla source").await
     }
 }
 

@@ -1,9 +1,6 @@
-use std::sync::Arc;
-
 use anyhow::Result;
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
-use elemental_infra::downloader::core::ElementalDownloader;
 use elemental_schema::{mojang::piston::PistonMetaData, quilt::ProfileJson};
 
 use crate::{
@@ -13,7 +10,7 @@ use crate::{
         PASSTHROUGH_PROFILE_BEHAVIOR, ProfiledVersionJsonDriver, ProfiledVersionJsonFamily,
         merge_profile_with_behavior,
     },
-    inspect::{find_library_version, inspect_driver_version_from_libraries},
+    inspect::LibraryPrefixSet,
     loader_version::LoaderVersionId,
 };
 
@@ -21,6 +18,8 @@ const QUILT_DRIVER: DriverDescriptor = DriverDescriptor {
     id: "quilt",
     name: "Quilt",
 };
+const QUILT_LOADER_LIBRARIES: LibraryPrefixSet =
+    LibraryPrefixSet::new(&["org.quiltmc:quilt-loader:"]);
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct QuiltDriverFamily;
@@ -45,6 +44,7 @@ impl ProfiledVersionJsonFamily for QuiltDriverFamily {
         source: &Self::Source,
     ) -> Self::RemoteResolver {
         super::prepared::QuiltRemoteResolver::new(
+            "quilt",
             vanilla_source.endpoints().clone(),
             source.endpoints().clone(),
         )
@@ -78,35 +78,14 @@ impl ProfiledVersionJsonFamily for QuiltDriverFamily {
         let expected_id = format!("quilt-loader-{loader_version}-{game_version}");
         metadata.id != expected_id
             || metadata.inherits_from.as_deref() != Some(game_version.as_str())
-            || inspect_driver_version(metadata)
+            || QUILT_LOADER_LIBRARIES
+                .version(metadata)
                 .is_none_or(|installed| installed != loader_version.as_str())
     }
 
     fn inspect_installed(&self, metadata: &PistonMetaData) -> Option<InstalledDriver> {
-        inspect_driver_version_from_libraries(
-            metadata,
-            QUILT_DRIVER,
-            &["org.quiltmc:quilt-loader:"],
-        )
+        QUILT_LOADER_LIBRARIES.installed_driver(metadata, QUILT_DRIVER)
     }
 }
 
 pub type QuiltDriver = ProfiledVersionJsonDriver<QuiltDriverFamily>;
-
-impl QuiltDriverFamily {
-    pub fn new_driver(
-        source: QuiltSource,
-        vanilla_source: VanillaSource,
-        downloader: Arc<ElementalDownloader>,
-    ) -> QuiltDriver {
-        ProfiledVersionJsonDriver::new(QuiltDriverFamily, source, vanilla_source, downloader)
-    }
-
-    pub fn new_driver_with_defaults() -> Result<QuiltDriver> {
-        ProfiledVersionJsonDriver::with_defaults(QuiltDriverFamily)
-    }
-}
-
-fn inspect_driver_version(metadata: &PistonMetaData) -> Option<String> {
-    find_library_version(metadata, &["org.quiltmc:quilt-loader:"])
-}

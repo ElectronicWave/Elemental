@@ -12,6 +12,7 @@ pub struct BaseInstanceLayout;
 
 impl Layout for BaseRootLayout {
     type Resource = VersionJsonRootResource;
+    type ExtendedResource = VersionJsonRootResource;
 
     fn get_resource(&self, root: &Path, resource: Self::Resource) -> Option<PathBuf> {
         let assets_root = root.join("assets");
@@ -56,17 +57,30 @@ impl Layout for BaseRootLayout {
     fn name(&self) -> &'static str {
         "BaseRoot"
     }
+
+    fn get_extended_resource(
+        &self,
+        root: &Path,
+        resource: Self::ExtendedResource,
+    ) -> Option<PathBuf> {
+        self.get_resource(root, resource)
+    }
 }
 
 impl Layout for BaseInstanceLayout {
     type Resource = VersionJsonInstanceResource;
+    type ExtendedResource = VersionJsonInstanceResource;
 
     fn get_resource(&self, root: &Path, resource: Self::Resource) -> Option<PathBuf> {
-        let name = root.file_name()?.to_string_lossy().to_string();
-
         match resource {
-            VersionJsonInstanceResource::Metadata => Some(root.join(format!("{name}.json"))),
-            VersionJsonInstanceResource::Jar => Some(root.join(format!("{name}.jar"))),
+            VersionJsonInstanceResource::Metadata => {
+                let name = root.file_name()?.to_string_lossy().to_string();
+                Some(root.join(format!("{name}.json")))
+            }
+            VersionJsonInstanceResource::Jar => {
+                let name = root.file_name()?.to_string_lossy().to_string();
+                Some(root.join(format!("{name}.jar")))
+            }
             VersionJsonInstanceResource::Natives => Some(root.join("natives")),
             VersionJsonInstanceResource::Logs => Some(root.join("logs")),
             VersionJsonInstanceResource::Configs => Some(root.join("config")),
@@ -74,18 +88,36 @@ impl Layout for BaseInstanceLayout {
             VersionJsonInstanceResource::ResourcePacks => Some(root.join("resourcepacks")),
             VersionJsonInstanceResource::Saves => Some(root.join("saves")),
             VersionJsonInstanceResource::Mods => Some(root.join("mods")),
+            VersionJsonInstanceResource::Elemental(path) => match path {
+                Some(path) => Some(root.join(".elemental").join(path)),
+                None => Some(root.join(".elemental")),
+            },
         }
     }
 
     fn name(&self) -> &'static str {
         "BaseInstance"
     }
+
+    fn get_extended_resource(
+        &self,
+        root: &Path,
+        resource: Self::ExtendedResource,
+    ) -> Option<PathBuf> {
+        self.get_resource(root, resource)
+    }
 }
 
-pub trait VersionJsonRootLayout: Layout<Resource = VersionJsonRootResource> {}
+pub trait VersionJsonRootLayout: Layout<ExtendedResource = VersionJsonRootResource> {}
 
-pub trait VersionJsonInstanceLayout: Layout<Resource = VersionJsonInstanceResource> {}
+pub trait VersionJsonInstanceLayout:
+    Layout<ExtendedResource = VersionJsonInstanceResource>
+{
+}
 
-impl<L> VersionJsonRootLayout for L where L: Layout<Resource = VersionJsonRootResource> {}
+impl<L> VersionJsonRootLayout for L where L: Layout<ExtendedResource = VersionJsonRootResource> {}
 
-impl<L> VersionJsonInstanceLayout for L where L: Layout<Resource = VersionJsonInstanceResource> {}
+impl<L> VersionJsonInstanceLayout for L where
+    L: Layout<ExtendedResource = VersionJsonInstanceResource>
+{
+}

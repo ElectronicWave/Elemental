@@ -12,7 +12,9 @@ use elemental_schema::{
 use serde::Deserialize;
 
 use crate::{
-    http::{build_default_client, fetch_bytes, fetch_json},
+    families::version_json::UpstreamUrlRewriter,
+    http::{HttpSource, fetch_bytes, fetch_json},
+    inspect::ProfileIdPattern,
     url::{Origin, OriginPolicy},
 };
 
@@ -31,9 +33,10 @@ pub struct RiftEndpoints {
 
 #[derive(Debug, Clone)]
 pub struct RiftSource {
-    client: reqwest::Client,
-    endpoints: RiftEndpoints,
+    inner: HttpSource<RiftEndpoints>,
 }
+
+const RIFT_PROFILE_ID: ProfileIdPattern = ProfileIdPattern::new("-rift-");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RiftRelease {
@@ -164,29 +167,31 @@ impl RiftEndpoints {
 
 impl Default for RiftSource {
     fn default() -> Self {
-        Self {
-            client: build_default_client("rift source"),
-            endpoints: RiftEndpoints::default(),
-        }
+        Self::new(RiftEndpoints::default())
     }
 }
 
 impl RiftSource {
     pub fn new(endpoints: RiftEndpoints) -> Self {
         Self {
-            endpoints,
-            ..Self::default()
+            inner: HttpSource::new(endpoints, "rift source"),
+        }
+    }
+
+    pub fn with_client(endpoints: RiftEndpoints, client: reqwest::Client) -> Self {
+        Self {
+            inner: HttpSource::with_client(endpoints, client),
         }
     }
 
     pub fn endpoints(&self) -> &RiftEndpoints {
-        &self.endpoints
+        self.inner.endpoints()
     }
 
     pub async fn releases(&self) -> Result<Vec<RiftRelease>> {
-        let url = self.endpoints.releases_url()?;
+        let url = self.endpoints().releases_url()?;
         let releases: Vec<GitHubRelease> =
-            fetch_json(&self.client, url.as_str(), "rift source").await?;
+            fetch_json(self.inner.client(), url.as_str(), "rift source").await?;
 
         releases
             .into_iter()
@@ -202,13 +207,19 @@ impl RiftSource {
 
     pub async fn profile_json_for_release(&self, release: &RiftRelease) -> Result<ProfileJson> {
         let url = self
-            .endpoints
+            .endpoints()
             .release_asset_url(release.tag_name.as_str(), release.asset_name.as_str())?;
-        let jar_bytes = fetch_bytes(&self.client, url.as_str(), "rift source").await?;
+        let jar_bytes = fetch_bytes(self.inner.client(), url.as_str(), "rift source").await?;
         let raw_profile = read_release_profile_json(release, jar_bytes).await?;
         let profile = parse_profile_json(raw_profile.as_str())?;
 
-        normalize_profile_json(profile, release, &self.endpoints)
+        normalize_profile_json(profile, release, self.endpoints())
+    }
+}
+
+impl UpstreamUrlRewriter for RiftEndpoints {
+    fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
+        RiftEndpoints::rewrite_upstream(self, raw_url)
     }
 }
 
@@ -325,7 +336,7 @@ fn normalize_profile_json(
     } else {
         profile.libraries.insert(0, normalized_loader_library);
     }
-    profile.id = build_profile_id(
+    profile.id = RIFT_PROFILE_ID.build(
         profile.inherits_from.as_str(),
         release.loader_version.as_str(),
     );
@@ -412,8 +423,4 @@ fn build_rift_mixin_library(endpoints: &RiftEndpoints) -> ProfileLibrary {
 fn is_rift_loader_library(library_name: &str) -> bool {
     library_name.starts_with("org.dimdev:rift:")
         || library_name.starts_with("com.github.Chocohead:Rift:")
-}
-
-fn build_profile_id(game_version: &str, loader_version: &str) -> String {
-    format!("{game_version}-rift-{loader_version}")
 }

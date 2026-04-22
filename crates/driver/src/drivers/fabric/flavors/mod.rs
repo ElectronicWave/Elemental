@@ -7,6 +7,7 @@ use elemental_core::minecraft::MinecraftVersionId;
 use elemental_schema::fabric::ProfileJson;
 use elemental_schema::mojang::piston::PistonMetaData;
 
+use crate::inspect::LibraryPrefixSet;
 use crate::loader_version::LoaderVersionId;
 use crate::{driver::DriverDescriptor, drivers::fabric::source::FabricFlavor};
 
@@ -32,12 +33,14 @@ const BABRIC_DRIVER: DriverDescriptor = DriverDescriptor {
     name: "Babric",
 };
 
-const FABRIC_LOADER_PREFIXES: &[&str] = &["net.fabricmc:fabric-loader:"];
-const LEGACY_FABRIC_LOADER_PREFIXES: &[&str] = &[
+const FABRIC_LOADER_PREFIXES: LibraryPrefixSet =
+    LibraryPrefixSet::new(&["net.fabricmc:fabric-loader:"]);
+const LEGACY_FABRIC_LOADER_PREFIXES: LibraryPrefixSet = LibraryPrefixSet::new(&[
     "net.fabricmc:fabric-loader:",
     "net.legacyfabric:fabric-loader:",
-];
-const BABRIC_LOADER_PREFIXES: &[&str] = &["net.fabricmc:fabric-loader:"];
+]);
+const BABRIC_LOADER_PREFIXES: LibraryPrefixSet =
+    LibraryPrefixSet::new(&["net.fabricmc:fabric-loader:"]);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FabricFlavorKind {
@@ -51,7 +54,7 @@ pub(crate) struct FabricFlavorSpec {
     descriptor: DriverDescriptor,
     meta_origin: &'static str,
     maven_origin: &'static str,
-    loader_prefixes: &'static [&'static str],
+    loader_prefixes: LibraryPrefixSet,
     behavior: &'static dyn FlavorBehavior,
 }
 
@@ -100,16 +103,7 @@ impl FabricFlavorSpec {
             return None;
         }
 
-        metadata
-            .libraries
-            .iter()
-            .map(|library| library.name.as_str())
-            .find(|name| {
-                self.loader_prefixes
-                    .iter()
-                    .any(|prefix| name.starts_with(prefix))
-            })
-            .and_then(|name| name.split(':').nth(2).map(ToOwned::to_owned))
+        self.loader_prefixes.version(metadata)
     }
 
     pub(crate) fn merge_profile(
@@ -131,11 +125,7 @@ impl FabricFlavorSpec {
     }
 
     fn matches_metadata(&self, metadata: &PistonMetaData) -> bool {
-        let has_loader = metadata.libraries.iter().any(|library| {
-            self.loader_prefixes
-                .iter()
-                .any(|prefix| library.name.starts_with(prefix))
-        });
+        let has_loader = self.loader_prefixes.matches(metadata);
         if !has_loader {
             return false;
         }

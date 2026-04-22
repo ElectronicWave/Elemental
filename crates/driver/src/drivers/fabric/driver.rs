@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
@@ -15,8 +13,9 @@ use crate::{
         },
         vanilla::source::VanillaSource,
     },
-    families::version_json::{ProfiledVersionJsonDriver, ProfiledVersionJsonFamily},
-    inspect::installed_version_json_driver,
+    families::version_json::{
+        ProfiledVersionJsonDriver, ProfiledVersionJsonFamily, ProfiledVersionJsonFamilyExt,
+    },
     loader_version::LoaderVersionId,
 };
 
@@ -34,24 +33,11 @@ impl FabricDriverFamily {
         &self.flavor
     }
 
-    pub fn new_driver(
-        &self,
-        source: FabricSource,
-        vanilla_source: VanillaSource,
-        downloader: Arc<ElementalDownloader>,
-    ) -> FabricDriver {
-        ProfiledVersionJsonDriver::new(self.clone(), source, vanilla_source, downloader)
-    }
-
-    pub fn new_driver_with_defaults(&self) -> Result<FabricDriver> {
-        ProfiledVersionJsonDriver::with_defaults(self.clone())
-    }
-
     pub fn new_driver_with_overrides(
         &self,
         overrides: FabricEndpointOverrides,
     ) -> Result<FabricDriver> {
-        Ok(self.new_driver(
+        Ok(self.clone().build_driver(
             FabricSource::with_overrides(overrides)?,
             VanillaSource::default(),
             ElementalDownloader::with_config_default()
@@ -80,6 +66,7 @@ impl ProfiledVersionJsonFamily for FabricDriverFamily {
         source: &Self::Source,
     ) -> Self::RemoteResolver {
         super::prepared::FabricRemoteResolver::new(
+            "fabric",
             vanilla_source.endpoints().clone(),
             source.endpoints().clone(),
         )
@@ -121,9 +108,9 @@ impl ProfiledVersionJsonFamily for FabricDriverFamily {
         let flavor = flavor_spec(self.flavor());
         let driver_version = flavor.inspect_driver_version(metadata)?;
 
-        Some(installed_version_json_driver(
-            metadata,
+        Some(InstalledDriver::version_json(
             flavor.descriptor(),
+            metadata,
             Some(driver_version),
         ))
     }

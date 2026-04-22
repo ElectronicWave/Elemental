@@ -8,7 +8,7 @@ use crate::{
         },
         version_json::VersionJsonRootLayout,
     },
-    http::build_default_client,
+    http::HttpSource,
     loader_version::LoaderVersionId,
     maven::fetch_maven_metadata,
     url::{Origin, OriginPolicy},
@@ -29,8 +29,7 @@ pub struct ForgeEndpoints {
 
 #[derive(Debug, Clone)]
 pub struct ForgeSource {
-    client: reqwest::Client,
-    endpoints: ForgeEndpoints,
+    inner: HttpSource<ForgeEndpoints>,
 }
 
 impl Origin for ForgeOrigin {
@@ -102,28 +101,30 @@ impl InstallerArtifactEndpoints for ForgeEndpoints {
 
 impl Default for ForgeSource {
     fn default() -> Self {
-        Self {
-            client: build_default_client("forge source"),
-            endpoints: ForgeEndpoints::default(),
-        }
+        Self::new(ForgeEndpoints::default())
     }
 }
 
 impl ForgeSource {
     pub fn new(endpoints: ForgeEndpoints) -> Self {
         Self {
-            endpoints,
-            ..Self::default()
+            inner: HttpSource::new(endpoints, "forge source"),
+        }
+    }
+
+    pub fn with_client(endpoints: ForgeEndpoints, client: reqwest::Client) -> Self {
+        Self {
+            inner: HttpSource::with_client(endpoints, client),
         }
     }
 
     pub fn endpoints(&self) -> &ForgeEndpoints {
-        &self.endpoints
+        self.inner.endpoints()
     }
 
     pub async fn maven_metadata(&self) -> Result<MavenMetadataBody> {
-        let url = self.endpoints.maven_metadata_url()?;
-        fetch_maven_metadata(&self.client, url, "forge source").await
+        let url = self.endpoints().maven_metadata_url()?;
+        fetch_maven_metadata(self.inner.client(), url, "forge source").await
     }
 
     pub fn installer_artifact<L>(
@@ -141,7 +142,7 @@ impl ForgeSource {
         build_installer_artifact(
             game_storage,
             format!("net.minecraftforge:forge:{version}:installer"),
-            self.endpoints
+            self.endpoints()
                 .installer_url(game_version.as_str(), loader_version.as_str())?,
             library_relative_path,
         )

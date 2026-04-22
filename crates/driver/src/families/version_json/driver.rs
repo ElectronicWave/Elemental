@@ -65,6 +65,23 @@ pub trait ProfiledVersionJsonFamily: Clone + Debug + Send + Sync + 'static {
     fn inspect_installed(&self, metadata: &PistonMetaData) -> Option<InstalledDriver>;
 }
 
+pub trait ProfiledVersionJsonFamilyExt: ProfiledVersionJsonFamily + Sized {
+    fn build_driver(
+        self,
+        source: Self::Source,
+        vanilla_source: VanillaSource,
+        downloader: Arc<ElementalDownloader>,
+    ) -> ProfiledVersionJsonDriver<Self> {
+        ProfiledVersionJsonDriver::new(self, source, vanilla_source, downloader)
+    }
+
+    fn build_driver_with_defaults(self) -> Result<ProfiledVersionJsonDriver<Self>> {
+        ProfiledVersionJsonDriver::with_defaults(self)
+    }
+}
+
+impl<F> ProfiledVersionJsonFamilyExt for F where F: ProfiledVersionJsonFamily {}
+
 #[derive(Debug, Clone)]
 pub struct ProfiledVersionJsonDriver<F>
 where

@@ -10,7 +10,7 @@ pub enum VersionJsonRootResource {
     Libraries(Option<PathBuf>),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum VersionJsonInstanceResource {
     Metadata,
     Jar,
@@ -21,4 +21,5 @@ pub enum VersionJsonInstanceResource {
     ResourcePacks,
     Saves,
     Mods,
+    Elemental(Option<PathBuf>),
 }

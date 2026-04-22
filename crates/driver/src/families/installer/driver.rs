@@ -24,7 +24,7 @@ use crate::{
             build_version_json_launch_command, launch_wrapped_version,
         },
     },
-    inspect::{InstanceProbe, inspect_driver_version_from_libraries},
+    inspect::{InstanceProbe, LibraryPrefixSet},
     loader_version::LoaderVersionId,
 };
 
@@ -226,10 +226,6 @@ where
             return Ok(None);
         };
 
-        Ok(inspect_driver_version_from_libraries(
-            metadata,
-            F::DRIVER,
-            F::INSPECT_PREFIXES,
-        ))
+        Ok(LibraryPrefixSet::new(F::INSPECT_PREFIXES).installed_driver(metadata, F::DRIVER))
     }
 }

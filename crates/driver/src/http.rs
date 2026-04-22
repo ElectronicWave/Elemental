@@ -3,6 +3,30 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use serde::de::DeserializeOwned;
 
+#[derive(Debug, Clone)]
+pub struct HttpSource<E> {
+    client: reqwest::Client,
+    endpoints: E,
+}
+
+impl<E> HttpSource<E> {
+    pub fn new(endpoints: E, source_name: &str) -> Self {
+        Self::with_client(endpoints, build_default_client(source_name))
+    }
+
+    pub fn with_client(endpoints: E, client: reqwest::Client) -> Self {
+        Self { client, endpoints }
+    }
+
+    pub fn client(&self) -> &reqwest::Client {
+        &self.client
+    }
+
+    pub fn endpoints(&self) -> &E {
+        &self.endpoints
+    }
+}
+
 pub fn build_default_client(source_name: &str) -> reqwest::Client {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(30))

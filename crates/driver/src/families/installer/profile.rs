@@ -8,7 +8,10 @@ use elemental_core::{
     minecraft::MinecraftVersionId,
     runtime::distribution::Distribution,
     runtime::{RuntimeValidationMode, resolve_runtime},
-    storage::{Storage, layout::Layoutable},
+    storage::{
+        Storage,
+        layout::{Layout, Layoutable},
+    },
 };
 use elemental_infra::downloader::{core::ElementalDownloader, task::DownloadPlan};
 use elemental_schema::{
@@ -26,9 +29,9 @@ use crate::{
     families::{
         installer::{InstallerArchive, InstallerArtifact, installer_client_processors_ready},
         version_json::{
-            PreparedVersionJsonInstance, ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata,
-            VersionJsonInstanceLayout, VersionJsonRemoteResolver, VersionJsonRootLayout,
-            VersionJsonRootResource,
+            BaseInstanceLayout, PreparedVersionJsonInstance, ResolvedVersionJsonInstance,
+            ResolvedVersionJsonMetadata, VersionJsonInstanceLayout, VersionJsonInstanceResource,
+            VersionJsonRemoteResolver, VersionJsonRootLayout, VersionJsonRootResource,
         },
     },
     loader_version::LoaderVersionId,
@@ -50,6 +53,188 @@ pub struct InstallerInstallStatus {
     pub profile_libraries_ready: bool,
     pub processors_completed: bool,
     pub launch_version_ready: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct InstallerStatePaths<'a> {
+    instance_root: &'a Path,
+    family_name: &'a str,
+}
+
+impl<'a> InstallerStatePaths<'a> {
+    fn new(instance_root: &'a Path, family_name: &'a str) -> Self {
+        Self {
+            instance_root,
+            family_name,
+        }
+    }
+
+    fn install_profile_path(self) -> PathBuf {
+        self.relative_path(PathBuf::from(INSTALL_PROFILE_ENTRY))
+    }
+
+    fn embedded_version_path(self) -> PathBuf {
+        self.relative_path(PathBuf::from("version.json"))
+    }
+
+    fn root(self) -> PathBuf {
+        self.resource_path(PathBuf::from(self.family_name))
+    }
+
+    fn relative_path(self, relative_path: PathBuf) -> PathBuf {
+        self.root().join(relative_path)
+    }
+
+    fn resource_path(self, resource_path: PathBuf) -> PathBuf {
+        BaseInstanceLayout
+            .get_extended_resource(
+                self.instance_root,
+                VersionJsonInstanceResource::Elemental(Some(resource_path)),
+            )
+            .expect("BaseInstanceLayout elemental resource path must always resolve")
+    }
+
+    fn load(self) -> Result<InstallerPersistedState> {
+        let install_profile_path = self.install_profile_path();
+        let install_profile = serde_json::from_reader(std::fs::File::open(&install_profile_path)?)
+            .with_context(|| {
+                format!(
+                    "read persisted {} install profile failed: {}",
+                    self.family_name,
+                    install_profile_path.display()
+                )
+            })?;
+
+        let embedded_version_path = self.embedded_version_path();
+        let embedded_version = if embedded_version_path.exists() {
+            Some(
+                serde_json::from_reader(std::fs::File::open(&embedded_version_path)?)
+                    .with_context(|| {
+                        format!(
+                            "read persisted {} embedded version failed: {}",
+                            self.family_name,
+                            embedded_version_path.display()
+                        )
+                    })?,
+            )
+        } else {
+            None
+        };
+
+        Ok(InstallerPersistedState {
+            install_profile,
+            embedded_version,
+        })
+    }
+
+    async fn persist_install_profile(self, install_profile: &ForgeInstallerProfile) -> Result<()> {
+        let path = self.install_profile_path();
+        let parent = path.parent().with_context(|| {
+            format!(
+                "{} install profile path has no parent directory",
+                self.family_name
+            )
+        })?;
+        create_dir_all(parent).await?;
+        tokio::fs::write(path, serde_json::to_vec_pretty(install_profile)?).await?;
+        Ok(())
+    }
+
+    async fn persist_embedded_version(
+        self,
+        embedded_version: Option<&serde_json::Value>,
+    ) -> Result<()> {
+        let path = self.embedded_version_path();
+        if let Some(version) = embedded_version {
+            let parent = path.parent().with_context(|| {
+                format!(
+                    "{} embedded version path has no parent directory",
+                    self.family_name
+                )
+            })?;
+            create_dir_all(parent).await?;
+            tokio::fs::write(path, serde_json::to_vec_pretty(version)?).await?;
+            return Ok(());
+        }
+
+        if path.exists() {
+            tokio::fs::remove_file(path).await?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct InstallerProfileIdentity {
+    game_version: String,
+    loader_version: LoaderVersionId,
+}
+
+impl InstallerProfileIdentity {
+    fn from_profile(
+        install_profile: &ForgeInstallerProfile,
+        family_name: &str,
+        loader_name: &str,
+    ) -> Result<Self> {
+        let game_version = install_profile
+            .minecraft
+            .clone()
+            .or_else(|| {
+                install_profile
+                    .install
+                    .as_ref()
+                    .and_then(|legacy| legacy.minecraft.clone())
+            })
+            .with_context(|| {
+                format!("{family_name} install profile is missing minecraft version")
+            })?;
+
+        let raw_loader_version = install_profile
+            .path
+            .clone()
+            .or_else(|| {
+                install_profile
+                    .install
+                    .as_ref()
+                    .and_then(|legacy| legacy.path.clone())
+            })
+            .and_then(|coordinate| coordinate.split(':').nth(2).map(ToOwned::to_owned))
+            .or_else(|| install_profile.version.clone())
+            .with_context(|| {
+                format!("{family_name} install profile is missing {loader_name} version identity")
+            })?;
+
+        Ok(Self {
+            game_version,
+            loader_version: LoaderVersionId::from(raw_loader_version),
+        })
+    }
+
+    fn validate_requested(
+        &self,
+        expected_game_version: &str,
+        expected_loader_version: &LoaderVersionId,
+        family_name: &str,
+    ) -> Result<()> {
+        if self.game_version != expected_game_version {
+            bail!(
+                "{family_name} installer game version '{}' does not match requested game version '{}'",
+                self.game_version,
+                expected_game_version
+            );
+        }
+
+        if &self.loader_version != expected_loader_version {
+            bail!(
+                "{family_name} installer loader version '{}' does not match requested loader version '{}'",
+                self.loader_version,
+                expected_loader_version
+            );
+        }
+
+        Ok(())
+    }
 }
 
 pub fn read_embedded_version<P: AsRef<Path>>(
@@ -114,6 +299,7 @@ where
     ensure_installer_artifact_downloaded(downloader, installer_artifact, family_name).await?;
 
     let archive = InstallerArchive::new(installer_artifact.path.clone());
+    let state_paths = InstallerStatePaths::new(instance_root, family_name);
     let install_profile = archive
         .read_json::<ForgeInstallerProfile>(INSTALL_PROFILE_ENTRY)
         .with_context(|| {
@@ -122,8 +308,12 @@ where
     validate_profile(&install_profile)?;
     let embedded_version = read_embedded_version(&archive, &install_profile, family_name)?;
 
-    persist_install_profile(instance_root, &install_profile, family_name).await?;
-    persist_embedded_version(instance_root, embedded_version.as_ref(), family_name).await?;
+    state_paths
+        .persist_install_profile(&install_profile)
+        .await?;
+    state_paths
+        .persist_embedded_version(embedded_version.as_ref())
+        .await?;
     archive
         .extract_maven_artifacts(libraries_root)
         .with_context(|| format!("extract {family_name} embedded maven artifacts failed"))?;
@@ -191,35 +381,7 @@ pub fn load_persisted_installer_state(
     instance_root: &Path,
     family_name: &str,
 ) -> Result<InstallerPersistedState> {
-    let install_profile_path = install_profile_path(instance_root, family_name);
-    let install_profile = serde_json::from_reader(std::fs::File::open(&install_profile_path)?)
-        .with_context(|| {
-            format!(
-                "read persisted {family_name} install profile failed: {}",
-                install_profile_path.display()
-            )
-        })?;
-
-    let embedded_version_path = embedded_version_path(instance_root, family_name);
-    let embedded_version = if embedded_version_path.exists() {
-        Some(
-            serde_json::from_reader(std::fs::File::open(&embedded_version_path)?).with_context(
-                || {
-                    format!(
-                        "read persisted {family_name} embedded version failed: {}",
-                        embedded_version_path.display()
-                    )
-                },
-            )?,
-        )
-    } else {
-        None
-    };
-
-    Ok(InstallerPersistedState {
-        install_profile,
-        embedded_version,
-    })
+    InstallerStatePaths::new(instance_root, family_name).load()
 }
 
 pub fn profile_game_and_raw_loader_version(
@@ -227,33 +389,9 @@ pub fn profile_game_and_raw_loader_version(
     family_name: &str,
     loader_name: &str,
 ) -> Result<(String, LoaderVersionId)> {
-    let game_version = install_profile
-        .minecraft
-        .clone()
-        .or_else(|| {
-            install_profile
-                .install
-                .as_ref()
-                .and_then(|legacy| legacy.minecraft.clone())
-        })
-        .with_context(|| format!("{family_name} install profile is missing minecraft version"))?;
-
-    let raw_loader_version = install_profile
-        .path
-        .clone()
-        .or_else(|| {
-            install_profile
-                .install
-                .as_ref()
-                .and_then(|legacy| legacy.path.clone())
-        })
-        .and_then(|coordinate| coordinate.split(':').nth(2).map(ToOwned::to_owned))
-        .or_else(|| install_profile.version.clone())
-        .with_context(|| {
-            format!("{family_name} install profile is missing {loader_name} version identity")
-        })?;
-
-    Ok((game_version, LoaderVersionId::from(raw_loader_version)))
+    let identity =
+        InstallerProfileIdentity::from_profile(install_profile, family_name, loader_name)?;
+    Ok((identity.game_version, identity.loader_version))
 }
 
 pub fn validate_installer_profile_identity(
@@ -263,23 +401,11 @@ pub fn validate_installer_profile_identity(
     actual_loader_version: &LoaderVersionId,
     family_name: &str,
 ) -> Result<()> {
-    if actual_game_version != expected_game_version {
-        bail!(
-            "{family_name} installer game version '{}' does not match requested game version '{}'",
-            actual_game_version,
-            expected_game_version
-        );
+    InstallerProfileIdentity {
+        game_version: actual_game_version.to_owned(),
+        loader_version: actual_loader_version.clone(),
     }
-
-    if actual_loader_version != expected_loader_version {
-        bail!(
-            "{family_name} installer loader version '{}' does not match requested loader version '{}'",
-            actual_loader_version,
-            expected_loader_version
-        );
-    }
-
-    Ok(())
+    .validate_requested(expected_game_version, expected_loader_version, family_name)
 }
 
 pub fn profile_libraries_ready<L, VL>(
@@ -294,9 +420,9 @@ where
         if let Some(artifact) = &library.downloads.artifact
             && !instance
                 .parent
-                .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
-                    artifact.path.as_str(),
-                ))))?
+                .try_get_extended_resource(VersionJsonRootResource::Libraries(Some(
+                    PathBuf::from(artifact.path.as_str()),
+                )))?
                 .exists()
         {
             return Ok(false);
@@ -306,9 +432,9 @@ where
             for artifact in classifiers.values() {
                 if !instance
                     .parent
-                    .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
-                        artifact.path.as_str(),
-                    ))))?
+                    .try_get_extended_resource(VersionJsonRootResource::Libraries(Some(
+                        PathBuf::from(artifact.path.as_str()),
+                    )))?
                     .exists()
                 {
                     return Ok(false);
@@ -353,10 +479,12 @@ where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
+    let state_paths = InstallerStatePaths::new(&instance.path, family_name);
+
     Ok(InstallerInstallStatus {
         installer_downloaded: installer_artifact.path.exists(),
-        install_profile_persisted: install_profile_path(&instance.path, family_name).exists(),
-        embedded_version_persisted: embedded_version_path(&instance.path, family_name).exists(),
+        install_profile_persisted: state_paths.install_profile_path().exists(),
+        embedded_version_persisted: state_paths.embedded_version_path().exists(),
         profile_libraries_ready: profile_libraries_ready(instance, install_profile)?,
         processors_completed: installer_client_processors_ready(
             instance,
@@ -373,13 +501,9 @@ pub async fn persist_install_profile(
     install_profile: &ForgeInstallerProfile,
     family_name: &str,
 ) -> Result<()> {
-    let path = install_profile_path(instance_root, family_name);
-    let parent = path
-        .parent()
-        .with_context(|| format!("{family_name} install profile path has no parent directory"))?;
-    create_dir_all(parent).await?;
-    tokio::fs::write(path, serde_json::to_vec_pretty(install_profile)?).await?;
-    Ok(())
+    InstallerStatePaths::new(instance_root, family_name)
+        .persist_install_profile(install_profile)
+        .await
 }
 
 pub async fn persist_embedded_version(
@@ -387,33 +511,17 @@ pub async fn persist_embedded_version(
     embedded_version: Option<&serde_json::Value>,
     family_name: &str,
 ) -> Result<()> {
-    let path = embedded_version_path(instance_root, family_name);
-    if let Some(version) = embedded_version {
-        let parent = path.parent().with_context(|| {
-            format!("{family_name} embedded version path has no parent directory")
-        })?;
-        create_dir_all(parent).await?;
-        tokio::fs::write(path, serde_json::to_vec_pretty(version)?).await?;
-        return Ok(());
-    }
-
-    if path.exists() {
-        tokio::fs::remove_file(path).await?;
-    }
-
-    Ok(())
+    InstallerStatePaths::new(instance_root, family_name)
+        .persist_embedded_version(embedded_version)
+        .await
 }
 
 pub fn install_profile_path(instance_root: &Path, family_name: &str) -> PathBuf {
-    installer_state_root(instance_root, family_name).join(INSTALL_PROFILE_ENTRY)
+    InstallerStatePaths::new(instance_root, family_name).install_profile_path()
 }
 
 pub fn embedded_version_path(instance_root: &Path, family_name: &str) -> PathBuf {
-    installer_state_root(instance_root, family_name).join("version.json")
-}
-
-fn installer_state_root(instance_root: &Path, family_name: &str) -> PathBuf {
-    instance_root.join(".elemental").join(family_name)
+    InstallerStatePaths::new(instance_root, family_name).embedded_version_path()
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -452,6 +560,146 @@ struct EmbeddedVersionData {
     release_time: Option<String>,
 }
 
+struct EmbeddedVersionMerger<'a, F, M>
+where
+    F: Fn(Vec<PistonMetaLibraries>) -> Result<Vec<PistonMetaLibraries>>,
+    M: Fn(Vec<PistonMetaLibraries>, Vec<PistonMetaLibraries>) -> Vec<PistonMetaLibraries>,
+{
+    family_name: &'a str,
+    normalize_libraries: F,
+    merge_libraries: M,
+}
+
+impl<'a, F, M> EmbeddedVersionMerger<'a, F, M>
+where
+    F: Fn(Vec<PistonMetaLibraries>) -> Result<Vec<PistonMetaLibraries>>,
+    M: Fn(Vec<PistonMetaLibraries>, Vec<PistonMetaLibraries>) -> Vec<PistonMetaLibraries>,
+{
+    fn new(family_name: &'a str, normalize_libraries: F, merge_libraries: M) -> Self {
+        Self {
+            family_name,
+            normalize_libraries,
+            merge_libraries,
+        }
+    }
+
+    fn merge(
+        &self,
+        base_metadata: PistonMetaData,
+        embedded_version: &serde_json::Value,
+    ) -> Result<PistonMetaData> {
+        let mut embedded = serde_json::from_value::<EmbeddedVersionData>(embedded_version.clone())
+            .with_context(|| format!("decode {} embedded version json failed", self.family_name))?;
+        embedded.libraries = (self.normalize_libraries)(embedded.libraries)?;
+        let (merged_arguments, merged_minecraft_arguments) = Self::merge_arguments(
+            base_metadata.arguments.clone(),
+            base_metadata.minecraft_arguments.clone(),
+            embedded.arguments,
+            embedded.minecraft_arguments,
+        )?;
+
+        Ok(PistonMetaData {
+            arguments: merged_arguments,
+            minecraft_arguments: merged_minecraft_arguments,
+            inherits_from: embedded
+                .inherits_from
+                .or(base_metadata.inherits_from.clone()),
+            asset_index: embedded.asset_index.unwrap_or(base_metadata.asset_index),
+            assets: embedded.assets.unwrap_or(base_metadata.assets),
+            compliance_level: embedded
+                .compliance_level
+                .unwrap_or(base_metadata.compliance_level),
+            downloads: embedded.downloads.unwrap_or(base_metadata.downloads),
+            id: embedded.id.unwrap_or(base_metadata.id),
+            java_version: embedded.java_version.unwrap_or(base_metadata.java_version),
+            libraries: (self.merge_libraries)(base_metadata.libraries, embedded.libraries),
+            logging: Self::merge_logging(base_metadata.logging, embedded.logging),
+            main_class: embedded.main_class.unwrap_or(base_metadata.main_class),
+            minimum_launcher_version: embedded
+                .minimum_launcher_version
+                .unwrap_or(base_metadata.minimum_launcher_version),
+            release_type: embedded.release_type.unwrap_or(base_metadata.release_type),
+            time: embedded.time.unwrap_or(base_metadata.time),
+            release_time: embedded.release_time.unwrap_or(base_metadata.release_time),
+        })
+    }
+
+    fn merge_arguments(
+        base_arguments: Option<PistonMetaArguments>,
+        base_minecraft_arguments: Option<String>,
+        embedded_arguments: Option<PistonMetaArguments>,
+        embedded_minecraft_arguments: Option<String>,
+    ) -> Result<(Option<PistonMetaArguments>, Option<String>)> {
+        if let Some(arguments) = embedded_minecraft_arguments {
+            return Ok((None, Some(arguments)));
+        }
+
+        let base_arguments = match (base_arguments, base_minecraft_arguments) {
+            (Some(arguments), _) => Some(arguments),
+            (None, Some(arguments)) => Some(PistonMetaArguments {
+                game: crate::families::version_json::parse_argument_string(arguments.as_str())?
+                    .into_iter()
+                    .map(elemental_schema::mojang::piston::PistonMetaGenericArgument::Plain)
+                    .collect(),
+                jvm: Vec::new(),
+            }),
+            (None, None) => None,
+        };
+
+        match (base_arguments, embedded_arguments) {
+            (None, None) => Ok((None, None)),
+            (Some(arguments), None) => Ok((Some(arguments), None)),
+            (None, Some(arguments)) => Ok((Some(arguments), None)),
+            (Some(mut base), Some(embedded)) => {
+                base.game.extend(embedded.game);
+                base.jvm.extend(embedded.jvm);
+                Ok((Some(base), None))
+            }
+        }
+    }
+
+    fn merge_logging(
+        base_logging: Option<PistonMetaLogging>,
+        embedded_logging: Option<PistonMetaLogging>,
+    ) -> Option<PistonMetaLogging> {
+        match (base_logging, embedded_logging) {
+            (None, None) => None,
+            (Some(base), None) => Some(base),
+            (None, Some(embedded)) => Some(embedded),
+            (Some(base), Some(embedded)) => Some(PistonMetaLogging {
+                client: embedded.client.or(base.client),
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LibraryIdentity<'a> {
+    notation: &'a str,
+}
+
+impl<'a> LibraryIdentity<'a> {
+    fn new(notation: &'a str) -> Self {
+        Self { notation }
+    }
+
+    fn key(self) -> String {
+        let (coordinates, extension) = self
+            .notation
+            .split_once('@')
+            .unwrap_or((self.notation, "jar"));
+        let segments = coordinates.split(':').collect::<Vec<&str>>();
+
+        match segments.as_slice() {
+            [group, artifact, _version] => format!("{group}:{artifact}@{extension}"),
+            [group, artifact, _version, classifier] => {
+                format!("{group}:{artifact}:{classifier}@{extension}")
+            }
+            _ => self.notation.to_owned(),
+        }
+    }
+}
+
 fn merge_embedded_version<F, M>(
     base_metadata: PistonMetaData,
     embedded_version: &serde_json::Value,
@@ -463,74 +711,8 @@ where
     F: Fn(Vec<PistonMetaLibraries>) -> Result<Vec<PistonMetaLibraries>>,
     M: Fn(Vec<PistonMetaLibraries>, Vec<PistonMetaLibraries>) -> Vec<PistonMetaLibraries>,
 {
-    let mut embedded = serde_json::from_value::<EmbeddedVersionData>(embedded_version.clone())
-        .with_context(|| format!("decode {family_name} embedded version json failed"))?;
-    embedded.libraries = normalize_libraries(embedded.libraries)?;
-    let (merged_arguments, merged_minecraft_arguments) = merge_arguments(
-        base_metadata.arguments.clone(),
-        base_metadata.minecraft_arguments.clone(),
-        embedded.arguments,
-        embedded.minecraft_arguments,
-    )?;
-
-    Ok(PistonMetaData {
-        arguments: merged_arguments,
-        minecraft_arguments: merged_minecraft_arguments,
-        inherits_from: embedded
-            .inherits_from
-            .or(base_metadata.inherits_from.clone()),
-        asset_index: embedded.asset_index.unwrap_or(base_metadata.asset_index),
-        assets: embedded.assets.unwrap_or(base_metadata.assets),
-        compliance_level: embedded
-            .compliance_level
-            .unwrap_or(base_metadata.compliance_level),
-        downloads: embedded.downloads.unwrap_or(base_metadata.downloads),
-        id: embedded.id.unwrap_or(base_metadata.id),
-        java_version: embedded.java_version.unwrap_or(base_metadata.java_version),
-        libraries: merge_libraries(base_metadata.libraries, embedded.libraries),
-        logging: merge_logging(base_metadata.logging, embedded.logging),
-        main_class: embedded.main_class.unwrap_or(base_metadata.main_class),
-        minimum_launcher_version: embedded
-            .minimum_launcher_version
-            .unwrap_or(base_metadata.minimum_launcher_version),
-        release_type: embedded.release_type.unwrap_or(base_metadata.release_type),
-        time: embedded.time.unwrap_or(base_metadata.time),
-        release_time: embedded.release_time.unwrap_or(base_metadata.release_time),
-    })
-}
-
-fn merge_arguments(
-    base_arguments: Option<PistonMetaArguments>,
-    base_minecraft_arguments: Option<String>,
-    embedded_arguments: Option<PistonMetaArguments>,
-    embedded_minecraft_arguments: Option<String>,
-) -> Result<(Option<PistonMetaArguments>, Option<String>)> {
-    if let Some(arguments) = embedded_minecraft_arguments {
-        return Ok((None, Some(arguments)));
-    }
-
-    let base_arguments = match (base_arguments, base_minecraft_arguments) {
-        (Some(arguments), _) => Some(arguments),
-        (None, Some(arguments)) => Some(PistonMetaArguments {
-            game: crate::families::version_json::parse_argument_string(arguments.as_str())?
-                .into_iter()
-                .map(elemental_schema::mojang::piston::PistonMetaGenericArgument::Plain)
-                .collect(),
-            jvm: Vec::new(),
-        }),
-        (None, None) => None,
-    };
-
-    match (base_arguments, embedded_arguments) {
-        (None, None) => Ok((None, None)),
-        (Some(arguments), None) => Ok((Some(arguments), None)),
-        (None, Some(arguments)) => Ok((Some(arguments), None)),
-        (Some(mut base), Some(embedded)) => {
-            base.game.extend(embedded.game);
-            base.jvm.extend(embedded.jvm);
-            Ok((Some(base), None))
-        }
-    }
+    EmbeddedVersionMerger::new(family_name, normalize_libraries, merge_libraries)
+        .merge(base_metadata, embedded_version)
 }
 
 pub fn merge_libraries_prefer_embedded(
@@ -561,31 +743,5 @@ pub fn merge_libraries_prefer_embedded(
 }
 
 fn library_identity_key(library: &PistonMetaLibraries) -> String {
-    let (coordinates, extension) = library
-        .name
-        .split_once('@')
-        .unwrap_or((&library.name, "jar"));
-    let segments = coordinates.split(':').collect::<Vec<&str>>();
-
-    match segments.as_slice() {
-        [group, artifact, _version] => format!("{group}:{artifact}@{extension}"),
-        [group, artifact, _version, classifier] => {
-            format!("{group}:{artifact}:{classifier}@{extension}")
-        }
-        _ => library.name.clone(),
-    }
-}
-
-fn merge_logging(
-    base_logging: Option<PistonMetaLogging>,
-    embedded_logging: Option<PistonMetaLogging>,
-) -> Option<PistonMetaLogging> {
-    match (base_logging, embedded_logging) {
-        (None, None) => None,
-        (Some(base), None) => Some(base),
-        (None, Some(embedded)) => Some(embedded),
-        (Some(base), Some(embedded)) => Some(PistonMetaLogging {
-            client: embedded.client.or(base.client),
-        }),
-    }
+    LibraryIdentity::new(&library.name).key()
 }

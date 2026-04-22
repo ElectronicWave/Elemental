@@ -2,7 +2,8 @@ use anyhow::Result;
 use elemental_schema::fabric::{GameVersion, LoaderGameVersion, LoaderProfile, ProfileJson};
 
 use crate::{
-    http::{build_default_client, fetch_json},
+    families::version_json::UpstreamUrlRewriter,
+    http::{HttpSource, fetch_json},
     url::{Origin, OriginPolicy},
 };
 
@@ -33,8 +34,7 @@ pub struct FabricEndpoints {
 
 #[derive(Debug, Clone)]
 pub struct FabricSource {
-    client: reqwest::Client,
-    endpoints: FabricEndpoints,
+    inner: HttpSource<FabricEndpoints>,
 }
 
 impl Default for FabricEndpoints {
@@ -121,18 +121,14 @@ impl FabricEndpoints {
 
 impl Default for FabricSource {
     fn default() -> Self {
-        Self {
-            client: build_default_client("fabric source"),
-            endpoints: FabricEndpoints::default(),
-        }
+        Self::new(FabricEndpoints::default())
     }
 }
 
 impl FabricSource {
     pub fn new(endpoints: FabricEndpoints) -> Self {
         Self {
-            endpoints,
-            ..Self::default()
+            inner: HttpSource::new(endpoints, "fabric source"),
         }
     }
 
@@ -145,21 +141,23 @@ impl FabricSource {
     }
 
     pub fn with_client(endpoints: FabricEndpoints, client: reqwest::Client) -> Self {
-        Self { client, endpoints }
+        Self {
+            inner: HttpSource::with_client(endpoints, client),
+        }
     }
 
     pub fn endpoints(&self) -> &FabricEndpoints {
-        &self.endpoints
+        self.inner.endpoints()
     }
 
     pub async fn game_versions(&self) -> Result<Vec<GameVersion>> {
-        let url = self.endpoints.game_versions_url()?;
-        fetch_json(&self.client, url.as_str(), "fabric source").await
+        let url = self.endpoints().game_versions_url()?;
+        fetch_json(self.inner.client(), url.as_str(), "fabric source").await
     }
 
     pub async fn loader_versions(&self, game_version: &str) -> Result<Vec<LoaderGameVersion>> {
-        let url = self.endpoints.loader_versions_url(game_version)?;
-        fetch_json(&self.client, url.as_str(), "fabric source").await
+        let url = self.endpoints().loader_versions_url(game_version)?;
+        fetch_json(self.inner.client(), url.as_str(), "fabric source").await
     }
 
     pub async fn loader_profile(
@@ -168,9 +166,9 @@ impl FabricSource {
         loader_version: &str,
     ) -> Result<LoaderProfile> {
         let url = self
-            .endpoints
+            .endpoints()
             .loader_profile_url(game_version, loader_version)?;
-        fetch_json(&self.client, url.as_str(), "fabric source").await
+        fetch_json(self.inner.client(), url.as_str(), "fabric source").await
     }
 
     pub async fn profile_json(
@@ -179,8 +177,14 @@ impl FabricSource {
         loader_version: &str,
     ) -> Result<ProfileJson> {
         let url = self
-            .endpoints
+            .endpoints()
             .profile_json_url(game_version, loader_version)?;
-        fetch_json(&self.client, url.as_str(), "fabric source").await
+        fetch_json(self.inner.client(), url.as_str(), "fabric source").await
+    }
+}
+
+impl UpstreamUrlRewriter for FabricEndpoints {
+    fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
+        FabricEndpoints::rewrite_upstream(self, raw_url)
     }
 }

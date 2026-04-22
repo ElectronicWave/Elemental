@@ -27,8 +27,15 @@ use crate::{
         launch_version_json_instance, load_prepared_version_json, persist_version_json,
         prepare_version_json,
     },
-    inspect::{InstanceProbe, installed_version_json_driver, metadata_contains_library_prefix},
+    inspect::{InstanceProbe, LibraryPrefixSet},
 };
+
+const LOADER_MARKERS: LibraryPrefixSet = LibraryPrefixSet::new(&[
+    "net.minecraftforge:forge:",
+    "net.neoforged:forge:",
+    "net.neoforged:neoforge:",
+    "net.fabricmc:fabric-loader:",
+]);
 
 pub struct VanillaDriver {
     source: VanillaSource,
@@ -165,22 +172,14 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for VanillaDriver {
             return Ok(None);
         }
 
-        Ok(Some(installed_version_json_driver(
-            metadata,
+        Ok(Some(InstalledDriver::version_json(
             <Self as Driver<L, VL>>::descriptor(self),
+            metadata,
             None,
         )))
     }
 }
 
 fn has_loader_marker(metadata: &PistonMetaData) -> bool {
-    metadata_contains_library_prefix(
-        metadata,
-        &[
-            "net.minecraftforge:forge:",
-            "net.neoforged:forge:",
-            "net.neoforged:neoforge:",
-            "net.fabricmc:fabric-loader:",
-        ],
-    )
+    LOADER_MARKERS.matches(metadata)
 }

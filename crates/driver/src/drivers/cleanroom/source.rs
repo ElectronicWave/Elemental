@@ -12,7 +12,7 @@ use crate::{
         },
         version_json::VersionJsonRootLayout,
     },
-    http::build_default_client,
+    http::HttpSource,
     loader_version::LoaderVersionId,
     maven::fetch_maven_metadata,
     url::{Origin, OriginPolicy},
@@ -30,8 +30,7 @@ pub struct CleanroomEndpoints {
 
 #[derive(Debug, Clone)]
 pub struct CleanroomSource {
-    client: reqwest::Client,
-    endpoints: CleanroomEndpoints,
+    inner: HttpSource<CleanroomEndpoints>,
 }
 
 impl Origin for CleanroomOrigin {
@@ -107,28 +106,30 @@ impl InstallerArtifactEndpoints for CleanroomEndpoints {
 
 impl Default for CleanroomSource {
     fn default() -> Self {
-        Self {
-            client: build_default_client("cleanroom source"),
-            endpoints: CleanroomEndpoints::default(),
-        }
+        Self::new(CleanroomEndpoints::default())
     }
 }
 
 impl CleanroomSource {
     pub fn new(endpoints: CleanroomEndpoints) -> Self {
         Self {
-            endpoints,
-            ..Self::default()
+            inner: HttpSource::new(endpoints, "cleanroom source"),
+        }
+    }
+
+    pub fn with_client(endpoints: CleanroomEndpoints, client: reqwest::Client) -> Self {
+        Self {
+            inner: HttpSource::with_client(endpoints, client),
         }
     }
 
     pub fn endpoints(&self) -> &CleanroomEndpoints {
-        &self.endpoints
+        self.inner.endpoints()
     }
 
     pub async fn maven_metadata(&self) -> Result<MavenMetadataBody> {
-        let url = self.endpoints.maven_metadata_url()?;
-        fetch_maven_metadata(&self.client, url, "cleanroom source").await
+        let url = self.endpoints().maven_metadata_url()?;
+        fetch_maven_metadata(self.inner.client(), url, "cleanroom source").await
     }
 
     pub fn installer_artifact<L>(
@@ -146,7 +147,7 @@ impl CleanroomSource {
         build_installer_artifact(
             game_storage,
             format!("com.cleanroommc:cleanroom:{version}:installer"),
-            self.endpoints.installer_url(loader_version.as_str())?,
+            self.endpoints().installer_url(loader_version.as_str())?,
             library_relative_path,
         )
     }

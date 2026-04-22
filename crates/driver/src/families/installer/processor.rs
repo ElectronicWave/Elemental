@@ -54,11 +54,12 @@ where
 
     for library in &install_profile.libraries {
         if let Some(artifact) = &library.downloads.artifact {
-            let path = instance
-                .parent
-                .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
-                    artifact.path.as_str(),
-                ))))?;
+            let path =
+                instance
+                    .parent
+                    .try_get_extended_resource(VersionJsonRootResource::Libraries(Some(
+                        PathBuf::from(artifact.path.as_str()),
+                    )))?;
             if seen.insert(path.clone()) {
                 tasks.push(DownloadTask::new(
                     artifact_url(artifact.url.as_str(), artifact.path.as_str())?,
@@ -71,11 +72,9 @@ where
 
         if let Some(classifiers) = &library.downloads.classifiers {
             for artifact in classifiers.values() {
-                let path = instance
-                    .parent
-                    .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
-                        artifact.path.as_str(),
-                    ))))?;
+                let path = instance.parent.try_get_extended_resource(
+                    VersionJsonRootResource::Libraries(Some(PathBuf::from(artifact.path.as_str()))),
+                )?;
                 if seen.insert(path.clone()) {
                     tasks.push(DownloadTask::new(
                         artifact_url(artifact.url.as_str(), artifact.path.as_str())?,
@@ -141,13 +140,15 @@ where
         libraries_directory: absolute_path(
             &instance
                 .parent
-                .try_get_resource(VersionJsonRootResource::Libraries(None))?,
+                .try_get_extended_resource(VersionJsonRootResource::Libraries(None))?,
         )?,
-        state_directory: absolute_path(&instance.path)?
-            .join(".elemental")
-            .join(family_name),
+        state_directory: absolute_path(&instance.try_get_extended_resource(
+            VersionJsonInstanceResource::Elemental(Some(
+                PathBuf::from(family_name).join("installer"),
+            )),
+        )?)?,
         minecraft_jar_path: absolute_path(
-            &instance.try_get_resource(VersionJsonInstanceResource::Jar)?,
+            &instance.try_get_extended_resource(VersionJsonInstanceResource::Jar)?,
         )?,
         family_name,
     };
@@ -200,13 +201,15 @@ where
         libraries_directory: absolute_path(
             &instance
                 .parent
-                .try_get_resource(VersionJsonRootResource::Libraries(None))?,
+                .try_get_extended_resource(VersionJsonRootResource::Libraries(None))?,
         )?,
-        state_directory: absolute_path(&instance.path)?
-            .join(".elemental")
-            .join(family_name),
+        state_directory: absolute_path(&instance.try_get_extended_resource(
+            VersionJsonInstanceResource::Elemental(Some(
+                PathBuf::from(family_name).join("installer"),
+            )),
+        )?)?,
         minecraft_jar_path: absolute_path(
-            &instance.try_get_resource(VersionJsonInstanceResource::Jar)?,
+            &instance.try_get_extended_resource(VersionJsonInstanceResource::Jar)?,
         )?,
         family_name,
     };
@@ -317,7 +320,7 @@ impl<'a> InstallerProcessorContext<'a> {
 
         if raw.starts_with('/') {
             let relative_path = raw.trim_start_matches('/');
-            let output_path = self.state_directory.join("installer").join(relative_path);
+            let output_path = self.state_directory.join(relative_path);
             if !output_path.exists() {
                 if let Some(parent) = output_path.parent() {
                     std::fs::create_dir_all(parent)?;

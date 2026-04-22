@@ -4,13 +4,13 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail};
-
 use elemental_core::{
-    auth::authorizer::Authorizer,
+    auth::{authorizer::Authorizer, credential::UserCredential},
     launcher::command::LaunchCommand,
     runtime::distribution::Distribution,
     storage::{Storage, layout::Layoutable},
 };
+use elemental_schema::mojang::piston::PistonMetaData;
 
 use super::{
     classpath::{classpath_separator, join_classpath},
@@ -20,7 +20,7 @@ use super::{
     resource::{VersionJsonInstanceResource, VersionJsonRootResource},
     rules::VersionJsonRuleContext,
     storage::VersionJsonVersionStorageExt,
-    variables::LauncherVariables,
+    variables::{LauncherVariables, UserType},
 };
 
 pub struct VersionJsonLaunchBuilder<
@@ -113,24 +113,6 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
     }
 
     pub async fn build_command(mut self) -> Result<LaunchCommand> {
-        let version_name = self.version.name().context("get version name failed")?;
-        let version_root = self.version.path.clone();
-        let version_jar = self
-            .version
-            .try_get_resource(VersionJsonInstanceResource::Jar)?;
-        let assets_root = self
-            .version
-            .parent
-            .try_get_resource(VersionJsonRootResource::Assets)?;
-        let libraries_root = self
-            .version
-            .parent
-            .try_get_resource(VersionJsonRootResource::Libraries(None))?;
-
-        if !version_jar.exists() {
-            bail!("version jar not found: {}", version_jar.to_string_lossy());
-        }
-
         let metadata = self
             .version
             .metadata()
@@ -141,7 +123,37 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
             .authorize()
             .await
             .context("authorize failed")?;
+        let version_name = self.version.name().context("get version name failed")?;
+        let paths = LaunchPaths::resolve(&self.version)?;
+        paths.ensure_version_jar_exists()?;
 
+        self.apply_default_variables(&metadata, credential, version_name, &paths);
+
+        let raw_jvm_arguments = metadata.jvm_arguments(&rule_context);
+        let module_path_entries = self.collect_module_path_entries(raw_jvm_arguments.as_slice())?;
+        self.inner.classpath =
+            self.build_classpath(&metadata, &rule_context, &paths, &module_path_entries)?;
+
+        let command_arguments =
+            self.build_command_arguments(&metadata, &rule_context, raw_jvm_arguments)?;
+
+        Ok(
+            LaunchCommand::new(self.runtime.executable(), command_arguments)
+                .with_cwd(paths.version_root),
+        )
+    }
+
+    pub fn variables(self) -> LauncherVariables {
+        self.inner
+    }
+
+    fn apply_default_variables(
+        &mut self,
+        metadata: &PistonMetaData,
+        credential: UserCredential,
+        version_name: String,
+        paths: &LaunchPaths,
+    ) {
         if self.inner.auth_player_name.is_empty() {
             self.inner.auth_player_name = credential.username.clone();
         }
@@ -159,33 +171,98 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
         }
 
         self.inner.version_name = version_name;
-        self.inner.game_directory = version_root.to_string_lossy().to_string();
-        self.inner.assets_root = assets_root.to_string_lossy().to_string();
+        self.inner.game_directory = paths.version_root.to_string_lossy().to_string();
+        self.inner.assets_root = paths.assets_root.to_string_lossy().to_string();
         self.inner.assets_index_name = metadata.assets.clone();
         self.inner.auth_uuid = credential.uuid;
         self.inner.auth_access_token = credential.access_token;
         self.inner.user_type = if self.inner.auth_access_token.is_empty() {
-            crate::families::version_json::variables::UserType::Legacy
+            UserType::Legacy
         } else {
-            crate::families::version_json::variables::UserType::Msa
+            UserType::Msa
         };
         self.inner.version_type = metadata.release_type.clone();
-        self.inner.library_directory = libraries_root.to_string_lossy().to_string();
+        self.inner.library_directory = paths.libraries_root.to_string_lossy().to_string();
         self.inner.classpath_separator = classpath_separator().to_owned();
-        self.inner.natives_directory = self
-            .version
-            .try_get_resource(VersionJsonInstanceResource::Natives)?
-            .to_string_lossy()
-            .to_string();
+        self.inner.natives_directory = paths.natives_directory.to_string_lossy().to_string();
+    }
 
-        let raw_jvm_arguments = metadata.jvm_arguments(&rule_context);
-        let module_path_entries =
-            collect_module_path_entries(raw_jvm_arguments.as_slice(), &self.inner)?;
-        let classpath = metadata
+    fn build_command_arguments(
+        &self,
+        metadata: &PistonMetaData,
+        rule_context: &VersionJsonRuleContext,
+        raw_jvm_arguments: Vec<String>,
+    ) -> Result<Vec<String>> {
+        let mut arguments = self.build_jvm_arguments(metadata, raw_jvm_arguments)?;
+        arguments.push(metadata.main_class.clone());
+        arguments.extend(self.inner.apply(metadata.game_arguments(rule_context))?);
+        arguments.extend(self.inner.apply(self.extra_game_arguments.clone())?);
+        Ok(arguments)
+    }
+
+    fn build_jvm_arguments(
+        &self,
+        metadata: &PistonMetaData,
+        raw_jvm_arguments: Vec<String>,
+    ) -> Result<Vec<String>> {
+        let mut jvm = Vec::new();
+
+        // Legacy metadata may already be normalized into `arguments.game`, while still needing
+        // the historical JVM bootstrap arguments such as `-cp` and `-Djava.library.path`.
+        if raw_jvm_arguments.is_empty() {
+            jvm.extend(self.inner.apply(legacy_jvm_arguments())?);
+        }
+
+        if let Some(logging_arguments) = self.logging_arguments(metadata)? {
+            jvm.extend(logging_arguments);
+        }
+
+        jvm.extend(self.inner.apply(raw_jvm_arguments)?);
+        jvm.extend(self.inner.apply(self.extra_jvm_arguments.clone())?);
+
+        Ok(jvm)
+    }
+
+    fn logging_arguments(&self, metadata: &PistonMetaData) -> Result<Option<Vec<String>>> {
+        let Some(logging) = &metadata.logging else {
+            return Ok(None);
+        };
+        let Some(client) = &logging.client else {
+            return Ok(None);
+        };
+
+        let log_config_path = self.version.parent.try_get_extended_resource(
+            VersionJsonRootResource::AssetLogConfigs(Some(client.file.id.clone())),
+        )?;
+
+        if !log_config_path.exists() {
+            bail!(
+                "logging config not found: {}",
+                log_config_path.to_string_lossy()
+            );
+        }
+
+        Ok(Some(self.inner.apply_with(
+            vec![client.argument.clone()],
+            &HashMap::from([(
+                "path".to_owned(),
+                log_config_path.to_string_lossy().to_string(),
+            )]),
+        )?))
+    }
+
+    fn build_classpath(
+        &self,
+        metadata: &PistonMetaData,
+        rule_context: &VersionJsonRuleContext,
+        paths: &LaunchPaths,
+        module_path_entries: &HashSet<String>,
+    ) -> Result<String> {
+        let mut classpath = metadata
             .libraries
             .iter()
             .map(|library| -> Result<Option<String>> {
-                if !library.is_allowed(&rule_context) {
+                if !library.is_allowed(rule_context) {
                     return Ok(None);
                 }
 
@@ -199,9 +276,9 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
                 let path = self
                     .version
                     .parent
-                    .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
-                        artifact.path.as_str(),
-                    ))))?
+                    .try_get_extended_resource(VersionJsonRootResource::Libraries(Some(
+                        PathBuf::from(artifact.path.as_str()),
+                    )))?
                     .to_string_lossy()
                     .to_string();
                 if module_path_entries.contains(&normalize_path_string(path.as_str())) {
@@ -213,57 +290,97 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
             .collect::<Result<Vec<Option<String>>>>()?
             .into_iter()
             .flatten()
-            .chain(std::iter::once(version_jar.to_string_lossy().to_string()))
             .collect::<Vec<String>>();
-        self.inner.classpath = join_classpath(classpath);
 
-        let mut jvm_args = Vec::new();
-        // Legacy metadata may already be normalized into `arguments.game`, while still needing
-        // the historical JVM bootstrap arguments such as `-cp` and `-Djava.library.path`.
-        if raw_jvm_arguments.is_empty() {
-            jvm_args.extend(self.inner.apply(legacy_jvm_arguments())?);
-        }
+        classpath.push(paths.version_jar.to_string_lossy().to_string());
 
-        if let Some(logging) = &metadata.logging
-            && let Some(client) = &logging.client
-        {
-            let log_config_path =
-                self.version
-                    .parent
-                    .try_get_resource(VersionJsonRootResource::AssetLogConfigs(Some(
-                        client.file.id.clone(),
-                    )))?;
-
-            if !log_config_path.exists() {
-                bail!(
-                    "logging config not found: {}",
-                    log_config_path.to_string_lossy()
-                );
-            }
-
-            jvm_args.extend(self.inner.apply_with(
-                vec![client.argument.clone()],
-                &HashMap::from([(
-                    "path".to_owned(),
-                    log_config_path.to_string_lossy().to_string(),
-                )]),
-            )?);
-        }
-
-        jvm_args.extend(self.inner.apply(raw_jvm_arguments)?);
-        jvm_args.extend(self.inner.apply(self.extra_jvm_arguments)?);
-        let mut game_args = self.inner.apply(metadata.game_arguments(&rule_context))?;
-        game_args.extend(self.inner.apply(self.extra_game_arguments)?);
-
-        let mut args = jvm_args;
-        args.push(metadata.main_class);
-        args.extend(game_args);
-
-        Ok(LaunchCommand::new(self.runtime.executable(), args).with_cwd(version_root))
+        Ok(join_classpath(classpath))
     }
 
-    pub fn variables(self) -> LauncherVariables {
-        self.inner
+    fn collect_module_path_entries(&self, jvm_arguments: &[String]) -> Result<HashSet<String>> {
+        let mut entries = HashSet::new();
+        let mut index = 0usize;
+
+        while index < jvm_arguments.len() {
+            let argument = &jvm_arguments[index];
+            if let Some(raw_value) = argument
+                .strip_prefix("--module-path=")
+                .or_else(|| argument.strip_prefix("-p="))
+            {
+                entries.extend(self.resolve_module_path_entries(raw_value)?);
+                index += 1;
+                continue;
+            }
+
+            if argument == "-p" || argument == "--module-path" {
+                let Some(raw_value) = jvm_arguments.get(index + 1) else {
+                    bail!("module path argument is missing its value");
+                };
+                entries.extend(self.resolve_module_path_entries(raw_value)?);
+                index += 2;
+                continue;
+            }
+
+            index += 1;
+        }
+
+        Ok(entries)
+    }
+
+    fn resolve_module_path_entries(&self, raw_value: &str) -> Result<Vec<String>> {
+        let resolved = self
+            .inner
+            .apply(vec![raw_value.to_owned()])?
+            .into_iter()
+            .next()
+            .context("resolve module path argument failed")?;
+
+        Ok(resolved
+            .split(classpath_separator())
+            .filter(|value| !value.is_empty())
+            .map(normalize_path_string)
+            .collect())
+    }
+}
+
+#[derive(Debug, Clone)]
+struct LaunchPaths {
+    version_root: PathBuf,
+    version_jar: PathBuf,
+    assets_root: PathBuf,
+    libraries_root: PathBuf,
+    natives_directory: PathBuf,
+}
+
+impl LaunchPaths {
+    fn resolve<L, VL>(version: &Storage<VL, Storage<L>>) -> Result<Self>
+    where
+        L: VersionJsonRootLayout,
+        VL: VersionJsonInstanceLayout,
+    {
+        Ok(Self {
+            version_root: version.path.clone(),
+            version_jar: version.try_get_extended_resource(VersionJsonInstanceResource::Jar)?,
+            assets_root: version
+                .parent
+                .try_get_extended_resource(VersionJsonRootResource::Assets)?,
+            libraries_root: version
+                .parent
+                .try_get_extended_resource(VersionJsonRootResource::Libraries(None))?,
+            natives_directory: version
+                .try_get_extended_resource(VersionJsonInstanceResource::Natives)?,
+        })
+    }
+
+    fn ensure_version_jar_exists(&self) -> Result<()> {
+        if self.version_jar.exists() {
+            return Ok(());
+        }
+
+        bail!(
+            "version jar not found: {}",
+            self.version_jar.to_string_lossy()
+        )
     }
 }
 
@@ -275,59 +392,6 @@ fn legacy_jvm_arguments() -> Vec<String> {
         "-cp".to_owned(),
         "${classpath}".to_owned(),
     ]
-}
-
-fn collect_module_path_entries(
-    jvm_arguments: &[String],
-    variables: &LauncherVariables,
-) -> Result<HashSet<String>> {
-    let mut entries = HashSet::new();
-    let mut index = 0usize;
-
-    while index < jvm_arguments.len() {
-        let argument = &jvm_arguments[index];
-        if let Some(raw_value) = argument
-            .strip_prefix("--module-path=")
-            .or_else(|| argument.strip_prefix("-p="))
-        {
-            let resolved = variables
-                .apply(vec![raw_value.to_owned()])?
-                .into_iter()
-                .next()
-                .context("resolve inline module path argument failed")?;
-            entries.extend(
-                resolved
-                    .split(classpath_separator())
-                    .filter(|value| !value.is_empty())
-                    .map(normalize_path_string),
-            );
-            index += 1;
-            continue;
-        }
-
-        if argument == "-p" || argument == "--module-path" {
-            let Some(raw_value) = jvm_arguments.get(index + 1) else {
-                bail!("module path argument is missing its value");
-            };
-            let resolved = variables
-                .apply(vec![raw_value.clone()])?
-                .into_iter()
-                .next()
-                .context("resolve module path argument failed")?;
-            entries.extend(
-                resolved
-                    .split(classpath_separator())
-                    .filter(|value| !value.is_empty())
-                    .map(normalize_path_string),
-            );
-            index += 2;
-            continue;
-        }
-
-        index += 1;
-    }
-
-    Ok(entries)
 }
 
 fn normalize_path_string(path: &str) -> String {

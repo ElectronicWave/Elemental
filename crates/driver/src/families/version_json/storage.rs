@@ -22,7 +22,7 @@ use crate::{
         rules::VersionJsonRuleContext,
         state::{NativesState, natives_state_store},
     },
-    inspect::{InstalledInstance, inspect_instance},
+    inspect::InstalledInstance,
 };
 
 #[async_trait(?Send)]
@@ -79,7 +79,8 @@ where
         Self::Layout: Clone,
         VL: VersionJsonInstanceLayout + Send,
     {
-        let instance_root = self.try_get_resource(VersionJsonRootResource::Versions(Some(name)))?;
+        let instance_root =
+            self.try_get_extended_resource(VersionJsonRootResource::Versions(Some(name)))?;
         create_dir_all(&instance_root).await?;
 
         Ok(Storage::with_parent(
@@ -94,12 +95,12 @@ where
         VL: VersionJsonInstanceLayout,
     {
         let name = name.as_ref();
-        let instance_root =
-            self.try_get_resource(VersionJsonRootResource::Versions(Some(name.to_owned())))?;
+        let instance_root = self
+            .try_get_extended_resource(VersionJsonRootResource::Versions(Some(name.to_owned())))?;
         let metadata_path = version_layout
-            .try_get_resource(&instance_root, VersionJsonInstanceResource::Metadata)?;
-        let jar_path =
-            version_layout.try_get_resource(&instance_root, VersionJsonInstanceResource::Jar)?;
+            .try_get_extended_resource(&instance_root, VersionJsonInstanceResource::Metadata)?;
+        let jar_path = version_layout
+            .try_get_extended_resource(&instance_root, VersionJsonInstanceResource::Jar)?;
 
         Ok(metadata_path.exists() && jar_path.exists())
     }
@@ -117,7 +118,8 @@ where
         if !self.instance_exists(&name, &version_layout)? {
             return Err(anyhow!("can't find a valid instance named '{name}'"));
         }
-        let instance_root = self.try_get_resource(VersionJsonRootResource::Versions(Some(name)))?;
+        let instance_root =
+            self.try_get_extended_resource(VersionJsonRootResource::Versions(Some(name)))?;
 
         Ok(Storage::with_parent(
             instance_root,
@@ -130,7 +132,8 @@ where
     where
         VL: VersionJsonInstanceLayout,
     {
-        let instances_root = self.try_get_resource(VersionJsonRootResource::Versions(None))?;
+        let instances_root =
+            self.try_get_extended_resource(VersionJsonRootResource::Versions(None))?;
         if !instances_root.exists() {
             return Ok(Vec::new());
         }
@@ -167,7 +170,8 @@ where
         id: String,
         objects: &PistonMetaAssetIndexObjects,
     ) -> Result<()> {
-        let path = self.try_get_resource(VersionJsonRootResource::AssetIndexes(Some(id)))?;
+        let path =
+            self.try_get_extended_resource(VersionJsonRootResource::AssetIndexes(Some(id)))?;
         let parent = path
             .parent()
             .context("asset index path has no parent directory")?;
@@ -177,7 +181,7 @@ where
     }
 
     fn asset_index_objects(&self, id: impl AsRef<str>) -> Result<PistonMetaAssetIndexObjects> {
-        let path = self.try_get_resource(VersionJsonRootResource::AssetIndexes(Some(
+        let path = self.try_get_extended_resource(VersionJsonRootResource::AssetIndexes(Some(
             id.as_ref().to_owned(),
         )))?;
         Ok(serde_json::from_reader(File::open(path)?)?)
@@ -206,13 +210,13 @@ where
     type VersionLayout = VL;
 
     fn metadata(&self) -> Result<PistonMetaData> {
-        let path = self.try_get_resource(VersionJsonInstanceResource::Metadata)?;
+        let path = self.try_get_extended_resource(VersionJsonInstanceResource::Metadata)?;
         Ok(serde_json::from_reader(File::open(path)?)?)
     }
 
     async fn write_metadata(&self, metadata: &PistonMetaData) -> Result<()> {
         self.ensure_root().await?;
-        let path = self.try_get_resource(VersionJsonInstanceResource::Metadata)?;
+        let path = self.try_get_extended_resource(VersionJsonInstanceResource::Metadata)?;
         tokio::fs::write(path, serde_json::to_vec(metadata)?).await?;
         Ok(())
     }
@@ -223,10 +227,11 @@ where
             Err(_) => return false,
         };
         let rule_context = VersionJsonRuleContext::current();
-        let natives_root = match self.try_get_resource(VersionJsonInstanceResource::Natives) {
-            Ok(path) => path,
-            Err(_) => return false,
-        };
+        let natives_root =
+            match self.try_get_extended_resource(VersionJsonInstanceResource::Natives) {
+                Ok(path) => path,
+                Err(_) => return false,
+            };
         let store = match natives_state_store(&self.path).await {
             Ok(store) => store,
             Err(_) => return false,
@@ -262,18 +267,20 @@ where
     }
 
     async fn ensure_platform_natives_path(&self) -> Result<PathBuf> {
-        let path = self.try_get_resource(VersionJsonInstanceResource::Natives)?;
+        let path = self.try_get_extended_resource(VersionJsonInstanceResource::Natives)?;
         create_dir_all(&path).await?;
         Ok(path)
     }
 
     async fn extract_natives(&self) -> Result<()> {
         let metadata = self.metadata()?;
-        let destination = self.try_get_resource(VersionJsonInstanceResource::Natives)?;
+        let destination = self.try_get_extended_resource(VersionJsonInstanceResource::Natives)?;
         let rule_context = VersionJsonRuleContext::current();
         std::fs::create_dir_all(&destination)?;
 
         tokio::task::block_in_place(|| -> Result<()> {
+            let natives_directory = NativesDirectory::new(&destination);
+
             for library in &metadata.libraries {
                 if !library.is_allowed(&rule_context) {
                     continue;
@@ -281,27 +288,28 @@ where
 
                 if let Some(artifact) = library.classifiers_native_artifact(rule_context.platform())
                 {
-                    let source =
-                        self.parent
-                            .try_get_resource(VersionJsonRootResource::Libraries(Some(
-                                PathBuf::from(artifact.path.as_str()),
-                            )))?;
+                    let source = self.parent.try_get_extended_resource(
+                        VersionJsonRootResource::Libraries(Some(PathBuf::from(
+                            artifact.path.as_str(),
+                        ))),
+                    )?;
                     JarFile::new(source).extract_blocking(&destination)?;
                 }
 
                 if let Some(artifact) = library.native_artifact(rule_context.platform()) {
-                    let source =
-                        self.parent
-                            .try_get_resource(VersionJsonRootResource::Libraries(Some(
-                                PathBuf::from(artifact.path.as_str()),
-                            )))?;
+                    let source = self.parent.try_get_extended_resource(
+                        VersionJsonRootResource::Libraries(Some(PathBuf::from(
+                            artifact.path.as_str(),
+                        ))),
+                    )?;
                     JarFile::new(source).extract_blocking(&destination)?;
                 }
             }
 
-            flatten_native_binaries(&destination)
+            natives_directory.flatten_binaries()
         })?;
-        let extracted_files = collect_root_native_binaries(&destination)?
+        let extracted_files = NativesDirectory::new(&destination)
+            .root_binaries()?
             .into_iter()
             .filter_map(|path| {
                 path.file_name()
@@ -334,14 +342,7 @@ where
     L: VersionJsonRootLayout + Clone,
     VL: VersionJsonInstanceLayout + Clone,
 {
-    let mut instances = Vec::new();
-    for instance in storage.instances(version_layout)? {
-        if let Some(installed) = inspect_instance(instance, drivers).await? {
-            instances.push(installed);
-        }
-    }
-
-    Ok(instances)
+    InstalledInstance::detect_all(storage, version_layout, drivers).await
 }
 
 fn current_unix_ms() -> Result<u64> {
@@ -349,40 +350,6 @@ fn current_unix_ms() -> Result<u64> {
         .duration_since(UNIX_EPOCH)
         .context("system time is before unix epoch")?;
     Ok(duration.as_millis() as u64)
-}
-
-fn flatten_native_binaries(root: &Path) -> Result<()> {
-    for path in collect_native_binaries(root)? {
-        let Some(file_name) = path.file_name() else {
-            continue;
-        };
-        let target = root.join(file_name);
-        if target == path {
-            continue;
-        }
-
-        std::fs::copy(&path, &target).with_context(|| {
-            format!(
-                "copy native binary '{}' to '{}' failed",
-                path.display(),
-                target.display()
-            )
-        })?;
-    }
-
-    Ok(())
-}
-
-fn collect_root_native_binaries(root: &Path) -> Result<Vec<PathBuf>> {
-    let mut files = Vec::new();
-    for entry in std::fs::read_dir(root)? {
-        let entry = entry?;
-        let path = entry.path();
-        if entry.file_type()?.is_file() && is_native_binary(&path) {
-            files.push(path);
-        }
-    }
-    Ok(files)
 }
 
 fn collect_native_artifact_paths(
@@ -410,36 +377,83 @@ fn collect_native_artifact_paths(
     paths
 }
 
-fn collect_native_binaries(root: &Path) -> Result<Vec<PathBuf>> {
-    let mut files = Vec::new();
-    collect_native_binaries_into(root, &mut files)?;
-    Ok(files)
+#[derive(Debug, Clone, Copy)]
+struct NativesDirectory<'a> {
+    root: &'a Path,
 }
 
-fn collect_native_binaries_into(current: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
-    for entry in std::fs::read_dir(current)? {
-        let entry = entry?;
-        let path = entry.path();
-        if entry.file_type()?.is_dir() {
-            collect_native_binaries_into(&path, files)?;
-            continue;
-        }
-
-        if is_native_binary(&path) {
-            files.push(path);
-        }
+impl<'a> NativesDirectory<'a> {
+    fn new(root: &'a Path) -> Self {
+        Self { root }
     }
 
-    Ok(())
-}
+    fn flatten_binaries(self) -> Result<()> {
+        for path in self.binaries()? {
+            let Some(file_name) = path.file_name() else {
+                continue;
+            };
+            let target = self.root.join(file_name);
+            if target == path {
+                continue;
+            }
 
-fn is_native_binary(path: &Path) -> bool {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| {
-            matches!(
-                extension.to_ascii_lowercase().as_str(),
-                "dll" | "so" | "dylib" | "jnilib"
-            )
-        })
+            std::fs::copy(&path, &target).with_context(|| {
+                format!(
+                    "copy native binary '{}' to '{}' failed",
+                    path.display(),
+                    target.display()
+                )
+            })?;
+        }
+
+        Ok(())
+    }
+
+    fn root_binaries(self) -> Result<Vec<PathBuf>> {
+        let mut files = Vec::new();
+
+        for entry in std::fs::read_dir(self.root)? {
+            let entry = entry?;
+            let path = entry.path();
+            if entry.file_type()?.is_file() && Self::is_binary(&path) {
+                files.push(path);
+            }
+        }
+
+        Ok(files)
+    }
+
+    fn binaries(self) -> Result<Vec<PathBuf>> {
+        let mut files = Vec::new();
+        self.collect_binaries_into(self.root, &mut files)?;
+        Ok(files)
+    }
+
+    fn collect_binaries_into(self, current: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
+        for entry in std::fs::read_dir(current)? {
+            let entry = entry?;
+            let path = entry.path();
+            if entry.file_type()?.is_dir() {
+                self.collect_binaries_into(&path, files)?;
+                continue;
+            }
+
+            if Self::is_binary(&path) {
+                files.push(path);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn is_binary(path: &Path) -> bool {
+        path.extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| {
+                matches!(
+                    extension.to_ascii_lowercase().as_str(),
+                    "dll" | "so" | "dylib" | "jnilib"
+                )
+            })
+    }
 }

@@ -1,6 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use elemental_core::{minecraft::MinecraftVersionId, storage::layout::Layout};
+use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::inspect::InstanceProbe;
 
@@ -16,6 +17,25 @@ pub struct InstalledDriver {
     pub driver_version: Option<String>,
     pub game_version: Option<MinecraftVersionId>,
     pub description: Option<String>,
+}
+
+impl InstalledDriver {
+    pub fn version_json(
+        descriptor: DriverDescriptor,
+        metadata: &PistonMetaData,
+        driver_version: Option<String>,
+    ) -> Self {
+        Self {
+            driver: descriptor,
+            driver_version,
+            game_version: metadata
+                .inherits_from
+                .clone()
+                .or_else(|| Some(metadata.id.clone()))
+                .map(MinecraftVersionId::from),
+            description: Some(metadata.release_type.clone()),
+        }
+    }
 }
 
 #[async_trait]

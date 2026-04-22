@@ -1,5 +1,8 @@
 use anyhow::{Result, bail};
-use elemental::driver::drivers::fabric::{driver::FabricDriverFamily, source::FabricFlavor};
+use elemental::driver::{
+    drivers::fabric::{driver::FabricDriverFamily, source::FabricFlavor},
+    families::version_json::ProfiledVersionJsonFamilyExt,
+};
 
 use crate::{
     commands::run_profiled_version_json_demo,
@@ -8,7 +11,8 @@ use crate::{
 
 pub async fn run(config: DemoConfig) -> Result<()> {
     let driver_kind = config.driver;
-    let driver = FabricDriverFamily::new(fabric_flavor(driver_kind)?).new_driver_with_defaults()?;
+    let driver =
+        FabricDriverFamily::new(fabric_flavor(driver_kind)?).build_driver_with_defaults()?;
 
     run_profiled_version_json_demo(config, "fabric-like", &driver).await
 }

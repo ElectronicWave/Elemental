@@ -2,7 +2,8 @@ use anyhow::Result;
 use elemental_schema::fabric::ProfileJson;
 
 use crate::{
-    http::{build_default_client, fetch_json},
+    families::version_json::UpstreamUrlRewriter,
+    http::{HttpSource, fetch_json},
     url::{Origin, OriginPolicy},
 };
 
@@ -28,8 +29,7 @@ pub struct LiteLoaderEndpoints {
 
 #[derive(Debug, Clone)]
 pub struct LiteLoaderSource {
-    client: reqwest::Client,
-    endpoints: LiteLoaderEndpoints,
+    inner: HttpSource<LiteLoaderEndpoints>,
 }
 
 impl Default for LiteLoaderEndpoints {
@@ -154,23 +154,25 @@ impl LiteLoaderEndpoints {
 
 impl Default for LiteLoaderSource {
     fn default() -> Self {
-        Self {
-            client: build_default_client("liteloader source"),
-            endpoints: LiteLoaderEndpoints::default(),
-        }
+        Self::new(LiteLoaderEndpoints::default())
     }
 }
 
 impl LiteLoaderSource {
     pub fn new(endpoints: LiteLoaderEndpoints) -> Self {
         Self {
-            endpoints,
-            ..Self::default()
+            inner: HttpSource::new(endpoints, "liteloader source"),
+        }
+    }
+
+    pub fn with_client(endpoints: LiteLoaderEndpoints, client: reqwest::Client) -> Self {
+        Self {
+            inner: HttpSource::with_client(endpoints, client),
         }
     }
 
     pub fn endpoints(&self) -> &LiteLoaderEndpoints {
-        &self.endpoints
+        self.inner.endpoints()
     }
 
     pub async fn releases(&self) -> Result<Vec<LiteLoaderRelease>> {
@@ -185,12 +187,18 @@ impl LiteLoaderSource {
     ) -> Result<ProfileJson> {
         let manifest = self.manifest().await?;
         let selected = select_build(&manifest, game_version, loader_version)?;
-        build_profile_json(&self.client, &self.endpoints, &selected).await
+        build_profile_json(self.inner.client(), self.endpoints(), &selected).await
     }
 
     async fn manifest(&self) -> Result<LiteLoaderManifest> {
-        let url = self.endpoints.versions_manifest_url()?;
-        fetch_json(&self.client, url.as_str(), "liteloader source").await
+        let url = self.endpoints().versions_manifest_url()?;
+        fetch_json(self.inner.client(), url.as_str(), "liteloader source").await
+    }
+}
+
+impl UpstreamUrlRewriter for LiteLoaderEndpoints {
+    fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
+        LiteLoaderEndpoints::rewrite_upstream(self, raw_url)
     }
 }
 

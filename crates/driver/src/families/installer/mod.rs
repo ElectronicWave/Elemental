@@ -5,6 +5,7 @@ mod family;
 mod libraries;
 mod processor;
 mod profile;
+mod source;
 
 pub use archive::InstallerArchive;
 pub use artifact::{
@@ -35,3 +36,4 @@ pub use profile::{
     read_embedded_version, resolve_installer_processor_runtime,
     validate_installer_profile_identity,
 };
+pub use source::{InstallerMavenArtifactSpec, InstallerMavenEndpoints, InstallerMavenSource};

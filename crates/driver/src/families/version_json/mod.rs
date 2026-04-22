@@ -10,6 +10,7 @@ pub mod profile;
 pub mod remote;
 pub mod resource;
 pub mod rules;
+mod source;
 mod state;
 pub mod storage;
 pub mod variables;
@@ -41,4 +42,5 @@ pub use resource::{VersionJsonInstanceResource, VersionJsonRootResource};
 pub use rules::{
     OperatingSystemExt, PistonMetaRuleExt, PistonMetaRulesExt, VersionJsonRuleContext,
 };
+pub use source::{LoaderMetaEndpoints, LoaderMetaSource, LoaderProfileEndpoints};
 pub use storage::{VersionJsonGameStorageExt, VersionJsonVersionStorageExt, inspect_instances};

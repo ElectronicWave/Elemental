@@ -15,10 +15,7 @@ use elemental_infra::{
     },
     jar::JarFile,
 };
-use elemental_schema::{
-    forge::{ForgeInstallerProcessor, ForgeInstallerProfile},
-    mojang::piston::PistonMetaLibrariesDownloadsArtifact,
-};
+use elemental_schema::forge::{ForgeInstallerProcessor, ForgeInstallerProfile};
 use regex::Regex;
 use tokio::{fs::create_dir_all, process::Command};
 
@@ -29,6 +26,8 @@ use crate::families::{
         VersionJsonRootResource, classpath::join_classpath,
     },
 };
+
+use super::profile::installer_library_artifacts;
 
 const CLIENT_PROCESSOR_DATA_KEYS: &[&str] = &[
     "MAPPINGS",
@@ -174,63 +173,30 @@ where
     let mut seen = HashSet::new();
     let mut tasks = Vec::new();
 
-    for library in &install_profile.libraries {
-        if let Some(artifact) = &library.downloads.artifact {
-            push_install_profile_library_task(
-                &mut tasks,
-                &mut seen,
-                instance,
-                artifact,
-                artifact_url,
-            )?;
+    for artifact in install_profile
+        .libraries
+        .iter()
+        .flat_map(installer_library_artifacts)
+    {
+        let path = instance
+            .parent
+            .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
+                artifact.path.as_str(),
+            ))))?;
+
+        if !seen.insert(path.clone()) {
+            continue;
         }
 
-        if let Some(classifiers) = &library.downloads.classifiers {
-            for artifact in classifiers.values() {
-                push_install_profile_library_task(
-                    &mut tasks,
-                    &mut seen,
-                    instance,
-                    artifact,
-                    artifact_url,
-                )?;
-            }
-        }
+        tasks.push(DownloadTask::new(
+            artifact_url(artifact.url.as_str(), artifact.path.as_str())?,
+            path,
+            artifact.size.map(|size| size as u64),
+            artifact.sha1.clone(),
+        ));
     }
 
     Ok(tasks)
-}
-
-fn push_install_profile_library_task<L, VL, F>(
-    tasks: &mut Vec<DownloadTask>,
-    seen: &mut HashSet<PathBuf>,
-    instance: &Storage<VL, Storage<L>>,
-    artifact: &PistonMetaLibrariesDownloadsArtifact,
-    artifact_url: &F,
-) -> Result<()>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-    F: Fn(&str, &str) -> Result<String>,
-{
-    let path = instance
-        .parent
-        .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
-            artifact.path.as_str(),
-        ))))?;
-
-    if !seen.insert(path.clone()) {
-        return Ok(());
-    }
-
-    tasks.push(DownloadTask::new(
-        artifact_url(artifact.url.as_str(), artifact.path.as_str())?,
-        path,
-        artifact.size.map(|size| size as u64),
-        artifact.sha1.clone(),
-    ));
-
-    Ok(())
 }
 
 fn build_processor_context<'a, L, VL>(

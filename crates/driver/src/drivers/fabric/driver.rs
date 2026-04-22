@@ -9,7 +9,7 @@ use crate::{
     drivers::{
         fabric::{
             flavors::flavor_spec,
-            source::{FabricEndpointOverrides, FabricFlavor, FabricSource},
+            source::{FabricEndpointOverrides, FabricEndpoints, FabricFlavor, FabricSource},
         },
         vanilla::source::VanillaSource,
     },
@@ -38,7 +38,7 @@ impl FabricDriverFamily {
         overrides: FabricEndpointOverrides,
     ) -> Result<FabricDriver> {
         Ok(self.clone().build_driver(
-            FabricSource::with_overrides(overrides)?,
+            FabricSource::new(FabricEndpoints::with_overrides(overrides)?),
             VanillaSource::default(),
             ElementalDownloader::with_config_default()
                 .context("create default elemental downloader failed")?,
@@ -57,7 +57,9 @@ impl ProfiledVersionJsonFamily for FabricDriverFamily {
     }
 
     fn default_source(&self) -> Result<Self::Source> {
-        FabricSource::for_flavor(self.flavor.clone())
+        Ok(FabricSource::new(FabricEndpoints::for_flavor(
+            self.flavor.clone(),
+        )?))
     }
 
     fn remote_resolver(

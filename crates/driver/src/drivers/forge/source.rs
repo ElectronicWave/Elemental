@@ -1,21 +1,16 @@
 use std::path::PathBuf;
 
+use anyhow::{Context, Result};
+use elemental_core::minecraft::MinecraftVersionId;
+
 use crate::{
-    families::{
-        installer::{
-            InstallerArtifact, InstallerArtifactEndpoints, InstallerArtifactSource,
-            build_installer_artifact,
-        },
-        version_json::VersionJsonRootLayout,
+    families::installer::{
+        InstallerArtifactEndpoints, InstallerMavenArtifactSpec, InstallerMavenEndpoints,
+        InstallerMavenSource,
     },
-    http::HttpSource,
     loader_version::LoaderVersionId,
-    maven::fetch_maven_metadata,
     url::{Origin, OriginPolicy},
 };
-use anyhow::{Context, Result};
-use elemental_core::{minecraft::MinecraftVersionId, storage::Storage};
-use elemental_schema::forge::MavenMetadataBody;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ForgeOrigin {
@@ -27,10 +22,7 @@ pub struct ForgeEndpoints {
     origin_policy: OriginPolicy<ForgeOrigin>,
 }
 
-#[derive(Debug, Clone)]
-pub struct ForgeSource {
-    inner: HttpSource<ForgeEndpoints>,
-}
+pub type ForgeSource = InstallerMavenSource<ForgeEndpoints>;
 
 impl Origin for ForgeOrigin {
     fn canonical(self) -> &'static str {
@@ -99,73 +91,25 @@ impl InstallerArtifactEndpoints for ForgeEndpoints {
     }
 }
 
-impl Default for ForgeSource {
-    fn default() -> Self {
-        Self::new(ForgeEndpoints::default())
-    }
-}
+impl InstallerMavenEndpoints for ForgeEndpoints {
+    const SOURCE_NAME: &'static str = "forge source";
 
-impl ForgeSource {
-    pub fn new(endpoints: ForgeEndpoints) -> Self {
-        Self {
-            inner: HttpSource::new(endpoints, "forge source"),
-        }
+    fn maven_metadata_url(&self) -> Result<String> {
+        ForgeEndpoints::maven_metadata_url(self)
     }
 
-    pub fn with_client(endpoints: ForgeEndpoints, client: reqwest::Client) -> Self {
-        Self {
-            inner: HttpSource::with_client(endpoints, client),
-        }
-    }
-
-    pub fn endpoints(&self) -> &ForgeEndpoints {
-        self.inner.endpoints()
-    }
-
-    pub async fn maven_metadata(&self) -> Result<MavenMetadataBody> {
-        let url = self.endpoints().maven_metadata_url()?;
-        fetch_maven_metadata(self.inner.client(), url, "forge source").await
-    }
-
-    pub fn installer_artifact<L>(
+    fn installer_artifact_spec(
         &self,
-        game_storage: &Storage<L>,
         game_version: &MinecraftVersionId,
         loader_version: &LoaderVersionId,
-    ) -> Result<InstallerArtifact>
-    where
-        L: VersionJsonRootLayout,
-    {
+    ) -> Result<InstallerMavenArtifactSpec> {
         let version = release_version(game_version.as_str(), loader_version.as_str());
-        let library_relative_path = forge_installer_relative_path(&version);
 
-        build_installer_artifact(
-            game_storage,
-            format!("net.minecraftforge:forge:{version}:installer"),
-            self.endpoints()
-                .installer_url(game_version.as_str(), loader_version.as_str())?,
-            library_relative_path,
-        )
-    }
-}
-
-impl InstallerArtifactSource for ForgeSource {
-    type Endpoints = ForgeEndpoints;
-
-    fn endpoints(&self) -> &Self::Endpoints {
-        ForgeSource::endpoints(self)
-    }
-
-    fn installer_artifact<L>(
-        &self,
-        game_storage: &Storage<L>,
-        game_version: &MinecraftVersionId,
-        loader_version: &LoaderVersionId,
-    ) -> Result<InstallerArtifact>
-    where
-        L: VersionJsonRootLayout,
-    {
-        ForgeSource::installer_artifact(self, game_storage, game_version, loader_version)
+        Ok(InstallerMavenArtifactSpec {
+            coordinate: format!("net.minecraftforge:forge:{version}:installer"),
+            download_url: self.installer_url(game_version.as_str(), loader_version.as_str())?,
+            relative_path: forge_installer_relative_path(&version),
+        })
     }
 }
 

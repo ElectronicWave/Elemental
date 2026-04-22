@@ -18,7 +18,8 @@ use elemental_schema::{
     forge::ForgeInstallerProfile,
     mojang::piston::{
         PistonMetaArguments, PistonMetaAssetIndex, PistonMetaData, PistonMetaDownloads,
-        PistonMetaJavaVersion, PistonMetaLibraries, PistonMetaLogging,
+        PistonMetaJavaVersion, PistonMetaLibraries, PistonMetaLibrariesDownloadsArtifact,
+        PistonMetaLogging,
     },
 };
 use serde::Deserialize;
@@ -417,28 +418,15 @@ where
     VL: VersionJsonInstanceLayout,
 {
     for library in &install_profile.libraries {
-        if let Some(artifact) = &library.downloads.artifact
-            && !instance
+        for artifact in installer_library_artifacts(library) {
+            if !instance
                 .parent
                 .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
                     artifact.path.as_str(),
                 ))))?
                 .exists()
-        {
-            return Ok(false);
-        }
-
-        if let Some(classifiers) = &library.downloads.classifiers {
-            for artifact in classifiers.values() {
-                if !instance
-                    .parent
-                    .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
-                        artifact.path.as_str(),
-                    ))))?
-                    .exists()
-                {
-                    return Ok(false);
-                }
+            {
+                return Ok(false);
             }
         }
     }
@@ -560,146 +548,6 @@ struct EmbeddedVersionData {
     release_time: Option<String>,
 }
 
-struct EmbeddedVersionMerger<'a, F, M>
-where
-    F: Fn(Vec<PistonMetaLibraries>) -> Result<Vec<PistonMetaLibraries>>,
-    M: Fn(Vec<PistonMetaLibraries>, Vec<PistonMetaLibraries>) -> Vec<PistonMetaLibraries>,
-{
-    family_name: &'a str,
-    normalize_libraries: F,
-    merge_libraries: M,
-}
-
-impl<'a, F, M> EmbeddedVersionMerger<'a, F, M>
-where
-    F: Fn(Vec<PistonMetaLibraries>) -> Result<Vec<PistonMetaLibraries>>,
-    M: Fn(Vec<PistonMetaLibraries>, Vec<PistonMetaLibraries>) -> Vec<PistonMetaLibraries>,
-{
-    fn new(family_name: &'a str, normalize_libraries: F, merge_libraries: M) -> Self {
-        Self {
-            family_name,
-            normalize_libraries,
-            merge_libraries,
-        }
-    }
-
-    fn merge(
-        &self,
-        base_metadata: PistonMetaData,
-        embedded_version: &serde_json::Value,
-    ) -> Result<PistonMetaData> {
-        let mut embedded = serde_json::from_value::<EmbeddedVersionData>(embedded_version.clone())
-            .with_context(|| format!("decode {} embedded version json failed", self.family_name))?;
-        embedded.libraries = (self.normalize_libraries)(embedded.libraries)?;
-        let (merged_arguments, merged_minecraft_arguments) = Self::merge_arguments(
-            base_metadata.arguments.clone(),
-            base_metadata.minecraft_arguments.clone(),
-            embedded.arguments,
-            embedded.minecraft_arguments,
-        )?;
-
-        Ok(PistonMetaData {
-            arguments: merged_arguments,
-            minecraft_arguments: merged_minecraft_arguments,
-            inherits_from: embedded
-                .inherits_from
-                .or(base_metadata.inherits_from.clone()),
-            asset_index: embedded.asset_index.unwrap_or(base_metadata.asset_index),
-            assets: embedded.assets.unwrap_or(base_metadata.assets),
-            compliance_level: embedded
-                .compliance_level
-                .unwrap_or(base_metadata.compliance_level),
-            downloads: embedded.downloads.unwrap_or(base_metadata.downloads),
-            id: embedded.id.unwrap_or(base_metadata.id),
-            java_version: embedded.java_version.unwrap_or(base_metadata.java_version),
-            libraries: (self.merge_libraries)(base_metadata.libraries, embedded.libraries),
-            logging: Self::merge_logging(base_metadata.logging, embedded.logging),
-            main_class: embedded.main_class.unwrap_or(base_metadata.main_class),
-            minimum_launcher_version: embedded
-                .minimum_launcher_version
-                .unwrap_or(base_metadata.minimum_launcher_version),
-            release_type: embedded.release_type.unwrap_or(base_metadata.release_type),
-            time: embedded.time.unwrap_or(base_metadata.time),
-            release_time: embedded.release_time.unwrap_or(base_metadata.release_time),
-        })
-    }
-
-    fn merge_arguments(
-        base_arguments: Option<PistonMetaArguments>,
-        base_minecraft_arguments: Option<String>,
-        embedded_arguments: Option<PistonMetaArguments>,
-        embedded_minecraft_arguments: Option<String>,
-    ) -> Result<(Option<PistonMetaArguments>, Option<String>)> {
-        if let Some(arguments) = embedded_minecraft_arguments {
-            return Ok((None, Some(arguments)));
-        }
-
-        let base_arguments = match (base_arguments, base_minecraft_arguments) {
-            (Some(arguments), _) => Some(arguments),
-            (None, Some(arguments)) => Some(PistonMetaArguments {
-                game: crate::families::version_json::parse_argument_string(arguments.as_str())?
-                    .into_iter()
-                    .map(elemental_schema::mojang::piston::PistonMetaGenericArgument::Plain)
-                    .collect(),
-                jvm: Vec::new(),
-            }),
-            (None, None) => None,
-        };
-
-        match (base_arguments, embedded_arguments) {
-            (None, None) => Ok((None, None)),
-            (Some(arguments), None) => Ok((Some(arguments), None)),
-            (None, Some(arguments)) => Ok((Some(arguments), None)),
-            (Some(mut base), Some(embedded)) => {
-                base.game.extend(embedded.game);
-                base.jvm.extend(embedded.jvm);
-                Ok((Some(base), None))
-            }
-        }
-    }
-
-    fn merge_logging(
-        base_logging: Option<PistonMetaLogging>,
-        embedded_logging: Option<PistonMetaLogging>,
-    ) -> Option<PistonMetaLogging> {
-        match (base_logging, embedded_logging) {
-            (None, None) => None,
-            (Some(base), None) => Some(base),
-            (None, Some(embedded)) => Some(embedded),
-            (Some(base), Some(embedded)) => Some(PistonMetaLogging {
-                client: embedded.client.or(base.client),
-            }),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-struct LibraryIdentity<'a> {
-    notation: &'a str,
-}
-
-impl<'a> LibraryIdentity<'a> {
-    fn new(notation: &'a str) -> Self {
-        Self { notation }
-    }
-
-    fn key(self) -> String {
-        let (coordinates, extension) = self
-            .notation
-            .split_once('@')
-            .unwrap_or((self.notation, "jar"));
-        let segments = coordinates.split(':').collect::<Vec<&str>>();
-
-        match segments.as_slice() {
-            [group, artifact, _version] => format!("{group}:{artifact}@{extension}"),
-            [group, artifact, _version, classifier] => {
-                format!("{group}:{artifact}:{classifier}@{extension}")
-            }
-            _ => self.notation.to_owned(),
-        }
-    }
-}
-
 fn merge_embedded_version<F, M>(
     base_metadata: PistonMetaData,
     embedded_version: &serde_json::Value,
@@ -711,8 +559,40 @@ where
     F: Fn(Vec<PistonMetaLibraries>) -> Result<Vec<PistonMetaLibraries>>,
     M: Fn(Vec<PistonMetaLibraries>, Vec<PistonMetaLibraries>) -> Vec<PistonMetaLibraries>,
 {
-    EmbeddedVersionMerger::new(family_name, normalize_libraries, merge_libraries)
-        .merge(base_metadata, embedded_version)
+    let mut embedded = serde_json::from_value::<EmbeddedVersionData>(embedded_version.clone())
+        .with_context(|| format!("decode {family_name} embedded version json failed"))?;
+    embedded.libraries = normalize_libraries(embedded.libraries)?;
+    let (arguments, minecraft_arguments) = merge_embedded_arguments(
+        base_metadata.arguments.clone(),
+        base_metadata.minecraft_arguments.clone(),
+        embedded.arguments,
+        embedded.minecraft_arguments,
+    )?;
+
+    Ok(PistonMetaData {
+        arguments,
+        minecraft_arguments,
+        inherits_from: embedded
+            .inherits_from
+            .or(base_metadata.inherits_from.clone()),
+        asset_index: embedded.asset_index.unwrap_or(base_metadata.asset_index),
+        assets: embedded.assets.unwrap_or(base_metadata.assets),
+        compliance_level: embedded
+            .compliance_level
+            .unwrap_or(base_metadata.compliance_level),
+        downloads: embedded.downloads.unwrap_or(base_metadata.downloads),
+        id: embedded.id.unwrap_or(base_metadata.id),
+        java_version: embedded.java_version.unwrap_or(base_metadata.java_version),
+        libraries: merge_libraries(base_metadata.libraries, embedded.libraries),
+        logging: merge_embedded_logging(base_metadata.logging, embedded.logging),
+        main_class: embedded.main_class.unwrap_or(base_metadata.main_class),
+        minimum_launcher_version: embedded
+            .minimum_launcher_version
+            .unwrap_or(base_metadata.minimum_launcher_version),
+        release_type: embedded.release_type.unwrap_or(base_metadata.release_type),
+        time: embedded.time.unwrap_or(base_metadata.time),
+        release_time: embedded.release_time.unwrap_or(base_metadata.release_time),
+    })
 }
 
 pub fn merge_libraries_prefer_embedded(
@@ -742,6 +622,75 @@ pub fn merge_libraries_prefer_embedded(
     merged
 }
 
+pub(crate) fn installer_library_artifacts(
+    library: &PistonMetaLibraries,
+) -> impl Iterator<Item = &PistonMetaLibrariesDownloadsArtifact> + '_ {
+    library.downloads.artifact.iter().chain(
+        library
+            .downloads
+            .classifiers
+            .iter()
+            .flat_map(|classifiers| classifiers.values()),
+    )
+}
+
+fn merge_embedded_arguments(
+    base_arguments: Option<PistonMetaArguments>,
+    base_minecraft_arguments: Option<String>,
+    embedded_arguments: Option<PistonMetaArguments>,
+    embedded_minecraft_arguments: Option<String>,
+) -> Result<(Option<PistonMetaArguments>, Option<String>)> {
+    if let Some(arguments) = embedded_minecraft_arguments {
+        return Ok((None, Some(arguments)));
+    }
+
+    let base_arguments = match (base_arguments, base_minecraft_arguments) {
+        (Some(arguments), _) => Some(arguments),
+        (None, Some(arguments)) => Some(PistonMetaArguments {
+            game: crate::families::version_json::parse_argument_string(arguments.as_str())?
+                .into_iter()
+                .map(elemental_schema::mojang::piston::PistonMetaGenericArgument::Plain)
+                .collect(),
+            jvm: Vec::new(),
+        }),
+        (None, None) => None,
+    };
+
+    match (base_arguments, embedded_arguments) {
+        (None, None) => Ok((None, None)),
+        (Some(arguments), None) | (None, Some(arguments)) => Ok((Some(arguments), None)),
+        (Some(mut base), Some(embedded)) => {
+            base.game.extend(embedded.game);
+            base.jvm.extend(embedded.jvm);
+            Ok((Some(base), None))
+        }
+    }
+}
+
+fn merge_embedded_logging(
+    base_logging: Option<PistonMetaLogging>,
+    embedded_logging: Option<PistonMetaLogging>,
+) -> Option<PistonMetaLogging> {
+    match (base_logging, embedded_logging) {
+        (None, None) => None,
+        (Some(base), None) => Some(base),
+        (None, Some(embedded)) => Some(embedded),
+        (Some(base), Some(embedded)) => Some(PistonMetaLogging {
+            client: embedded.client.or(base.client),
+        }),
+    }
+}
+
 fn library_identity_key(library: &PistonMetaLibraries) -> String {
-    LibraryIdentity::new(&library.name).key()
+    let notation = library.name.as_str();
+    let (coordinates, extension) = notation.split_once('@').unwrap_or((notation, "jar"));
+    let segments = coordinates.split(':').collect::<Vec<&str>>();
+
+    match segments.as_slice() {
+        [group, artifact, _version] => format!("{group}:{artifact}@{extension}"),
+        [group, artifact, _version, classifier] => {
+            format!("{group}:{artifact}:{classifier}@{extension}")
+        }
+        _ => notation.to_owned(),
+    }
 }

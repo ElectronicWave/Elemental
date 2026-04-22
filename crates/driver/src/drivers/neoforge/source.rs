@@ -1,21 +1,16 @@
 use std::path::PathBuf;
 
+use anyhow::Result;
+use elemental_core::minecraft::MinecraftVersionId;
+
 use crate::{
-    families::{
-        installer::{
-            InstallerArtifact, InstallerArtifactEndpoints, InstallerArtifactSource,
-            build_installer_artifact,
-        },
-        version_json::VersionJsonRootLayout,
+    families::installer::{
+        InstallerArtifactEndpoints, InstallerMavenArtifactSpec, InstallerMavenEndpoints,
+        InstallerMavenSource,
     },
-    http::HttpSource,
     loader_version::LoaderVersionId,
-    maven::fetch_maven_metadata,
     url::{Origin, OriginPolicy},
 };
-use anyhow::Result;
-use elemental_core::{minecraft::MinecraftVersionId, storage::Storage};
-use elemental_schema::forge::MavenMetadataBody;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NeoForgeOrigin {
@@ -27,10 +22,7 @@ pub struct NeoForgeEndpoints {
     origin_policy: OriginPolicy<NeoForgeOrigin>,
 }
 
-#[derive(Debug, Clone)]
-pub struct NeoForgeSource {
-    inner: HttpSource<NeoForgeEndpoints>,
-}
+pub type NeoForgeSource = InstallerMavenSource<NeoForgeEndpoints>;
 
 impl Origin for NeoForgeOrigin {
     fn canonical(self) -> &'static str {
@@ -103,72 +95,25 @@ impl InstallerArtifactEndpoints for NeoForgeEndpoints {
     }
 }
 
-impl Default for NeoForgeSource {
-    fn default() -> Self {
-        Self::new(NeoForgeEndpoints::default())
-    }
-}
+impl InstallerMavenEndpoints for NeoForgeEndpoints {
+    const SOURCE_NAME: &'static str = "neoforge source";
 
-impl NeoForgeSource {
-    pub fn new(endpoints: NeoForgeEndpoints) -> Self {
-        Self {
-            inner: HttpSource::new(endpoints, "neoforge source"),
-        }
+    fn maven_metadata_url(&self) -> Result<String> {
+        NeoForgeEndpoints::maven_metadata_url(self)
     }
 
-    pub fn with_client(endpoints: NeoForgeEndpoints, client: reqwest::Client) -> Self {
-        Self {
-            inner: HttpSource::with_client(endpoints, client),
-        }
-    }
-
-    pub fn endpoints(&self) -> &NeoForgeEndpoints {
-        self.inner.endpoints()
-    }
-
-    pub async fn maven_metadata(&self) -> Result<MavenMetadataBody> {
-        let url = self.endpoints().maven_metadata_url()?;
-        fetch_maven_metadata(self.inner.client(), url, "neoforge source").await
-    }
-
-    pub fn installer_artifact<L>(
+    fn installer_artifact_spec(
         &self,
-        game_storage: &Storage<L>,
         _game_version: &MinecraftVersionId,
         loader_version: &LoaderVersionId,
-    ) -> Result<InstallerArtifact>
-    where
-        L: VersionJsonRootLayout,
-    {
+    ) -> Result<InstallerMavenArtifactSpec> {
         let version = release_version(loader_version.as_str());
-        let library_relative_path = neoforge_installer_relative_path(&version);
 
-        build_installer_artifact(
-            game_storage,
-            format!("net.neoforged:neoforge:{version}:installer"),
-            self.endpoints().installer_url(loader_version.as_str())?,
-            library_relative_path,
-        )
-    }
-}
-
-impl InstallerArtifactSource for NeoForgeSource {
-    type Endpoints = NeoForgeEndpoints;
-
-    fn endpoints(&self) -> &Self::Endpoints {
-        NeoForgeSource::endpoints(self)
-    }
-
-    fn installer_artifact<L>(
-        &self,
-        game_storage: &Storage<L>,
-        game_version: &MinecraftVersionId,
-        loader_version: &LoaderVersionId,
-    ) -> Result<InstallerArtifact>
-    where
-        L: VersionJsonRootLayout,
-    {
-        NeoForgeSource::installer_artifact(self, game_storage, game_version, loader_version)
+        Ok(InstallerMavenArtifactSpec {
+            coordinate: format!("net.neoforged:neoforge:{version}:installer"),
+            download_url: self.installer_url(loader_version.as_str())?,
+            relative_path: neoforge_installer_relative_path(&version),
+        })
     }
 }
 

@@ -2,8 +2,9 @@ use anyhow::Result;
 use elemental_schema::fabric::{GameVersion, LoaderGameVersion, LoaderProfile, ProfileJson};
 
 use crate::{
-    families::version_json::UpstreamUrlRewriter,
-    http::{HttpSource, fetch_json},
+    families::version_json::{
+        LoaderMetaEndpoints, LoaderMetaSource, LoaderProfileEndpoints, UpstreamUrlRewriter,
+    },
     url::{Origin, OriginPolicy},
 };
 
@@ -32,10 +33,7 @@ pub struct FabricEndpoints {
     origin_policy: OriginPolicy<FabricOrigin>,
 }
 
-#[derive(Debug, Clone)]
-pub struct FabricSource {
-    inner: HttpSource<FabricEndpoints>,
-}
+pub type FabricSource = LoaderMetaSource<FabricEndpoints>;
 
 impl Default for FabricEndpoints {
     fn default() -> Self {
@@ -119,67 +117,31 @@ impl FabricEndpoints {
     }
 }
 
-impl Default for FabricSource {
-    fn default() -> Self {
-        Self::new(FabricEndpoints::default())
+impl LoaderMetaEndpoints for FabricEndpoints {
+    type GameVersion = GameVersion;
+    type LoaderGameVersion = LoaderGameVersion;
+    type ProfileJson = ProfileJson;
+
+    const SOURCE_NAME: &'static str = "fabric source";
+
+    fn game_versions_url(&self) -> Result<String> {
+        FabricEndpoints::game_versions_url(self)
+    }
+
+    fn loader_versions_url(&self, game_version: &str) -> Result<String> {
+        FabricEndpoints::loader_versions_url(self, game_version)
+    }
+
+    fn profile_json_url(&self, game_version: &str, loader_version: &str) -> Result<String> {
+        FabricEndpoints::profile_json_url(self, game_version, loader_version)
     }
 }
 
-impl FabricSource {
-    pub fn new(endpoints: FabricEndpoints) -> Self {
-        Self {
-            inner: HttpSource::new(endpoints, "fabric source"),
-        }
-    }
+impl LoaderProfileEndpoints for FabricEndpoints {
+    type LoaderProfile = LoaderProfile;
 
-    pub fn for_flavor(flavor: FabricFlavor) -> Result<Self> {
-        Ok(Self::new(FabricEndpoints::for_flavor(flavor)?))
-    }
-
-    pub fn with_overrides(overrides: FabricEndpointOverrides) -> Result<Self> {
-        Ok(Self::new(FabricEndpoints::with_overrides(overrides)?))
-    }
-
-    pub fn with_client(endpoints: FabricEndpoints, client: reqwest::Client) -> Self {
-        Self {
-            inner: HttpSource::with_client(endpoints, client),
-        }
-    }
-
-    pub fn endpoints(&self) -> &FabricEndpoints {
-        self.inner.endpoints()
-    }
-
-    pub async fn game_versions(&self) -> Result<Vec<GameVersion>> {
-        let url = self.endpoints().game_versions_url()?;
-        fetch_json(self.inner.client(), url.as_str(), "fabric source").await
-    }
-
-    pub async fn loader_versions(&self, game_version: &str) -> Result<Vec<LoaderGameVersion>> {
-        let url = self.endpoints().loader_versions_url(game_version)?;
-        fetch_json(self.inner.client(), url.as_str(), "fabric source").await
-    }
-
-    pub async fn loader_profile(
-        &self,
-        game_version: &str,
-        loader_version: &str,
-    ) -> Result<LoaderProfile> {
-        let url = self
-            .endpoints()
-            .loader_profile_url(game_version, loader_version)?;
-        fetch_json(self.inner.client(), url.as_str(), "fabric source").await
-    }
-
-    pub async fn profile_json(
-        &self,
-        game_version: &str,
-        loader_version: &str,
-    ) -> Result<ProfileJson> {
-        let url = self
-            .endpoints()
-            .profile_json_url(game_version, loader_version)?;
-        fetch_json(self.inner.client(), url.as_str(), "fabric source").await
+    fn loader_profile_url(&self, game_version: &str, loader_version: &str) -> Result<String> {
+        FabricEndpoints::loader_profile_url(self, game_version, loader_version)
     }
 }
 

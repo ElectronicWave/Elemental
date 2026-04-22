@@ -2,8 +2,7 @@ use anyhow::Result;
 use elemental_schema::quilt::{GameVersion, LoaderGameVersion, ProfileJson};
 
 use crate::{
-    families::version_json::UpstreamUrlRewriter,
-    http::{HttpSource, fetch_json},
+    families::version_json::{LoaderMetaEndpoints, LoaderMetaSource, UpstreamUrlRewriter},
     url::{Origin, OriginPolicy},
 };
 
@@ -18,10 +17,7 @@ pub struct QuiltEndpoints {
     origin_policy: OriginPolicy<QuiltOrigin>,
 }
 
-#[derive(Debug, Clone)]
-pub struct QuiltSource {
-    inner: HttpSource<QuiltEndpoints>,
-}
+pub type QuiltSource = LoaderMetaSource<QuiltEndpoints>;
 
 impl Default for QuiltEndpoints {
     fn default() -> Self {
@@ -90,48 +86,23 @@ impl QuiltEndpoints {
     }
 }
 
-impl Default for QuiltSource {
-    fn default() -> Self {
-        Self::new(QuiltEndpoints::default())
-    }
-}
+impl LoaderMetaEndpoints for QuiltEndpoints {
+    type GameVersion = GameVersion;
+    type LoaderGameVersion = LoaderGameVersion;
+    type ProfileJson = ProfileJson;
 
-impl QuiltSource {
-    pub fn new(endpoints: QuiltEndpoints) -> Self {
-        Self {
-            inner: HttpSource::new(endpoints, "quilt source"),
-        }
+    const SOURCE_NAME: &'static str = "quilt source";
+
+    fn game_versions_url(&self) -> Result<String> {
+        QuiltEndpoints::game_versions_url(self)
     }
 
-    pub fn with_client(endpoints: QuiltEndpoints, client: reqwest::Client) -> Self {
-        Self {
-            inner: HttpSource::with_client(endpoints, client),
-        }
+    fn loader_versions_url(&self, game_version: &str) -> Result<String> {
+        QuiltEndpoints::loader_versions_url(self, game_version)
     }
 
-    pub fn endpoints(&self) -> &QuiltEndpoints {
-        self.inner.endpoints()
-    }
-
-    pub async fn game_versions(&self) -> Result<Vec<GameVersion>> {
-        let url = self.endpoints().game_versions_url()?;
-        fetch_json(self.inner.client(), url.as_str(), "quilt source").await
-    }
-
-    pub async fn loader_versions(&self, game_version: &str) -> Result<Vec<LoaderGameVersion>> {
-        let url = self.endpoints().loader_versions_url(game_version)?;
-        fetch_json(self.inner.client(), url.as_str(), "quilt source").await
-    }
-
-    pub async fn profile_json(
-        &self,
-        game_version: &str,
-        loader_version: &str,
-    ) -> Result<ProfileJson> {
-        let url = self
-            .endpoints()
-            .profile_json_url(game_version, loader_version)?;
-        fetch_json(self.inner.client(), url.as_str(), "quilt source").await
+    fn profile_json_url(&self, game_version: &str, loader_version: &str) -> Result<String> {
+        QuiltEndpoints::profile_json_url(self, game_version, loader_version)
     }
 }
 

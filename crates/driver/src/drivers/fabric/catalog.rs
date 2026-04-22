@@ -10,7 +10,7 @@ use crate::catalog::{
 };
 use crate::loader_version::LoaderVersionId;
 
-use super::source::{FabricEndpointOverrides, FabricFlavor, FabricSource};
+use super::source::{FabricEndpointOverrides, FabricEndpoints, FabricFlavor, FabricSource};
 
 pub struct FabricCatalog {
     source: FabricSource,
@@ -43,11 +43,15 @@ impl FabricCatalog {
     }
 
     pub fn for_flavor(flavor: FabricFlavor) -> Result<Self> {
-        Ok(Self::new(FabricSource::for_flavor(flavor)?))
+        Ok(Self::new(FabricSource::new(FabricEndpoints::for_flavor(
+            flavor,
+        )?)))
     }
 
     pub fn with_overrides(overrides: FabricEndpointOverrides) -> Result<Self> {
-        Ok(Self::new(FabricSource::with_overrides(overrides)?))
+        Ok(Self::new(FabricSource::new(
+            FabricEndpoints::with_overrides(overrides)?,
+        )))
     }
 }
 

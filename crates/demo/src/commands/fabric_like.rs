@@ -20,6 +20,7 @@ fn fabric_flavor(driver: DemoDriver) -> Result<FabricFlavor> {
         DemoDriver::Babric => Ok(FabricFlavor::Babric),
         DemoDriver::Vanilla
         | DemoDriver::Quilt
+        | DemoDriver::Rift
         | DemoDriver::Forge
         | DemoDriver::Cleanroom
         | DemoDriver::NeoForge => {

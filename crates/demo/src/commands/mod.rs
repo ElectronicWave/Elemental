@@ -3,6 +3,7 @@ mod fabric_like;
 mod forge;
 mod neoforge;
 mod quilt;
+mod rift;
 mod vanilla;
 
 use std::{fmt::Debug, future::Future, time::Duration};
@@ -40,6 +41,7 @@ pub async fn run(config: DemoConfig) -> Result<()> {
             fabric_like::run(config).await
         }
         DemoDriver::Quilt => quilt::run(config).await,
+        DemoDriver::Rift => rift::run(config).await,
         DemoDriver::Forge => forge::run(config).await,
         DemoDriver::Cleanroom => cleanroom::run(config).await,
         DemoDriver::NeoForge => neoforge::run(config).await,

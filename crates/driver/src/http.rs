@@ -30,6 +30,19 @@ pub async fn fetch_text(client: &reqwest::Client, url: &str, source_name: &str) 
         .with_context(|| format!("decode {source_name} resource failed: {url}"))
 }
 
+pub async fn fetch_bytes(
+    client: &reqwest::Client,
+    url: &str,
+    source_name: &str,
+) -> Result<Vec<u8>> {
+    send_ok(client, url, source_name)
+        .await?
+        .bytes()
+        .await
+        .map(|bytes| bytes.to_vec())
+        .with_context(|| format!("decode {source_name} resource failed: {url}"))
+}
+
 async fn send_ok(
     client: &reqwest::Client,
     url: &str,

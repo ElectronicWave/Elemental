@@ -25,7 +25,7 @@ It is intended as a working architecture reference, not as a release guarantee.
 | NeoForge        | Yes     | Yes     | Yes     | Yes            | Yes    | Installer-family driver now reaches a verified modern launch anchor; catalog game-version grouping remains heuristic, but now covers both pre-2026 and year-based naming |
 | CleanroomMC     | Yes     | Yes     | Yes     | Yes            | Yes    | Installer-family driver is implemented and smoke-verified on a `1.12.2 / 0.5.8-alpha` anchor                                                                             |
 | LiteLoader      | No      | No      | No      | No             | No     | Not started                                                                                                                                                              |
-| Rift            | No      | No      | No      | No             | No     | Not started                                                                                                                                                              |
+| Rift            | Yes     | Yes     | Yes     | Yes            | Yes    | Direct profiled `version_json` driver is implemented against official release jars; runtime smoke coverage still needs to be recorded                                     |
 | OptiFine        | No      | No      | No      | No             | No     | Not started                                                                                                                                                              |
 
 ## Verified Smoke Coverage
@@ -64,6 +64,7 @@ These are the ranges I would claim today based on the current code, upstream doc
 | Forge           | `1.12.2 / 14.23.5.2860` and `1.20.1 / 47.3.1` verified, broader range not claimed yet | High         | The installer-family pipeline now has verified anchors on both a classic `1.12.2` generation and a modern `1.20.1` generation, but broader Forge coverage still needs systematic validation                                      |
 | NeoForge        | `1.21.1 / 21.1.199` verified, broader range not claimed yet                           | High         | The installer-family pipeline now has a verified modern NeoForge anchor, but broader NeoForge coverage still needs systematic validation and catalog grouping still relies on version-name heuristics rather than upstream truth |
 | CleanroomMC     | `1.12.2 / 0.5.8-alpha` verified, broader range not claimed yet                        | High         | The installer-family pipeline now has a verified Cleanroom anchor on the only currently targeted Minecraft line, but broader Cleanroom release coverage and companion-pack semantics still need systematic validation            |
+| Rift            | official `1.13` and `1.13.2` release line is implemented, but do not claim yet      | Low-Medium   | The direct profiled driver now derives metadata from official release jars and normalizes their embedded launcher profiles, but no runtime smoke anchor has been recorded yet                                              |
 
 ## Upstream Findings
 
@@ -177,10 +178,10 @@ Recommended families:
 
 | Family                | Examples                            | Character                                                                                |
 | --------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------- |
-| `version_json` family | Vanilla                             | Modern metadata-driven install and launch                                                |
+| `version_json` family | Vanilla, Rift                       | Modern metadata-driven install and launch, including direct launcher-profile derivatives  |
 | `fabric-like` family  | Fabric, LegacyFabric, Babric, Quilt | Profile-driven or version-json-derived boot                                              |
 | `installer` family    | Forge, NeoForge, CleanroomMC        | Installer protocol and materialization, including legacy-derived installer distributions |
-| `legacy` family       | LiteLoader, Rift                    | LaunchWrapper, tweaker, relaunch, legacy bootstrap                                       |
+| `legacy` family       | LiteLoader                          | LaunchWrapper, tweaker, relaunch, and bootstrap paths that cannot be expressed as direct profile-driven metadata |
 | `addon` family        | OptiFine, OptiFabric                | Patch or addon semantics layered on top of a base driver                                 |
 
 ## Should Elemental Support Driver Uninstall
@@ -391,33 +392,31 @@ Current status:
 - broader Forge, NeoForge, and Cleanroom coverage is still unclaimed until more installer generations are smoke-validated
 - Phase 3 is now good enough to stop being the primary roadmap milestone; the remaining work is wider coverage, not missing family substrate
 
-## Phase 4: Create Legacy Family
+## Phase 4: Revisit Legacy Boot Surface
 
 Goal:
 
-- support LaunchWrapper and tweaker-era loaders without forcing them into modern metadata assumptions
+- support the remaining genuinely legacy loaders without inventing a family boundary too early
 
 Work:
 
-- define legacy boot substrate
-- support:
-  - tweak classes
+- keep Rift on the direct profiled `version_json` path unless real boot semantics prove otherwise
+- runtime-smoke the official Rift line on one representative anchor first
+- only introduce a separate `legacy` family if a target truly needs:
   - relaunch flows
-  - legacy libraries
-  - launchwrapper-era bootstrap
-- implement one minimal working target first:
-  - preferably Rift
-  - keep LiteLoader as the follow-up target once the substrate is proven
+  - bootstrap indirection beyond an embedded launcher profile
+  - library/bootstrap mutation that the current profile pipeline cannot model
+- use LiteLoader as the first serious pressure test if that boundary is still needed
 
 Why this phase matters:
 
-- this is the step that moves Elemental from a modern launcher SDK to a broader launcher kernel
+- this is still the step that determines whether Elemental needs another kernel family, but Rift no longer has to be the proof target for it
 
 Current status:
 
-- this family does not exist yet in the current workspace
-- no legacy-era LaunchWrapper or tweaker target has a verified end-to-end anchor yet
-- this is now the highest-value next family milestone
+- Rift is now implemented as a direct profiled `version_json` driver with catalog, inspect, install, load-installed, and launch support
+- no separate `legacy` family exists yet in the current workspace
+- LiteLoader remains the strongest candidate for deciding whether a dedicated legacy substrate is actually necessary
 
 ## Phase 5: Broaden CleanroomMC Coverage
 
@@ -475,42 +474,45 @@ Why this phase should be late:
 
 ## Immediate Next Milestone
 
-The next concrete milestone should be to make the `legacy` family real with one minimal end-to-end target.
+The next concrete milestone should be to harden the new Rift path with a real runtime smoke anchor, then use a harder target to decide whether a separate `legacy` family is justified at all.
 
 Recommended first slice:
 
-- define the smallest possible legacy boot substrate for tweak-class entry, relaunch, and legacy library augmentation
-- implement Rift first so the family is proven on one target without taking on multiple legacy packaging styles at once
 - verify one representative Rift anchor end-to-end through catalog, inspect, install, load-installed, and launch
+- prefer `1.13.2 / 1.0.4-106` as the first anchor, with `1.13 / 1.0.4-105` as the follow-up compatibility check
+- keep Rift on the direct profiled path unless the smoke work exposes a real semantic gap
+- use LiteLoader, not Rift, as the first target if a dedicated `legacy` family still looks necessary afterward
 
 Not part of the first slice:
 
-- broad legacy range claims
+- broad Rift range claims
 - full LiteLoader support
 - addon layering such as OptiFine
 - CLI or GUI work
 
 Success criteria:
 
-- one `legacy` driver reaches a verified end-to-end anchor
-- the family boundary is expressed without faking legacy loaders as `version_json` or `installer` variants
-- the existing `fabric-like` and `installer` families remain stable while the new substrate lands
+- the Rift driver reaches a verified end-to-end runtime anchor
+- any later `legacy` family work is justified by real unmet semantics rather than by loader era naming
+- the existing `fabric-like`, direct `version_json`, and `installer` paths remain stable while Rift is hardened
 
 ## Priority Recommendation
 
 If only one direction should be chosen next, the order should be:
 
-1. make the `legacy` family real with one minimal target
-2. broaden installer-family coverage for Forge, NeoForge, and CleanroomMC
-3. add the `addon` family starting with OptiFine
-4. ecosystem features such as skins, profiles, and account polish
-5. CLI or GUI
+1. runtime-smoke and harden Rift
+2. decide whether LiteLoader truly needs a separate `legacy` family
+3. broaden installer-family coverage for Forge, NeoForge, and CleanroomMC
+4. add the `addon` family starting with OptiFine
+5. ecosystem features such as skins, profiles, and account polish
+6. CLI or GUI
 
 Reason:
 
 - `fabric-like` and `installer` are now real enough to stop being the immediate proof target
-- `legacy` is the largest missing family boundary in the launcher kernel
-- `addon` work will be easier once legacy boot semantics are explicit
+- Rift proved to be a direct profiled driver rather than a forced separate family
+- LiteLoader is now the better discriminator for whether a real `legacy` family is needed
+- `addon` work will be easier once the remaining legacy boundary is either justified or explicitly unnecessary
 - the current strongest differentiator in Elemental is still the launcher kernel architecture, not front-end packaging
 
 ## Summary
@@ -522,17 +524,20 @@ The current Elemental kernel is already in a strong position:
 - `Vanilla` is a usable mainline driver
 - `Fabric` is attached as the second real family-backed driver
 - the installer family now hosts verified Forge, NeoForge, and Cleanroom anchors
+- Rift now exists as a direct profiled `version_json` driver over official release jars
 
 The next milestone is not UI polish.
 
-The next milestone is no longer proving that `fabric-like` or `installer` can exist.
+The next milestone is no longer proving that `fabric-like`, direct profiled `version_json`, or `installer` can exist.
 
-Those two family lines are already real enough in the current workspace.
+Those lines are already real enough in the current workspace.
 
-The next milestone is proving that Elemental can cleanly host:
+The next milestone is proving that the new Rift path is operational on a real runtime anchor, then deciding whether harder legacy loaders actually require another family boundary.
 
-- `legacy`
-- then broaden installer-family coverage
+After that, the natural order is:
+
+- broaden installer-family coverage
+- then decide the remaining legacy substrate question
 - then add `addon`
 
-That is the step that turns it from a modern launcher SDK into a true launcher kernel.
+That is the step that turns it from a modern launcher SDK into a broader launcher kernel without inventing unnecessary family layers.

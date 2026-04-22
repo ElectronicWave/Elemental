@@ -25,6 +25,7 @@ enum DriverCommand {
     LegacyFabric(LoaderArgs),
     Babric(LoaderArgs),
     Quilt(LoaderArgs),
+    Rift(LoaderArgs),
     Forge(LoaderArgs),
     Cleanroom(LoaderArgs),
     #[command(name = "neoforge", alias = "neo-forge")]
@@ -152,6 +153,19 @@ impl Cli {
                 },
                 loader_version: arguments.loader_version.map(LoaderVersionId::from),
             }),
+            DriverCommand::Rift(arguments) => build_loader_config(LoaderConfigInput {
+                driver: DemoDriver::Rift,
+                common: CommonConfigInput {
+                    storage_root,
+                    runtime_major_version: arguments.runtime_major_version,
+                    runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
+                    runtime_paths: arguments.runtime_paths,
+                    runtime_executable_path: arguments.runtime_executable_path,
+                    game_version: arguments.game_version.map(MinecraftVersionId::from),
+                    instance_name: arguments.instance_name,
+                },
+                loader_version: arguments.loader_version.map(LoaderVersionId::from),
+            }),
             DriverCommand::Forge(arguments) => build_loader_config(LoaderConfigInput {
                 driver: DemoDriver::Forge,
                 common: CommonConfigInput {
@@ -265,6 +279,7 @@ fn default_loader_game_version(
         DemoDriver::LegacyFabric => MinecraftVersionId::from("1.20.1"),
         DemoDriver::Babric => MinecraftVersionId::from("1.20.1"),
         DemoDriver::Quilt => MinecraftVersionId::from("1.20.1"),
+        DemoDriver::Rift => MinecraftVersionId::from("1.13.2"),
         DemoDriver::Forge => MinecraftVersionId::from("1.20.1"),
         DemoDriver::Cleanroom => MinecraftVersionId::from("1.12.2"),
         DemoDriver::NeoForge => MinecraftVersionId::from("1.21.1"),
@@ -281,6 +296,7 @@ fn default_loader_version(
         DemoDriver::LegacyFabric => LoaderVersionId::from("0.16.10"),
         DemoDriver::Babric => LoaderVersionId::from("0.16.10"),
         DemoDriver::Quilt => LoaderVersionId::from("0.24.0"),
+        DemoDriver::Rift => LoaderVersionId::from("1.0.4-106"),
         DemoDriver::Forge => LoaderVersionId::from("47.3.1"),
         DemoDriver::Cleanroom => LoaderVersionId::from("0.5.8-alpha"),
         DemoDriver::NeoForge => LoaderVersionId::from("21.1.199"),
@@ -294,6 +310,7 @@ fn default_loader_instance_name(driver: DemoDriver, game_version: &MinecraftVers
         DemoDriver::LegacyFabric => format!("MyLegacyFabric-{game_version}"),
         DemoDriver::Babric => format!("MyBabric-{game_version}"),
         DemoDriver::Quilt => format!("MyQuilt-{game_version}"),
+        DemoDriver::Rift => format!("MyRift-{game_version}"),
         DemoDriver::Forge => format!("MyForge-{game_version}"),
         DemoDriver::Cleanroom => format!("MyCleanroom-{game_version}"),
         DemoDriver::NeoForge => format!("MyNeoForge-{game_version}"),

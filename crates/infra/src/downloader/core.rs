@@ -115,6 +115,12 @@ impl Default for ElementalDownloaderConfig {
 }
 
 impl DownloadSession {
+    fn downloader(&self) -> Result<Arc<ElementalDownloader>> {
+        self.downloader
+            .upgrade()
+            .context("unexpected downloader drop")
+    }
+
     pub fn id(&self) -> SessionId {
         self.id
     }
@@ -124,75 +130,39 @@ impl DownloadSession {
     }
 
     pub async fn add_task(&self, task: DownloadTask) -> Result<()> {
-        let downloader = self
-            .downloader
-            .upgrade()
-            .context("unexpected downloader drop")?;
-        downloader.add_task(self.id, task).await
+        self.downloader()?.add_task(self.id, task).await
     }
 
     pub async fn add_tasks(&self, tasks: Vec<DownloadTask>) -> Result<()> {
-        let downloader = self
-            .downloader
-            .upgrade()
-            .context("unexpected downloader drop")?;
-        downloader.add_tasks(self.id, tasks).await
+        self.downloader()?.add_tasks(self.id, tasks).await
     }
 
     pub async fn add_plan(&self, plan: DownloadPlan) -> Result<()> {
-        let downloader = self
-            .downloader
-            .upgrade()
-            .context("unexpected downloader drop")?;
-        downloader.add_plan(self.id, plan).await
+        self.downloader()?.add_plan(self.id, plan).await
     }
 
     pub async fn report(&self) -> Result<SessionExecutionReport> {
-        let downloader = self
-            .downloader
-            .upgrade()
-            .context("unexpected downloader drop")?;
-        downloader.session_report(self.id).await
+        self.downloader()?.session_report(self.id).await
     }
 
     pub async fn close(&self) -> Result<bool> {
-        let downloader = self
-            .downloader
-            .upgrade()
-            .context("unexpected downloader drop")?;
-        downloader.close_session(self.id).await
+        self.downloader()?.close_session(self.id).await
     }
 
     pub async fn wait_empty(&self) -> Result<()> {
-        let downloader = self
-            .downloader
-            .upgrade()
-            .context("unexpected downloader drop")?;
-        downloader.wait_session_empty(self.id).await
+        self.downloader()?.wait_session_empty(self.id).await
     }
 
     pub async fn wait(&self) -> Result<()> {
-        let downloader = self
-            .downloader
-            .upgrade()
-            .context("unexpected downloader drop")?;
-        downloader.wait_session(self.id).await
+        self.downloader()?.wait_session(self.id).await
     }
 
     pub async fn wait_result(&self) -> Result<SessionExecutionReport> {
-        let downloader = self
-            .downloader
-            .upgrade()
-            .context("unexpected downloader drop")?;
-        downloader.wait_session_result(self.id).await
+        self.downloader()?.wait_session_result(self.id).await
     }
 
     pub async fn remove(&self) -> Result<()> {
-        let downloader = self
-            .downloader
-            .upgrade()
-            .context("unexpected downloader drop")?;
-        downloader.remove_session(self.id).await
+        self.downloader()?.remove_session(self.id).await
     }
 }
 
@@ -281,6 +251,12 @@ impl SessionHandler {
 
     async fn wait_workers(&self) {
         self.workers.wait().await;
+    }
+
+    async fn close_and_wait(&self) {
+        self.close().await;
+        self.wait_idle().await;
+        self.wait_workers().await;
     }
 
     async fn close(&self) -> bool {
@@ -403,21 +379,13 @@ impl ElementalTaskTracker {
     }
 
     pub async fn cancel_session(&self, session_id: SessionId) {
-        if let Some(token) = self
-            .sessions
-            .read_async(&session_id, |_, state| state.token.clone())
-            .await
-        {
+        if let Some(token) = self.session_token(session_id).await {
             token.cancel();
         }
     }
 
     pub async fn remove_session(&self, session_id: SessionId) {
-        if let Some(token) = self
-            .sessions
-            .read_async(&session_id, |_, state| state.token.clone())
-            .await
-        {
+        if let Some(token) = self.session_token(session_id).await {
             token.cancel();
         }
         self.sessions.remove_async(&session_id).await;
@@ -426,22 +394,17 @@ impl ElementalTaskTracker {
     pub async fn has_session(&self, session_id: SessionId) -> bool {
         self.sessions.contains_async(&session_id).await
     }
+
+    async fn session_token(&self, session_id: SessionId) -> Option<CancellationToken> {
+        self.sessions
+            .read_async(&session_id, |_, state| state.token.clone())
+            .await
+    }
 }
 
 impl ElementalDownloader {
     pub fn new() -> Arc<Self> {
-        let worker_count = 8;
-        Arc::new_cyclic(|me| Self {
-            client: reqwest::Client::new(),
-            sessions: HashMap::new(),
-            tracker: Arc::new(ElementalTaskTracker::new(me.clone())),
-            connections: Arc::new(Semaphore::new(worker_count)),
-            storage: Arc::new(LocalFsStorage),
-            worker_count,
-            queue_capacity: build_queue_capacity(worker_count),
-            next_session_id: AtomicU64::new(1),
-            me: me.clone(),
-        })
+        Self::from_parts(reqwest::Client::new(), Arc::new(LocalFsStorage), 8)
     }
 
     pub fn with_config_default() -> Result<Arc<Self>> {
@@ -473,7 +436,15 @@ impl ElementalDownloader {
             .connect_timeout(config.connect_timeout)
             .build()?;
 
-        Ok(Arc::new_cyclic(|me| Self {
+        Ok(Self::from_parts(client, storage, worker_count))
+    }
+
+    fn from_parts(
+        client: reqwest::Client,
+        storage: Arc<dyn DownloadStorage>,
+        worker_count: usize,
+    ) -> Arc<Self> {
+        Arc::new_cyclic(|me| Self {
             client,
             sessions: HashMap::new(),
             tracker: Arc::new(ElementalTaskTracker::new(me.clone())),
@@ -483,7 +454,7 @@ impl ElementalDownloader {
             queue_capacity: build_queue_capacity(worker_count),
             next_session_id: AtomicU64::new(1),
             me: me.clone(),
-        }))
+        })
     }
 
     pub fn with_hardlink_cache(
@@ -538,23 +509,13 @@ impl ElementalDownloader {
     }
 
     pub async fn close_session(&self, session_id: SessionId) -> Result<bool> {
-        let handler = self
-            .sessions
-            .read_async(&session_id, |_, handler| handler.clone())
-            .await
-            .context("download session not found")?;
+        let handler = self.session_handler(session_id).await?;
         Ok(handler.close().await)
     }
 
     pub async fn remove_session(&self, session_id: SessionId) -> Result<()> {
-        let handler = self
-            .sessions
-            .read_async(&session_id, |_, handler| handler.clone())
-            .await
-            .context("download session not found")?;
-        handler.close().await;
-        handler.wait_idle().await;
-        handler.wait_workers().await;
+        let handler = self.session_handler(session_id).await?;
+        handler.close_and_wait().await;
         self.sessions.remove_async(&session_id).await;
         self.tracker.remove_session(session_id).await;
         Ok(())
@@ -572,11 +533,7 @@ impl ElementalDownloader {
     }
 
     pub async fn session_report(&self, session_id: SessionId) -> Result<SessionExecutionReport> {
-        let handler = self
-            .sessions
-            .read_async(&session_id, |_, handler| handler.clone())
-            .await
-            .context("download session not found")?;
+        let handler = self.session_handler(session_id).await?;
         Ok(handler.snapshot_report(session_id))
     }
 
@@ -598,11 +555,7 @@ impl ElementalDownloader {
         headers: Option<HeaderMap>,
     ) -> Result<()> {
         let headers = headers.unwrap_or_default();
-        let handler = self
-            .sessions
-            .read_async(&session_id, |_, handler| handler.clone())
-            .await
-            .context("download session not found")?;
+        let handler = self.session_handler(session_id).await?;
         let _submission_guard = handler.submission.lock().await;
 
         if handler.is_closed() {
@@ -649,24 +602,14 @@ impl ElementalDownloader {
     }
 
     pub async fn wait_session_empty(&self, session_id: SessionId) -> Result<()> {
-        let handler = self
-            .sessions
-            .read_async(&session_id, |_, handler| handler.clone())
-            .await
-            .context("download session not found")?;
+        let handler = self.session_handler(session_id).await?;
         handler.wait_idle().await;
         Ok(())
     }
 
     pub async fn wait_session(&self, session_id: SessionId) -> Result<()> {
-        let handler = self
-            .sessions
-            .read_async(&session_id, |_, handler| handler.clone())
-            .await
-            .context("download session not found")?;
-        handler.close().await;
-        handler.wait_idle().await;
-        handler.wait_workers().await;
+        let handler = self.session_handler(session_id).await?;
+        handler.close_and_wait().await;
         Ok(())
     }
 
@@ -674,14 +617,8 @@ impl ElementalDownloader {
         &self,
         session_id: SessionId,
     ) -> Result<SessionExecutionReport> {
-        let handler = self
-            .sessions
-            .read_async(&session_id, |_, handler| handler.clone())
-            .await
-            .context("download session not found")?;
-        handler.close().await;
-        handler.wait_idle().await;
-        handler.wait_workers().await;
+        let handler = self.session_handler(session_id).await?;
+        handler.close_and_wait().await;
         Ok(handler.snapshot_report(session_id))
     }
 
@@ -713,6 +650,13 @@ impl ElementalDownloader {
     {
         let plans = planner.plan()?;
         self.execute_plans(plans).await
+    }
+
+    async fn session_handler(&self, session_id: SessionId) -> Result<Arc<SessionHandler>> {
+        self.sessions
+            .read_async(&session_id, |_, handler| handler.clone())
+            .await
+            .context("download session not found")
     }
 }
 
@@ -757,17 +701,14 @@ async fn execute_queued_task(
         }
         Ok(false) => {}
         Err(error) => {
-            let error_message = error.to_string();
-            downloader
-                .tracker
-                .update_task(
-                    session_id,
-                    &task_id,
-                    TrackedTaskStatus::ERR(error_message.clone()),
-                )
-                .await;
-            handler.mark_failed(task_id.clone(), error_message);
-            handler.finish_task();
+            finish_task_error(
+                downloader.tracker.as_ref(),
+                handler.as_ref(),
+                session_id,
+                &task_id,
+                error.to_string(),
+            )
+            .await;
             return;
         }
     }
@@ -789,12 +730,13 @@ async fn execute_queued_task(
     let permit = tokio::select! {
         biased;
         () = token.cancelled() => {
-            downloader
-                .tracker
-                .update_task(session_id, &task_id, TrackedTaskStatus::CANCELLED)
-                .await;
-            handler.mark_cancelled(task_id.clone());
-            handler.finish_task();
+            finish_task_cancelled(
+                downloader.tracker.as_ref(),
+                handler.as_ref(),
+                session_id,
+                &task_id,
+            )
+            .await;
             return;
         }
         permit = downloader.connections.clone().acquire_owned() => permit,
@@ -803,17 +745,14 @@ async fn execute_queued_task(
     let permit = match permit {
         Ok(permit) => permit,
         Err(error) => {
-            let error_message = error.to_string();
-            downloader
-                .tracker
-                .update_task(
-                    session_id,
-                    &task_id,
-                    TrackedTaskStatus::ERR(error_message.clone()),
-                )
-                .await;
-            handler.mark_failed(task_id.clone(), error_message);
-            handler.finish_task();
+            finish_task_error(
+                downloader.tracker.as_ref(),
+                handler.as_ref(),
+                session_id,
+                &task_id,
+                error.to_string(),
+            )
+            .await;
             return;
         }
     };
@@ -827,16 +766,14 @@ async fn execute_queued_task(
     let staged = match staged_output {
         Ok(output) => output,
         Err(error) => {
-            let error_message = error.to_string();
-            downloader
-                .tracker
-                .update_task(
-                    session_id,
-                    &task_id,
-                    TrackedTaskStatus::ERR(error_message.clone()),
-                )
-                .await;
-            handler.mark_failed(task_id.clone(), error_message);
+            mark_task_error(
+                downloader.tracker.as_ref(),
+                handler.as_ref(),
+                session_id,
+                &task_id,
+                error.to_string(),
+            )
+            .await;
             drop(permit);
             handler.finish_task();
             return;
@@ -892,27 +829,31 @@ async fn execute_queued_task(
                     handler.mark_downloaded();
                 }
                 Err(error) => {
-                    let error_message = error.to_string();
                     let _ = storage
                         .abort(StagedDownload {
                             path: staged_path.clone(),
                             file: None,
                         })
                         .await;
-                    downloader
-                        .tracker
-                        .update_task(session_id, &task_id, TrackedTaskStatus::ERR(error_message.clone()))
-                        .await;
-                    handler.mark_failed(task_id.clone(), error_message);
+                    mark_task_error(
+                        downloader.tracker.as_ref(),
+                        handler.as_ref(),
+                        session_id,
+                        &task_id,
+                        error.to_string(),
+                    )
+                    .await;
                 }
             }
         }
         () = token.cancelled() => {
-            downloader
-                .tracker
-                .update_task(session_id, &task_id, TrackedTaskStatus::CANCELLED)
-                .await;
-            handler.mark_cancelled(task_id.clone());
+            mark_task_cancelled(
+                downloader.tracker.as_ref(),
+                handler.as_ref(),
+                session_id,
+                &task_id,
+            )
+            .await;
             let _ = storage
                 .abort(StagedDownload {
                     path: staged_path,
@@ -928,4 +869,54 @@ async fn execute_queued_task(
 
 fn build_queue_capacity(worker_count: usize) -> usize {
     (worker_count.saturating_mul(32)).max(128)
+}
+
+async fn mark_task_error(
+    tracker: &ElementalTaskTracker,
+    handler: &SessionHandler,
+    session_id: SessionId,
+    task_id: &TaskId,
+    error_message: String,
+) {
+    tracker
+        .update_task(
+            session_id,
+            task_id,
+            TrackedTaskStatus::ERR(error_message.clone()),
+        )
+        .await;
+    handler.mark_failed(task_id.clone(), error_message);
+}
+
+async fn finish_task_error(
+    tracker: &ElementalTaskTracker,
+    handler: &SessionHandler,
+    session_id: SessionId,
+    task_id: &TaskId,
+    error_message: String,
+) {
+    mark_task_error(tracker, handler, session_id, task_id, error_message).await;
+    handler.finish_task();
+}
+
+async fn mark_task_cancelled(
+    tracker: &ElementalTaskTracker,
+    handler: &SessionHandler,
+    session_id: SessionId,
+    task_id: &TaskId,
+) {
+    tracker
+        .update_task(session_id, task_id, TrackedTaskStatus::CANCELLED)
+        .await;
+    handler.mark_cancelled(task_id.clone());
+}
+
+async fn finish_task_cancelled(
+    tracker: &ElementalTaskTracker,
+    handler: &SessionHandler,
+    session_id: SessionId,
+    task_id: &TaskId,
+) {
+    mark_task_cancelled(tracker, handler, session_id, task_id).await;
+    handler.finish_task();
 }

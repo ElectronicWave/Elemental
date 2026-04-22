@@ -37,6 +37,14 @@ impl PistonMetaDataExt for PistonMetaData {
 
 pub trait PistonMetaLibrariesExt {
     fn is_allowed(&self, context: &VersionJsonRuleContext) -> bool;
+    fn version_artifacts<'a>(
+        &'a self,
+        platform: &VersionJsonPlatform,
+    ) -> [Option<&'a PistonMetaLibrariesDownloadsArtifact>; 2];
+    fn native_source_artifacts<'a>(
+        &'a self,
+        platform: &VersionJsonPlatform,
+    ) -> [Option<&'a PistonMetaLibrariesDownloadsArtifact>; 2];
     fn classifiers_native_artifact<'a>(
         &'a self,
         platform: &VersionJsonPlatform,
@@ -53,6 +61,26 @@ impl PistonMetaLibrariesExt for PistonMetaLibraries {
             .as_deref()
             .map(|rules| rules.are_allowed(context))
             .unwrap_or(true)
+    }
+
+    fn version_artifacts<'a>(
+        &'a self,
+        platform: &VersionJsonPlatform,
+    ) -> [Option<&'a PistonMetaLibrariesDownloadsArtifact>; 2] {
+        [
+            self.downloads.artifact.as_ref(),
+            self.classifiers_native_artifact(platform),
+        ]
+    }
+
+    fn native_source_artifacts<'a>(
+        &'a self,
+        platform: &VersionJsonPlatform,
+    ) -> [Option<&'a PistonMetaLibrariesDownloadsArtifact>; 2] {
+        [
+            self.classifiers_native_artifact(platform),
+            self.native_artifact(platform),
+        ]
     }
 
     fn classifiers_native_artifact<'a>(

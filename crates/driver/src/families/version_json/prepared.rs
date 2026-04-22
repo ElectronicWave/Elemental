@@ -278,28 +278,21 @@ where
                 continue;
             }
 
-            if let Some(artifact) = &library.downloads.artifact
-                && !self
+            for artifact in library
+                .version_artifacts(rule_context.platform())
+                .into_iter()
+                .flatten()
+            {
+                if !self
                     .version
                     .parent
                     .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
                         artifact.path.as_str(),
                     ))))?
                     .exists()
-            {
-                return Ok(false);
-            }
-
-            if let Some(artifact) = library.classifiers_native_artifact(rule_context.platform())
-                && !self
-                    .version
-                    .parent
-                    .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
-                        artifact.path.as_str(),
-                    ))))?
-                    .exists()
-            {
-                return Ok(false);
+                {
+                    return Ok(false);
+                }
             }
         }
 
@@ -427,16 +420,12 @@ where
             return Ok(Vec::new());
         }
 
-        let mut tasks = Vec::new();
-        if let Some(artifact) = &library.downloads.artifact {
-            tasks.push(self.plan_library_artifact_task(artifact)?);
-        }
-
-        if let Some(artifact) = library.classifiers_native_artifact(self.rule_context.platform()) {
-            tasks.push(self.plan_library_artifact_task(artifact)?);
-        }
-
-        Ok(tasks)
+        library
+            .version_artifacts(self.rule_context.platform())
+            .into_iter()
+            .flatten()
+            .map(|artifact| self.plan_library_artifact_task(artifact))
+            .collect()
     }
 
     fn plan_library_artifact_task(

@@ -281,17 +281,11 @@ where
                     continue;
                 }
 
-                if let Some(artifact) = library.classifiers_native_artifact(rule_context.platform())
+                for artifact in library
+                    .native_source_artifacts(rule_context.platform())
+                    .into_iter()
+                    .flatten()
                 {
-                    let source =
-                        self.parent
-                            .try_get_resource(VersionJsonRootResource::Libraries(Some(
-                                PathBuf::from(artifact.path.as_str()),
-                            )))?;
-                    JarFile::new(source).extract_blocking(&destination)?;
-                }
-
-                if let Some(artifact) = library.native_artifact(rule_context.platform()) {
                     let source =
                         self.parent
                             .try_get_resource(VersionJsonRootResource::Libraries(Some(
@@ -358,11 +352,11 @@ fn collect_native_artifact_paths(
             continue;
         }
 
-        if let Some(artifact) = library.classifiers_native_artifact(rule_context.platform()) {
-            paths.push(artifact.path.clone());
-        }
-
-        if let Some(artifact) = library.native_artifact(rule_context.platform()) {
+        for artifact in library
+            .native_source_artifacts(rule_context.platform())
+            .into_iter()
+            .flatten()
+        {
             paths.push(artifact.path.clone());
         }
     }

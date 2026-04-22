@@ -25,6 +25,8 @@ enum DriverCommand {
     LegacyFabric(LoaderArgs),
     Babric(LoaderArgs),
     Quilt(LoaderArgs),
+    #[command(name = "liteloader", alias = "lite-loader")]
+    LiteLoader(LoaderArgs),
     Rift(LoaderArgs),
     Forge(LoaderArgs),
     Cleanroom(LoaderArgs),
@@ -142,6 +144,19 @@ impl Cli {
             }),
             DriverCommand::Quilt(arguments) => build_loader_config(LoaderConfigInput {
                 driver: DemoDriver::Quilt,
+                common: CommonConfigInput {
+                    storage_root,
+                    runtime_major_version: arguments.runtime_major_version,
+                    runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
+                    runtime_paths: arguments.runtime_paths,
+                    runtime_executable_path: arguments.runtime_executable_path,
+                    game_version: arguments.game_version.map(MinecraftVersionId::from),
+                    instance_name: arguments.instance_name,
+                },
+                loader_version: arguments.loader_version.map(LoaderVersionId::from),
+            }),
+            DriverCommand::LiteLoader(arguments) => build_loader_config(LoaderConfigInput {
+                driver: DemoDriver::LiteLoader,
                 common: CommonConfigInput {
                     storage_root,
                     runtime_major_version: arguments.runtime_major_version,
@@ -279,6 +294,7 @@ fn default_loader_game_version(
         DemoDriver::LegacyFabric => MinecraftVersionId::from("1.20.1"),
         DemoDriver::Babric => MinecraftVersionId::from("1.20.1"),
         DemoDriver::Quilt => MinecraftVersionId::from("1.20.1"),
+        DemoDriver::LiteLoader => MinecraftVersionId::from("1.7.10"),
         DemoDriver::Rift => MinecraftVersionId::from("1.13.2"),
         DemoDriver::Forge => MinecraftVersionId::from("1.20.1"),
         DemoDriver::Cleanroom => MinecraftVersionId::from("1.12.2"),
@@ -296,6 +312,7 @@ fn default_loader_version(
         DemoDriver::LegacyFabric => LoaderVersionId::from("0.16.10"),
         DemoDriver::Babric => LoaderVersionId::from("0.16.10"),
         DemoDriver::Quilt => LoaderVersionId::from("0.24.0"),
+        DemoDriver::LiteLoader => LoaderVersionId::from("1.7.10_04"),
         DemoDriver::Rift => LoaderVersionId::from("1.0.4-106"),
         DemoDriver::Forge => LoaderVersionId::from("47.3.1"),
         DemoDriver::Cleanroom => LoaderVersionId::from("0.5.8-alpha"),
@@ -310,6 +327,7 @@ fn default_loader_instance_name(driver: DemoDriver, game_version: &MinecraftVers
         DemoDriver::LegacyFabric => format!("MyLegacyFabric-{game_version}"),
         DemoDriver::Babric => format!("MyBabric-{game_version}"),
         DemoDriver::Quilt => format!("MyQuilt-{game_version}"),
+        DemoDriver::LiteLoader => format!("MyLiteLoader-{game_version}"),
         DemoDriver::Rift => format!("MyRift-{game_version}"),
         DemoDriver::Forge => format!("MyForge-{game_version}"),
         DemoDriver::Cleanroom => format!("MyCleanroom-{game_version}"),

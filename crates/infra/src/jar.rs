@@ -1,7 +1,7 @@
 use std::{
     ffi::OsStr,
     fs::{File, create_dir_all},
-    io::{self, Read},
+    io::{self, Cursor, Read, Seek},
     path::{Path, PathBuf},
 };
 
@@ -11,6 +11,11 @@ use zip::ZipArchive;
 #[derive(Debug, Clone)]
 pub struct JarFile<P: AsRef<Path>> {
     path: P,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct JarBytes<'a> {
+    bytes: &'a [u8],
 }
 
 impl<P: AsRef<Path>> JarFile<P> {
@@ -52,10 +57,7 @@ impl<P: AsRef<Path>> JarFile<P> {
 
     pub fn by_name_bytes(&self, name: &str) -> Result<Vec<u8>> {
         let file = File::open(&self.path)?;
-        let mut archive = ZipArchive::new(file)?;
-        let mut data = vec![];
-        archive.by_name(name)?.read_to_end(&mut data)?;
-        Ok(data)
+        read_archive_entry_bytes(file, name)
     }
 
     pub fn by_name_string(&self, name: &str) -> Result<String> {
@@ -102,4 +104,28 @@ impl<P: AsRef<Path>> JarFile<P> {
 
         Ok(extracted)
     }
+}
+
+impl<'a> JarBytes<'a> {
+    pub fn new(bytes: &'a [u8]) -> Self {
+        Self { bytes }
+    }
+
+    pub fn by_name_bytes(&self, name: &str) -> Result<Vec<u8>> {
+        read_archive_entry_bytes(Cursor::new(self.bytes), name)
+    }
+
+    pub fn by_name_string(&self, name: &str) -> Result<String> {
+        Ok(String::from_utf8(self.by_name_bytes(name)?)?)
+    }
+}
+
+fn read_archive_entry_bytes<R>(reader: R, name: &str) -> Result<Vec<u8>>
+where
+    R: Read + Seek,
+{
+    let mut archive = ZipArchive::new(reader)?;
+    let mut data = vec![];
+    archive.by_name(name)?.read_to_end(&mut data)?;
+    Ok(data)
 }

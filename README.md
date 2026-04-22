@@ -24,16 +24,18 @@ Elemental is a Modern Minecraft Launcher SDK⚛
 | Forge           | ✅       | ✅       | ✅       | ✅              | ✅      |
 | NeoForge        | ✅       | ✅       | ✅       | ✅              | ✅      |
 | CleanroomMC     | ✅       | ✅       | ✅       | ✅              | ✅      |
-| LiteLoader      | ❌       | ❌       | ❌       | ❌              | ❌      |
+| Rift            | ✅       | ✅       | ✅       | ✅              | ✅      |
+| LiteLoader      | ✅       | ✅       | ✅       | ✅              | ✅      |
 
 Development is actively in progress. The matrix reflects the current workspace state rather than a stability guarantee. Verified anchors and current range claims live in [ROADMAP.md](ROADMAP.md).
 
 ## Why Elemental
 
-- It treats Minecraft distributions as real families instead of flattening everything into one fake `version.json` model. Vanilla, Fabric-like loaders, Forge, NeoForge, and Cleanroom already land on different substrates without collapsing into special-case flags.
+- It treats Minecraft distributions as real families instead of flattening everything into one fake `version.json` model. Vanilla, Fabric-like loaders, direct profiled legacy-era loaders such as Rift and LiteLoader, and installer-driven ecosystems such as Forge, NeoForge, and Cleanroom all land on intentional substrates instead of collapsing into special-case flags.
 - `Storage` + `Layout` make paths a typed capability, not stringly-typed launcher glue. Game roots, instances, libraries, assets, and version artifacts are resolved through explicit resource models, which keeps alternative layouts and migration work possible without hardcoding one `.minecraft` shape.
 - The instance lifecycle is explicit and product-friendly. Elemental separates catalog, inspect, install, load-installed, and launch so a launcher can discover local state, reopen prepared instances, and build launch commands without rerunning the whole install path every time.
 - Runtime handling is part of the kernel, not scattered around app code. The core can validate an explicit Java executable against the required major version or resolve a compatible local runtime automatically, which matters once old and new distributions coexist in the same launcher.
+- Older tweaker-era loaders do not automatically force a new kernel family. Rift and LiteLoader now run on the direct profiled `version_json` path, which keeps the boot surface smaller until a future target proves otherwise.
 - Installer-driven ecosystems are first-class. Forge, NeoForge, and now Cleanroom run on a shared installer-family flow with family-specific merge and runtime behavior, so the SDK can support legacy-derived installers without pretending they are just metadata overlays.
 - The workspace is split for reuse instead of forcing one monolith:
   - `schema` for protocol types
@@ -61,9 +63,9 @@ If you just want to verify the current end-to-end example inside this repository
 cargo run -p demo
 ```
 
-The current demo prepares and launches a Fabric instance.
+The current default demo prepares and launches a Fabric instance.
 
-Loader-specific demo entry points are also available, including `cargo run -p demo -- cleanroom --help`.
+Loader-specific demo entry points are also available, including `cargo run -p demo -- cleanroom --help`, `cargo run -p demo -- rift --help`, and `cargo run -p demo -- liteloader --help`.
 
 The default demo settings live in [crates/demo/src/main.rs](crates/demo/src/main.rs).
 

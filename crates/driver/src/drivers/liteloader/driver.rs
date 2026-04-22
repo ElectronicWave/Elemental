@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 use elemental_infra::downloader::core::ElementalDownloader;
@@ -8,7 +8,7 @@ use elemental_schema::{fabric::ProfileJson, mojang::piston::PistonMetaData};
 
 use crate::{
     driver::{DriverDescriptor, InstalledDriver},
-    drivers::{rift::source::RiftSource, vanilla::source::VanillaSource},
+    drivers::{liteloader::source::LiteLoaderSource, vanilla::source::VanillaSource},
     families::version_json::{
         PASSTHROUGH_PROFILE_BEHAVIOR, ProfiledVersionJsonDriver, ProfiledVersionJsonFamily,
         merge_profile_with_behavior,
@@ -19,26 +19,26 @@ use crate::{
     loader_version::LoaderVersionId,
 };
 
-const RIFT_DRIVER: DriverDescriptor = DriverDescriptor {
-    id: "rift",
-    name: "Rift",
+const LITELOADER_DRIVER: DriverDescriptor = DriverDescriptor {
+    id: "liteloader",
+    name: "LiteLoader",
 };
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct RiftDriverFamily;
+pub struct LiteLoaderDriverFamily;
 
 #[async_trait(?Send)]
-impl ProfiledVersionJsonFamily for RiftDriverFamily {
-    type Source = RiftSource;
+impl ProfiledVersionJsonFamily for LiteLoaderDriverFamily {
+    type Source = LiteLoaderSource;
     type Profile = ProfileJson;
-    type RemoteResolver = super::prepared::RiftRemoteResolver;
+    type RemoteResolver = super::prepared::LiteLoaderRemoteResolver;
 
     fn descriptor(&self) -> DriverDescriptor {
-        RIFT_DRIVER
+        LITELOADER_DRIVER
     }
 
     fn default_source(&self) -> Result<Self::Source> {
-        Ok(RiftSource::default())
+        Ok(LiteLoaderSource::default())
     }
 
     fn remote_resolver(
@@ -46,7 +46,7 @@ impl ProfiledVersionJsonFamily for RiftDriverFamily {
         vanilla_source: &VanillaSource,
         source: &Self::Source,
     ) -> Self::RemoteResolver {
-        super::prepared::RiftRemoteResolver::new(
+        super::prepared::LiteLoaderRemoteResolver::new(
             vanilla_source.endpoints().clone(),
             source.endpoints().clone(),
         )
@@ -58,9 +58,9 @@ impl ProfiledVersionJsonFamily for RiftDriverFamily {
         game_version: &MinecraftVersionId,
         loader_version: &LoaderVersionId,
     ) -> Result<Self::Profile> {
-        let profile = source.profile_json(loader_version.as_str()).await?;
-        validate_requested_game_version(&profile, game_version, loader_version)?;
-        Ok(profile)
+        source
+            .profile_json(game_version.as_str(), loader_version.as_str())
+            .await
     }
 
     fn merge_profile(
@@ -80,75 +80,55 @@ impl ProfiledVersionJsonFamily for RiftDriverFamily {
         let expected_id = build_profile_id(game_version.as_str(), loader_version.as_str());
         metadata.id != expected_id
             || metadata.inherits_from.as_deref() != Some(game_version.as_str())
-            || metadata_contains_library_prefix(metadata, &["com.github.Chocohead:Rift:"])
             || inspect_driver_version(metadata)
                 .is_none_or(|installed| installed != loader_version.as_str())
     }
 
     fn inspect_installed(&self, metadata: &PistonMetaData) -> Option<InstalledDriver> {
-        if !is_rift_metadata(metadata) {
+        if !is_liteloader_metadata(metadata) {
             return None;
         }
 
         Some(installed_version_json_driver(
             metadata,
-            RIFT_DRIVER,
+            LITELOADER_DRIVER,
             inspect_driver_version(metadata),
         ))
     }
 }
 
-pub type RiftDriver = ProfiledVersionJsonDriver<RiftDriverFamily>;
+pub type LiteLoaderDriver = ProfiledVersionJsonDriver<LiteLoaderDriverFamily>;
 
-impl RiftDriverFamily {
+impl LiteLoaderDriverFamily {
     pub fn new_driver(
-        source: RiftSource,
+        source: LiteLoaderSource,
         vanilla_source: VanillaSource,
         downloader: Arc<ElementalDownloader>,
-    ) -> RiftDriver {
-        ProfiledVersionJsonDriver::new(RiftDriverFamily, source, vanilla_source, downloader)
+    ) -> LiteLoaderDriver {
+        ProfiledVersionJsonDriver::new(LiteLoaderDriverFamily, source, vanilla_source, downloader)
     }
 
-    pub fn new_driver_with_defaults() -> Result<RiftDriver> {
-        ProfiledVersionJsonDriver::with_defaults(RiftDriverFamily)
+    pub fn new_driver_with_defaults() -> Result<LiteLoaderDriver> {
+        ProfiledVersionJsonDriver::with_defaults(LiteLoaderDriverFamily)
     }
-}
-
-fn validate_requested_game_version(
-    profile: &ProfileJson,
-    requested_game_version: &MinecraftVersionId,
-    loader_version: &LoaderVersionId,
-) -> Result<()> {
-    if profile.inherits_from == requested_game_version.as_str() {
-        return Ok(());
-    }
-
-    bail!(
-        "Rift loader '{}' targets Minecraft '{}' but '{}' was requested",
-        loader_version.as_str(),
-        profile.inherits_from,
-        requested_game_version.as_str(),
-    )
 }
 
 fn build_profile_id(game_version: &str, loader_version: &str) -> String {
-    format!("{game_version}-rift-{loader_version}")
+    format!("{game_version}-liteloader-{loader_version}")
 }
 
-fn is_rift_metadata(metadata: &PistonMetaData) -> bool {
-    metadata_contains_library_prefix(
-        metadata,
-        &["org.dimdev:rift:", "com.github.Chocohead:Rift:"],
-    ) || extract_loader_version_from_profile_id(metadata.id.as_str()).is_some()
+fn is_liteloader_metadata(metadata: &PistonMetaData) -> bool {
+    metadata_contains_library_prefix(metadata, &["com.mumfrey:liteloader:"])
+        || extract_loader_version_from_profile_id(metadata.id.as_str()).is_some()
 }
 
 fn inspect_driver_version(metadata: &PistonMetaData) -> Option<String> {
-    find_library_version(metadata, &["org.dimdev:rift:"])
+    find_library_version(metadata, &["com.mumfrey:liteloader:"])
         .or_else(|| extract_loader_version_from_profile_id(metadata.id.as_str()))
 }
 
 fn extract_loader_version_from_profile_id(metadata_id: &str) -> Option<String> {
     metadata_id
-        .split_once("-rift-")
+        .split_once("-liteloader-")
         .map(|(_, loader_version)| loader_version.to_owned())
 }

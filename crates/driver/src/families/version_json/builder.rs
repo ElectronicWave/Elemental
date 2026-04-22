@@ -218,7 +218,9 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
         self.inner.classpath = join_classpath(classpath);
 
         let mut jvm_args = Vec::new();
-        if metadata.arguments.is_none() {
+        // Legacy metadata may already be normalized into `arguments.game`, while still needing
+        // the historical JVM bootstrap arguments such as `-cp` and `-Djava.library.path`.
+        if raw_jvm_arguments.is_empty() {
             jvm_args.extend(self.inner.apply(legacy_jvm_arguments())?);
         }
 
@@ -257,7 +259,7 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
         args.push(metadata.main_class);
         args.extend(game_args);
 
-        Ok(LaunchCommand::new(self.runtime.executable(), args))
+        Ok(LaunchCommand::new(self.runtime.executable(), args).with_cwd(version_root))
     }
 
     pub fn variables(self) -> LauncherVariables {

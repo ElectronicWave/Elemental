@@ -1,6 +1,7 @@
 mod cleanroom;
 mod fabric_like;
 mod forge;
+mod liteloader;
 mod neoforge;
 mod quilt;
 mod rift;
@@ -41,6 +42,7 @@ pub async fn run(config: DemoConfig) -> Result<()> {
             fabric_like::run(config).await
         }
         DemoDriver::Quilt => quilt::run(config).await,
+        DemoDriver::LiteLoader => liteloader::run(config).await,
         DemoDriver::Rift => rift::run(config).await,
         DemoDriver::Forge => forge::run(config).await,
         DemoDriver::Cleanroom => cleanroom::run(config).await,

@@ -1,12 +1,7 @@
-use std::{
-    collections::HashMap,
-    env,
-    path::PathBuf,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::collections::HashMap;
 
 use anyhow::{Context, Result, bail};
-use elemental_infra::jar::JarFile;
+use elemental_infra::jar::JarBytes;
 use elemental_schema::{
     fabric::{
         ProfileJson, ProfileLibrary, ProfileLibraryArtifact, ProfileLibraryDownloads,
@@ -20,24 +15,6 @@ use crate::{
     http::{build_default_client, fetch_bytes, fetch_json},
     url::{Origin, OriginPolicy},
 };
-
-const GITHUB_API_ORIGIN: &str = "https://api.github.com";
-const GITHUB_RELEASES_ORIGIN: &str = "https://github.com";
-const RIFT_OWNER: &str = "DimensionalDevelopment";
-const RIFT_REPOSITORY: &str = "Rift";
-const PROFILE_ENTRY: &str = "profile.json";
-const RIFT_RELEASE_LIBRARY_GROUP: &str = "org.dimdev:rift";
-const RIFT_RELEASE_LIBRARY_ARTIFACT: &str = "rift";
-const LEGACY_RIFT_MIXIN_LIBRARY_NAME: &str = "org.dimdev:mixin:0.7.11-SNAPSHOT";
-const NORMALIZED_RIFT_MIXIN_LIBRARY_NAME: &str = "org.spongepowered:mixin:0.7.11-SNAPSHOT";
-const SPONGE_MAVEN_ORIGIN: &str = "https://repo.spongepowered.org/maven";
-const RIFT_MIXIN_SNAPSHOT_VALUE: &str = "0.7.11-20180703.121122-1";
-const MOJANG_LIBRARIES_ORIGIN: &str = "https://libraries.minecraft.net/";
-const LEGACY_MAVEN_CENTRAL_ORIGIN: &str = "http://repo1.maven.org/maven2/";
-const MAVEN_CENTRAL_ORIGIN: &str = "https://repo.maven.apache.org/maven2";
-
-pub const NORMALIZED_RIFT_LIBRARY_PREFIX: &str = "org.dimdev:rift:";
-pub const LEGACY_RIFT_LIBRARY_PREFIX: &str = "com.github.Chocohead:Rift:";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RiftOrigin {
@@ -120,10 +97,10 @@ impl Default for RiftEndpoints {
 impl Origin for RiftOrigin {
     fn canonical(self) -> &'static str {
         match self {
-            Self::GitHubApi => GITHUB_API_ORIGIN,
-            Self::GitHubReleases => GITHUB_RELEASES_ORIGIN,
-            Self::SpongeMaven => SPONGE_MAVEN_ORIGIN,
-            Self::MavenCentral => MAVEN_CENTRAL_ORIGIN,
+            Self::GitHubApi => "https://api.github.com",
+            Self::GitHubReleases => "https://github.com",
+            Self::SpongeMaven => "https://repo.spongepowered.org/maven",
+            Self::MavenCentral => "https://repo.maven.apache.org/maven2",
         }
     }
 
@@ -150,7 +127,7 @@ impl RiftEndpoints {
     pub fn releases_url(&self) -> Result<String> {
         self.origin_policy.resolve_segments(
             RiftOrigin::GitHubApi,
-            ["repos", RIFT_OWNER, RIFT_REPOSITORY, "releases"],
+            ["repos", "DimensionalDevelopment", "Rift", "releases"],
         )
     }
 
@@ -158,8 +135,8 @@ impl RiftEndpoints {
         self.origin_policy.resolve_segments(
             RiftOrigin::GitHubReleases,
             [
-                RIFT_OWNER,
-                RIFT_REPOSITORY,
+                "DimensionalDevelopment",
+                "Rift",
                 "releases",
                 "download",
                 tag_name,
@@ -273,51 +250,14 @@ fn normalize_loader_version(tag_name: &str) -> Result<String> {
 }
 
 async fn read_release_profile_json(release: &RiftRelease, jar_bytes: Vec<u8>) -> Result<String> {
-    let temp_path = temporary_release_jar_path(release)?;
-    tokio::fs::write(&temp_path, jar_bytes)
-        .await
-        .with_context(|| {
-            format!(
-                "write temporary Rift release jar failed: {}",
-                temp_path.display()
-            )
-        })?;
-    let read_result = JarFile::new(&temp_path)
-        .by_name_string(PROFILE_ENTRY)
+    JarBytes::new(jar_bytes.as_slice())
+        .by_name_string("profile.json")
         .with_context(|| {
             format!(
                 "read embedded Rift profile failed from '{}'",
                 release.asset_name
             )
-        });
-    let cleanup_result = std::fs::remove_file(&temp_path).with_context(|| {
-        format!(
-            "remove temporary Rift release jar failed: {}",
-            temp_path.display()
-        )
-    });
-
-    match (read_result, cleanup_result) {
-        (Ok(profile), Ok(())) => Ok(profile),
-        (Err(read_error), Ok(())) => Err(read_error),
-        (Ok(_), Err(cleanup_error)) => Err(cleanup_error),
-        (Err(read_error), Err(cleanup_error)) => Err(read_error).with_context(|| {
-            format!("temporary Rift release cleanup also failed: {cleanup_error:#}")
-        }),
-    }
-}
-
-fn temporary_release_jar_path(release: &RiftRelease) -> Result<PathBuf> {
-    let unix_ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .context("system time is before unix epoch")?
-        .as_millis();
-
-    Ok(env::temp_dir().join(format!(
-        "elemental-rift-{}-{}-{unix_ms}.jar",
-        std::process::id(),
-        release.loader_version
-    )))
+        })
 }
 
 fn parse_profile_json(raw_profile: &str) -> Result<ProfileJson> {
@@ -394,12 +334,12 @@ fn normalize_profile_json(
 }
 
 fn normalize_profile_library(library: ProfileLibrary, endpoints: &RiftEndpoints) -> ProfileLibrary {
-    if library.name == LEGACY_RIFT_MIXIN_LIBRARY_NAME {
+    if library.name == "org.dimdev:mixin:0.7.11-SNAPSHOT" {
         // The historical DimDev Maven endpoint is no longer a reliable source for this snapshot.
         return build_rift_mixin_library(endpoints);
     }
 
-    if library.url == LEGACY_MAVEN_CENTRAL_ORIGIN
+    if library.url == "http://repo1.maven.org/maven2/"
         && let Ok(maven_central_url) = endpoints.maven_central_url()
     {
         return ProfileLibrary {
@@ -410,7 +350,7 @@ fn normalize_profile_library(library: ProfileLibrary, endpoints: &RiftEndpoints)
 
     if library.url.is_empty() && library.name.starts_with("net.minecraft:") {
         return ProfileLibrary {
-            url: MOJANG_LIBRARIES_ORIGIN.to_owned(),
+            url: "https://libraries.minecraft.net/".to_owned(),
             ..library
         };
     }
@@ -419,10 +359,10 @@ fn normalize_profile_library(library: ProfileLibrary, endpoints: &RiftEndpoints)
 }
 
 fn build_loader_library(release: &RiftRelease, asset_url: String) -> ProfileLibrary {
-    let library_name = format!("{RIFT_RELEASE_LIBRARY_GROUP}:{}", release.loader_version);
+    let library_name = format!("org.dimdev:rift:{}", release.loader_version);
     let artifact_path = format!(
         "org/dimdev/rift/{}/{}-{}.jar",
-        release.loader_version, RIFT_RELEASE_LIBRARY_ARTIFACT, release.loader_version
+        release.loader_version, "rift", release.loader_version
     );
 
     ProfileLibrary {
@@ -443,15 +383,17 @@ fn build_loader_library(release: &RiftRelease, asset_url: String) -> ProfileLibr
 }
 
 fn build_rift_mixin_library(endpoints: &RiftEndpoints) -> ProfileLibrary {
-    let artifact_path =
-        format!("org/spongepowered/mixin/0.7.11-SNAPSHOT/mixin-{RIFT_MIXIN_SNAPSHOT_VALUE}.jar");
+    let artifact_path = format!(
+        "org/spongepowered/mixin/0.7.11-SNAPSHOT/mixin-{}.jar",
+        "0.7.11-20180703.121122-1"
+    );
     let sponge_maven_url = endpoints
         .sponge_maven_url()
-        .unwrap_or_else(|_| SPONGE_MAVEN_ORIGIN.to_owned());
+        .unwrap_or_else(|_| "https://repo.spongepowered.org/maven".to_owned());
     let artifact_url = format!("{}/{artifact_path}", sponge_maven_url.trim_end_matches('/'));
 
     ProfileLibrary {
-        name: NORMALIZED_RIFT_MIXIN_LIBRARY_NAME.to_owned(),
+        name: "org.spongepowered:mixin:0.7.11-SNAPSHOT".to_owned(),
         url: ensure_trailing_slash(sponge_maven_url.as_str()),
         downloads: Some(ProfileLibraryDownloads {
             artifact: Some(ProfileLibraryArtifact {
@@ -468,8 +410,8 @@ fn build_rift_mixin_library(endpoints: &RiftEndpoints) -> ProfileLibrary {
 }
 
 fn is_rift_loader_library(library_name: &str) -> bool {
-    library_name.starts_with(NORMALIZED_RIFT_LIBRARY_PREFIX)
-        || library_name.starts_with(LEGACY_RIFT_LIBRARY_PREFIX)
+    library_name.starts_with("org.dimdev:rift:")
+        || library_name.starts_with("com.github.Chocohead:Rift:")
 }
 
 fn build_profile_id(game_version: &str, loader_version: &str) -> String {

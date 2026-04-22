@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use elemental_core::minecraft::MinecraftVersionId;
 use elemental_infra::downloader::core::ElementalDownloader;
 use elemental_schema::{fabric::ProfileJson, mojang::piston::PistonMetaData};
 
@@ -16,6 +17,7 @@ use crate::{
     },
     families::version_json::{ProfiledVersionJsonDriver, ProfiledVersionJsonFamily},
     inspect::installed_version_json_driver,
+    loader_version::LoaderVersionId,
 };
 
 #[derive(Debug, Clone)]
@@ -86,10 +88,12 @@ impl ProfiledVersionJsonFamily for FabricDriverFamily {
     async fn profile(
         &self,
         source: &Self::Source,
-        game_version: &str,
-        loader_version: &str,
+        game_version: &MinecraftVersionId,
+        loader_version: &LoaderVersionId,
     ) -> Result<Self::Profile> {
-        source.profile_json(game_version, loader_version).await
+        source
+            .profile_json(game_version.as_str(), loader_version.as_str())
+            .await
     }
 
     fn merge_profile(
@@ -103,8 +107,8 @@ impl ProfiledVersionJsonFamily for FabricDriverFamily {
     fn local_metadata_needs_refresh(
         &self,
         metadata: &PistonMetaData,
-        game_version: &str,
-        loader_version: &str,
+        game_version: &MinecraftVersionId,
+        loader_version: &LoaderVersionId,
     ) -> bool {
         flavor_spec(self.flavor()).local_metadata_needs_refresh(
             metadata,

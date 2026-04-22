@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use elemental_core::minecraft::MinecraftVersionId;
 use elemental_infra::downloader::core::ElementalDownloader;
 use elemental_schema::{mojang::piston::PistonMetaData, quilt::ProfileJson};
 
@@ -13,6 +14,7 @@ use crate::{
         merge_profile_with_behavior,
     },
     inspect::{find_library_version, inspect_driver_version_from_libraries},
+    loader_version::LoaderVersionId,
 };
 
 const QUILT_DRIVER: DriverDescriptor = DriverDescriptor {
@@ -51,10 +53,12 @@ impl ProfiledVersionJsonFamily for QuiltDriverFamily {
     async fn profile(
         &self,
         source: &Self::Source,
-        game_version: &str,
-        loader_version: &str,
+        game_version: &MinecraftVersionId,
+        loader_version: &LoaderVersionId,
     ) -> Result<Self::Profile> {
-        source.profile_json(game_version, loader_version).await
+        source
+            .profile_json(game_version.as_str(), loader_version.as_str())
+            .await
     }
 
     fn merge_profile(
@@ -68,13 +72,14 @@ impl ProfiledVersionJsonFamily for QuiltDriverFamily {
     fn local_metadata_needs_refresh(
         &self,
         metadata: &PistonMetaData,
-        game_version: &str,
-        loader_version: &str,
+        game_version: &MinecraftVersionId,
+        loader_version: &LoaderVersionId,
     ) -> bool {
         let expected_id = format!("quilt-loader-{loader_version}-{game_version}");
         metadata.id != expected_id
-            || metadata.inherits_from.as_deref() != Some(game_version)
-            || inspect_driver_version(metadata).is_none_or(|installed| installed != loader_version)
+            || metadata.inherits_from.as_deref() != Some(game_version.as_str())
+            || inspect_driver_version(metadata)
+                .is_none_or(|installed| installed != loader_version.as_str())
     }
 
     fn inspect_installed(&self, metadata: &PistonMetaData) -> Option<InstalledDriver> {

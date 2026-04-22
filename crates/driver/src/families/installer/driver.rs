@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use elemental_core::{
     auth::authorizer::Authorizer,
     launcher::command::LaunchCommand,
+    minecraft::MinecraftVersionId,
     runtime::distribution::Distribution,
     storage::{Storage, layout::Layout},
 };
@@ -24,6 +25,7 @@ use crate::{
         },
     },
     inspect::{InstanceProbe, inspect_driver_version_from_libraries},
+    loader_version::LoaderVersionId,
 };
 
 pub trait InstallerFamilyDriverSpec: InstallerFamily {
@@ -85,8 +87,8 @@ where
     pub async fn prepare<L, VL>(
         &self,
         instance: &Storage<VL, Storage<L>>,
-        game_version: String,
-        loader_version: String,
+        game_version: MinecraftVersionId,
+        loader_version: LoaderVersionId,
     ) -> Result<PreparedInstallerFamilyVersion<F, L, VL>>
     where
         L: VersionJsonRootLayout + Clone,
@@ -104,8 +106,8 @@ where
     pub async fn prepare_with_config<L, VL>(
         &self,
         instance: &Storage<VL, Storage<L>>,
-        game_version: String,
-        loader_version: String,
+        game_version: MinecraftVersionId,
+        loader_version: LoaderVersionId,
         config: &VersionJsonLaunchConfig,
     ) -> Result<PreparedInstallerFamilyVersion<F, L, VL>>
     where

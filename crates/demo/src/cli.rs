@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use elemental::core::runtime::RuntimeValidationMode;
+use elemental::core::{minecraft::MinecraftVersionId, runtime::RuntimeValidationMode};
+use elemental::driver::loader_version::LoaderVersionId;
 
 use crate::config::{DemoConfig, DemoDriver};
 
@@ -96,7 +97,7 @@ impl Cli {
                 runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
                 runtime_paths: arguments.runtime_paths,
                 runtime_executable_path: arguments.runtime_executable_path,
-                game_version: arguments.game_version,
+                game_version: arguments.game_version.map(MinecraftVersionId::from),
                 instance_name: arguments.instance_name,
             }),
             DriverCommand::Fabric(arguments) => build_loader_config(LoaderConfigInput {
@@ -107,10 +108,10 @@ impl Cli {
                     runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
                     runtime_paths: arguments.runtime_paths,
                     runtime_executable_path: arguments.runtime_executable_path,
-                    game_version: arguments.game_version,
+                    game_version: arguments.game_version.map(MinecraftVersionId::from),
                     instance_name: arguments.instance_name,
                 },
-                loader_version: arguments.loader_version,
+                loader_version: arguments.loader_version.map(LoaderVersionId::from),
             }),
             DriverCommand::LegacyFabric(arguments) => build_loader_config(LoaderConfigInput {
                 driver: DemoDriver::LegacyFabric,
@@ -120,10 +121,10 @@ impl Cli {
                     runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
                     runtime_paths: arguments.runtime_paths,
                     runtime_executable_path: arguments.runtime_executable_path,
-                    game_version: arguments.game_version,
+                    game_version: arguments.game_version.map(MinecraftVersionId::from),
                     instance_name: arguments.instance_name,
                 },
-                loader_version: arguments.loader_version,
+                loader_version: arguments.loader_version.map(LoaderVersionId::from),
             }),
             DriverCommand::Babric(arguments) => build_loader_config(LoaderConfigInput {
                 driver: DemoDriver::Babric,
@@ -133,10 +134,10 @@ impl Cli {
                     runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
                     runtime_paths: arguments.runtime_paths,
                     runtime_executable_path: arguments.runtime_executable_path,
-                    game_version: arguments.game_version,
+                    game_version: arguments.game_version.map(MinecraftVersionId::from),
                     instance_name: arguments.instance_name,
                 },
-                loader_version: arguments.loader_version,
+                loader_version: arguments.loader_version.map(LoaderVersionId::from),
             }),
             DriverCommand::Quilt(arguments) => build_loader_config(LoaderConfigInput {
                 driver: DemoDriver::Quilt,
@@ -146,10 +147,10 @@ impl Cli {
                     runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
                     runtime_paths: arguments.runtime_paths,
                     runtime_executable_path: arguments.runtime_executable_path,
-                    game_version: arguments.game_version,
+                    game_version: arguments.game_version.map(MinecraftVersionId::from),
                     instance_name: arguments.instance_name,
                 },
-                loader_version: arguments.loader_version,
+                loader_version: arguments.loader_version.map(LoaderVersionId::from),
             }),
             DriverCommand::Forge(arguments) => build_loader_config(LoaderConfigInput {
                 driver: DemoDriver::Forge,
@@ -159,10 +160,10 @@ impl Cli {
                     runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
                     runtime_paths: arguments.runtime_paths,
                     runtime_executable_path: arguments.runtime_executable_path,
-                    game_version: arguments.game_version,
+                    game_version: arguments.game_version.map(MinecraftVersionId::from),
                     instance_name: arguments.instance_name,
                 },
-                loader_version: arguments.loader_version,
+                loader_version: arguments.loader_version.map(LoaderVersionId::from),
             }),
             DriverCommand::Cleanroom(arguments) => build_loader_config(LoaderConfigInput {
                 driver: DemoDriver::Cleanroom,
@@ -174,10 +175,10 @@ impl Cli {
                     runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
                     runtime_paths: arguments.runtime_paths,
                     runtime_executable_path: arguments.runtime_executable_path,
-                    game_version: arguments.game_version,
+                    game_version: arguments.game_version.map(MinecraftVersionId::from),
                     instance_name: arguments.instance_name,
                 },
-                loader_version: arguments.loader_version,
+                loader_version: arguments.loader_version.map(LoaderVersionId::from),
             }),
             DriverCommand::NeoForge(arguments) => build_loader_config(LoaderConfigInput {
                 driver: DemoDriver::NeoForge,
@@ -187,10 +188,10 @@ impl Cli {
                     runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
                     runtime_paths: arguments.runtime_paths,
                     runtime_executable_path: arguments.runtime_executable_path,
-                    game_version: arguments.game_version,
+                    game_version: arguments.game_version.map(MinecraftVersionId::from),
                     instance_name: arguments.instance_name,
                 },
-                loader_version: arguments.loader_version,
+                loader_version: arguments.loader_version.map(LoaderVersionId::from),
             }),
         }
     }
@@ -202,18 +203,20 @@ struct CommonConfigInput {
     runtime_validation: RuntimeValidationMode,
     runtime_paths: Vec<PathBuf>,
     runtime_executable_path: Option<PathBuf>,
-    game_version: Option<String>,
+    game_version: Option<MinecraftVersionId>,
     instance_name: Option<String>,
 }
 
 struct LoaderConfigInput {
     driver: DemoDriver,
     common: CommonConfigInput,
-    loader_version: Option<String>,
+    loader_version: Option<LoaderVersionId>,
 }
 
 fn build_vanilla_config(input: CommonConfigInput) -> DemoConfig {
-    let resolved_game_version = input.game_version.unwrap_or_else(|| "1.20.1".to_owned());
+    let resolved_game_version = input
+        .game_version
+        .unwrap_or_else(|| MinecraftVersionId::from("1.20.1"));
     let resolved_instance_name = input
         .instance_name
         .unwrap_or_else(|| format!("MyVanilla-{resolved_game_version}"));
@@ -253,33 +256,39 @@ fn build_loader_config(input: LoaderConfigInput) -> DemoConfig {
     }
 }
 
-fn default_loader_game_version(driver: DemoDriver, game_version: Option<String>) -> String {
+fn default_loader_game_version(
+    driver: DemoDriver,
+    game_version: Option<MinecraftVersionId>,
+) -> MinecraftVersionId {
     game_version.unwrap_or_else(|| match driver {
-        DemoDriver::Fabric => "1.20.1".to_owned(),
-        DemoDriver::LegacyFabric => "1.20.1".to_owned(),
-        DemoDriver::Babric => "1.20.1".to_owned(),
-        DemoDriver::Quilt => "1.20.1".to_owned(),
-        DemoDriver::Forge => "1.20.1".to_owned(),
-        DemoDriver::Cleanroom => "1.12.2".to_owned(),
-        DemoDriver::NeoForge => "1.21.1".to_owned(),
+        DemoDriver::Fabric => MinecraftVersionId::from("1.20.1"),
+        DemoDriver::LegacyFabric => MinecraftVersionId::from("1.20.1"),
+        DemoDriver::Babric => MinecraftVersionId::from("1.20.1"),
+        DemoDriver::Quilt => MinecraftVersionId::from("1.20.1"),
+        DemoDriver::Forge => MinecraftVersionId::from("1.20.1"),
+        DemoDriver::Cleanroom => MinecraftVersionId::from("1.12.2"),
+        DemoDriver::NeoForge => MinecraftVersionId::from("1.21.1"),
         DemoDriver::Vanilla => unreachable!("vanilla is handled separately"),
     })
 }
 
-fn default_loader_version(driver: DemoDriver, loader_version: Option<String>) -> String {
+fn default_loader_version(
+    driver: DemoDriver,
+    loader_version: Option<LoaderVersionId>,
+) -> LoaderVersionId {
     loader_version.unwrap_or_else(|| match driver {
-        DemoDriver::Fabric => "0.16.10".to_owned(),
-        DemoDriver::LegacyFabric => "0.16.10".to_owned(),
-        DemoDriver::Babric => "0.16.10".to_owned(),
-        DemoDriver::Quilt => "0.24.0".to_owned(),
-        DemoDriver::Forge => "47.3.1".to_owned(),
-        DemoDriver::Cleanroom => "0.5.8-alpha".to_owned(),
-        DemoDriver::NeoForge => "21.1.199".to_owned(),
+        DemoDriver::Fabric => LoaderVersionId::from("0.16.10"),
+        DemoDriver::LegacyFabric => LoaderVersionId::from("0.16.10"),
+        DemoDriver::Babric => LoaderVersionId::from("0.16.10"),
+        DemoDriver::Quilt => LoaderVersionId::from("0.24.0"),
+        DemoDriver::Forge => LoaderVersionId::from("47.3.1"),
+        DemoDriver::Cleanroom => LoaderVersionId::from("0.5.8-alpha"),
+        DemoDriver::NeoForge => LoaderVersionId::from("21.1.199"),
         DemoDriver::Vanilla => unreachable!("vanilla is handled separately"),
     })
 }
 
-fn default_loader_instance_name(driver: DemoDriver, game_version: &str) -> String {
+fn default_loader_instance_name(driver: DemoDriver, game_version: &MinecraftVersionId) -> String {
     match driver {
         DemoDriver::Fabric => format!("MyFabric-{game_version}"),
         DemoDriver::LegacyFabric => format!("MyLegacyFabric-{game_version}"),

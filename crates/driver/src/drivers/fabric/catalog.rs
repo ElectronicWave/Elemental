@@ -2,11 +2,13 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::catalog::{
     Catalog, GameVersions, Release, ReleaseInfo, collect_single_game_loader_releases,
     single_game_release_info,
 };
+use crate::loader_version::LoaderVersionId;
 
 use super::source::{FabricEndpointOverrides, FabricFlavor, FabricSource};
 
@@ -15,8 +17,8 @@ pub struct FabricCatalog {
 }
 
 pub struct FabricRelease {
-    pub game_version: String,
-    pub loader_version: String,
+    pub game_version: MinecraftVersionId,
+    pub loader_version: LoaderVersionId,
     pub description: Option<String>,
 }
 
@@ -24,7 +26,7 @@ pub struct FabricRelease {
 impl Release for FabricRelease {
     async fn info(&self) -> ReleaseInfo {
         single_game_release_info(
-            self.loader_version.clone(),
+            self.loader_version.to_string(),
             self.game_version.clone(),
             self.description.clone(),
         )
@@ -59,15 +61,15 @@ impl Catalog for FabricCatalog {
             .game_versions()
             .await?
             .into_iter()
-            .map(|game_version| game_version.version)
-            .collect::<Vec<String>>();
+            .map(|game_version| MinecraftVersionId::from(game_version.version))
+            .collect::<Vec<MinecraftVersionId>>();
 
         collect_single_game_loader_releases(
             game_versions,
             |game_version| async move { self.source.loader_versions(game_version.as_str()).await },
             |game_version, loader| FabricRelease {
-                game_version: game_version.to_owned(),
-                loader_version: loader.loader.version,
+                game_version: game_version.clone(),
+                loader_version: LoaderVersionId::from(loader.loader.version),
                 description: Some(if loader.loader.stable {
                     "Stable".to_owned()
                 } else {

@@ -9,11 +9,12 @@ use crate::{
         version_json::VersionJsonRootLayout,
     },
     http::build_default_client,
+    loader_version::LoaderVersionId,
     maven::fetch_maven_metadata,
     url::{Origin, OriginPolicy},
 };
 use anyhow::Result;
-use elemental_core::storage::Storage;
+use elemental_core::{minecraft::MinecraftVersionId, storage::Storage};
 use elemental_schema::forge::MavenMetadataBody;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -132,19 +133,19 @@ impl NeoForgeSource {
     pub fn installer_artifact<L>(
         &self,
         game_storage: &Storage<L>,
-        _game_version: &str,
-        loader_version: &str,
+        _game_version: &MinecraftVersionId,
+        loader_version: &LoaderVersionId,
     ) -> Result<InstallerArtifact>
     where
         L: VersionJsonRootLayout,
     {
-        let version = release_version(loader_version);
+        let version = release_version(loader_version.as_str());
         let library_relative_path = neoforge_installer_relative_path(&version);
 
         build_installer_artifact(
             game_storage,
             format!("net.neoforged:neoforge:{version}:installer"),
-            self.endpoints.installer_url(loader_version)?,
+            self.endpoints.installer_url(loader_version.as_str())?,
             library_relative_path,
         )
     }
@@ -160,8 +161,8 @@ impl InstallerArtifactSource for NeoForgeSource {
     fn installer_artifact<L>(
         &self,
         game_storage: &Storage<L>,
-        game_version: &str,
-        loader_version: &str,
+        game_version: &MinecraftVersionId,
+        loader_version: &LoaderVersionId,
     ) -> Result<InstallerArtifact>
     where
         L: VersionJsonRootLayout,

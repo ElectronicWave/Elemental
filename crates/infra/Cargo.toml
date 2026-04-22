@@ -10,8 +10,8 @@ serde_json = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-futures = "0.3.31"
+futures = { workspace = true }
 scc = { workspace = true }
 tokio-util = { version = "0.7.17", default-features = false, features = ["rt"] }
-sha1_smol = "1.0.1"
+sha1_smol = { workspace = true }
 zip = { version = "8.0.0", default-features = false, features = ["deflate"] }

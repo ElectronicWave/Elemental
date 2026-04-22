@@ -1,7 +1,10 @@
 use std::{fs::File, path::PathBuf};
 
 use anyhow::Result;
-use elemental_core::storage::{Storage, layout::Layout};
+use elemental_core::{
+    minecraft::MinecraftVersionId,
+    storage::{Storage, layout::Layout},
+};
 use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::driver::{Driver, DriverDescriptor, InstalledDriver};
@@ -84,7 +87,8 @@ pub fn installed_version_json_driver(
         game_version: metadata
             .inherits_from
             .clone()
-            .or_else(|| Some(metadata.id.clone())),
+            .or_else(|| Some(metadata.id.clone()))
+            .map(MinecraftVersionId::from),
         description: Some(metadata.release_type.clone()),
     }
 }

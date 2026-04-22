@@ -9,6 +9,7 @@ use crate::{
         ResolvedInstallerFamilyLaunchVersion, ResolvedInstallerFamilyMetadata,
         ResolvedInstallerFamilyVersion, profile_game_and_raw_loader_version,
     },
+    loader_version::LoaderVersionId,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -30,10 +31,12 @@ impl InstallerFamily for ForgeFamily {
 
     const FAMILY_NAME: &'static str = "forge";
 
-    fn profile_identity(install_profile: &ForgeInstallerProfile) -> Result<(String, String)> {
+    fn profile_identity(
+        install_profile: &ForgeInstallerProfile,
+    ) -> Result<(String, LoaderVersionId)> {
         let (game_version, raw_version) =
             profile_game_and_raw_loader_version(install_profile, Self::FAMILY_NAME, "forge")?;
-        let (_, loader_version) = parse_installer_version(&raw_version)?;
-        Ok((game_version, loader_version))
+        let (_, loader_version) = parse_installer_version(raw_version.as_str())?;
+        Ok((game_version, LoaderVersionId::from(loader_version)))
     }
 }

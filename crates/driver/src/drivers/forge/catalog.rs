@@ -2,11 +2,13 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::catalog::{
     Catalog, GameVersions, Release, ReleaseInfo, collect_single_game_releases,
     single_game_release_info,
 };
+use crate::loader_version::LoaderVersionId;
 
 use super::source::ForgeSource;
 
@@ -17,8 +19,8 @@ pub struct ForgeCatalog {
 
 #[derive(Debug, Clone)]
 pub struct ForgeRelease {
-    pub loader: String,
-    pub game: String,
+    pub loader: LoaderVersionId,
+    pub game: MinecraftVersionId,
     pub description: Option<String>,
 }
 
@@ -42,7 +44,7 @@ impl ForgeCatalog {
 impl Release for ForgeRelease {
     async fn info(&self) -> ReleaseInfo {
         single_game_release_info(
-            self.loader.clone(),
+            self.loader.to_string(),
             self.game.clone(),
             self.description.clone(),
         )
@@ -60,10 +62,10 @@ impl Catalog for ForgeCatalog {
             |version| {
                 let (game_version, loader_version) = version.split_once('-')?;
                 Some((
-                    game_version.to_owned(),
+                    MinecraftVersionId::from(game_version),
                     ForgeRelease {
-                        loader: loader_version.to_owned(),
-                        game: game_version.to_owned(),
+                        loader: LoaderVersionId::from(loader_version),
+                        game: MinecraftVersionId::from(game_version),
                         description: None,
                     },
                 ))

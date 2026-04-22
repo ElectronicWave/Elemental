@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use elemental_core::{
     auth::authorizer::Authorizer,
     launcher::command::LaunchCommand,
+    minecraft::MinecraftVersionId,
     runtime::distribution::Distribution,
     storage::{Storage, layout::Layout},
 };
@@ -22,6 +23,7 @@ use crate::{
         prepare_version_json,
     },
     inspect::InstanceProbe,
+    loader_version::LoaderVersionId,
 };
 
 #[async_trait(?Send)]
@@ -43,8 +45,8 @@ pub trait ProfiledVersionJsonFamily: Clone + Debug + Send + Sync + 'static {
     async fn profile(
         &self,
         source: &Self::Source,
-        game_version: &str,
-        loader_version: &str,
+        game_version: &MinecraftVersionId,
+        loader_version: &LoaderVersionId,
     ) -> Result<Self::Profile>;
 
     fn merge_profile(
@@ -56,8 +58,8 @@ pub trait ProfiledVersionJsonFamily: Clone + Debug + Send + Sync + 'static {
     fn local_metadata_needs_refresh(
         &self,
         metadata: &PistonMetaData,
-        game_version: &str,
-        loader_version: &str,
+        game_version: &MinecraftVersionId,
+        loader_version: &LoaderVersionId,
     ) -> bool;
 
     fn inspect_installed(&self, metadata: &PistonMetaData) -> Option<InstalledDriver>;
@@ -121,8 +123,8 @@ where
     pub async fn prepare<L, VL>(
         &self,
         instance: &Storage<VL, Storage<L>>,
-        game_version: String,
-        loader_version: String,
+        game_version: MinecraftVersionId,
+        loader_version: LoaderVersionId,
     ) -> Result<PreparedVersionJsonInstance<F::RemoteResolver, L, VL>>
     where
         L: VersionJsonRootLayout + Clone,
@@ -181,8 +183,8 @@ where
     async fn resolve_or_load<L, VL>(
         &self,
         instance: &Storage<VL, Storage<L>>,
-        game_version: String,
-        loader_version: String,
+        game_version: MinecraftVersionId,
+        loader_version: LoaderVersionId,
     ) -> Result<ResolvedVersionJsonInstance<F::RemoteResolver, L, VL>>
     where
         L: VersionJsonRootLayout + Clone,
@@ -195,8 +197,8 @@ where
             if status.is_downloaded()
                 && !self.family.local_metadata_needs_refresh(
                     &resolved.metadata,
-                    game_version.as_str(),
-                    loader_version.as_str(),
+                    &game_version,
+                    &loader_version,
                 )
             {
                 return Ok(resolved);
@@ -210,8 +212,8 @@ where
     async fn resolve_version<L, VL>(
         &self,
         instance: &Storage<VL, Storage<L>>,
-        game_version: String,
-        loader_version: String,
+        game_version: MinecraftVersionId,
+        loader_version: LoaderVersionId,
     ) -> Result<ResolvedVersionJsonInstance<F::RemoteResolver, L, VL>>
     where
         L: VersionJsonRootLayout + Clone,
@@ -225,18 +227,14 @@ where
 
     async fn resolve_metadata(
         &self,
-        game_version: String,
-        loader_version: String,
+        game_version: MinecraftVersionId,
+        loader_version: LoaderVersionId,
     ) -> Result<ResolvedVersionJsonMetadata<F::RemoteResolver>> {
         let base_metadata =
             resolve_vanilla_metadata(self.vanilla_source(), game_version.as_str()).await?;
         let profile = self
             .family
-            .profile(
-                self.source(),
-                game_version.as_str(),
-                loader_version.as_str(),
-            )
+            .profile(self.source(), &game_version, &loader_version)
             .await?;
         let metadata = self.family.merge_profile(base_metadata.metadata, profile)?;
 

@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
-use elemental::core::runtime::RuntimeValidationMode;
+use elemental::core::{minecraft::MinecraftVersionId, runtime::RuntimeValidationMode};
+use elemental::driver::loader_version::LoaderVersionId;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DemoDriver {
@@ -19,8 +20,8 @@ pub struct DemoConfig {
     pub driver: DemoDriver,
     pub storage_root: PathBuf,
     pub instance_name: String,
-    pub game_version: String,
-    pub loader_version: Option<String>,
+    pub game_version: MinecraftVersionId,
+    pub loader_version: Option<LoaderVersionId>,
     pub runtime_major_version: Option<usize>,
     pub runtime_paths: Vec<PathBuf>,
     pub runtime_executable_path: Option<PathBuf>,

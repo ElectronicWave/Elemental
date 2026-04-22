@@ -23,6 +23,7 @@ use elemental::{
                 VersionJsonRootLayout,
             },
         },
+        loader_version::LoaderVersionId,
     },
 };
 
@@ -68,7 +69,10 @@ pub(super) fn offline_authorizer() -> OfflineAuthorizer {
     }
 }
 
-pub(super) fn require_loader_version(config: &DemoConfig, driver_label: &str) -> Result<String> {
+pub(super) fn require_loader_version(
+    config: &DemoConfig,
+    driver_label: &str,
+) -> Result<LoaderVersionId> {
     config
         .loader_version
         .clone()
@@ -79,7 +83,7 @@ pub(super) async fn prepare_loader_demo(
     config: &DemoConfig,
     driver_label: &str,
 ) -> Result<(
-    String,
+    LoaderVersionId,
     Storage<BaseInstanceLayout, Storage<BaseRootLayout>>,
     VanillaLaunchConfig,
 )> {
@@ -184,7 +188,7 @@ where
         driver_name: config.driver.as_str(),
         loader_version,
         instance_name: &config.instance_name,
-        game_version: &config.game_version,
+        game_version: config.game_version.as_str(),
         prepared_ms,
         install_status,
         runtime_executable: runtime_executable.as_path(),
@@ -195,7 +199,7 @@ where
     let exit_status = run_logged_process(command).await?;
     print_summary(&LaunchSummary {
         driver_name: config.driver.as_str(),
-        game_version: &config.game_version,
+        game_version: config.game_version.as_str(),
         loader_version,
         runtime_executable: runtime_executable.as_path(),
         version_root: diagnostics.version_root.as_path(),

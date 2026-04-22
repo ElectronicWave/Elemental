@@ -2,11 +2,13 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::catalog::{
     Catalog, GameVersions, Release, ReleaseInfo, collect_single_game_releases,
     single_game_release_info,
 };
+use crate::loader_version::LoaderVersionId;
 
 use super::source::NeoForgeSource;
 
@@ -19,8 +21,8 @@ pub struct NeoForgeCatalog {
 
 #[derive(Debug, Clone)]
 pub struct NeoForgeRelease {
-    pub loader: String,
-    pub game_version_hint: String,
+    pub loader: LoaderVersionId,
+    pub game_version_hint: MinecraftVersionId,
     pub description: Option<String>,
 }
 
@@ -44,7 +46,7 @@ impl NeoForgeCatalog {
 impl Release for NeoForgeRelease {
     async fn info(&self) -> ReleaseInfo {
         single_game_release_info(
-            self.loader.clone(),
+            self.loader.to_string(),
             self.game_version_hint.clone(),
             self.description.clone(),
         )
@@ -64,7 +66,7 @@ impl Catalog for NeoForgeCatalog {
                 Some((
                     game_version_hint.clone(),
                     NeoForgeRelease {
-                        loader: version,
+                        loader: LoaderVersionId::from(version),
                         game_version_hint,
                         description: Some(GAME_VERSION_HEURISTIC_DESCRIPTION.to_owned()),
                     },
@@ -74,12 +76,12 @@ impl Catalog for NeoForgeCatalog {
     }
 }
 
-fn infer_game_version_from_loader_version(loader_version: &str) -> Option<String> {
+fn infer_game_version_from_loader_version(loader_version: &str) -> Option<MinecraftVersionId> {
     let core_version = loader_version.split('-').next().unwrap_or(loader_version);
     let parts = core_version.split('.').collect::<Vec<&str>>();
     let [major, minor, ..] = parts.as_slice() else {
         return None;
     };
 
-    Some(format!("1.{major}.{minor}"))
+    Some(MinecraftVersionId::from(format!("1.{major}.{minor}")))
 }

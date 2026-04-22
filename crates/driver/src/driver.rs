@@ -1,6 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use elemental_core::storage::layout::Layout;
+use elemental_core::{minecraft::MinecraftVersionId, storage::layout::Layout};
 
 use crate::inspect::InstanceProbe;
 
@@ -14,7 +14,7 @@ pub struct DriverDescriptor {
 pub struct InstalledDriver {
     pub driver: DriverDescriptor,
     pub driver_version: Option<String>,
-    pub game_version: Option<String>,
+    pub game_version: Option<MinecraftVersionId>,
     pub description: Option<String>,
 }
 

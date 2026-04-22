@@ -3,9 +3,11 @@ mod common;
 mod passthrough;
 
 use anyhow::Result;
+use elemental_core::minecraft::MinecraftVersionId;
 use elemental_schema::fabric::ProfileJson;
 use elemental_schema::mojang::piston::PistonMetaData;
 
+use crate::loader_version::LoaderVersionId;
 use crate::{driver::DriverDescriptor, drivers::fabric::source::FabricFlavor};
 
 use self::common::FlavorBehavior;
@@ -121,8 +123,8 @@ impl FabricFlavorSpec {
     pub(crate) fn local_metadata_needs_refresh(
         &self,
         metadata: &PistonMetaData,
-        game_version: &str,
-        loader_version: &str,
+        game_version: &MinecraftVersionId,
+        loader_version: &LoaderVersionId,
     ) -> bool {
         self.behavior
             .local_metadata_needs_refresh(metadata, game_version, loader_version)

@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use elemental_core::{
     auth::authorizer::Authorizer,
     launcher::command::LaunchCommand,
+    minecraft::MinecraftVersionId,
     runtime::distribution::Distribution,
     storage::{Storage, layout::Layout},
 };
@@ -61,7 +62,7 @@ impl VanillaDriver {
     >(
         &self,
         instance: &Storage<VL, Storage<L>>,
-        version_id: String,
+        version_id: MinecraftVersionId,
     ) -> Result<PreparedVanillaVersion<L, VL>> {
         prepare_version_json(self.downloader(), || {
             self.resolve_or_load(instance, version_id)
@@ -117,7 +118,7 @@ impl VanillaDriver {
     >(
         &self,
         instance: &Storage<VL, Storage<L>>,
-        version_id: String,
+        version_id: MinecraftVersionId,
     ) -> Result<ResolvedVanillaVersion<L, VL>> {
         if let Ok(resolved) =
             ResolvedVanillaVersion::load(self.source.endpoints().clone(), instance.clone())
@@ -134,12 +135,15 @@ impl VanillaDriver {
     >(
         &self,
         instance: &Storage<VL, Storage<L>>,
-        version_id: String,
+        version_id: MinecraftVersionId,
     ) -> Result<ResolvedVanillaVersion<L, VL>> {
         persist_version_json(instance, || self.resolve_metadata(version_id)).await
     }
 
-    async fn resolve_metadata(&self, version_id: String) -> Result<ResolvedVanillaMetadata> {
+    async fn resolve_metadata(
+        &self,
+        version_id: MinecraftVersionId,
+    ) -> Result<ResolvedVanillaMetadata> {
         resolve_vanilla_metadata(self.source(), version_id.as_str()).await
     }
 }

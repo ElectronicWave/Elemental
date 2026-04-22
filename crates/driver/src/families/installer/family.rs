@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail};
+use elemental_core::minecraft::MinecraftVersionId;
 use elemental_core::runtime::RuntimeValidationMode;
 use elemental_core::storage::{Storage, layout::Layoutable};
 use elemental_infra::downloader::core::ElementalDownloader;
@@ -30,6 +31,7 @@ use crate::{
             VersionJsonRootResource,
         },
     },
+    loader_version::LoaderVersionId,
 };
 
 pub trait InstallerArtifactEndpoints: Clone + Debug + Send + Sync + 'static {
@@ -45,8 +47,8 @@ pub trait InstallerArtifactSource: Clone + Debug {
     fn installer_artifact<L>(
         &self,
         game_storage: &Storage<L>,
-        game_version: &str,
-        loader_version: &str,
+        game_version: &MinecraftVersionId,
+        loader_version: &LoaderVersionId,
     ) -> Result<InstallerArtifact>
     where
         L: VersionJsonRootLayout;
@@ -65,8 +67,8 @@ pub trait InstallerFamily: Clone + Copy + Debug + Send + Sync + 'static {
     fn installer_artifact<L>(
         source: &Self::Source,
         game_storage: &Storage<L>,
-        game_version: &str,
-        loader_version: &str,
+        game_version: &MinecraftVersionId,
+        loader_version: &LoaderVersionId,
     ) -> Result<InstallerArtifact>
     where
         L: VersionJsonRootLayout,
@@ -74,7 +76,9 @@ pub trait InstallerFamily: Clone + Copy + Debug + Send + Sync + 'static {
         source.installer_artifact(game_storage, game_version, loader_version)
     }
 
-    fn profile_identity(install_profile: &ForgeInstallerProfile) -> Result<(String, String)> {
+    fn profile_identity(
+        install_profile: &ForgeInstallerProfile,
+    ) -> Result<(String, LoaderVersionId)> {
         profile_game_and_raw_loader_version(install_profile, Self::FAMILY_NAME, Self::FAMILY_NAME)
     }
 
@@ -130,8 +134,8 @@ where
 {
     pub source: F::Source,
     pub instance: Storage<VL, Storage<L>>,
-    pub game_version: String,
-    pub loader_version: String,
+    pub game_version: MinecraftVersionId,
+    pub loader_version: LoaderVersionId,
     pub installer_artifact: InstallerArtifact,
     family: PhantomData<F>,
 }
@@ -198,8 +202,8 @@ where
     pub fn new(
         source: F::Source,
         instance: Storage<VL, Storage<L>>,
-        game_version: String,
-        loader_version: String,
+        game_version: MinecraftVersionId,
+        loader_version: LoaderVersionId,
     ) -> Result<Self> {
         let installer_artifact =
             F::installer_artifact(&source, &instance.parent, &game_version, &loader_version)?;
@@ -218,7 +222,7 @@ where
         let (profile_game_version, profile_loader_version) = F::profile_identity(install_profile)?;
 
         validate_installer_profile_identity(
-            &self.game_version,
+            self.game_version.as_str(),
             &self.loader_version,
             &profile_game_version,
             &profile_loader_version,
@@ -326,7 +330,7 @@ where
         let resolved_version = ResolvedInstallerFamilyVersion::new(
             source,
             instance.clone(),
-            game_version,
+            MinecraftVersionId::from(game_version),
             loader_version,
         )?;
         let launch_version = ResolvedInstallerFamilyLaunchVersion::<F, L, VL>::load(

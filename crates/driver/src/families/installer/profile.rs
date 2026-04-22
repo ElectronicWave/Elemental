@@ -5,6 +5,7 @@ use std::{
 
 use anyhow::{Context, Result, bail};
 use elemental_core::{
+    minecraft::MinecraftVersionId,
     runtime::distribution::Distribution,
     runtime::{RuntimeValidationMode, resolve_runtime},
     storage::{Storage, layout::Layoutable},
@@ -30,6 +31,7 @@ use crate::{
             VersionJsonRootResource,
         },
     },
+    loader_version::LoaderVersionId,
 };
 
 const INSTALL_PROFILE_ENTRY: &str = "install_profile.json";
@@ -147,7 +149,7 @@ where
         request.family_name, request.family_name
     ))?;
     let base_metadata =
-        resolve_vanilla_metadata(request.vanilla_source, request.game_version).await?;
+        resolve_vanilla_metadata(request.vanilla_source, request.game_version.as_str()).await?;
     let merged_metadata = merge_embedded_version(
         base_metadata.metadata,
         embedded_version,
@@ -175,7 +177,7 @@ where
     M: Fn(Vec<PistonMetaLibraries>, Vec<PistonMetaLibraries>) -> Vec<PistonMetaLibraries>,
 {
     pub instance: &'a Storage<VL, Storage<L>>,
-    pub game_version: &'a str,
+    pub game_version: &'a MinecraftVersionId,
     pub remote_resolver: &'a RR,
     pub downloader: &'a ElementalDownloader,
     pub vanilla_source: &'a VanillaSource,
@@ -224,7 +226,7 @@ pub fn profile_game_and_raw_loader_version(
     install_profile: &ForgeInstallerProfile,
     family_name: &str,
     loader_name: &str,
-) -> Result<(String, String)> {
+) -> Result<(String, LoaderVersionId)> {
     let game_version = install_profile
         .minecraft
         .clone()
@@ -251,14 +253,14 @@ pub fn profile_game_and_raw_loader_version(
             format!("{family_name} install profile is missing {loader_name} version identity")
         })?;
 
-    Ok((game_version, raw_loader_version))
+    Ok((game_version, LoaderVersionId::from(raw_loader_version)))
 }
 
 pub fn validate_installer_profile_identity(
     expected_game_version: &str,
-    expected_loader_version: &str,
+    expected_loader_version: &LoaderVersionId,
     actual_game_version: &str,
-    actual_loader_version: &str,
+    actual_loader_version: &LoaderVersionId,
     family_name: &str,
 ) -> Result<()> {
     if actual_game_version != expected_game_version {

@@ -2,11 +2,13 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::catalog::{
     Catalog, GameVersions, Release, ReleaseInfo, collect_single_game_releases,
     single_game_release_info,
 };
+use crate::loader_version::LoaderVersionId;
 
 use super::source::CleanroomSource;
 
@@ -20,7 +22,7 @@ pub struct CleanroomCatalog {
 
 #[derive(Debug, Clone)]
 pub struct CleanroomRelease {
-    pub loader: String,
+    pub loader: LoaderVersionId,
     pub description: Option<String>,
 }
 
@@ -44,8 +46,8 @@ impl CleanroomCatalog {
 impl Release for CleanroomRelease {
     async fn info(&self) -> ReleaseInfo {
         single_game_release_info(
-            self.loader.clone(),
-            CLEANROOM_GAME_VERSION.to_owned(),
+            self.loader.to_string(),
+            MinecraftVersionId::from(CLEANROOM_GAME_VERSION),
             self.description.clone(),
         )
     }
@@ -61,9 +63,9 @@ impl Catalog for CleanroomCatalog {
             metadata.versioning.versions.version,
             |version| {
                 Some((
-                    CLEANROOM_GAME_VERSION.to_owned(),
+                    MinecraftVersionId::from(CLEANROOM_GAME_VERSION),
                     CleanroomRelease {
-                        loader: version,
+                        loader: LoaderVersionId::from(version),
                         description: Some(CLEANROOM_RELEASE_DESCRIPTION.to_owned()),
                     },
                 ))

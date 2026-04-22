@@ -13,20 +13,20 @@ It is intended as a working architecture reference, not as a release guarantee.
 
 ## Current State
 
-| Family / Driver | Catalog | Inspect | Install | Load Installed | Launch  | Notes                                                                             |
-| --------------- | ------- | ------- | ------- | -------------- | ------- | --------------------------------------------------------------------------------- |
-| Vanilla         | Yes     | Yes     | Yes     | Yes            | Yes     | Current primary complete driver, smoke-verified on representative release anchors |
-| Fabric-like     | Yes     | Yes     | Yes     | Yes            | Yes     | Shared flavor-aware profile family now drives multiple loader variants            |
-| Fabric          | Yes     | Yes     | Yes     | Yes            | Yes     | Modern Fabric mainline implemented and smoke-verified on representative anchors   |
-| LegacyFabric    | Yes     | Yes     | Yes     | Yes            | Yes     | End-to-end flow is working and smoke-verified on a representative legacy anchor   |
-| Babric          | Yes     | Yes     | Yes     | Yes            | Yes     | End-to-end flow is working and smoke-verified on a representative beta anchor     |
-| Quilt           | Yes     | Yes     | Yes     | Yes            | Yes     | Independent fabric-like driver implemented and smoke-verified on a representative anchor |
-| Forge           | Yes     | Yes     | Yes     | Yes            | Yes     | Installer-family driver now reaches a verified modern launch anchor               |
-| NeoForge        | Yes     | Yes     | Yes     | Yes            | Yes     | Installer-family driver now reaches a verified modern launch anchor; catalog game-version grouping remains heuristic |
-| CleanroomMC     | Yes     | Yes     | Yes     | Yes            | Yes     | Installer-family driver is implemented and smoke-verified on a `1.12.2 / 0.5.8-alpha` anchor |
-| LiteLoader      | No      | No      | No      | No             | No      | Not started                                                                       |
-| Rift            | No      | No      | No      | No             | No      | Not started                                                                       |
-| OptiFine        | No      | No      | No      | No             | No      | Not started                                                                       |
+| Family / Driver | Catalog | Inspect | Install | Load Installed | Launch | Notes                                                                                                                |
+| --------------- | ------- | ------- | ------- | -------------- | ------ | -------------------------------------------------------------------------------------------------------------------- |
+| Vanilla         | Yes     | Yes     | Yes     | Yes            | Yes    | Current primary complete driver, smoke-verified on representative release anchors                                    |
+| Fabric-like     | Yes     | Yes     | Yes     | Yes            | Yes    | Shared flavor-aware profile family now drives multiple loader variants                                               |
+| Fabric          | Yes     | Yes     | Yes     | Yes            | Yes    | Modern Fabric mainline implemented and smoke-verified on representative anchors                                      |
+| LegacyFabric    | Yes     | Yes     | Yes     | Yes            | Yes    | End-to-end flow is working and smoke-verified on a representative legacy anchor                                      |
+| Babric          | Yes     | Yes     | Yes     | Yes            | Yes    | End-to-end flow is working and smoke-verified on a representative beta anchor                                        |
+| Quilt           | Yes     | Yes     | Yes     | Yes            | Yes    | Independent fabric-like driver implemented and smoke-verified on a representative anchor                             |
+| Forge           | Yes     | Yes     | Yes     | Yes            | Yes    | Installer-family driver now reaches a verified modern launch anchor                                                  |
+| NeoForge        | Yes     | Yes     | Yes     | Yes            | Yes    | Installer-family driver now reaches a verified modern launch anchor; catalog game-version grouping remains heuristic |
+| CleanroomMC     | Yes     | Yes     | Yes     | Yes            | Yes    | Installer-family driver is implemented and smoke-verified on a `1.12.2 / 0.5.8-alpha` anchor                         |
+| LiteLoader      | No      | No      | No      | No             | No     | Not started                                                                                                          |
+| Rift            | No      | No      | No      | No             | No     | Not started                                                                                                          |
+| OptiFine        | No      | No      | No      | No             | No     | Not started                                                                                                          |
 
 ## Verified Smoke Coverage
 
@@ -34,16 +34,16 @@ The current workspace has already passed end-to-end smoke validation on the foll
 
 These anchors should be read as verified points inside the support range, not as the entire range by themselves.
 
-| Family / Driver | Verified anchors                      | Notes                                                                                          |
-| --------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Vanilla         | `1.8.9`, `1.12.2`, `1.16.5`, `1.20.1` | Covers old `minecraftArguments` flow and the modern `arguments` flow in the current workspace  |
-| Fabric          | `1.14.4`, `1.16.5`, `1.20.1`          | Confirms the modern Fabric profile flow across early, mid, and current supported release lines |
-| LegacyFabric    | `1.13.2`                              | Confirms the flavor-aware family path on the modern edge of the LegacyFabric-supported band    |
-| Babric          | `b1.7.3`                              | Confirms the flavor-aware family path on a representative beta-era Babric anchor               |
-| Quilt           | `1.20.1`                              | Confirms a second independent fabric-like driver on the shared profile-driven substrate         |
-| Forge           | `1.12.2 / 14.23.5.2860`, `1.20.1 / 47.3.1` | Confirms the installer-family pipeline across a classic legacy-era anchor and a modern Forge anchor |
-| NeoForge        | `1.21.1 / 21.1.199`                   | Confirms the installer-family pipeline on a modern NeoForge anchor; catalog grouping is still version-name heuristic |
-| CleanroomMC     | `1.12.2 / 0.5.8-alpha`               | Confirms the installer-family pipeline on a Java 25-era Cleanroom anchor after legacy runtime cleanup |
+| Family / Driver | Verified anchors                           | Notes                                                                                                                |
+| --------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| Vanilla         | `1.8.9`, `1.12.2`, `1.16.5`, `1.20.1`      | Covers old `minecraftArguments` flow and the modern `arguments` flow in the current workspace                        |
+| Fabric          | `1.14.4`, `1.16.5`, `1.20.1`               | Confirms the modern Fabric profile flow across early, mid, and current supported release lines                       |
+| LegacyFabric    | `1.13.2`                                   | Confirms the flavor-aware family path on the modern edge of the LegacyFabric-supported band                          |
+| Babric          | `b1.7.3`                                   | Confirms the flavor-aware family path on a representative beta-era Babric anchor                                     |
+| Quilt           | `1.20.1`                                   | Confirms a second independent fabric-like driver on the shared profile-driven substrate                              |
+| Forge           | `1.12.2 / 14.23.5.2860`, `1.20.1 / 47.3.1` | Confirms the installer-family pipeline across a classic legacy-era anchor and a modern Forge anchor                  |
+| NeoForge        | `1.21.1 / 21.1.199`                        | Confirms the installer-family pipeline on a modern NeoForge anchor; catalog grouping is still version-name heuristic |
+| CleanroomMC     | `1.12.2 / 0.5.8-alpha`                     | Confirms the installer-family pipeline on a Java 25-era Cleanroom anchor after legacy runtime cleanup                |
 
 Rolling targets such as the latest release, latest snapshot, and latest stable loader should still be treated as recurring regression checks rather than one-time milestones.
 
@@ -51,19 +51,19 @@ Rolling targets such as the latest release, latest snapshot, and latest stable l
 
 These are the ranges I would claim today based on the current code, upstream docs, and the verified smoke anchors above.
 
-| Family / Driver | Range to claim now                                        | Confidence   | Why                                                                                                                                                        |
-| --------------- | --------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Vanilla         | `1.8.9+` release line, including modern mainline releases | High         | The current workspace now has successful smoke anchors on `1.8.9`, `1.12.2`, `1.16.5`, and `1.20.1`, covering both legacy and modern launch argument paths |
-| Vanilla         | current snapshot line                                     | Medium-High  | Modern `version_json` handling is in place, but latest snapshot should continue to be treated as a rolling regression target                               |
-| Vanilla         | `1.6.1` to `1.7.x`                                        | Medium       | The builder now supports legacy JVM and game argument handling, but this older band still lacks the same smoke coverage as `1.8.9+`                        |
-| Vanilla         | `<1.6`                                                    | Do not claim | Current metadata assumptions still lean on modern Piston-style fields                                                                                      |
-| Fabric          | modern official Fabric line, practically `1.14.4+`        | High         | The current workspace has successful smoke anchors on `1.14.4`, `1.16.5`, and `1.20.1`, and the implementation consumes official Fabric profile metadata   |
-| LegacyFabric    | `1.13.2` verified, broader range not claimed yet          | Medium       | The current workspace now has an end-to-end verified anchor on `1.13.2`, but older LegacyFabric-supported releases and snapshots still need systematic smoke coverage |
-| Babric          | `b1.7.3` verified, broader range not claimed yet          | Medium       | The current workspace now has an end-to-end verified anchor on `b1.7.3`, but broader Babric-supported beta coverage still needs systematic smoke coverage |
-| Quilt           | `1.20.1` verified, broader range not claimed yet          | Medium       | The current workspace now has an end-to-end verified anchor on `1.20.1`, but broader Quilt-supported version coverage still needs systematic smoke coverage |
-| Forge           | `1.12.2 / 14.23.5.2860` and `1.20.1 / 47.3.1` verified, broader range not claimed yet | High  | The installer-family pipeline now has verified anchors on both a classic `1.12.2` generation and a modern `1.20.1` generation, but broader Forge coverage still needs systematic validation |
-| NeoForge        | `1.21.1 / 21.1.199` verified, broader range not claimed yet | High       | The installer-family pipeline now has a verified modern NeoForge anchor, but broader NeoForge coverage still needs systematic validation and catalog grouping still relies on version-name heuristics |
-| CleanroomMC     | `1.12.2 / 0.5.8-alpha` verified, broader range not claimed yet | High     | The installer-family pipeline now has a verified Cleanroom anchor on the only currently targeted Minecraft line, but broader Cleanroom release coverage and companion-pack semantics still need systematic validation |
+| Family / Driver | Range to claim now                                                                    | Confidence   | Why                                                                                                                                                                                                                   |
+| --------------- | ------------------------------------------------------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vanilla         | `1.8.9+` release line, including modern mainline releases                             | High         | The current workspace now has successful smoke anchors on `1.8.9`, `1.12.2`, `1.16.5`, and `1.20.1`, covering both legacy and modern launch argument paths                                                            |
+| Vanilla         | current snapshot line                                                                 | Medium-High  | Modern `version_json` handling is in place, but latest snapshot should continue to be treated as a rolling regression target                                                                                          |
+| Vanilla         | `1.6.1` to `1.7.x`                                                                    | Medium       | The builder now supports legacy JVM and game argument handling, but this older band still lacks the same smoke coverage as `1.8.9+`                                                                                   |
+| Vanilla         | `<1.6`                                                                                | Do not claim | Current metadata assumptions still lean on modern Piston-style fields                                                                                                                                                 |
+| Fabric          | modern official Fabric line, practically `1.14.4+`                                    | High         | The current workspace has successful smoke anchors on `1.14.4`, `1.16.5`, and `1.20.1`, and the implementation consumes official Fabric profile metadata                                                              |
+| LegacyFabric    | `1.13.2` verified, broader range not claimed yet                                      | Medium       | The current workspace now has an end-to-end verified anchor on `1.13.2`, but older LegacyFabric-supported releases and snapshots still need systematic smoke coverage                                                 |
+| Babric          | `b1.7.3` verified, broader range not claimed yet                                      | Medium       | The current workspace now has an end-to-end verified anchor on `b1.7.3`, but broader Babric-supported beta coverage still needs systematic smoke coverage                                                             |
+| Quilt           | `1.20.1` verified, broader range not claimed yet                                      | Medium       | The current workspace now has an end-to-end verified anchor on `1.20.1`, but broader Quilt-supported version coverage still needs systematic smoke coverage                                                           |
+| Forge           | `1.12.2 / 14.23.5.2860` and `1.20.1 / 47.3.1` verified, broader range not claimed yet | High         | The installer-family pipeline now has verified anchors on both a classic `1.12.2` generation and a modern `1.20.1` generation, but broader Forge coverage still needs systematic validation                           |
+| NeoForge        | `1.21.1 / 21.1.199` verified, broader range not claimed yet                           | High         | The installer-family pipeline now has a verified modern NeoForge anchor, but broader NeoForge coverage still needs systematic validation and catalog grouping still relies on version-name heuristics                 |
+| CleanroomMC     | `1.12.2 / 0.5.8-alpha` verified, broader range not claimed yet                        | High         | The installer-family pipeline now has a verified Cleanroom anchor on the only currently targeted Minecraft line, but broader Cleanroom release coverage and companion-pack semantics still need systematic validation |
 
 ## Upstream Findings
 
@@ -175,13 +175,13 @@ The cleaner long-term model is:
 
 Recommended families:
 
-| Family                | Examples                            | Character                                                |
-| --------------------- | ----------------------------------- | -------------------------------------------------------- |
-| `version_json` family | Vanilla                             | Modern metadata-driven install and launch                |
-| `fabric-like` family  | Fabric, LegacyFabric, Babric, Quilt | Profile-driven or version-json-derived boot              |
+| Family                | Examples                            | Character                                                                                |
+| --------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------- |
+| `version_json` family | Vanilla                             | Modern metadata-driven install and launch                                                |
+| `fabric-like` family  | Fabric, LegacyFabric, Babric, Quilt | Profile-driven or version-json-derived boot                                              |
 | `installer` family    | Forge, NeoForge, CleanroomMC        | Installer protocol and materialization, including legacy-derived installer distributions |
-| `legacy` family       | LiteLoader, Rift                    | LaunchWrapper, tweaker, relaunch, legacy bootstrap       |
-| `addon` family        | OptiFine, OptiFabric                | Patch or addon semantics layered on top of a base driver |
+| `legacy` family       | LiteLoader, Rift                    | LaunchWrapper, tweaker, relaunch, legacy bootstrap                                       |
+| `addon` family        | OptiFine, OptiFabric                | Patch or addon semantics layered on top of a base driver                                 |
 
 ## Should Elemental Support Driver Uninstall
 

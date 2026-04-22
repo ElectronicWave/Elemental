@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::catalog::{
     Catalog, GameVersions, Release, ReleaseInfo, push_single_game_release, single_game_release_info,
@@ -23,7 +24,7 @@ impl Release for VanillaRelease {
     async fn info(&self) -> ReleaseInfo {
         single_game_release_info(
             self.version_id.clone(),
-            self.version_id.clone(),
+            MinecraftVersionId::from(self.version_id.clone()),
             self.description.clone(),
         )
     }
@@ -51,7 +52,7 @@ impl Catalog for VanillaCatalog {
             let version_id = version.id;
             push_single_game_release(
                 &mut releases,
-                version_id.clone(),
+                MinecraftVersionId::from(version_id.clone()),
                 VanillaRelease {
                     version_id,
                     description: Some(version.release_type),

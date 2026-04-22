@@ -16,8 +16,9 @@ use crate::{
     families::{
         installer::{
             InstallerArtifact, InstallerInstallStatus, InstallerLaunchVersionRequest,
-            ensure_installer_profile_libraries_downloaded, installer_install_status,
-            load_persisted_installer_state, prepare_installer_launch_version,
+            ensure_installer_profile_libraries_downloaded, installer_has_client_processors,
+            installer_install_status, load_persisted_installer_state,
+            merge_libraries_prefer_embedded, prepare_installer_launch_version,
             prepare_installer_state, resolve_installer_processor_runtime,
             run_installer_client_processors, validate_installer_profile_identity,
         },
@@ -52,6 +53,13 @@ pub trait InstallerFamily: Clone + Copy + Debug + Send + Sync + 'static {
         endpoints: &Self::Endpoints,
         libraries: Vec<PistonMetaLibraries>,
     ) -> Result<Vec<PistonMetaLibraries>>;
+
+    fn merge_libraries(
+        base_libraries: Vec<PistonMetaLibraries>,
+        embedded_libraries: Vec<PistonMetaLibraries>,
+    ) -> Vec<PistonMetaLibraries> {
+        merge_libraries_prefer_embedded(base_libraries, embedded_libraries)
+    }
 
     fn rewrite_upstream(endpoints: &Self::Endpoints, raw_url: &str) -> Result<String>;
 
@@ -218,6 +226,7 @@ where
             vanilla_source,
             embedded_version: installer_state.embedded_version.as_ref(),
             normalize_libraries: |libraries| F::normalize_libraries(endpoints, libraries),
+            merge_libraries: F::merge_libraries,
             family_name: F::FAMILY_NAME,
         })
         .await?;
@@ -231,21 +240,23 @@ where
         )
         .await?;
 
-        let processor_operation_name = format!("{} processors", F::FAMILY_NAME);
-        let runtime = resolve_installer_processor_runtime(
-            &launch_version,
-            runtime_executable_path,
-            &processor_operation_name,
-        )
-        .await?;
-        run_installer_client_processors(
-            &runtime,
-            &self.instance,
-            &self.installer_artifact,
-            &installer_state.install_profile,
-            F::FAMILY_NAME,
-        )
-        .await?;
+        if installer_has_client_processors(&installer_state.install_profile) {
+            let processor_operation_name = format!("{} processors", F::FAMILY_NAME);
+            let runtime = resolve_installer_processor_runtime(
+                &launch_version,
+                runtime_executable_path,
+                &processor_operation_name,
+            )
+            .await?;
+            run_installer_client_processors(
+                &runtime,
+                &self.instance,
+                &self.installer_artifact,
+                &installer_state.install_profile,
+                F::FAMILY_NAME,
+            )
+            .await?;
+        }
 
         let install_status = installer_install_status(
             &self.instance,

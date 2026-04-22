@@ -8,6 +8,7 @@ pub enum DemoDriver {
     Babric,
     Quilt,
     Forge,
+    Cleanroom,
     NeoForge,
 }
 
@@ -32,6 +33,7 @@ impl DemoDriver {
             Self::Babric => "Babric",
             Self::Quilt => "Quilt",
             Self::Forge => "Forge",
+            Self::Cleanroom => "Cleanroom",
             Self::NeoForge => "NeoForge",
         }
     }

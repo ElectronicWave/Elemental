@@ -132,14 +132,15 @@ where
     })
 }
 
-pub async fn prepare_installer_launch_version<RR, L, VL, F>(
-    request: InstallerLaunchVersionRequest<'_, RR, L, VL, F>,
+pub async fn prepare_installer_launch_version<RR, L, VL, F, M>(
+    request: InstallerLaunchVersionRequest<'_, RR, L, VL, F, M>,
 ) -> Result<PreparedVersionJsonInstance<RR, L, VL>>
 where
     RR: VersionJsonRemoteResolver + Clone,
     L: VersionJsonRootLayout + Clone,
     VL: VersionJsonInstanceLayout + Clone,
     F: Fn(Vec<PistonMetaLibraries>) -> Result<Vec<PistonMetaLibraries>>,
+    M: Fn(Vec<PistonMetaLibraries>, Vec<PistonMetaLibraries>) -> Vec<PistonMetaLibraries>,
 {
     let embedded_version = request.embedded_version.context(format!(
         "{} installer is missing an embedded version json; launchable {} preparation is not available",
@@ -151,6 +152,7 @@ where
         base_metadata.metadata,
         embedded_version,
         request.normalize_libraries,
+        request.merge_libraries,
         request.family_name,
     )?;
     let launch_version = ResolvedVersionJsonMetadata::new(
@@ -164,12 +166,13 @@ where
     launch_version.prepare(request.downloader).await
 }
 
-pub struct InstallerLaunchVersionRequest<'a, RR, L, VL, F>
+pub struct InstallerLaunchVersionRequest<'a, RR, L, VL, F, M>
 where
     RR: VersionJsonRemoteResolver + Clone,
     L: VersionJsonRootLayout + Clone,
     VL: VersionJsonInstanceLayout + Clone,
     F: Fn(Vec<PistonMetaLibraries>) -> Result<Vec<PistonMetaLibraries>>,
+    M: Fn(Vec<PistonMetaLibraries>, Vec<PistonMetaLibraries>) -> Vec<PistonMetaLibraries>,
 {
     pub instance: &'a Storage<VL, Storage<L>>,
     pub game_version: &'a str,
@@ -178,6 +181,7 @@ where
     pub vanilla_source: &'a VanillaSource,
     pub embedded_version: Option<&'a serde_json::Value>,
     pub normalize_libraries: F,
+    pub merge_libraries: M,
     pub family_name: &'a str,
 }
 
@@ -444,14 +448,16 @@ struct EmbeddedVersionData {
     release_time: Option<String>,
 }
 
-fn merge_embedded_version<F>(
+fn merge_embedded_version<F, M>(
     base_metadata: PistonMetaData,
     embedded_version: &serde_json::Value,
     normalize_libraries: F,
+    merge_libraries: M,
     family_name: &str,
 ) -> Result<PistonMetaData>
 where
     F: Fn(Vec<PistonMetaLibraries>) -> Result<Vec<PistonMetaLibraries>>,
+    M: Fn(Vec<PistonMetaLibraries>, Vec<PistonMetaLibraries>) -> Vec<PistonMetaLibraries>,
 {
     let mut embedded = serde_json::from_value::<EmbeddedVersionData>(embedded_version.clone())
         .with_context(|| format!("decode {family_name} embedded version json failed"))?;
@@ -523,23 +529,47 @@ fn merge_arguments(
     }
 }
 
-fn merge_libraries(
+pub fn merge_libraries_prefer_embedded(
     base_libraries: Vec<PistonMetaLibraries>,
     embedded_libraries: Vec<PistonMetaLibraries>,
 ) -> Vec<PistonMetaLibraries> {
-    let mut seen = base_libraries
+    let embedded_keys = embedded_libraries
         .iter()
-        .map(|library| library.name.clone())
+        .map(library_identity_key)
         .collect::<HashSet<String>>();
-    let mut merged = base_libraries;
+    let mut merged = base_libraries
+        .into_iter()
+        .filter(|library| !embedded_keys.contains(&library_identity_key(library)))
+        .collect::<Vec<PistonMetaLibraries>>();
+    let mut seen = merged
+        .iter()
+        .map(library_identity_key)
+        .collect::<HashSet<String>>();
 
     for library in embedded_libraries {
-        if seen.insert(library.name.clone()) {
+        let identity = library_identity_key(&library);
+        if seen.insert(identity) {
             merged.push(library);
         }
     }
 
     merged
+}
+
+fn library_identity_key(library: &PistonMetaLibraries) -> String {
+    let (coordinates, extension) = library
+        .name
+        .split_once('@')
+        .unwrap_or((&library.name, "jar"));
+    let segments = coordinates.split(':').collect::<Vec<&str>>();
+
+    match segments.as_slice() {
+        [group, artifact, _version] => format!("{group}:{artifact}@{extension}"),
+        [group, artifact, _version, classifier] => {
+            format!("{group}:{artifact}:{classifier}@{extension}")
+        }
+        _ => library.name.clone(),
+    }
 }
 
 fn merge_logging(

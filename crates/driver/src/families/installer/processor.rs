@@ -171,6 +171,13 @@ where
     Ok(())
 }
 
+pub fn installer_has_client_processors(install_profile: &ForgeInstallerProfile) -> bool {
+    install_profile
+        .processors
+        .iter()
+        .any(processor_applies_to_client)
+}
+
 pub fn installer_client_processors_ready<L, VL>(
     instance: &Storage<VL, Storage<L>>,
     installer_artifact: &InstallerArtifact,
@@ -181,11 +188,7 @@ where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    if install_profile
-        .processors
-        .iter()
-        .all(|processor| !processor_applies_to_client(processor))
-    {
+    if !installer_has_client_processors(install_profile) {
         return Ok(true);
     }
     let archive = InstallerArchive::new(installer_artifact.path.clone());

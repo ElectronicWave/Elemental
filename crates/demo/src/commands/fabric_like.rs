@@ -18,7 +18,11 @@ fn fabric_flavor(driver: DemoDriver) -> Result<FabricFlavor> {
         DemoDriver::Fabric => Ok(FabricFlavor::Fabric),
         DemoDriver::LegacyFabric => Ok(FabricFlavor::LegacyFabric),
         DemoDriver::Babric => Ok(FabricFlavor::Babric),
-        DemoDriver::Vanilla | DemoDriver::Quilt | DemoDriver::Forge | DemoDriver::NeoForge => {
+        DemoDriver::Vanilla
+        | DemoDriver::Quilt
+        | DemoDriver::Forge
+        | DemoDriver::Cleanroom
+        | DemoDriver::NeoForge => {
             bail!("unsupported fabric-like demo driver: {}", driver.as_str())
         }
     }

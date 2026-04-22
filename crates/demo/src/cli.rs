@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
+use elemental::driver::drivers::cleanroom::config::CLEANROOM_RECOMMENDED_RUNTIME_MAJOR_VERSION;
 
 use crate::config::{DemoConfig, DemoDriver};
 
@@ -22,6 +23,7 @@ enum DriverCommand {
     Babric(LoaderArgs),
     Quilt(LoaderArgs),
     Forge(LoaderArgs),
+    Cleanroom(LoaderArgs),
     #[command(name = "neoforge", alias = "neo-forge")]
     NeoForge(LoaderArgs),
 }
@@ -129,6 +131,20 @@ impl Cli {
                 },
                 loader_version: arguments.loader_version,
             }),
+            DriverCommand::Cleanroom(arguments) => build_loader_config(LoaderConfigInput {
+                driver: DemoDriver::Cleanroom,
+                common: CommonConfigInput {
+                    storage_root,
+                    runtime_major_version: arguments
+                        .runtime_major_version
+                        .or(Some(CLEANROOM_RECOMMENDED_RUNTIME_MAJOR_VERSION)),
+                    runtime_paths: arguments.runtime_paths,
+                    runtime_executable_path: arguments.runtime_executable_path,
+                    game_version: arguments.game_version,
+                    instance_name: arguments.instance_name,
+                },
+                loader_version: arguments.loader_version,
+            }),
             DriverCommand::NeoForge(arguments) => build_loader_config(LoaderConfigInput {
                 driver: DemoDriver::NeoForge,
                 common: CommonConfigInput {
@@ -206,6 +222,7 @@ fn default_loader_game_version(driver: DemoDriver, game_version: Option<String>)
         DemoDriver::Babric => "1.20.1".to_owned(),
         DemoDriver::Quilt => "1.20.1".to_owned(),
         DemoDriver::Forge => "1.20.1".to_owned(),
+        DemoDriver::Cleanroom => "1.12.2".to_owned(),
         DemoDriver::NeoForge => "1.21.1".to_owned(),
         DemoDriver::Vanilla => unreachable!("vanilla is handled separately"),
     })
@@ -218,6 +235,7 @@ fn default_loader_version(driver: DemoDriver, loader_version: Option<String>) ->
         DemoDriver::Babric => "0.16.10".to_owned(),
         DemoDriver::Quilt => "0.24.0".to_owned(),
         DemoDriver::Forge => "47.3.1".to_owned(),
+        DemoDriver::Cleanroom => "0.5.8-alpha".to_owned(),
         DemoDriver::NeoForge => "21.1.199".to_owned(),
         DemoDriver::Vanilla => unreachable!("vanilla is handled separately"),
     })
@@ -230,6 +248,7 @@ fn default_loader_instance_name(driver: DemoDriver, game_version: &str) -> Strin
         DemoDriver::Babric => format!("MyBabric-{game_version}"),
         DemoDriver::Quilt => format!("MyQuilt-{game_version}"),
         DemoDriver::Forge => format!("MyForge-{game_version}"),
+        DemoDriver::Cleanroom => format!("MyCleanroom-{game_version}"),
         DemoDriver::NeoForge => format!("MyNeoForge-{game_version}"),
         DemoDriver::Vanilla => unreachable!("vanilla is handled separately"),
     }

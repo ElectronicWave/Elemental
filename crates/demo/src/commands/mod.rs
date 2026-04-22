@@ -1,3 +1,4 @@
+mod cleanroom;
 mod fabric_like;
 mod forge;
 mod neoforge;
@@ -39,6 +40,7 @@ pub async fn run(config: DemoConfig) -> Result<()> {
         }
         DemoDriver::Quilt => quilt::run(config).await,
         DemoDriver::Forge => forge::run(config).await,
+        DemoDriver::Cleanroom => cleanroom::run(config).await,
         DemoDriver::NeoForge => neoforge::run(config).await,
     }
 }

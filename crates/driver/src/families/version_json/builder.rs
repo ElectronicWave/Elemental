@@ -231,9 +231,12 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
             return Ok(None);
         };
 
-        let log_config_path = self.version.parent.try_get_resource(
-            VersionJsonRootResource::AssetLogConfigs(Some(client.file.id.clone())),
-        )?;
+        let log_config_path =
+            self.version
+                .parent
+                .try_get_resource(VersionJsonRootResource::AssetLogConfigs(Some(
+                    client.file.id.clone(),
+                )))?;
 
         if !log_config_path.exists() {
             bail!(
@@ -276,9 +279,9 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
                 let path = self
                     .version
                     .parent
-                    .try_get_resource(VersionJsonRootResource::Libraries(Some(
-                        PathBuf::from(artifact.path.as_str()),
-                    )))?
+                    .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
+                        artifact.path.as_str(),
+                    ))))?
                     .to_string_lossy()
                     .to_string();
                 if module_path_entries.contains(&normalize_path_string(path.as_str())) {
@@ -367,8 +370,7 @@ impl LaunchPaths {
             libraries_root: version
                 .parent
                 .try_get_resource(VersionJsonRootResource::Libraries(None))?,
-            natives_directory: version
-                .try_get_resource(VersionJsonInstanceResource::Natives)?,
+            natives_directory: version.try_get_resource(VersionJsonInstanceResource::Natives)?,
         })
     }
 

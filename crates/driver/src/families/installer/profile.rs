@@ -420,9 +420,9 @@ where
         if let Some(artifact) = &library.downloads.artifact
             && !instance
                 .parent
-                .try_get_resource(VersionJsonRootResource::Libraries(Some(
-                    PathBuf::from(artifact.path.as_str()),
-                )))?
+                .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
+                    artifact.path.as_str(),
+                ))))?
                 .exists()
         {
             return Ok(false);
@@ -432,9 +432,9 @@ where
             for artifact in classifiers.values() {
                 if !instance
                     .parent
-                    .try_get_resource(VersionJsonRootResource::Libraries(Some(
-                        PathBuf::from(artifact.path.as_str()),
-                    )))?
+                    .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
+                        artifact.path.as_str(),
+                    ))))?
                     .exists()
                 {
                     return Ok(false);

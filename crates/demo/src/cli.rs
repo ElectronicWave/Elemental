@@ -89,134 +89,52 @@ impl Cli {
             .command
             .unwrap_or(DriverCommand::Fabric(LoaderArgs::default()))
         {
-            DriverCommand::Vanilla(arguments) => build_vanilla_config(CommonConfigInput {
+            DriverCommand::Vanilla(arguments) => {
+                build_vanilla_config(common_config_from_vanilla_args(storage_root, arguments))
+            }
+            DriverCommand::Fabric(arguments) => build_loader_config(loader_config_input(
                 storage_root,
-                runtime_major_version: arguments.runtime_major_version,
-                runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
-                runtime_paths: arguments.runtime_paths,
-                runtime_executable_path: arguments.runtime_executable_path,
-                game_version: arguments.game_version.map(MinecraftVersionId::from),
-                instance_name: arguments.instance_name,
-            }),
-            DriverCommand::Fabric(arguments) => build_loader_config(LoaderConfigInput {
-                driver: DemoDriver::Fabric,
-                common: CommonConfigInput {
-                    storage_root,
-                    runtime_major_version: arguments.runtime_major_version,
-                    runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
-                    runtime_paths: arguments.runtime_paths,
-                    runtime_executable_path: arguments.runtime_executable_path,
-                    game_version: arguments.game_version.map(MinecraftVersionId::from),
-                    instance_name: arguments.instance_name,
-                },
-                loader_version: arguments.loader_version.map(LoaderVersionId::from),
-            }),
-            DriverCommand::LegacyFabric(arguments) => build_loader_config(LoaderConfigInput {
-                driver: DemoDriver::LegacyFabric,
-                common: CommonConfigInput {
-                    storage_root,
-                    runtime_major_version: arguments.runtime_major_version,
-                    runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
-                    runtime_paths: arguments.runtime_paths,
-                    runtime_executable_path: arguments.runtime_executable_path,
-                    game_version: arguments.game_version.map(MinecraftVersionId::from),
-                    instance_name: arguments.instance_name,
-                },
-                loader_version: arguments.loader_version.map(LoaderVersionId::from),
-            }),
-            DriverCommand::Babric(arguments) => build_loader_config(LoaderConfigInput {
-                driver: DemoDriver::Babric,
-                common: CommonConfigInput {
-                    storage_root,
-                    runtime_major_version: arguments.runtime_major_version,
-                    runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
-                    runtime_paths: arguments.runtime_paths,
-                    runtime_executable_path: arguments.runtime_executable_path,
-                    game_version: arguments.game_version.map(MinecraftVersionId::from),
-                    instance_name: arguments.instance_name,
-                },
-                loader_version: arguments.loader_version.map(LoaderVersionId::from),
-            }),
-            DriverCommand::Quilt(arguments) => build_loader_config(LoaderConfigInput {
-                driver: DemoDriver::Quilt,
-                common: CommonConfigInput {
-                    storage_root,
-                    runtime_major_version: arguments.runtime_major_version,
-                    runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
-                    runtime_paths: arguments.runtime_paths,
-                    runtime_executable_path: arguments.runtime_executable_path,
-                    game_version: arguments.game_version.map(MinecraftVersionId::from),
-                    instance_name: arguments.instance_name,
-                },
-                loader_version: arguments.loader_version.map(LoaderVersionId::from),
-            }),
-            DriverCommand::LiteLoader(arguments) => build_loader_config(LoaderConfigInput {
-                driver: DemoDriver::LiteLoader,
-                common: CommonConfigInput {
-                    storage_root,
-                    runtime_major_version: arguments.runtime_major_version,
-                    runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
-                    runtime_paths: arguments.runtime_paths,
-                    runtime_executable_path: arguments.runtime_executable_path,
-                    game_version: arguments.game_version.map(MinecraftVersionId::from),
-                    instance_name: arguments.instance_name,
-                },
-                loader_version: arguments.loader_version.map(LoaderVersionId::from),
-            }),
-            DriverCommand::Rift(arguments) => build_loader_config(LoaderConfigInput {
-                driver: DemoDriver::Rift,
-                common: CommonConfigInput {
-                    storage_root,
-                    runtime_major_version: arguments.runtime_major_version,
-                    runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
-                    runtime_paths: arguments.runtime_paths,
-                    runtime_executable_path: arguments.runtime_executable_path,
-                    game_version: arguments.game_version.map(MinecraftVersionId::from),
-                    instance_name: arguments.instance_name,
-                },
-                loader_version: arguments.loader_version.map(LoaderVersionId::from),
-            }),
-            DriverCommand::Forge(arguments) => build_loader_config(LoaderConfigInput {
-                driver: DemoDriver::Forge,
-                common: CommonConfigInput {
-                    storage_root,
-                    runtime_major_version: arguments.runtime_major_version,
-                    runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
-                    runtime_paths: arguments.runtime_paths,
-                    runtime_executable_path: arguments.runtime_executable_path,
-                    game_version: arguments.game_version.map(MinecraftVersionId::from),
-                    instance_name: arguments.instance_name,
-                },
-                loader_version: arguments.loader_version.map(LoaderVersionId::from),
-            }),
-            DriverCommand::Cleanroom(arguments) => build_loader_config(LoaderConfigInput {
-                driver: DemoDriver::Cleanroom,
-                common: CommonConfigInput {
-                    storage_root,
-                    runtime_major_version: arguments
-                        .runtime_major_version
-                        .or(Some(CLEANROOM_DEMO_RUNTIME_MAJOR_VERSION)),
-                    runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
-                    runtime_paths: arguments.runtime_paths,
-                    runtime_executable_path: arguments.runtime_executable_path,
-                    game_version: arguments.game_version.map(MinecraftVersionId::from),
-                    instance_name: arguments.instance_name,
-                },
-                loader_version: arguments.loader_version.map(LoaderVersionId::from),
-            }),
-            DriverCommand::NeoForge(arguments) => build_loader_config(LoaderConfigInput {
-                driver: DemoDriver::NeoForge,
-                common: CommonConfigInput {
-                    storage_root,
-                    runtime_major_version: arguments.runtime_major_version,
-                    runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
-                    runtime_paths: arguments.runtime_paths,
-                    runtime_executable_path: arguments.runtime_executable_path,
-                    game_version: arguments.game_version.map(MinecraftVersionId::from),
-                    instance_name: arguments.instance_name,
-                },
-                loader_version: arguments.loader_version.map(LoaderVersionId::from),
-            }),
+                DemoDriver::Fabric,
+                arguments,
+            )),
+            DriverCommand::LegacyFabric(arguments) => build_loader_config(loader_config_input(
+                storage_root,
+                DemoDriver::LegacyFabric,
+                arguments,
+            )),
+            DriverCommand::Babric(arguments) => build_loader_config(loader_config_input(
+                storage_root,
+                DemoDriver::Babric,
+                arguments,
+            )),
+            DriverCommand::Quilt(arguments) => build_loader_config(loader_config_input(
+                storage_root,
+                DemoDriver::Quilt,
+                arguments,
+            )),
+            DriverCommand::LiteLoader(arguments) => build_loader_config(loader_config_input(
+                storage_root,
+                DemoDriver::LiteLoader,
+                arguments,
+            )),
+            DriverCommand::Rift(arguments) => build_loader_config(loader_config_input(
+                storage_root,
+                DemoDriver::Rift,
+                arguments,
+            )),
+            DriverCommand::Forge(arguments) => build_loader_config(loader_config_input(
+                storage_root,
+                DemoDriver::Forge,
+                arguments,
+            )),
+            DriverCommand::Cleanroom(arguments) => {
+                build_loader_config(cleanroom_config_input(storage_root, arguments))
+            }
+            DriverCommand::NeoForge(arguments) => build_loader_config(loader_config_input(
+                storage_root,
+                DemoDriver::NeoForge,
+                arguments,
+            )),
         }
     }
 }
@@ -235,6 +153,87 @@ struct LoaderConfigInput {
     driver: DemoDriver,
     common: CommonConfigInput,
     loader_version: Option<LoaderVersionId>,
+}
+
+fn common_config_from_vanilla_args(
+    storage_root: PathBuf,
+    arguments: VanillaArgs,
+) -> CommonConfigInput {
+    let VanillaArgs {
+        runtime_major_version,
+        runtime_validation,
+        runtime_paths,
+        runtime_executable_path,
+        game_version,
+        instance_name,
+    } = arguments;
+
+    CommonConfigInput {
+        storage_root,
+        runtime_major_version,
+        runtime_validation: runtime_validation.into_runtime_validation_mode(),
+        runtime_paths,
+        runtime_executable_path,
+        game_version: game_version.map(MinecraftVersionId::from),
+        instance_name,
+    }
+}
+
+fn loader_config_input(
+    storage_root: PathBuf,
+    driver: DemoDriver,
+    arguments: LoaderArgs,
+) -> LoaderConfigInput {
+    let LoaderArgs {
+        runtime_major_version,
+        runtime_validation,
+        runtime_paths,
+        runtime_executable_path,
+        game_version,
+        loader_version,
+        instance_name,
+    } = arguments;
+
+    LoaderConfigInput {
+        driver,
+        common: CommonConfigInput {
+            storage_root,
+            runtime_major_version,
+            runtime_validation: runtime_validation.into_runtime_validation_mode(),
+            runtime_paths,
+            runtime_executable_path,
+            game_version: game_version.map(MinecraftVersionId::from),
+            instance_name,
+        },
+        loader_version: loader_version.map(LoaderVersionId::from),
+    }
+}
+
+fn cleanroom_config_input(storage_root: PathBuf, arguments: LoaderArgs) -> LoaderConfigInput {
+    let LoaderArgs {
+        runtime_major_version,
+        runtime_validation,
+        runtime_paths,
+        runtime_executable_path,
+        game_version,
+        loader_version,
+        instance_name,
+    } = arguments;
+
+    LoaderConfigInput {
+        driver: DemoDriver::Cleanroom,
+        common: CommonConfigInput {
+            storage_root,
+            runtime_major_version: runtime_major_version
+                .or(Some(CLEANROOM_DEMO_RUNTIME_MAJOR_VERSION)),
+            runtime_validation: runtime_validation.into_runtime_validation_mode(),
+            runtime_paths,
+            runtime_executable_path,
+            game_version: game_version.map(MinecraftVersionId::from),
+            instance_name,
+        },
+        loader_version: loader_version.map(LoaderVersionId::from),
+    }
 }
 
 fn build_vanilla_config(input: CommonConfigInput) -> DemoConfig {

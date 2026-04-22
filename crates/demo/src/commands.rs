@@ -1,28 +1,28 @@
-mod cleanroom;
-mod fabric_like;
-mod forge;
-mod liteloader;
-mod neoforge;
-mod quilt;
-mod rift;
-mod vanilla;
-
 use std::{fmt::Debug, future::Future, time::Duration};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use elemental::{
     core::{
         auth::authorizers::offline::OfflineAuthorizer, launcher::command::LaunchCommand,
         runtime::distribution::Distribution, storage::Storage,
     },
     driver::{
-        drivers::vanilla::config::VanillaLaunchConfig,
+        drivers::{
+            cleanroom::driver::CleanroomDriver,
+            fabric::{driver::FabricDriverFamily, source::FabricFlavor},
+            forge::driver::ForgeDriver,
+            liteloader::driver::LiteLoaderDriverFamily,
+            neoforge::driver::NeoForgeDriver,
+            quilt::driver::QuiltDriverFamily,
+            rift::driver::RiftDriverFamily,
+            vanilla::{config::VanillaLaunchConfig, driver::VanillaDriver},
+        },
         families::{
             installer::{InstallerFamilyDriver, InstallerFamilyDriverSpec},
             version_json::{
                 BaseInstanceLayout, BaseRootLayout, ProfiledVersionJsonDriver,
-                ProfiledVersionJsonFamily, VersionJsonGameStorageExt, VersionJsonInstanceLayout,
-                VersionJsonRootLayout,
+                ProfiledVersionJsonFamily, ProfiledVersionJsonFamilyExt, VersionJsonGameStorageExt,
+                VersionJsonInstanceLayout, VersionJsonRootLayout,
             },
         },
         loader_version::LoaderVersionId,
@@ -37,16 +37,84 @@ use crate::diagnostics::{
 
 pub async fn run(config: DemoConfig) -> Result<()> {
     match config.driver {
-        DemoDriver::Vanilla => vanilla::run(config).await,
+        DemoDriver::Vanilla => run_vanilla_demo(config).await,
         DemoDriver::Fabric | DemoDriver::LegacyFabric | DemoDriver::Babric => {
-            fabric_like::run(config).await
+            run_fabric_like_demo(config).await
         }
-        DemoDriver::Quilt => quilt::run(config).await,
-        DemoDriver::LiteLoader => liteloader::run(config).await,
-        DemoDriver::Rift => rift::run(config).await,
-        DemoDriver::Forge => forge::run(config).await,
-        DemoDriver::Cleanroom => cleanroom::run(config).await,
-        DemoDriver::NeoForge => neoforge::run(config).await,
+        DemoDriver::Quilt => {
+            run_profiled_version_json_family_demo(config, "quilt", QuiltDriverFamily).await
+        }
+        DemoDriver::LiteLoader => {
+            run_profiled_version_json_family_demo(config, "liteloader", LiteLoaderDriverFamily)
+                .await
+        }
+        DemoDriver::Rift => {
+            run_profiled_version_json_family_demo(config, "rift", RiftDriverFamily).await
+        }
+        DemoDriver::Forge => {
+            run_installer_family_demo_with_defaults(config, "forge", ForgeDriver::with_defaults)
+                .await
+        }
+        DemoDriver::Cleanroom => {
+            run_installer_family_demo_with_defaults(
+                config,
+                "cleanroom",
+                CleanroomDriver::with_defaults,
+            )
+            .await
+        }
+        DemoDriver::NeoForge => {
+            run_installer_family_demo_with_defaults(
+                config,
+                "neoforge",
+                NeoForgeDriver::with_defaults,
+            )
+            .await
+        }
+    }
+}
+
+async fn run_vanilla_demo(config: DemoConfig) -> Result<()> {
+    let instance = ensure_instance(&config).await?;
+    let driver = VanillaDriver::with_defaults()?;
+    let launch_config: VanillaLaunchConfig = build_launch_config(&config);
+
+    let (prepared, prepare_elapsed) =
+        time_operation(driver.prepare(&instance, config.game_version.clone())).await?;
+    let (runtime, command) = driver
+        .build_launch_command(offline_authorizer(), &prepared, &launch_config)
+        .await?;
+
+    finalize_launch(
+        &config,
+        None,
+        prepare_elapsed.as_millis(),
+        &prepared.install_status,
+        &prepared.resolved_version.version,
+        runtime,
+        command,
+    )
+    .await
+}
+
+async fn run_fabric_like_demo(config: DemoConfig) -> Result<()> {
+    let driver =
+        FabricDriverFamily::new(fabric_flavor(config.driver)?).build_driver_with_defaults()?;
+    run_profiled_version_json_demo(config, "fabric-like", &driver).await
+}
+
+fn fabric_flavor(driver: DemoDriver) -> Result<FabricFlavor> {
+    match driver {
+        DemoDriver::Fabric => Ok(FabricFlavor::Fabric),
+        DemoDriver::LegacyFabric => Ok(FabricFlavor::LegacyFabric),
+        DemoDriver::Babric => Ok(FabricFlavor::Babric),
+        DemoDriver::Vanilla
+        | DemoDriver::Quilt
+        | DemoDriver::LiteLoader
+        | DemoDriver::Rift
+        | DemoDriver::Forge
+        | DemoDriver::Cleanroom
+        | DemoDriver::NeoForge => bail!("unsupported fabric-like demo driver: {}", driver.as_str()),
     }
 }
 
@@ -130,6 +198,18 @@ where
     .await
 }
 
+pub(super) async fn run_profiled_version_json_family_demo<F>(
+    config: DemoConfig,
+    driver_label: &str,
+    family: F,
+) -> Result<()>
+where
+    F: ProfiledVersionJsonFamily,
+{
+    let driver = family.build_driver_with_defaults()?;
+    run_profiled_version_json_demo(config, driver_label, &driver).await
+}
+
 pub(super) async fn run_installer_family_demo<F>(
     config: DemoConfig,
     driver_label: &str,
@@ -161,6 +241,19 @@ where
         command,
     )
     .await
+}
+
+pub(super) async fn run_installer_family_demo_with_defaults<F, B>(
+    config: DemoConfig,
+    driver_label: &str,
+    build_driver: B,
+) -> Result<()>
+where
+    F: InstallerFamilyDriverSpec,
+    B: FnOnce() -> Result<InstallerFamilyDriver<F>>,
+{
+    let driver = build_driver()?;
+    run_installer_family_demo(config, driver_label, &driver).await
 }
 
 pub(super) async fn time_operation<T, Fut>(operation: Fut) -> Result<(T, Duration)>

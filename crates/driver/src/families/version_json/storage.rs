@@ -79,8 +79,7 @@ where
         Self::Layout: Clone,
         VL: VersionJsonInstanceLayout + Send,
     {
-        let instance_root =
-            self.try_get_resource(VersionJsonRootResource::Versions(Some(name)))?;
+        let instance_root = self.try_get_resource(VersionJsonRootResource::Versions(Some(name)))?;
         create_dir_all(&instance_root).await?;
 
         Ok(Storage::with_parent(
@@ -95,12 +94,12 @@ where
         VL: VersionJsonInstanceLayout,
     {
         let name = name.as_ref();
-        let instance_root = self
-            .try_get_resource(VersionJsonRootResource::Versions(Some(name.to_owned())))?;
+        let instance_root =
+            self.try_get_resource(VersionJsonRootResource::Versions(Some(name.to_owned())))?;
         let metadata_path = version_layout
             .try_get_resource(&instance_root, VersionJsonInstanceResource::Metadata)?;
-        let jar_path = version_layout
-            .try_get_resource(&instance_root, VersionJsonInstanceResource::Jar)?;
+        let jar_path =
+            version_layout.try_get_resource(&instance_root, VersionJsonInstanceResource::Jar)?;
 
         Ok(metadata_path.exists() && jar_path.exists())
     }
@@ -118,8 +117,7 @@ where
         if !self.instance_exists(&name, &version_layout)? {
             return Err(anyhow!("can't find a valid instance named '{name}'"));
         }
-        let instance_root =
-            self.try_get_resource(VersionJsonRootResource::Versions(Some(name)))?;
+        let instance_root = self.try_get_resource(VersionJsonRootResource::Versions(Some(name)))?;
 
         Ok(Storage::with_parent(
             instance_root,
@@ -132,8 +130,7 @@ where
     where
         VL: VersionJsonInstanceLayout,
     {
-        let instances_root =
-            self.try_get_resource(VersionJsonRootResource::Versions(None))?;
+        let instances_root = self.try_get_resource(VersionJsonRootResource::Versions(None))?;
         if !instances_root.exists() {
             return Ok(Vec::new());
         }
@@ -170,8 +167,7 @@ where
         id: String,
         objects: &PistonMetaAssetIndexObjects,
     ) -> Result<()> {
-        let path =
-            self.try_get_resource(VersionJsonRootResource::AssetIndexes(Some(id)))?;
+        let path = self.try_get_resource(VersionJsonRootResource::AssetIndexes(Some(id)))?;
         let parent = path
             .parent()
             .context("asset index path has no parent directory")?;
@@ -287,20 +283,20 @@ where
 
                 if let Some(artifact) = library.classifiers_native_artifact(rule_context.platform())
                 {
-                    let source = self.parent.try_get_resource(
-                        VersionJsonRootResource::Libraries(Some(PathBuf::from(
-                            artifact.path.as_str(),
-                        ))),
-                    )?;
+                    let source =
+                        self.parent
+                            .try_get_resource(VersionJsonRootResource::Libraries(Some(
+                                PathBuf::from(artifact.path.as_str()),
+                            )))?;
                     JarFile::new(source).extract_blocking(&destination)?;
                 }
 
                 if let Some(artifact) = library.native_artifact(rule_context.platform()) {
-                    let source = self.parent.try_get_resource(
-                        VersionJsonRootResource::Libraries(Some(PathBuf::from(
-                            artifact.path.as_str(),
-                        ))),
-                    )?;
+                    let source =
+                        self.parent
+                            .try_get_resource(VersionJsonRootResource::Libraries(Some(
+                                PathBuf::from(artifact.path.as_str()),
+                            )))?;
                     JarFile::new(source).extract_blocking(&destination)?;
                 }
             }

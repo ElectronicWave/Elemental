@@ -15,7 +15,10 @@ use elemental_infra::{
     },
     jar::JarFile,
 };
-use elemental_schema::forge::{ForgeInstallerProcessor, ForgeInstallerProfile};
+use elemental_schema::{
+    forge::{ForgeInstallerProcessor, ForgeInstallerProfile},
+    mojang::piston::PistonMetaLibrariesDownloadsArtifact,
+};
 use regex::Regex;
 use tokio::{fs::create_dir_all, process::Command};
 
@@ -49,43 +52,7 @@ where
     VL: VersionJsonInstanceLayout,
     F: Fn(&str, &str) -> Result<String>,
 {
-    let mut seen = HashSet::new();
-    let mut tasks = Vec::new();
-
-    for library in &install_profile.libraries {
-        if let Some(artifact) = &library.downloads.artifact {
-            let path =
-                instance
-                    .parent
-                    .try_get_resource(VersionJsonRootResource::Libraries(Some(
-                        PathBuf::from(artifact.path.as_str()),
-                    )))?;
-            if seen.insert(path.clone()) {
-                tasks.push(DownloadTask::new(
-                    artifact_url(artifact.url.as_str(), artifact.path.as_str())?,
-                    path,
-                    artifact.size.map(|size| size as u64),
-                    artifact.sha1.clone(),
-                ));
-            }
-        }
-
-        if let Some(classifiers) = &library.downloads.classifiers {
-            for artifact in classifiers.values() {
-                let path = instance.parent.try_get_resource(
-                    VersionJsonRootResource::Libraries(Some(PathBuf::from(artifact.path.as_str()))),
-                )?;
-                if seen.insert(path.clone()) {
-                    tasks.push(DownloadTask::new(
-                        artifact_url(artifact.url.as_str(), artifact.path.as_str())?,
-                        path,
-                        artifact.size.map(|size| size as u64),
-                        artifact.sha1.clone(),
-                    ));
-                }
-            }
-        }
-    }
+    let tasks = install_profile_library_tasks(instance, install_profile, &artifact_url)?;
 
     if tasks.is_empty() {
         return Ok(());
@@ -132,26 +99,13 @@ where
     if client_processors.is_empty() {
         return Ok(());
     }
-    let context = InstallerProcessorContext {
+    let context = build_processor_context(
+        instance,
         installer_artifact,
         install_profile,
         archive,
-        root_directory: absolute_path(&instance.parent.path)?,
-        libraries_directory: absolute_path(
-            &instance
-                .parent
-                .try_get_resource(VersionJsonRootResource::Libraries(None))?,
-        )?,
-        state_directory: absolute_path(&instance.try_get_resource(
-            VersionJsonInstanceResource::Elemental(Some(
-                PathBuf::from(family_name).join("installer"),
-            )),
-        )?)?,
-        minecraft_jar_path: absolute_path(
-            &instance.try_get_resource(VersionJsonInstanceResource::Jar)?,
-        )?,
         family_name,
-    };
+    )?;
 
     if context.client_outputs_ready()? {
         return Ok(());
@@ -193,7 +147,104 @@ where
         return Ok(true);
     }
     let archive = InstallerArchive::new(installer_artifact.path.clone());
-    let context = InstallerProcessorContext {
+    let context = build_processor_context(
+        instance,
+        installer_artifact,
+        install_profile,
+        archive,
+        family_name,
+    )?;
+    context.client_outputs_ready()
+}
+
+fn processor_applies_to_client(processor: &ForgeInstallerProcessor) -> bool {
+    processor.sides.is_empty() || processor.sides.iter().any(|side| side == "client")
+}
+
+fn install_profile_library_tasks<L, VL, F>(
+    instance: &Storage<VL, Storage<L>>,
+    install_profile: &ForgeInstallerProfile,
+    artifact_url: &F,
+) -> Result<Vec<DownloadTask>>
+where
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+    F: Fn(&str, &str) -> Result<String>,
+{
+    let mut seen = HashSet::new();
+    let mut tasks = Vec::new();
+
+    for library in &install_profile.libraries {
+        if let Some(artifact) = &library.downloads.artifact {
+            push_install_profile_library_task(
+                &mut tasks,
+                &mut seen,
+                instance,
+                artifact,
+                artifact_url,
+            )?;
+        }
+
+        if let Some(classifiers) = &library.downloads.classifiers {
+            for artifact in classifiers.values() {
+                push_install_profile_library_task(
+                    &mut tasks,
+                    &mut seen,
+                    instance,
+                    artifact,
+                    artifact_url,
+                )?;
+            }
+        }
+    }
+
+    Ok(tasks)
+}
+
+fn push_install_profile_library_task<L, VL, F>(
+    tasks: &mut Vec<DownloadTask>,
+    seen: &mut HashSet<PathBuf>,
+    instance: &Storage<VL, Storage<L>>,
+    artifact: &PistonMetaLibrariesDownloadsArtifact,
+    artifact_url: &F,
+) -> Result<()>
+where
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+    F: Fn(&str, &str) -> Result<String>,
+{
+    let path = instance
+        .parent
+        .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
+            artifact.path.as_str(),
+        ))))?;
+
+    if !seen.insert(path.clone()) {
+        return Ok(());
+    }
+
+    tasks.push(DownloadTask::new(
+        artifact_url(artifact.url.as_str(), artifact.path.as_str())?,
+        path,
+        artifact.size.map(|size| size as u64),
+        artifact.sha1.clone(),
+    ));
+
+    Ok(())
+}
+
+fn build_processor_context<'a, L, VL>(
+    instance: &Storage<VL, Storage<L>>,
+    installer_artifact: &'a InstallerArtifact,
+    install_profile: &'a ForgeInstallerProfile,
+    archive: InstallerArchive<PathBuf>,
+    family_name: &'a str,
+) -> Result<InstallerProcessorContext<'a>>
+where
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+{
+    Ok(InstallerProcessorContext {
         installer_artifact,
         install_profile,
         archive,
@@ -212,12 +263,7 @@ where
             &instance.try_get_resource(VersionJsonInstanceResource::Jar)?,
         )?,
         family_name,
-    };
-    context.client_outputs_ready()
-}
-
-fn processor_applies_to_client(processor: &ForgeInstallerProcessor) -> bool {
-    processor.sides.is_empty() || processor.sides.iter().any(|side| side == "client")
+    })
 }
 
 #[derive(Clone)]

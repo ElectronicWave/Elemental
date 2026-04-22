@@ -26,31 +26,14 @@ impl<P: AsRef<Path>> JarFile<P> {
     pub fn extract_blocking<S: AsRef<OsStr> + ?Sized>(&self, dest: &S) -> Result<()> {
         let file = File::open(&self.path)?;
         let mut archive = ZipArchive::new(file)?;
-
-        for index in 0..archive.len() {
-            let mut entry = archive.by_index(index)?;
-            let relative_path = match entry.enclosed_name() {
-                Some(path) => path,
-                None => continue,
-            };
-
+        let destination = Path::new(dest);
+        extract_entries_blocking(&mut archive, destination, |relative_path| {
             if relative_path.starts_with("META-INF") {
-                continue;
+                return None;
             }
 
-            let output_path = Path::new(dest).join(relative_path);
-            if entry.is_dir() {
-                create_dir_all(&output_path)?;
-                continue;
-            }
-
-            if let Some(parent) = output_path.parent() {
-                create_dir_all(parent)?;
-            }
-
-            let mut output = File::create(output_path)?;
-            io::copy(&mut entry, &mut output)?;
-        }
+            Some(relative_path.to_path_buf())
+        })?;
 
         Ok(())
     }
@@ -67,42 +50,19 @@ impl<P: AsRef<Path>> JarFile<P> {
     pub fn extract_prefixed_blocking(&self, prefix: &str, dest: &Path) -> Result<Vec<PathBuf>> {
         let file = File::open(&self.path)?;
         let mut archive = ZipArchive::new(file)?;
-        let normalized_prefix = prefix.trim_matches('/').to_owned();
-        let mut extracted = Vec::new();
+        let normalized_prefix = PathBuf::from(prefix.trim_matches('/'));
 
-        for index in 0..archive.len() {
-            let mut entry = archive.by_index(index)?;
-            let relative_path = match entry.enclosed_name() {
-                Some(path) => path,
-                None => continue,
+        extract_entries_blocking(&mut archive, dest, |relative_path| {
+            let Ok(stripped) = relative_path.strip_prefix(&normalized_prefix) else {
+                return None;
             };
-            let relative_raw = relative_path.to_string_lossy();
-            let Some(stripped) = relative_raw
-                .strip_prefix(normalized_prefix.as_str())
-                .map(|suffix| suffix.trim_start_matches(['/', '\\']))
-            else {
-                continue;
-            };
-            if stripped.is_empty() {
-                continue;
+
+            if stripped.as_os_str().is_empty() {
+                return None;
             }
 
-            let output_path = dest.join(stripped);
-            if entry.is_dir() {
-                create_dir_all(&output_path)?;
-                continue;
-            }
-
-            if let Some(parent) = output_path.parent() {
-                create_dir_all(parent)?;
-            }
-
-            let mut output = File::create(&output_path)?;
-            io::copy(&mut entry, &mut output)?;
-            extracted.push(output_path);
-        }
-
-        Ok(extracted)
+            Some(stripped.to_path_buf())
+        })
     }
 }
 
@@ -128,4 +88,42 @@ where
     let mut data = vec![];
     archive.by_name(name)?.read_to_end(&mut data)?;
     Ok(data)
+}
+
+fn extract_entries_blocking<R, F>(
+    archive: &mut ZipArchive<R>,
+    dest: &Path,
+    resolve_output_path: F,
+) -> Result<Vec<PathBuf>>
+where
+    R: Read + Seek,
+    F: Fn(&Path) -> Option<PathBuf>,
+{
+    let mut extracted = Vec::new();
+
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index)?;
+        let Some(relative_path) = entry.enclosed_name() else {
+            continue;
+        };
+        let Some(output_relative_path) = resolve_output_path(&relative_path) else {
+            continue;
+        };
+        let output_path = dest.join(&output_relative_path);
+
+        if entry.is_dir() {
+            create_dir_all(&output_path)?;
+            continue;
+        }
+
+        if let Some(parent) = output_path.parent() {
+            create_dir_all(parent)?;
+        }
+
+        let mut output = File::create(&output_path)?;
+        io::copy(&mut entry, &mut output)?;
+        extracted.push(output_path);
+    }
+
+    Ok(extracted)
 }

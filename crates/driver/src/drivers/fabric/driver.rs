@@ -15,7 +15,7 @@ use crate::{
     },
     families::version_json::{
         ProfiledVersionJsonDriver, ProfiledVersionJsonFamily, ProfiledVersionJsonFamilyExt,
-        vanilla_fallback_remote_resolver,
+        VanillaFallbackRemoteResolver,
     },
     loader_version::LoaderVersionId,
 };
@@ -68,7 +68,11 @@ impl ProfiledVersionJsonFamily for FabricDriverFamily {
         vanilla_source: &VanillaSource,
         source: &Self::Source,
     ) -> Self::RemoteResolver {
-        vanilla_fallback_remote_resolver("fabric", vanilla_source, source.endpoints())
+        VanillaFallbackRemoteResolver::new(
+            "fabric",
+            vanilla_source.endpoints().clone(),
+            source.endpoints().clone(),
+        )
     }
 
     async fn profile(

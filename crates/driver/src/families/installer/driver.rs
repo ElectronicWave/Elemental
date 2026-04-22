@@ -72,18 +72,6 @@ where
         }
     }
 
-    pub fn source(&self) -> &F::Source {
-        &self.source
-    }
-
-    pub fn vanilla_source(&self) -> &VanillaSource {
-        &self.vanilla_source
-    }
-
-    pub fn downloader(&self) -> &ElementalDownloader {
-        self.downloader.as_ref()
-    }
-
     pub async fn prepare<L, VL>(
         &self,
         instance: &Storage<VL, Storage<L>>,
@@ -121,8 +109,8 @@ where
             loader_version,
         )?
         .prepare(
-            self.downloader(),
-            self.vanilla_source(),
+            self.downloader.as_ref(),
+            &self.vanilla_source,
             &self.remote_resolver(),
             config.runtime_executable_path.as_deref(),
             config.runtime_validation,

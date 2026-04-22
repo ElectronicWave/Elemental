@@ -1,7 +1,9 @@
 pub mod builder;
 pub mod classpath;
+pub(crate) mod direct_profiled;
 pub mod driver;
 pub mod extensions;
+pub mod family;
 pub mod launch;
 pub mod layout;
 pub mod platform;
@@ -15,11 +17,9 @@ mod state;
 pub mod storage;
 pub mod variables;
 
-pub use driver::{
-    PassthroughProfiledVersionJsonFamily, ProfiledVersionJsonDriver, ProfiledVersionJsonFamily,
-    ProfiledVersionJsonFamilyExt, default_profiled_source, vanilla_fallback_remote_resolver,
-};
+pub use driver::ProfiledVersionJsonDriver;
 pub use extensions::{PistonMetaDataExt, PistonMetaLibrariesExt};
+pub use family::{ProfiledVersionJsonFamily, ProfiledVersionJsonFamilyExt};
 pub use launch::{
     LaunchResolution, QuickPlayOptions, VersionJsonLaunchConfig, build_version_json_launch_builder,
     build_version_json_launch_command, launch_version_json_instance, launch_wrapped_version,

@@ -55,14 +55,6 @@ impl VanillaDriver {
         ))
     }
 
-    pub fn source(&self) -> &VanillaSource {
-        &self.source
-    }
-
-    pub fn downloader(&self) -> &ElementalDownloader {
-        self.downloader.as_ref()
-    }
-
     pub async fn prepare<
         L: VersionJsonRootLayout + Clone,
         VL: VersionJsonInstanceLayout + Clone,
@@ -71,7 +63,7 @@ impl VanillaDriver {
         instance: &Storage<VL, Storage<L>>,
         version_id: MinecraftVersionId,
     ) -> Result<PreparedVanillaVersion<L, VL>> {
-        prepare_version_json(self.downloader(), || {
+        prepare_version_json(self.downloader.as_ref(), || {
             self.resolve_or_load(instance, version_id)
         })
         .await
@@ -151,7 +143,7 @@ impl VanillaDriver {
         &self,
         version_id: MinecraftVersionId,
     ) -> Result<ResolvedVanillaMetadata> {
-        resolve_vanilla_metadata(self.source(), version_id.as_str()).await
+        resolve_vanilla_metadata(&self.source, version_id.as_str()).await
     }
 }
 

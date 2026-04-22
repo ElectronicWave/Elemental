@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use elemental::core::runtime::RuntimeValidationMode;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DemoDriver {
     Vanilla,
@@ -22,6 +24,7 @@ pub struct DemoConfig {
     pub runtime_major_version: Option<usize>,
     pub runtime_paths: Vec<PathBuf>,
     pub runtime_executable_path: Option<PathBuf>,
+    pub runtime_validation: RuntimeValidationMode,
 }
 
 impl DemoDriver {

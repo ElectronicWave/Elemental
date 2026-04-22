@@ -6,7 +6,7 @@ use std::{
 use anyhow::{Context, Result, bail};
 use elemental_core::{
     runtime::distribution::Distribution,
-    runtime::resolve_runtime,
+    runtime::{RuntimeValidationMode, resolve_runtime},
     storage::{Storage, layout::Layoutable},
 };
 use elemental_infra::downloader::{core::ElementalDownloader, task::DownloadPlan};
@@ -321,6 +321,7 @@ where
 pub async fn resolve_installer_processor_runtime<RR, L, VL>(
     launch_version: &PreparedVersionJsonInstance<RR, L, VL>,
     runtime_executable_path: Option<&Path>,
+    runtime_validation: RuntimeValidationMode,
     operation_name: &str,
 ) -> Result<Distribution>
 where
@@ -332,6 +333,7 @@ where
     resolve_runtime(
         required_major_version,
         runtime_executable_path,
+        runtime_validation,
         operation_name,
     )
     .await

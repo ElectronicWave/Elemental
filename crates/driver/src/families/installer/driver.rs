@@ -123,6 +123,7 @@ where
             self.vanilla_source(),
             &self.remote_resolver(),
             config.runtime_executable_path.as_deref(),
+            config.runtime_validation,
         )
         .await
     }

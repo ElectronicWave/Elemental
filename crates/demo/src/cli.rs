@@ -1,9 +1,11 @@
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand};
-use elemental::driver::drivers::cleanroom::config::CLEANROOM_RECOMMENDED_RUNTIME_MAJOR_VERSION;
+use clap::{Args, Parser, Subcommand, ValueEnum};
+use elemental::core::runtime::RuntimeValidationMode;
 
 use crate::config::{DemoConfig, DemoDriver};
+
+const CLEANROOM_DEMO_RUNTIME_MAJOR_VERSION: usize = 25;
 
 #[derive(Debug, Parser)]
 #[command(name = "demo", about = "Elemental demo CLI")]
@@ -32,6 +34,8 @@ enum DriverCommand {
 struct VanillaArgs {
     #[arg(long)]
     runtime_major_version: Option<usize>,
+    #[arg(long, value_enum, default_value_t = RuntimeValidationArg::Strict)]
+    runtime_validation: RuntimeValidationArg,
     #[arg(long = "runtime-path", value_name = "PATH")]
     runtime_paths: Vec<PathBuf>,
     #[arg(long = "runtime-executable", value_name = "PATH")]
@@ -44,6 +48,8 @@ struct VanillaArgs {
 struct LoaderArgs {
     #[arg(long)]
     runtime_major_version: Option<usize>,
+    #[arg(long, value_enum, default_value_t = RuntimeValidationArg::Strict)]
+    runtime_validation: RuntimeValidationArg,
     #[arg(long = "runtime-path", value_name = "PATH")]
     runtime_paths: Vec<PathBuf>,
     #[arg(long = "runtime-executable", value_name = "PATH")]
@@ -51,6 +57,27 @@ struct LoaderArgs {
     game_version: Option<String>,
     loader_version: Option<String>,
     instance_name: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum RuntimeValidationArg {
+    Strict,
+    Disabled,
+}
+
+impl RuntimeValidationArg {
+    fn into_runtime_validation_mode(self) -> RuntimeValidationMode {
+        match self {
+            Self::Strict => RuntimeValidationMode::Strict,
+            Self::Disabled => RuntimeValidationMode::Disabled,
+        }
+    }
+}
+
+impl Default for RuntimeValidationArg {
+    fn default() -> Self {
+        Self::Strict
+    }
 }
 
 impl Cli {
@@ -66,6 +93,7 @@ impl Cli {
             DriverCommand::Vanilla(arguments) => build_vanilla_config(CommonConfigInput {
                 storage_root,
                 runtime_major_version: arguments.runtime_major_version,
+                runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
                 runtime_paths: arguments.runtime_paths,
                 runtime_executable_path: arguments.runtime_executable_path,
                 game_version: arguments.game_version,
@@ -76,6 +104,7 @@ impl Cli {
                 common: CommonConfigInput {
                     storage_root,
                     runtime_major_version: arguments.runtime_major_version,
+                    runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
                     runtime_paths: arguments.runtime_paths,
                     runtime_executable_path: arguments.runtime_executable_path,
                     game_version: arguments.game_version,
@@ -88,6 +117,7 @@ impl Cli {
                 common: CommonConfigInput {
                     storage_root,
                     runtime_major_version: arguments.runtime_major_version,
+                    runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
                     runtime_paths: arguments.runtime_paths,
                     runtime_executable_path: arguments.runtime_executable_path,
                     game_version: arguments.game_version,
@@ -100,6 +130,7 @@ impl Cli {
                 common: CommonConfigInput {
                     storage_root,
                     runtime_major_version: arguments.runtime_major_version,
+                    runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
                     runtime_paths: arguments.runtime_paths,
                     runtime_executable_path: arguments.runtime_executable_path,
                     game_version: arguments.game_version,
@@ -112,6 +143,7 @@ impl Cli {
                 common: CommonConfigInput {
                     storage_root,
                     runtime_major_version: arguments.runtime_major_version,
+                    runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
                     runtime_paths: arguments.runtime_paths,
                     runtime_executable_path: arguments.runtime_executable_path,
                     game_version: arguments.game_version,
@@ -124,6 +156,7 @@ impl Cli {
                 common: CommonConfigInput {
                     storage_root,
                     runtime_major_version: arguments.runtime_major_version,
+                    runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
                     runtime_paths: arguments.runtime_paths,
                     runtime_executable_path: arguments.runtime_executable_path,
                     game_version: arguments.game_version,
@@ -137,7 +170,8 @@ impl Cli {
                     storage_root,
                     runtime_major_version: arguments
                         .runtime_major_version
-                        .or(Some(CLEANROOM_RECOMMENDED_RUNTIME_MAJOR_VERSION)),
+                        .or(Some(CLEANROOM_DEMO_RUNTIME_MAJOR_VERSION)),
+                    runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
                     runtime_paths: arguments.runtime_paths,
                     runtime_executable_path: arguments.runtime_executable_path,
                     game_version: arguments.game_version,
@@ -150,6 +184,7 @@ impl Cli {
                 common: CommonConfigInput {
                     storage_root,
                     runtime_major_version: arguments.runtime_major_version,
+                    runtime_validation: arguments.runtime_validation.into_runtime_validation_mode(),
                     runtime_paths: arguments.runtime_paths,
                     runtime_executable_path: arguments.runtime_executable_path,
                     game_version: arguments.game_version,
@@ -164,6 +199,7 @@ impl Cli {
 struct CommonConfigInput {
     storage_root: PathBuf,
     runtime_major_version: Option<usize>,
+    runtime_validation: RuntimeValidationMode,
     runtime_paths: Vec<PathBuf>,
     runtime_executable_path: Option<PathBuf>,
     game_version: Option<String>,
@@ -189,6 +225,7 @@ fn build_vanilla_config(input: CommonConfigInput) -> DemoConfig {
         game_version: resolved_game_version,
         loader_version: None,
         runtime_major_version: input.runtime_major_version,
+        runtime_validation: input.runtime_validation,
         runtime_paths: input.runtime_paths,
         runtime_executable_path: input.runtime_executable_path,
     }
@@ -210,6 +247,7 @@ fn build_loader_config(input: LoaderConfigInput) -> DemoConfig {
         game_version: resolved_game_version,
         loader_version: Some(resolved_loader_version),
         runtime_major_version: input.common.runtime_major_version,
+        runtime_validation: input.common.runtime_validation,
         runtime_paths: input.common.runtime_paths,
         runtime_executable_path: input.common.runtime_executable_path,
     }

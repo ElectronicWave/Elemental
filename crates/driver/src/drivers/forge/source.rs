@@ -2,7 +2,10 @@ use std::path::PathBuf;
 
 use crate::{
     families::{
-        installer::{InstallerArtifact, build_installer_artifact},
+        installer::{
+            InstallerArtifact, InstallerArtifactEndpoints, InstallerArtifactSource,
+            build_installer_artifact,
+        },
         version_json::VersionJsonRootLayout,
     },
     http::build_default_client,
@@ -86,6 +89,16 @@ impl ForgeEndpoints {
     }
 }
 
+impl InstallerArtifactEndpoints for ForgeEndpoints {
+    fn artifact_url(&self, artifact_path: &str) -> Result<String> {
+        ForgeEndpoints::maven_artifact_url(self, artifact_path)
+    }
+
+    fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
+        ForgeEndpoints::rewrite_upstream(self, raw_url)
+    }
+}
+
 impl Default for ForgeSource {
     fn default() -> Self {
         Self {
@@ -130,6 +143,26 @@ impl ForgeSource {
             self.endpoints.installer_url(game_version, loader_version)?,
             library_relative_path,
         )
+    }
+}
+
+impl InstallerArtifactSource for ForgeSource {
+    type Endpoints = ForgeEndpoints;
+
+    fn endpoints(&self) -> &Self::Endpoints {
+        ForgeSource::endpoints(self)
+    }
+
+    fn installer_artifact<L>(
+        &self,
+        game_storage: &Storage<L>,
+        game_version: &str,
+        loader_version: &str,
+    ) -> Result<InstallerArtifact>
+    where
+        L: VersionJsonRootLayout,
+    {
+        ForgeSource::installer_artifact(self, game_storage, game_version, loader_version)
     }
 }
 

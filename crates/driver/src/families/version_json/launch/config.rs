@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
+use elemental_core::runtime::RuntimeValidationMode;
 
 use super::parse_argument_string;
 
@@ -22,6 +23,7 @@ pub struct QuickPlayOptions {
 pub struct VersionJsonLaunchConfig {
     pub runtime_major_version: Option<usize>,
     pub runtime_executable_path: Option<PathBuf>,
+    pub runtime_validation: RuntimeValidationMode,
     pub launcher_name: Option<String>,
     pub launcher_version: Option<String>,
     pub client_id: Option<String>,
@@ -58,6 +60,7 @@ impl VersionJsonLaunchConfig {
         Self {
             runtime_major_version: None,
             runtime_executable_path: None,
+            runtime_validation: RuntimeValidationMode::Strict,
             launcher_name: None,
             launcher_version: None,
             client_id: None,
@@ -75,6 +78,11 @@ impl VersionJsonLaunchConfig {
 
     pub fn set_runtime_executable_path(mut self, runtime_executable_path: PathBuf) -> Self {
         self.runtime_executable_path = Some(runtime_executable_path);
+        self
+    }
+
+    pub fn set_runtime_validation(mut self, runtime_validation: RuntimeValidationMode) -> Self {
+        self.runtime_validation = runtime_validation;
         self
     }
 

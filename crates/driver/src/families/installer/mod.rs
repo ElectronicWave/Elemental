@@ -15,7 +15,8 @@ pub use driver::{
     InstallerFamilyDriver, InstallerFamilyDriverSpec, LaunchedInstallerFamilyVersion,
 };
 pub use family::{
-    InstallerFamily, InstallerFamilyInstallStatus, InstallerFamilyRemoteResolver,
+    InstallerArtifactEndpoints, InstallerArtifactSource, InstallerFamily,
+    InstallerFamilyInstallStatus, InstallerFamilyRemoteResolver,
     PreparedInstallerFamilyLaunchVersion, PreparedInstallerFamilyVersion,
     ResolvedInstallerFamilyLaunchVersion, ResolvedInstallerFamilyMetadata,
     ResolvedInstallerFamilyVersion,

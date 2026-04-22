@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail};
+use elemental_core::runtime::RuntimeValidationMode;
 use elemental_core::storage::{Storage, layout::Layoutable};
 use elemental_infra::downloader::core::ElementalDownloader;
 use elemental_schema::{forge::ForgeInstallerProfile, mojang::piston::PistonMetaLibraries};
@@ -18,8 +19,9 @@ use crate::{
             InstallerArtifact, InstallerInstallStatus, InstallerLaunchVersionRequest,
             ensure_installer_profile_libraries_downloaded, installer_has_client_processors,
             installer_install_status, load_persisted_installer_state,
-            merge_libraries_prefer_embedded, prepare_installer_launch_version,
-            prepare_installer_state, resolve_installer_processor_runtime,
+            merge_libraries_prefer_embedded, normalize_library_urls,
+            prepare_installer_launch_version, prepare_installer_state,
+            profile_game_and_raw_loader_version, resolve_installer_processor_runtime,
             run_installer_client_processors, validate_installer_profile_identity,
         },
         version_json::{
@@ -30,13 +32,35 @@ use crate::{
     },
 };
 
+pub trait InstallerArtifactEndpoints: Clone + Debug + Send + Sync + 'static {
+    fn artifact_url(&self, artifact_path: &str) -> Result<String>;
+    fn rewrite_upstream(&self, raw_url: &str) -> Result<String>;
+}
+
+pub trait InstallerArtifactSource: Clone + Debug {
+    type Endpoints: InstallerArtifactEndpoints;
+
+    fn endpoints(&self) -> &Self::Endpoints;
+
+    fn installer_artifact<L>(
+        &self,
+        game_storage: &Storage<L>,
+        game_version: &str,
+        loader_version: &str,
+    ) -> Result<InstallerArtifact>
+    where
+        L: VersionJsonRootLayout;
+}
+
 pub trait InstallerFamily: Clone + Copy + Debug + Send + Sync + 'static {
-    type Source: Clone + Debug;
-    type Endpoints: Clone + Debug + Send + Sync + 'static;
+    type Source: InstallerArtifactSource<Endpoints = Self::Endpoints>;
+    type Endpoints: InstallerArtifactEndpoints;
 
     const FAMILY_NAME: &'static str;
 
-    fn source_endpoints(source: &Self::Source) -> &Self::Endpoints;
+    fn source_endpoints(source: &Self::Source) -> &Self::Endpoints {
+        source.endpoints()
+    }
 
     fn installer_artifact<L>(
         source: &Self::Source,
@@ -45,14 +69,23 @@ pub trait InstallerFamily: Clone + Copy + Debug + Send + Sync + 'static {
         loader_version: &str,
     ) -> Result<InstallerArtifact>
     where
-        L: VersionJsonRootLayout;
+        L: VersionJsonRootLayout,
+    {
+        source.installer_artifact(game_storage, game_version, loader_version)
+    }
 
-    fn profile_identity(install_profile: &ForgeInstallerProfile) -> Result<(String, String)>;
+    fn profile_identity(install_profile: &ForgeInstallerProfile) -> Result<(String, String)> {
+        profile_game_and_raw_loader_version(install_profile, Self::FAMILY_NAME, Self::FAMILY_NAME)
+    }
 
     fn normalize_libraries(
         endpoints: &Self::Endpoints,
         libraries: Vec<PistonMetaLibraries>,
-    ) -> Result<Vec<PistonMetaLibraries>>;
+    ) -> Result<Vec<PistonMetaLibraries>> {
+        normalize_library_urls(libraries, |artifact_path| {
+            endpoints.artifact_url(artifact_path)
+        })
+    }
 
     fn merge_libraries(
         base_libraries: Vec<PistonMetaLibraries>,
@@ -61,9 +94,13 @@ pub trait InstallerFamily: Clone + Copy + Debug + Send + Sync + 'static {
         merge_libraries_prefer_embedded(base_libraries, embedded_libraries)
     }
 
-    fn rewrite_upstream(endpoints: &Self::Endpoints, raw_url: &str) -> Result<String>;
+    fn rewrite_upstream(endpoints: &Self::Endpoints, raw_url: &str) -> Result<String> {
+        endpoints.rewrite_upstream(raw_url)
+    }
 
-    fn default_artifact_url(endpoints: &Self::Endpoints, artifact_path: &str) -> Result<String>;
+    fn default_artifact_url(endpoints: &Self::Endpoints, artifact_path: &str) -> Result<String> {
+        endpoints.artifact_url(artifact_path)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -202,6 +239,7 @@ where
         vanilla_source: &VanillaSource,
         remote_resolver: &InstallerFamilyRemoteResolver<F>,
         runtime_executable_path: Option<&Path>,
+        runtime_validation: RuntimeValidationMode,
     ) -> Result<PreparedInstallerFamilyVersion<F, L, VL>> {
         let libraries_root = self
             .instance
@@ -245,6 +283,7 @@ where
             let runtime = resolve_installer_processor_runtime(
                 &launch_version,
                 runtime_executable_path,
+                runtime_validation,
                 &processor_operation_name,
             )
             .await?;

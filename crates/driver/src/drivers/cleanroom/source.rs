@@ -6,7 +6,10 @@ use elemental_schema::forge::MavenMetadataBody;
 
 use crate::{
     families::{
-        installer::{InstallerArtifact, build_installer_artifact},
+        installer::{
+            InstallerArtifact, InstallerArtifactEndpoints, InstallerArtifactSource,
+            build_installer_artifact,
+        },
         version_json::VersionJsonRootLayout,
     },
     http::build_default_client,
@@ -91,6 +94,16 @@ impl CleanroomEndpoints {
     }
 }
 
+impl InstallerArtifactEndpoints for CleanroomEndpoints {
+    fn artifact_url(&self, artifact_path: &str) -> Result<String> {
+        CleanroomEndpoints::maven_artifact_url(self, artifact_path)
+    }
+
+    fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
+        CleanroomEndpoints::rewrite_upstream(self, raw_url)
+    }
+}
+
 impl Default for CleanroomSource {
     fn default() -> Self {
         Self {
@@ -135,6 +148,26 @@ impl CleanroomSource {
             self.endpoints.installer_url(loader_version)?,
             library_relative_path,
         )
+    }
+}
+
+impl InstallerArtifactSource for CleanroomSource {
+    type Endpoints = CleanroomEndpoints;
+
+    fn endpoints(&self) -> &Self::Endpoints {
+        CleanroomSource::endpoints(self)
+    }
+
+    fn installer_artifact<L>(
+        &self,
+        game_storage: &Storage<L>,
+        game_version: &str,
+        loader_version: &str,
+    ) -> Result<InstallerArtifact>
+    where
+        L: VersionJsonRootLayout,
+    {
+        CleanroomSource::installer_artifact(self, game_storage, game_version, loader_version)
     }
 }
 

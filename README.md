@@ -165,6 +165,12 @@ async fn main() -> Result<()> {
 - The example uses offline auth on purpose so the minimal flow stays easy to run.
 - If you want a complete runnable reference from this repository, [crates/demo/src/main.rs](crates/demo/src/main.rs) is the best starting point.
 
+## Credits
+
+- [MultiMC](https://multimc.org/)
+- [Prism Launcher](https://prismlauncher.org/)
+- [XMCL](https://xmcl.app/)
+
 <!-- LINKS -->
 [contributors-shield]: https://img.shields.io/github/contributors/ElectronicWave/Elemental.svg?style=for-the-badge
 [contributors-url]: https://github.com/ElectronicWave/Elemental/graphs/contributors

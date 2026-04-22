@@ -58,6 +58,7 @@ pub(super) fn build_launch_config(config: &DemoConfig) -> VanillaLaunchConfig {
     let mut launch_config = VanillaLaunchConfig::new();
     launch_config.runtime_major_version = config.runtime_major_version;
     launch_config.runtime_executable_path = config.runtime_executable_path.clone();
+    launch_config.runtime_validation = config.runtime_validation;
     launch_config
 }
 

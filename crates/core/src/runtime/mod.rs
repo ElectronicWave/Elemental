@@ -8,9 +8,16 @@ pub mod distribution;
 pub mod provider;
 pub mod providers;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeValidationMode {
+    Strict,
+    Disabled,
+}
+
 pub async fn resolve_runtime(
     required_major_version: usize,
     runtime_executable_path: Option<&Path>,
+    validation_mode: RuntimeValidationMode,
     usage: &str,
 ) -> Result<Distribution> {
     if let Some(runtime_executable_path) = runtime_executable_path {
@@ -30,7 +37,9 @@ pub async fn resolve_runtime(
             runtime_executable_path.display()
         ))?;
 
-        if actual_major_version != required_major_version {
+        if validation_mode == RuntimeValidationMode::Strict
+            && actual_major_version != required_major_version
+        {
             bail!(
                 "explicit {} runtime executable has Java major version {}, expected {}: {}",
                 usage,

@@ -2,7 +2,10 @@ use std::path::PathBuf;
 
 use crate::{
     families::{
-        installer::{InstallerArtifact, build_installer_artifact},
+        installer::{
+            InstallerArtifact, InstallerArtifactEndpoints, InstallerArtifactSource,
+            build_installer_artifact,
+        },
         version_json::VersionJsonRootLayout,
     },
     http::build_default_client,
@@ -90,6 +93,16 @@ impl NeoForgeEndpoints {
     }
 }
 
+impl InstallerArtifactEndpoints for NeoForgeEndpoints {
+    fn artifact_url(&self, artifact_path: &str) -> Result<String> {
+        NeoForgeEndpoints::maven_artifact_url(self, artifact_path)
+    }
+
+    fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
+        NeoForgeEndpoints::rewrite_upstream(self, raw_url)
+    }
+}
+
 impl Default for NeoForgeSource {
     fn default() -> Self {
         Self {
@@ -134,6 +147,26 @@ impl NeoForgeSource {
             self.endpoints.installer_url(loader_version)?,
             library_relative_path,
         )
+    }
+}
+
+impl InstallerArtifactSource for NeoForgeSource {
+    type Endpoints = NeoForgeEndpoints;
+
+    fn endpoints(&self) -> &Self::Endpoints {
+        NeoForgeSource::endpoints(self)
+    }
+
+    fn installer_artifact<L>(
+        &self,
+        game_storage: &Storage<L>,
+        game_version: &str,
+        loader_version: &str,
+    ) -> Result<InstallerArtifact>
+    where
+        L: VersionJsonRootLayout,
+    {
+        NeoForgeSource::installer_artifact(self, game_storage, game_version, loader_version)
     }
 }
 

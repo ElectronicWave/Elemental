@@ -4,7 +4,7 @@ use anyhow::Result;
 use elemental_core::{
     auth::authorizer::Authorizer,
     launcher::{command::LaunchCommand, process},
-    runtime::{distribution::Distribution, resolve_runtime},
+    runtime::{RuntimeValidationMode, distribution::Distribution, resolve_runtime},
 };
 
 use crate::families::version_json::{
@@ -22,6 +22,7 @@ pub async fn resolve_prepared_version_runtime<RR, L, VL>(
     prepared_version: &PreparedVersionJsonInstance<RR, L, VL>,
     runtime_major_version: Option<usize>,
     runtime_executable_path: Option<&Path>,
+    runtime_validation: RuntimeValidationMode,
 ) -> Result<Distribution>
 where
     RR: VersionJsonRemoteResolver,
@@ -31,7 +32,13 @@ where
     let required_major_version =
         runtime_major_version.unwrap_or_else(|| prepared_version.required_java_major_version());
 
-    resolve_runtime(required_major_version, runtime_executable_path, "launch").await
+    resolve_runtime(
+        required_major_version,
+        runtime_executable_path,
+        runtime_validation,
+        "launch",
+    )
+    .await
 }
 
 pub fn build_version_json_launch_builder<A, RR, L, VL>(
@@ -99,6 +106,7 @@ where
         prepared_version,
         config.runtime_major_version,
         config.runtime_executable_path.as_deref(),
+        config.runtime_validation,
     )
     .await?;
     let command =

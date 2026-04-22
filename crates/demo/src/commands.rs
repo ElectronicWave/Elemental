@@ -75,12 +75,15 @@ pub async fn run(config: DemoConfig) -> Result<()> {
 }
 
 async fn run_vanilla_demo(config: DemoConfig) -> Result<()> {
-    let instance = ensure_instance(&config).await?;
+    let instance = resolve_instance(&config).await?;
     let driver = VanillaDriver::with_defaults()?;
     let launch_config: VanillaLaunchConfig = build_launch_config(&config);
 
-    let (prepared, prepare_elapsed) =
-        time_operation(driver.prepare(&instance, config.game_version.clone())).await?;
+    let (prepared, prepare_elapsed) = if config.local_only {
+        time_operation(driver.load_prepared(&instance)).await?
+    } else {
+        time_operation(driver.prepare(&instance, config.game_version.clone())).await?
+    };
     let (runtime, command) = driver
         .build_launch_command(offline_authorizer(), &prepared, &launch_config)
         .await?;
@@ -127,6 +130,17 @@ pub(super) async fn ensure_instance(
         .await
 }
 
+pub(super) async fn resolve_instance(
+    config: &DemoConfig,
+) -> Result<Storage<BaseInstanceLayout, Storage<BaseRootLayout>>> {
+    if config.local_only {
+        let storage = Storage::new(config.storage_root.clone(), BaseRootLayout);
+        return storage.instance(config.instance_name.clone(), BaseInstanceLayout);
+    }
+
+    ensure_instance(config).await
+}
+
 pub(super) fn build_launch_config(config: &DemoConfig) -> VanillaLaunchConfig {
     let mut launch_config = VanillaLaunchConfig::new();
     launch_config.runtime_major_version = config.runtime_major_version;
@@ -160,7 +174,7 @@ pub(super) async fn prepare_loader_demo(
     VanillaLaunchConfig,
 )> {
     let loader_version = require_loader_version(config, driver_label)?;
-    let instance = ensure_instance(config).await?;
+    let instance = resolve_instance(config).await?;
     let launch_config = build_launch_config(config);
 
     Ok((loader_version, instance, launch_config))
@@ -176,12 +190,16 @@ where
 {
     let (loader_version, instance, launch_config) =
         prepare_loader_demo(&config, driver_label).await?;
-    let (prepared, prepare_elapsed) = time_operation(driver.prepare(
-        &instance,
-        config.game_version.clone(),
-        loader_version.clone(),
-    ))
-    .await?;
+    let (prepared, prepare_elapsed) = if config.local_only {
+        time_operation(driver.load_prepared(&instance)).await?
+    } else {
+        time_operation(driver.prepare(
+            &instance,
+            config.game_version.clone(),
+            loader_version.clone(),
+        ))
+        .await?
+    };
     let (runtime, command) = driver
         .build_launch_command(offline_authorizer(), &prepared, &launch_config)
         .await?;
@@ -220,13 +238,17 @@ where
 {
     let (loader_version, instance, launch_config) =
         prepare_loader_demo(&config, driver_label).await?;
-    let (prepared, prepare_elapsed) = time_operation(driver.prepare_with_config(
-        &instance,
-        config.game_version.clone(),
-        loader_version.clone(),
-        &launch_config,
-    ))
-    .await?;
+    let (prepared, prepare_elapsed) = if config.local_only {
+        time_operation(driver.load_prepared(&instance)).await?
+    } else {
+        time_operation(driver.prepare_with_config(
+            &instance,
+            config.game_version.clone(),
+            loader_version.clone(),
+            &launch_config,
+        ))
+        .await?
+    };
     let (runtime, command) = driver
         .build_launch_command(offline_authorizer(), &prepared, &launch_config)
         .await?;

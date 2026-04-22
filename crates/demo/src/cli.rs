@@ -13,6 +13,8 @@ const CLEANROOM_DEMO_RUNTIME_MAJOR_VERSION: usize = 25;
 pub struct Cli {
     #[arg(long, global = true, value_name = "PATH")]
     storage_root: Option<PathBuf>,
+    #[arg(long, global = true, help = "Use only locally prepared data")]
+    local_only: bool,
     #[command(subcommand)]
     command: Option<DriverCommand>,
 }
@@ -84,53 +86,63 @@ impl Cli {
         let storage_root = self
             .storage_root
             .unwrap_or_else(|| PathBuf::from(".minecraft"));
+        let local_only = self.local_only;
 
         match self
             .command
             .unwrap_or(DriverCommand::Fabric(LoaderArgs::default()))
         {
-            DriverCommand::Vanilla(arguments) => {
-                build_vanilla_config(common_config_from_vanilla_args(storage_root, arguments))
-            }
+            DriverCommand::Vanilla(arguments) => build_vanilla_config(
+                local_only,
+                common_config_from_vanilla_args(storage_root, arguments),
+            ),
             DriverCommand::Fabric(arguments) => build_loader_config(loader_config_input(
+                local_only,
                 storage_root,
                 DemoDriver::Fabric,
                 arguments,
             )),
             DriverCommand::LegacyFabric(arguments) => build_loader_config(loader_config_input(
+                local_only,
                 storage_root,
                 DemoDriver::LegacyFabric,
                 arguments,
             )),
             DriverCommand::Babric(arguments) => build_loader_config(loader_config_input(
+                local_only,
                 storage_root,
                 DemoDriver::Babric,
                 arguments,
             )),
             DriverCommand::Quilt(arguments) => build_loader_config(loader_config_input(
+                local_only,
                 storage_root,
                 DemoDriver::Quilt,
                 arguments,
             )),
             DriverCommand::LiteLoader(arguments) => build_loader_config(loader_config_input(
+                local_only,
                 storage_root,
                 DemoDriver::LiteLoader,
                 arguments,
             )),
             DriverCommand::Rift(arguments) => build_loader_config(loader_config_input(
+                local_only,
                 storage_root,
                 DemoDriver::Rift,
                 arguments,
             )),
             DriverCommand::Forge(arguments) => build_loader_config(loader_config_input(
+                local_only,
                 storage_root,
                 DemoDriver::Forge,
                 arguments,
             )),
             DriverCommand::Cleanroom(arguments) => {
-                build_loader_config(cleanroom_config_input(storage_root, arguments))
+                build_loader_config(cleanroom_config_input(local_only, storage_root, arguments))
             }
             DriverCommand::NeoForge(arguments) => build_loader_config(loader_config_input(
+                local_only,
                 storage_root,
                 DemoDriver::NeoForge,
                 arguments,
@@ -151,6 +163,7 @@ struct CommonConfigInput {
 
 struct LoaderConfigInput {
     driver: DemoDriver,
+    local_only: bool,
     common: CommonConfigInput,
     loader_version: Option<LoaderVersionId>,
 }
@@ -180,6 +193,7 @@ fn common_config_from_vanilla_args(
 }
 
 fn loader_config_input(
+    local_only: bool,
     storage_root: PathBuf,
     driver: DemoDriver,
     arguments: LoaderArgs,
@@ -196,6 +210,7 @@ fn loader_config_input(
 
     LoaderConfigInput {
         driver,
+        local_only,
         common: CommonConfigInput {
             storage_root,
             runtime_major_version,
@@ -209,7 +224,11 @@ fn loader_config_input(
     }
 }
 
-fn cleanroom_config_input(storage_root: PathBuf, arguments: LoaderArgs) -> LoaderConfigInput {
+fn cleanroom_config_input(
+    local_only: bool,
+    storage_root: PathBuf,
+    arguments: LoaderArgs,
+) -> LoaderConfigInput {
     let LoaderArgs {
         runtime_major_version,
         runtime_validation,
@@ -222,6 +241,7 @@ fn cleanroom_config_input(storage_root: PathBuf, arguments: LoaderArgs) -> Loade
 
     LoaderConfigInput {
         driver: DemoDriver::Cleanroom,
+        local_only,
         common: CommonConfigInput {
             storage_root,
             runtime_major_version: runtime_major_version
@@ -236,7 +256,7 @@ fn cleanroom_config_input(storage_root: PathBuf, arguments: LoaderArgs) -> Loade
     }
 }
 
-fn build_vanilla_config(input: CommonConfigInput) -> DemoConfig {
+fn build_vanilla_config(local_only: bool, input: CommonConfigInput) -> DemoConfig {
     let resolved_game_version = input
         .game_version
         .unwrap_or_else(|| MinecraftVersionId::from("1.20.1"));
@@ -246,6 +266,7 @@ fn build_vanilla_config(input: CommonConfigInput) -> DemoConfig {
 
     DemoConfig {
         driver: DemoDriver::Vanilla,
+        local_only,
         storage_root: input.storage_root,
         instance_name: resolved_instance_name,
         game_version: resolved_game_version,
@@ -268,6 +289,7 @@ fn build_loader_config(input: LoaderConfigInput) -> DemoConfig {
 
     DemoConfig {
         driver: input.driver,
+        local_only: input.local_only,
         storage_root: input.common.storage_root,
         instance_name: resolved_instance_name,
         game_version: resolved_game_version,

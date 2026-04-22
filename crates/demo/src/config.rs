@@ -20,6 +20,7 @@ pub enum DemoDriver {
 #[derive(Clone, Debug)]
 pub struct DemoConfig {
     pub driver: DemoDriver,
+    pub local_only: bool,
     pub storage_root: PathBuf,
     pub instance_name: String,
     pub game_version: MinecraftVersionId,

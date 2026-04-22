@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    env::current_dir,
     path::PathBuf,
 };
 
@@ -237,6 +238,7 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
                 .try_get_resource(VersionJsonRootResource::AssetLogConfigs(Some(
                     client.file.id.clone(),
                 )))?;
+        let log_config_path = resolve_absolute_path(log_config_path)?;
 
         if !log_config_path.exists() {
             bail!(
@@ -276,14 +278,13 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
                     return Ok(None);
                 }
 
-                let path = self
-                    .version
-                    .parent
-                    .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
-                        artifact.path.as_str(),
-                    ))))?
-                    .to_string_lossy()
-                    .to_string();
+                let path =
+                    self.version
+                        .parent
+                        .try_get_resource(VersionJsonRootResource::Libraries(Some(
+                            PathBuf::from(artifact.path.as_str()),
+                        )))?;
+                let path = resolve_absolute_path(path)?.to_string_lossy().to_string();
                 if module_path_entries.contains(&normalize_path_string(path.as_str())) {
                     return Ok(None);
                 }
@@ -362,15 +363,23 @@ impl LaunchPaths {
         VL: VersionJsonInstanceLayout,
     {
         Ok(Self {
-            version_root: version.path.clone(),
-            version_jar: version.try_get_resource(VersionJsonInstanceResource::Jar)?,
-            assets_root: version
-                .parent
-                .try_get_resource(VersionJsonRootResource::Assets)?,
-            libraries_root: version
-                .parent
-                .try_get_resource(VersionJsonRootResource::Libraries(None))?,
-            natives_directory: version.try_get_resource(VersionJsonInstanceResource::Natives)?,
+            version_root: resolve_absolute_path(version.path.clone())?,
+            version_jar: resolve_absolute_path(
+                version.try_get_resource(VersionJsonInstanceResource::Jar)?,
+            )?,
+            assets_root: resolve_absolute_path(
+                version
+                    .parent
+                    .try_get_resource(VersionJsonRootResource::Assets)?,
+            )?,
+            libraries_root: resolve_absolute_path(
+                version
+                    .parent
+                    .try_get_resource(VersionJsonRootResource::Libraries(None))?,
+            )?,
+            natives_directory: resolve_absolute_path(
+                version.try_get_resource(VersionJsonInstanceResource::Natives)?,
+            )?,
         })
     }
 
@@ -402,4 +411,12 @@ fn normalize_path_string(path: &str) -> String {
         .collect::<PathBuf>()
         .to_string_lossy()
         .to_string()
+}
+
+fn resolve_absolute_path(path: PathBuf) -> Result<PathBuf> {
+    if path.is_absolute() {
+        return Ok(path);
+    }
+
+    Ok(current_dir()?.join(path))
 }

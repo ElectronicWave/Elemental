@@ -83,5 +83,16 @@ fn infer_game_version_from_loader_version(loader_version: &str) -> Option<Minecr
         return None;
     };
 
+    let major_number = major.parse::<u32>().ok()?;
+
+    if major_number >= 26 {
+        // NeoForge switched to year-based Minecraft version prefixes in 2026.
+        let game_version = match parts.get(2).copied() {
+            Some("0") | None => format!("{major}.{minor}"),
+            Some(hotfix) => format!("{major}.{minor}.{hotfix}"),
+        };
+        return Some(MinecraftVersionId::from(game_version));
+    }
+
     Some(MinecraftVersionId::from(format!("1.{major}.{minor}")))
 }

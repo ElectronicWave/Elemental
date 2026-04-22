@@ -231,7 +231,7 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
             return Ok(None);
         };
 
-        let log_config_path = self.version.parent.try_get_extended_resource(
+        let log_config_path = self.version.parent.try_get_resource(
             VersionJsonRootResource::AssetLogConfigs(Some(client.file.id.clone())),
         )?;
 
@@ -276,7 +276,7 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
                 let path = self
                     .version
                     .parent
-                    .try_get_extended_resource(VersionJsonRootResource::Libraries(Some(
+                    .try_get_resource(VersionJsonRootResource::Libraries(Some(
                         PathBuf::from(artifact.path.as_str()),
                     )))?
                     .to_string_lossy()
@@ -360,15 +360,15 @@ impl LaunchPaths {
     {
         Ok(Self {
             version_root: version.path.clone(),
-            version_jar: version.try_get_extended_resource(VersionJsonInstanceResource::Jar)?,
+            version_jar: version.try_get_resource(VersionJsonInstanceResource::Jar)?,
             assets_root: version
                 .parent
-                .try_get_extended_resource(VersionJsonRootResource::Assets)?,
+                .try_get_resource(VersionJsonRootResource::Assets)?,
             libraries_root: version
                 .parent
-                .try_get_extended_resource(VersionJsonRootResource::Libraries(None))?,
+                .try_get_resource(VersionJsonRootResource::Libraries(None))?,
             natives_directory: version
-                .try_get_extended_resource(VersionJsonInstanceResource::Natives)?,
+                .try_get_resource(VersionJsonInstanceResource::Natives)?,
         })
     }
 

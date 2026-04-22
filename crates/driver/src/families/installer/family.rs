@@ -248,7 +248,7 @@ where
         let libraries_root = self
             .instance
             .parent
-            .try_get_extended_resource(VersionJsonRootResource::Libraries(None))?;
+            .try_get_resource(VersionJsonRootResource::Libraries(None))?;
         let installer_state = prepare_installer_state(
             downloader,
             &self.installer_artifact,

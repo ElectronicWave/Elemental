@@ -57,7 +57,7 @@ where
             let path =
                 instance
                     .parent
-                    .try_get_extended_resource(VersionJsonRootResource::Libraries(Some(
+                    .try_get_resource(VersionJsonRootResource::Libraries(Some(
                         PathBuf::from(artifact.path.as_str()),
                     )))?;
             if seen.insert(path.clone()) {
@@ -72,7 +72,7 @@ where
 
         if let Some(classifiers) = &library.downloads.classifiers {
             for artifact in classifiers.values() {
-                let path = instance.parent.try_get_extended_resource(
+                let path = instance.parent.try_get_resource(
                     VersionJsonRootResource::Libraries(Some(PathBuf::from(artifact.path.as_str()))),
                 )?;
                 if seen.insert(path.clone()) {
@@ -140,15 +140,15 @@ where
         libraries_directory: absolute_path(
             &instance
                 .parent
-                .try_get_extended_resource(VersionJsonRootResource::Libraries(None))?,
+                .try_get_resource(VersionJsonRootResource::Libraries(None))?,
         )?,
-        state_directory: absolute_path(&instance.try_get_extended_resource(
+        state_directory: absolute_path(&instance.try_get_resource(
             VersionJsonInstanceResource::Elemental(Some(
                 PathBuf::from(family_name).join("installer"),
             )),
         )?)?,
         minecraft_jar_path: absolute_path(
-            &instance.try_get_extended_resource(VersionJsonInstanceResource::Jar)?,
+            &instance.try_get_resource(VersionJsonInstanceResource::Jar)?,
         )?,
         family_name,
     };
@@ -201,15 +201,15 @@ where
         libraries_directory: absolute_path(
             &instance
                 .parent
-                .try_get_extended_resource(VersionJsonRootResource::Libraries(None))?,
+                .try_get_resource(VersionJsonRootResource::Libraries(None))?,
         )?,
-        state_directory: absolute_path(&instance.try_get_extended_resource(
+        state_directory: absolute_path(&instance.try_get_resource(
             VersionJsonInstanceResource::Elemental(Some(
                 PathBuf::from(family_name).join("installer"),
             )),
         )?)?,
         minecraft_jar_path: absolute_path(
-            &instance.try_get_extended_resource(VersionJsonInstanceResource::Jar)?,
+            &instance.try_get_resource(VersionJsonInstanceResource::Jar)?,
         )?,
         family_name,
     };

@@ -108,16 +108,9 @@ impl Layout for BaseInstanceLayout {
     }
 }
 
-pub trait VersionJsonRootLayout: Layout<ExtendedResource = VersionJsonRootResource> {}
+pub trait VersionJsonRootLayout: Layout<Resource = VersionJsonRootResource> {}
 
-pub trait VersionJsonInstanceLayout:
-    Layout<ExtendedResource = VersionJsonInstanceResource>
-{
-}
+pub trait VersionJsonInstanceLayout: Layout<Resource = VersionJsonInstanceResource> {}
 
-impl<L> VersionJsonRootLayout for L where L: Layout<ExtendedResource = VersionJsonRootResource> {}
-
-impl<L> VersionJsonInstanceLayout for L where
-    L: Layout<ExtendedResource = VersionJsonInstanceResource>
-{
-}
+impl<L> VersionJsonRootLayout for L where L: Layout<Resource = VersionJsonRootResource> {}
+impl<L> VersionJsonInstanceLayout for L where L: Layout<Resource = VersionJsonInstanceResource> {}

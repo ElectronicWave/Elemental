@@ -231,12 +231,12 @@ where
         Ok(VersionJsonInstallStatus {
             metadata_persisted: self
                 .version
-                .try_get_extended_resource(VersionJsonInstanceResource::Metadata)?
+                .try_get_resource(VersionJsonInstanceResource::Metadata)?
                 .exists(),
             asset_index_persisted: self
                 .version
                 .parent
-                .try_get_extended_resource(VersionJsonRootResource::AssetIndexes(Some(
+                .try_get_resource(VersionJsonRootResource::AssetIndexes(Some(
                     self.metadata.asset_index.id.clone(),
                 )))?
                 .exists(),
@@ -267,7 +267,7 @@ where
     fn version_artifacts_ready(&self, rule_context: &VersionJsonRuleContext) -> Result<bool> {
         if !self
             .version
-            .try_get_extended_resource(VersionJsonInstanceResource::Jar)?
+            .try_get_resource(VersionJsonInstanceResource::Jar)?
             .exists()
         {
             return Ok(false);
@@ -282,7 +282,7 @@ where
                 && !self
                     .version
                     .parent
-                    .try_get_extended_resource(VersionJsonRootResource::Libraries(Some(
+                    .try_get_resource(VersionJsonRootResource::Libraries(Some(
                         PathBuf::from(artifact.path.as_str()),
                     )))?
                     .exists()
@@ -294,7 +294,7 @@ where
                 && !self
                     .version
                     .parent
-                    .try_get_extended_resource(VersionJsonRootResource::Libraries(Some(
+                    .try_get_resource(VersionJsonRootResource::Libraries(Some(
                         PathBuf::from(artifact.path.as_str()),
                     )))?
                     .exists()
@@ -308,7 +308,7 @@ where
             && !self
                 .version
                 .parent
-                .try_get_extended_resource(VersionJsonRootResource::AssetLogConfigs(Some(
+                .try_get_resource(VersionJsonRootResource::AssetLogConfigs(Some(
                     client.file.id.clone(),
                 )))?
                 .exists()
@@ -324,7 +324,7 @@ where
             if !self
                 .version
                 .parent
-                .try_get_extended_resource(VersionJsonRootResource::AssetObjects(Some(
+                .try_get_resource(VersionJsonRootResource::AssetObjects(Some(
                     object.hash.clone(),
                 )))?
                 .exists()
@@ -394,7 +394,7 @@ where
             self.remote_resolver
                 .rewrite_upstream(self.metadata.downloads.client.url.as_str())?,
             self.version
-                .try_get_extended_resource(VersionJsonInstanceResource::Jar)?,
+                .try_get_resource(VersionJsonInstanceResource::Jar)?,
             Some(self.metadata.downloads.client.size as u64),
             Some(self.metadata.downloads.client.sha1.clone()),
         ));
@@ -409,7 +409,7 @@ where
             tasks.push(DownloadTask::new(
                 self.remote_resolver
                     .rewrite_upstream(client.file.url.as_str())?,
-                self.version.parent.try_get_extended_resource(
+                self.version.parent.try_get_resource(
                     VersionJsonRootResource::AssetLogConfigs(Some(client.file.id.clone())),
                 )?,
                 Some(client.file.size as u64),
@@ -446,7 +446,7 @@ where
                 .rewrite_upstream(artifact.url.as_str())?,
             self.version
                 .parent
-                .try_get_extended_resource(VersionJsonRootResource::Libraries(Some(
+                .try_get_resource(VersionJsonRootResource::Libraries(Some(
                     PathBuf::from(artifact.path.as_str()),
                 )))?,
             artifact.size.map(|size| size as u64),
@@ -463,7 +463,7 @@ where
             .map(|object| {
                 Ok(DownloadTask::new(
                     self.remote_resolver.object_url(object.hash.as_str())?,
-                    self.version.parent.try_get_extended_resource(
+                    self.version.parent.try_get_resource(
                         VersionJsonRootResource::AssetObjects(Some(object.hash.clone())),
                     )?,
                     Some(object.size as u64),

@@ -61,9 +61,9 @@ where
 {
     let metadata = version.metadata()?;
     let version_root = version.path.clone();
-    let metadata_path = version.try_get_extended_resource(VersionJsonInstanceResource::Metadata)?;
-    let version_jar_path = version.try_get_extended_resource(VersionJsonInstanceResource::Jar)?;
-    let natives_root = version.try_get_extended_resource(VersionJsonInstanceResource::Natives)?;
+    let metadata_path = version.try_get_resource(VersionJsonInstanceResource::Metadata)?;
+    let version_jar_path = version.try_get_resource(VersionJsonInstanceResource::Jar)?;
+    let natives_root = version.try_get_resource(VersionJsonInstanceResource::Natives)?;
     let natives_root_binaries = collect_root_files(&natives_root)?;
     let natives_nested_binaries = collect_recursive_native_files(&natives_root)?;
 

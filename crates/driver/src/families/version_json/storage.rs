@@ -80,7 +80,7 @@ where
         VL: VersionJsonInstanceLayout + Send,
     {
         let instance_root =
-            self.try_get_extended_resource(VersionJsonRootResource::Versions(Some(name)))?;
+            self.try_get_resource(VersionJsonRootResource::Versions(Some(name)))?;
         create_dir_all(&instance_root).await?;
 
         Ok(Storage::with_parent(
@@ -96,11 +96,11 @@ where
     {
         let name = name.as_ref();
         let instance_root = self
-            .try_get_extended_resource(VersionJsonRootResource::Versions(Some(name.to_owned())))?;
+            .try_get_resource(VersionJsonRootResource::Versions(Some(name.to_owned())))?;
         let metadata_path = version_layout
-            .try_get_extended_resource(&instance_root, VersionJsonInstanceResource::Metadata)?;
+            .try_get_resource(&instance_root, VersionJsonInstanceResource::Metadata)?;
         let jar_path = version_layout
-            .try_get_extended_resource(&instance_root, VersionJsonInstanceResource::Jar)?;
+            .try_get_resource(&instance_root, VersionJsonInstanceResource::Jar)?;
 
         Ok(metadata_path.exists() && jar_path.exists())
     }
@@ -119,7 +119,7 @@ where
             return Err(anyhow!("can't find a valid instance named '{name}'"));
         }
         let instance_root =
-            self.try_get_extended_resource(VersionJsonRootResource::Versions(Some(name)))?;
+            self.try_get_resource(VersionJsonRootResource::Versions(Some(name)))?;
 
         Ok(Storage::with_parent(
             instance_root,
@@ -133,7 +133,7 @@ where
         VL: VersionJsonInstanceLayout,
     {
         let instances_root =
-            self.try_get_extended_resource(VersionJsonRootResource::Versions(None))?;
+            self.try_get_resource(VersionJsonRootResource::Versions(None))?;
         if !instances_root.exists() {
             return Ok(Vec::new());
         }
@@ -171,7 +171,7 @@ where
         objects: &PistonMetaAssetIndexObjects,
     ) -> Result<()> {
         let path =
-            self.try_get_extended_resource(VersionJsonRootResource::AssetIndexes(Some(id)))?;
+            self.try_get_resource(VersionJsonRootResource::AssetIndexes(Some(id)))?;
         let parent = path
             .parent()
             .context("asset index path has no parent directory")?;
@@ -181,7 +181,7 @@ where
     }
 
     fn asset_index_objects(&self, id: impl AsRef<str>) -> Result<PistonMetaAssetIndexObjects> {
-        let path = self.try_get_extended_resource(VersionJsonRootResource::AssetIndexes(Some(
+        let path = self.try_get_resource(VersionJsonRootResource::AssetIndexes(Some(
             id.as_ref().to_owned(),
         )))?;
         Ok(serde_json::from_reader(File::open(path)?)?)
@@ -210,13 +210,13 @@ where
     type VersionLayout = VL;
 
     fn metadata(&self) -> Result<PistonMetaData> {
-        let path = self.try_get_extended_resource(VersionJsonInstanceResource::Metadata)?;
+        let path = self.try_get_resource(VersionJsonInstanceResource::Metadata)?;
         Ok(serde_json::from_reader(File::open(path)?)?)
     }
 
     async fn write_metadata(&self, metadata: &PistonMetaData) -> Result<()> {
         self.ensure_root().await?;
-        let path = self.try_get_extended_resource(VersionJsonInstanceResource::Metadata)?;
+        let path = self.try_get_resource(VersionJsonInstanceResource::Metadata)?;
         tokio::fs::write(path, serde_json::to_vec(metadata)?).await?;
         Ok(())
     }
@@ -227,11 +227,10 @@ where
             Err(_) => return false,
         };
         let rule_context = VersionJsonRuleContext::current();
-        let natives_root =
-            match self.try_get_extended_resource(VersionJsonInstanceResource::Natives) {
-                Ok(path) => path,
-                Err(_) => return false,
-            };
+        let natives_root = match self.try_get_resource(VersionJsonInstanceResource::Natives) {
+            Ok(path) => path,
+            Err(_) => return false,
+        };
         let store = match natives_state_store(&self.path).await {
             Ok(store) => store,
             Err(_) => return false,
@@ -267,14 +266,14 @@ where
     }
 
     async fn ensure_platform_natives_path(&self) -> Result<PathBuf> {
-        let path = self.try_get_extended_resource(VersionJsonInstanceResource::Natives)?;
+        let path = self.try_get_resource(VersionJsonInstanceResource::Natives)?;
         create_dir_all(&path).await?;
         Ok(path)
     }
 
     async fn extract_natives(&self) -> Result<()> {
         let metadata = self.metadata()?;
-        let destination = self.try_get_extended_resource(VersionJsonInstanceResource::Natives)?;
+        let destination = self.try_get_resource(VersionJsonInstanceResource::Natives)?;
         let rule_context = VersionJsonRuleContext::current();
         std::fs::create_dir_all(&destination)?;
 
@@ -288,7 +287,7 @@ where
 
                 if let Some(artifact) = library.classifiers_native_artifact(rule_context.platform())
                 {
-                    let source = self.parent.try_get_extended_resource(
+                    let source = self.parent.try_get_resource(
                         VersionJsonRootResource::Libraries(Some(PathBuf::from(
                             artifact.path.as_str(),
                         ))),
@@ -297,7 +296,7 @@ where
                 }
 
                 if let Some(artifact) = library.native_artifact(rule_context.platform()) {
-                    let source = self.parent.try_get_extended_resource(
+                    let source = self.parent.try_get_resource(
                         VersionJsonRootResource::Libraries(Some(PathBuf::from(
                             artifact.path.as_str(),
                         ))),

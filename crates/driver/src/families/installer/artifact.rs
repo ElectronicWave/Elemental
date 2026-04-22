@@ -58,7 +58,7 @@ where
     Ok(InstallerArtifact {
         coordinate,
         url,
-        path: game_storage.try_get_extended_resource(VersionJsonRootResource::Libraries(Some(
+        path: game_storage.try_get_resource(VersionJsonRootResource::Libraries(Some(
             library_relative_path,
         )))?,
         expected_size: None,

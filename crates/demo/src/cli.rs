@@ -63,8 +63,9 @@ struct LoaderArgs {
     instance_name: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum, Default)]
 enum RuntimeValidationArg {
+    #[default]
     Strict,
     Disabled,
 }
@@ -75,12 +76,6 @@ impl RuntimeValidationArg {
             Self::Strict => RuntimeValidationMode::Strict,
             Self::Disabled => RuntimeValidationMode::Disabled,
         }
-    }
-}
-
-impl Default for RuntimeValidationArg {
-    fn default() -> Self {
-        Self::Strict
     }
 }
 

@@ -282,9 +282,9 @@ where
                 && !self
                     .version
                     .parent
-                    .try_get_resource(VersionJsonRootResource::Libraries(Some(
-                        PathBuf::from(artifact.path.as_str()),
-                    )))?
+                    .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
+                        artifact.path.as_str(),
+                    ))))?
                     .exists()
             {
                 return Ok(false);
@@ -294,9 +294,9 @@ where
                 && !self
                     .version
                     .parent
-                    .try_get_resource(VersionJsonRootResource::Libraries(Some(
-                        PathBuf::from(artifact.path.as_str()),
-                    )))?
+                    .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
+                        artifact.path.as_str(),
+                    ))))?
                     .exists()
             {
                 return Ok(false);
@@ -409,9 +409,11 @@ where
             tasks.push(DownloadTask::new(
                 self.remote_resolver
                     .rewrite_upstream(client.file.url.as_str())?,
-                self.version.parent.try_get_resource(
-                    VersionJsonRootResource::AssetLogConfigs(Some(client.file.id.clone())),
-                )?,
+                self.version
+                    .parent
+                    .try_get_resource(VersionJsonRootResource::AssetLogConfigs(Some(
+                        client.file.id.clone(),
+                    )))?,
                 Some(client.file.size as u64),
                 Some(client.file.sha1.clone()),
             ));
@@ -446,9 +448,9 @@ where
                 .rewrite_upstream(artifact.url.as_str())?,
             self.version
                 .parent
-                .try_get_resource(VersionJsonRootResource::Libraries(Some(
-                    PathBuf::from(artifact.path.as_str()),
-                )))?,
+                .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
+                    artifact.path.as_str(),
+                ))))?,
             artifact.size.map(|size| size as u64),
             artifact.sha1.clone(),
         ))
@@ -456,21 +458,21 @@ where
 
     fn plan_assets(&self) -> Result<DownloadPlan> {
         let version_name = self.version_name()?;
-        let tasks = self
-            .asset_index_objects
-            .objects
-            .values()
-            .map(|object| {
-                Ok(DownloadTask::new(
-                    self.remote_resolver.object_url(object.hash.as_str())?,
-                    self.version.parent.try_get_resource(
-                        VersionJsonRootResource::AssetObjects(Some(object.hash.clone())),
-                    )?,
-                    Some(object.size as u64),
-                    Some(object.hash.clone()),
-                ))
-            })
-            .collect::<Result<Vec<DownloadTask>>>()?;
+        let tasks =
+            self.asset_index_objects
+                .objects
+                .values()
+                .map(|object| {
+                    Ok(DownloadTask::new(
+                        self.remote_resolver.object_url(object.hash.as_str())?,
+                        self.version.parent.try_get_resource(
+                            VersionJsonRootResource::AssetObjects(Some(object.hash.clone())),
+                        )?,
+                        Some(object.size as u64),
+                        Some(object.hash.clone()),
+                    ))
+                })
+                .collect::<Result<Vec<DownloadTask>>>()?;
 
         Ok(DownloadPlan::named(format!("{version_name}-assets"), tasks))
     }

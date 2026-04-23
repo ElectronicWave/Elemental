@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::catalog::{
-    Catalog, GameVersions, Release, ReleaseInfo, push_single_game_release, single_game_release_info,
+    Catalog, Release, ReleaseInfo, push_single_game_release, single_game_release_info,
 };
 use crate::loader_version::LoaderVersionId;
 
@@ -15,6 +15,7 @@ pub struct RiftCatalog {
     source: RiftSource,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RiftCatalogRelease {
     pub game_version: MinecraftVersionId,
     pub loader_version: LoaderVersionId,
@@ -46,7 +47,7 @@ impl RiftCatalog {
 impl Catalog for RiftCatalog {
     type Release = RiftCatalogRelease;
 
-    async fn releases(&self) -> Result<HashMap<GameVersions, Vec<Self::Release>>> {
+    async fn releases(&self) -> Result<HashMap<MinecraftVersionId, Vec<Self::Release>>> {
         let mut releases = HashMap::new();
 
         for release in self.source.releases().await? {

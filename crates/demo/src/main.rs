@@ -14,7 +14,7 @@ use std::sync::Arc;
 use crate::cli::Cli;
 use crate::config::DemoCommand;
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
     let command = Cli::parse().into_demo_command();
     if let DemoCommand::Launch(config) = &command

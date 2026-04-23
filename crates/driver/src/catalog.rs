@@ -8,7 +8,7 @@ use elemental_core::minecraft::MinecraftVersionId;
 pub trait Catalog {
     type Release: Release;
 
-    async fn releases(&self) -> Result<HashMap<GameVersions, Vec<Self::Release>>>;
+    async fn releases(&self) -> Result<HashMap<MinecraftVersionId, Vec<Self::Release>>>;
 }
 
 #[async_trait]
@@ -18,15 +18,8 @@ pub trait Release {
 
 pub struct ReleaseInfo {
     pub name: String,
-    pub game_versions: GameVersions,
+    pub game_version: MinecraftVersionId,
     pub description: Option<String>,
-}
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub enum GameVersions {
-    Single(MinecraftVersionId),
-    Multi(Vec<MinecraftVersionId>),
-    Ignore,
 }
 
 pub fn single_game_release_info(
@@ -36,26 +29,23 @@ pub fn single_game_release_info(
 ) -> ReleaseInfo {
     ReleaseInfo {
         name,
-        game_versions: GameVersions::Single(game_version),
+        game_version,
         description,
     }
 }
 
 pub fn push_single_game_release<R>(
-    releases: &mut HashMap<GameVersions, Vec<R>>,
+    releases: &mut HashMap<MinecraftVersionId, Vec<R>>,
     game_version: MinecraftVersionId,
     release: R,
 ) {
-    releases
-        .entry(GameVersions::Single(game_version))
-        .or_default()
-        .push(release);
+    releases.entry(game_version).or_default().push(release);
 }
 
 pub fn collect_single_game_releases<Release, BuildRelease>(
     versions: Vec<String>,
     mut build_release: BuildRelease,
-) -> HashMap<GameVersions, Vec<Release>>
+) -> HashMap<MinecraftVersionId, Vec<Release>>
 where
     BuildRelease: FnMut(String) -> Option<(MinecraftVersionId, Release)>,
 {
@@ -82,7 +72,7 @@ pub async fn collect_single_game_loader_releases<
     game_versions: Vec<MinecraftVersionId>,
     mut load_loader_versions: LoadLoaderVersions,
     mut build_release: BuildRelease,
-) -> Result<HashMap<GameVersions, Vec<Release>>>
+) -> Result<HashMap<MinecraftVersionId, Vec<Release>>>
 where
     LoadLoaderVersions: FnMut(MinecraftVersionId) -> LoadLoaderVersionsFuture,
     LoadLoaderVersionsFuture: Future<Output = Result<Vec<Loader>>>,
@@ -97,7 +87,7 @@ where
             .map(|loader| build_release(&game_version, loader))
             .collect::<Vec<Release>>();
 
-        releases.insert(GameVersions::Single(game_version), game_releases);
+        releases.insert(game_version, game_releases);
     }
 
     Ok(releases)

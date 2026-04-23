@@ -5,8 +5,7 @@ use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::catalog::{
-    Catalog, GameVersions, Release, ReleaseInfo, collect_single_game_releases,
-    single_game_release_info,
+    Catalog, Release, ReleaseInfo, collect_single_game_releases, single_game_release_info,
 };
 use crate::loader_version::LoaderVersionId;
 
@@ -17,7 +16,7 @@ pub struct ForgeCatalog {
     source: ForgeSource,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ForgeRelease {
     pub loader: LoaderVersionId,
     pub game: MinecraftVersionId,
@@ -55,7 +54,7 @@ impl Release for ForgeRelease {
 impl Catalog for ForgeCatalog {
     type Release = ForgeRelease;
 
-    async fn releases(&self) -> Result<HashMap<GameVersions, Vec<Self::Release>>> {
+    async fn releases(&self) -> Result<HashMap<MinecraftVersionId, Vec<Self::Release>>> {
         let metadata = self.source.maven_metadata().await?;
         Ok(collect_single_game_releases(
             metadata.versioning.versions.version,

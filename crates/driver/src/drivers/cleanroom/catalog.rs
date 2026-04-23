@@ -5,8 +5,7 @@ use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::catalog::{
-    Catalog, GameVersions, Release, ReleaseInfo, collect_single_game_releases,
-    single_game_release_info,
+    Catalog, Release, ReleaseInfo, collect_single_game_releases, single_game_release_info,
 };
 use crate::loader_version::LoaderVersionId;
 
@@ -20,7 +19,7 @@ pub struct CleanroomCatalog {
     source: CleanroomSource,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CleanroomRelease {
     pub loader: LoaderVersionId,
     pub description: Option<String>,
@@ -57,7 +56,7 @@ impl Release for CleanroomRelease {
 impl Catalog for CleanroomCatalog {
     type Release = CleanroomRelease;
 
-    async fn releases(&self) -> Result<HashMap<GameVersions, Vec<Self::Release>>> {
+    async fn releases(&self) -> Result<HashMap<MinecraftVersionId, Vec<Self::Release>>> {
         let metadata = self.source.maven_metadata().await?;
         Ok(collect_single_game_releases(
             metadata.versioning.versions.version,

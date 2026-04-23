@@ -1,11 +1,16 @@
 use std::{
+    collections::HashMap,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
 use anyhow::{Result, anyhow, bail};
-use elemental_core::{auth::authorizer::Authorizer, launcher::process, storage::Storage};
+use elemental_core::{
+    auth::authorizer::Authorizer, launcher::process, minecraft::MinecraftVersionId,
+    storage::Storage,
+};
 use elemental_driver::{
+    catalog::Catalog,
     driver::Driver,
     drivers::{
         cleanroom::driver::CleanroomDriverSpec,
@@ -33,8 +38,7 @@ use crate::{
     builder::LauncherBuilder,
     request::{LaunchOptions, LoadPreparedInstanceRequest, PrepareInstanceRequest},
     result::{
-        LaunchCommandResult, LaunchedInstance, LocalInstanceSummary, PreparedInstance,
-        PreparedInstanceKind,
+        Instance, LaunchCommandResult, LaunchedInstance, PreparedInstance, PreparedInstanceKind,
     },
     spec::DriverSpec,
 };
@@ -115,7 +119,7 @@ where
         &self.downloader
     }
 
-    pub async fn inspect_instances(&self) -> Result<Vec<LocalInstanceSummary>> {
+    pub async fn inspect_instances(&self) -> Result<Vec<Instance>> {
         let storage = self.game_storage();
         let inspect_drivers = InspectDrivers::new(self)?;
         let drivers = inspect_drivers.as_array::<L, VL>();
@@ -123,15 +127,12 @@ where
             .await?
             .into_iter()
             .map(summarize_installed_instance)
-            .collect::<Vec<LocalInstanceSummary>>();
+            .collect::<Vec<Instance>>();
         summaries.sort_by(|left, right| left.instance_name.cmp(&right.instance_name));
         Ok(summaries)
     }
 
-    pub async fn inspect_instance(
-        &self,
-        instance_name: String,
-    ) -> Result<Option<LocalInstanceSummary>> {
+    pub async fn inspect_instance(&self, instance_name: String) -> Result<Option<Instance>> {
         let instance = self.instance(instance_name)?;
         let inspect_drivers = InspectDrivers::new(self)?;
         let drivers = inspect_drivers.as_array::<L, VL>();
@@ -139,6 +140,13 @@ where
         Ok(InstalledInstance::detect(instance, &drivers)
             .await?
             .map(summarize_installed_instance))
+    }
+
+    pub async fn catalog<R, C: Catalog<Release = R>>(
+        &self,
+        catalog: C,
+    ) -> Result<HashMap<MinecraftVersionId, Vec<R>>> {
+        catalog.releases().await
     }
 
     pub async fn prepare_instance(
@@ -154,7 +162,7 @@ where
         Ok(PreparedInstance::new(driver_spec, prepared_kind))
     }
 
-    pub async fn load_prepared_instance(
+    pub async fn load_instance(
         &self,
         request: LoadPreparedInstanceRequest,
     ) -> Result<PreparedInstance<L, VL>> {
@@ -171,13 +179,13 @@ where
         &self,
         prepared: &PreparedInstance<L, VL>,
         authorizer: A,
-        launch_options: &LaunchOptions,
+        options: &LaunchOptions,
     ) -> Result<LaunchCommandResult>
     where
         A: Authorizer,
     {
         self.resolve_driver(prepared.driver())?
-            .build_launch_command(prepared, authorizer, launch_options)
+            .build_launch_command(prepared, authorizer, options)
             .await
     }
 
@@ -185,13 +193,13 @@ where
         &self,
         prepared: &PreparedInstance<L, VL>,
         authorizer: A,
-        launch_options: &LaunchOptions,
+        options: &LaunchOptions,
     ) -> Result<LaunchedInstance>
     where
         A: Authorizer,
     {
         let command = self
-            .build_launch_command(prepared, authorizer, launch_options)
+            .build_launch_command(prepared, authorizer, options)
             .await?;
         let child = process::spawn_command(command.command.clone())?;
 
@@ -547,7 +555,7 @@ impl InspectDrivers {
     }
 }
 
-fn summarize_installed_instance<L, VL>(instance: InstalledInstance<L, VL>) -> LocalInstanceSummary
+fn summarize_installed_instance<L, VL>(instance: InstalledInstance<L, VL>) -> Instance
 where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
@@ -561,7 +569,7 @@ where
             .unwrap_or_else(|| instance.storage.path.display().to_string())
     });
 
-    LocalInstanceSummary {
+    Instance {
         instance_name,
         instance_root: instance.storage.path,
         driver: instance.driver,

@@ -69,7 +69,7 @@ Loader-specific demo entry points are also available, including `cargo run -p de
 
 The default demo settings live in [crates/demo/src/main.rs](crates/demo/src/main.rs).
 
-## Vanilla Download And Launch Example
+## Use The Library Crates Directly
 
 This is the smallest end-to-end flow using the library crates directly.
 
@@ -82,81 +82,72 @@ tokio = { version = "1", features = ["macros", "process", "rt-multi-thread"] }
 elemental = { path = "crates/elemental" }
 ```
 
-### Example
+### 1. Fetch Catalog Data
 
 ```rust
-use std::path::PathBuf;
-
 use anyhow::Result;
-use elemental::{
-    core::{auth::authorizers::offline::OfflineAuthorizer, storage::Storage},
-    driver::drivers::{
-        vanilla::{config::VanillaLaunchConfig, driver::VanillaDriver},
-        version_json::{BaseLayout, VersionJsonGameStorageExt},
-    },
-};
+use elemental::{driver::drivers::vanilla::catalog::VanillaCatalog, launcher::Launcher};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let storage = Storage::new(PathBuf::from(".minecraft"), BaseLayout);
-    let instance = storage.instance("MyGame-1.16.5".to_owned(), BaseLayout)?;
-    let vanilla = VanillaDriver::with_defaults()?;
-    let launch_config = VanillaLaunchConfig::new();
-    let authorizer = OfflineAuthorizer {
-        username: "Player".to_owned(),
-    };
-
-    let prepared = vanilla.prepare(&instance, "1.16.5".to_owned()).await?;
-    let launched = vanilla.launch(prepared, &launch_config, authorizer).await?;
-    println!("java executable: {}", launched.runtime.executable().display());
-    println!(
-        "install status: {:?}",
-        launched.prepared_version.install_status
-    );
-
-    let mut child = launched.child;
-    let exit_status = child.wait().await?;
-    println!("game exited with: {exit_status}");
+    let launcher = Launcher::builder().build();
+    let data = launcher.catalog(VanillaCatalog::with_defaults()).await?;
+    println!("Data: {:#?}", data);
 
     Ok(())
 }
 ```
 
-## Launch An Existing Local Version
+## 2. Prepare and Launch
 
 If you want to launch a version that is already fully prepared on disk without downloading anything,
 load it from storage first and then launch it.
 
 ```rust
-use std::path::PathBuf;
-
 use anyhow::Result;
 use elemental::{
-    core::{auth::authorizers::offline::OfflineAuthorizer, storage::Storage},
-    driver::drivers::{
-        vanilla::{config::VanillaLaunchConfig, driver::VanillaDriver},
-        version_json::{BaseLayout, VersionJsonGameStorageExt},
-    },
+    core::auth::authorizers::offline::OfflineAuthorizer,
+    launcher::{DriverSpec, LaunchOptions, Launcher, PrepareInstanceRequest, VanillaSpec},
 };
 
-#[tokio::main]
+// Extracting native should use multi-thread runtime to avoid blocking the async flow, but the rest of the work is single-thread-friendly so the default runtime is fine for most of the flow.
+#[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
-    let storage = Storage::new(PathBuf::from(".minecraft"), BaseLayout);
-    let instance = storage.instance("MyGame-1.16.5".to_owned(), BaseLayout)?;
-    let vanilla = VanillaDriver::with_defaults()?;
-    let launch_config = VanillaLaunchConfig::new();
-    let authorizer = OfflineAuthorizer {
-        username: "Player".to_owned(),
-    };
+    let launcher = Launcher::builder().build();
+    let prepared = launcher
+        .prepare_instance(PrepareInstanceRequest {
+            instance_name: "Vanilla".to_string(),
+            driver: DriverSpec::Vanilla(VanillaSpec {
+                game_version: "1.20.1".into(),
+            }),
+        })
+        .await?;
 
-    let prepared = vanilla.load_prepared(&instance)?;
-    let launched = vanilla.launch(prepared, &launch_config, authorizer).await?;
-    let mut child = launched.child;
-    let exit_status = child.wait().await?;
-    println!("game exited with: {exit_status}");
-
+    let mut instance = launcher
+        .launch_prepared_instance(
+            &prepared,
+            OfflineAuthorizer {
+                username: "Vanilla123".to_string(),
+            },
+            &LaunchOptions::default(),
+        )
+        .await?;
+    let exit_code = instance.child.wait().await?;
+    println!("Exited with code: {exit_code}");
     Ok(())
 }
+```
+
+## 3. Runtime Discovery
+
+```rust
+todo!()
+```
+
+## 4. Launch a existing Prepared Instance
+
+```rust
+todo!()
 ```
 
 ## Notes

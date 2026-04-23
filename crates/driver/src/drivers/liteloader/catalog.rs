@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::catalog::{
-    Catalog, GameVersions, Release, ReleaseInfo, push_single_game_release, single_game_release_info,
+    Catalog, Release, ReleaseInfo, push_single_game_release, single_game_release_info,
 };
 use crate::loader_version::LoaderVersionId;
 
@@ -14,7 +14,7 @@ use super::source::LiteLoaderSource;
 pub struct LiteLoaderCatalog {
     source: LiteLoaderSource,
 }
-
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LiteLoaderCatalogRelease {
     pub game_version: MinecraftVersionId,
     pub loader_version: LoaderVersionId,
@@ -46,7 +46,7 @@ impl LiteLoaderCatalog {
 impl Catalog for LiteLoaderCatalog {
     type Release = LiteLoaderCatalogRelease;
 
-    async fn releases(&self) -> Result<HashMap<GameVersions, Vec<Self::Release>>> {
+    async fn releases(&self) -> Result<HashMap<MinecraftVersionId, Vec<Self::Release>>> {
         let mut releases = HashMap::new();
 
         for release in self.source.releases().await? {

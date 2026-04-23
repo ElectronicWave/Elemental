@@ -27,7 +27,7 @@ pub struct LaunchedInstance {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LocalInstanceSummary {
+pub struct Instance {
     pub instance_name: String,
     pub instance_root: PathBuf,
     pub driver: InstalledDriver,

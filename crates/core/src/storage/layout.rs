@@ -85,3 +85,24 @@ pub trait Layoutable<L: Layout> {
             .try_get_extended_resource(self.root_path(), resource)
     }
 }
+
+impl Layout for () {
+    type Resource = ();
+    type ExtendedResource = ();
+
+    fn get_resource(&self, _root: &Path, _resource: Self::Resource) -> Option<PathBuf> {
+        None
+    }
+
+    fn get_extended_resource(
+        &self,
+        _root: &Path,
+        _resource: Self::ExtendedResource,
+    ) -> Option<PathBuf> {
+        None
+    }
+
+    fn name(&self) -> &'static str {
+        "empty"
+    }
+}

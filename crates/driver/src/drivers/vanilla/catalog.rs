@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::catalog::{
-    Catalog, GameVersions, Release, ReleaseInfo, push_single_game_release, single_game_release_info,
+    Catalog, Release, ReleaseInfo, push_single_game_release, single_game_release_info,
 };
 
 use super::source::VanillaSource;
@@ -14,6 +14,7 @@ pub struct VanillaCatalog {
     source: VanillaSource,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct VanillaRelease {
     pub version_id: String,
     pub description: Option<String>,
@@ -44,7 +45,7 @@ impl VanillaCatalog {
 impl Catalog for VanillaCatalog {
     type Release = VanillaRelease;
 
-    async fn releases(&self) -> Result<HashMap<GameVersions, Vec<Self::Release>>> {
+    async fn releases(&self) -> Result<HashMap<MinecraftVersionId, Vec<Self::Release>>> {
         let mut releases = HashMap::new();
         let manifest = self.source.launch_meta().await?;
 

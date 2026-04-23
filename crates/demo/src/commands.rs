@@ -39,7 +39,7 @@ async fn run_launch(config: DemoConfig) -> Result<()> {
     let request_driver = driver_spec.clone();
 
     let (prepared, prepare_elapsed) = if config.local_only {
-        time_operation(launcher.load_prepared_instance(LoadPreparedInstanceRequest {
+        time_operation(launcher.load_instance(LoadPreparedInstanceRequest {
             instance_name: request_instance_name,
             driver: request_driver,
         }))

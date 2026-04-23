@@ -5,8 +5,7 @@ use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::catalog::{
-    Catalog, GameVersions, Release, ReleaseInfo, collect_single_game_loader_releases,
-    single_game_release_info,
+    Catalog, Release, ReleaseInfo, collect_single_game_loader_releases, single_game_release_info,
 };
 use crate::loader_version::LoaderVersionId;
 
@@ -16,6 +15,7 @@ pub struct QuiltCatalog {
     source: QuiltSource,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct QuiltRelease {
     pub game_version: MinecraftVersionId,
     pub loader_version: LoaderVersionId,
@@ -46,7 +46,7 @@ impl QuiltCatalog {
 impl Catalog for QuiltCatalog {
     type Release = QuiltRelease;
 
-    async fn releases(&self) -> Result<HashMap<GameVersions, Vec<Self::Release>>> {
+    async fn releases(&self) -> Result<HashMap<MinecraftVersionId, Vec<Self::Release>>> {
         let game_versions = self
             .source
             .game_versions()

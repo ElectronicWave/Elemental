@@ -10,8 +10,7 @@ use elemental::{
         BaseInstanceLayout, BaseRootLayout, VersionJsonGameStorageExt,
     },
     launcher::{
-        DriverSpec, LaunchOptions, Launcher, LoadPreparedInstanceRequest, LoaderSpec,
-        PrepareInstanceRequest, VanillaSpec,
+        DriverSpec, LaunchOptions, Launcher, LoaderSpec, PrepareInstanceRequest, VanillaSpec,
     },
 };
 
@@ -39,10 +38,14 @@ async fn run_launch(config: DemoConfig) -> Result<()> {
     let request_driver = driver_spec.clone();
 
     let (prepared, prepare_elapsed) = if config.local_only {
-        time_operation(launcher.load_instance(LoadPreparedInstanceRequest {
-            instance_name: request_instance_name,
-            driver: driver_spec.descriptor(),
-        }))
+        time_operation(
+            launcher.load_instance(
+                launcher
+                    .inspect_instance(request_instance_name)
+                    .await?
+                    .context("Can't find instance")?,
+            ),
+        )
         .await?
     } else {
         time_operation(launcher.prepare_instance(PrepareInstanceRequest {

@@ -12,15 +12,18 @@ use elemental::core::runtime::{
 use std::sync::Arc;
 
 use crate::cli::Cli;
+use crate::config::DemoCommand;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = Cli::parse().into_demo_config();
-    if !config.runtime_paths.is_empty() {
+    let command = Cli::parse().into_demo_command();
+    if let DemoCommand::Launch(config) = &command
+        && !config.runtime_paths.is_empty()
+    {
         let mut providers = Vec::<Arc<dyn RuntimeProvider>>::new();
         providers.push(Arc::new(new_custom_provider(config.runtime_paths.clone())?));
         providers.extend(default_providers());
         with_runtime_providers(providers)?;
     }
-    commands::run(config).await
+    commands::run(command).await
 }

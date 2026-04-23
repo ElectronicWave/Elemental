@@ -1,4 +1,5 @@
 pub mod catalog;
+pub mod descriptors;
 pub mod driver;
 pub mod drivers;
 pub mod families;

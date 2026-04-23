@@ -31,6 +31,12 @@ pub struct DemoConfig {
     pub runtime_validation: RuntimeValidationMode,
 }
 
+#[derive(Clone, Debug)]
+pub enum DemoCommand {
+    Launch(DemoConfig),
+    ListInstances { storage_root: PathBuf },
+}
+
 impl DemoDriver {
     pub fn as_str(self) -> &'static str {
         match self {

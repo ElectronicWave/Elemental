@@ -1,7 +1,7 @@
 use elemental_schema::mojang::piston::PistonMetaLibraries;
 
 use crate::{
-    driver::DriverDescriptor,
+    descriptors::CLEANROOM_DRIVER,
     drivers::cleanroom::source::{CleanroomEndpoints, CleanroomSource},
     families::installer::{
         InstallerFamily, InstallerFamilyDriver, InstallerFamilyDriverSpec,
@@ -53,10 +53,7 @@ impl InstallerFamily for CleanroomDriverSpec {
 }
 
 impl InstallerFamilyDriverSpec for CleanroomDriverSpec {
-    const DRIVER: DriverDescriptor = DriverDescriptor {
-        id: "cleanroom",
-        name: "Cleanroom",
-    };
+    const DRIVER: crate::driver::DriverDescriptor = CLEANROOM_DRIVER;
 
     const INSPECT_PREFIXES: &'static [&'static str] = &["com.cleanroommc:cleanroom:"];
 }

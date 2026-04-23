@@ -453,6 +453,7 @@ dependencies = [
  "elemental-core",
  "elemental-driver",
  "elemental-infra",
+ "elemental-launcher",
  "elemental-object",
  "elemental-schema",
  "elemental-shared",
@@ -519,6 +520,17 @@ dependencies = [
  "tokio",
  "tokio-util",
  "zip",
+]
+
+[[package]]
+name = "elemental-launcher"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "elemental-core",
+ "elemental-driver",
+ "elemental-infra",
+ "tokio",
 ]
 
 [[package]]

@@ -4,6 +4,7 @@ use elemental_core::minecraft::MinecraftVersionId;
 use elemental_schema::{mojang::piston::PistonMetaData, quilt::ProfileJson};
 
 use crate::{
+    descriptors::QUILT_DRIVER,
     driver::{DriverDescriptor, InstalledDriver},
     drivers::{quilt::source::QuiltSource, vanilla::source::VanillaSource},
     families::version_json::{
@@ -14,10 +15,6 @@ use crate::{
     loader_version::LoaderVersionId,
 };
 
-const QUILT_DRIVER: DriverDescriptor = DriverDescriptor {
-    id: "quilt",
-    name: "Quilt",
-};
 const QUILT_LOADER_LIBRARIES: LibraryPrefixSet =
     LibraryPrefixSet::new(&["org.quiltmc:quilt-loader:"]);
 

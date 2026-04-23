@@ -5,6 +5,7 @@ members = [
     "crates/demo",
     "crates/driver",
     "crates/elemental",
+    "crates/launcher",
     "crates/object",
     "crates/schema",
     "crates/shared",

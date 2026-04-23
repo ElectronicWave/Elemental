@@ -1,148 +1,145 @@
-use std::{fmt::Debug, future::Future, time::Duration};
+use std::time::Duration;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use elemental::{
     core::{
         auth::authorizers::offline::OfflineAuthorizer, launcher::command::LaunchCommand,
         runtime::distribution::Distribution, storage::Storage,
     },
-    driver::{
-        drivers::{
-            cleanroom::driver::CleanroomDriver,
-            fabric::{driver::FabricDriverFamily, source::FabricFlavor},
-            forge::driver::ForgeDriver,
-            liteloader::driver::LiteLoaderDriverFamily,
-            neoforge::driver::NeoForgeDriver,
-            quilt::driver::QuiltDriverFamily,
-            rift::driver::RiftDriverFamily,
-            vanilla::{config::VanillaLaunchConfig, driver::VanillaDriver},
-        },
-        families::{
-            installer::{InstallerFamilyDriver, InstallerFamilyDriverSpec},
-            version_json::{
-                BaseInstanceLayout, BaseRootLayout, ProfiledVersionJsonDriver,
-                ProfiledVersionJsonFamily, ProfiledVersionJsonFamilyExt, VersionJsonGameStorageExt,
-                VersionJsonInstanceLayout, VersionJsonRootLayout,
-            },
-        },
-        loader_version::LoaderVersionId,
+    driver::families::version_json::{
+        BaseInstanceLayout, BaseRootLayout, VersionJsonGameStorageExt,
+    },
+    launcher::{
+        DriverSpec, LaunchOptions, Launcher, LoadPreparedInstanceRequest, LoaderSpec,
+        PrepareInstanceRequest, VanillaSpec,
     },
 };
 
-use crate::config::{DemoConfig, DemoDriver};
+use crate::config::{DemoCommand, DemoConfig, DemoDriver};
 use crate::diagnostics::{
     LaunchDiagnostics, LaunchSummary, collect_version_diagnostics, print_launch_diagnostics,
     print_summary, run_logged_process,
 };
 
-pub async fn run(config: DemoConfig) -> Result<()> {
-    match config.driver {
-        DemoDriver::Vanilla => run_vanilla_demo(config).await,
-        DemoDriver::Fabric | DemoDriver::LegacyFabric | DemoDriver::Babric => {
-            run_fabric_like_demo(config).await
-        }
-        DemoDriver::Quilt => {
-            run_profiled_version_json_family_demo(config, "quilt", QuiltDriverFamily).await
-        }
-        DemoDriver::LiteLoader => {
-            run_profiled_version_json_family_demo(config, "liteloader", LiteLoaderDriverFamily)
-                .await
-        }
-        DemoDriver::Rift => {
-            run_profiled_version_json_family_demo(config, "rift", RiftDriverFamily).await
-        }
-        DemoDriver::Forge => {
-            run_installer_family_demo_with_defaults(config, "forge", ForgeDriver::with_defaults)
-                .await
-        }
-        DemoDriver::Cleanroom => {
-            run_installer_family_demo_with_defaults(
-                config,
-                "cleanroom",
-                CleanroomDriver::with_defaults,
-            )
-            .await
-        }
-        DemoDriver::NeoForge => {
-            run_installer_family_demo_with_defaults(
-                config,
-                "neoforge",
-                NeoForgeDriver::with_defaults,
-            )
-            .await
-        }
+pub async fn run(command: DemoCommand) -> Result<()> {
+    match command {
+        DemoCommand::Launch(config) => run_launch(config).await,
+        DemoCommand::ListInstances { storage_root } => run_list_instances(storage_root).await,
     }
 }
 
-async fn run_vanilla_demo(config: DemoConfig) -> Result<()> {
-    let instance = resolve_instance(&config).await?;
-    let driver = VanillaDriver::with_defaults()?;
-    let launch_config: VanillaLaunchConfig = build_launch_config(&config);
+async fn run_launch(config: DemoConfig) -> Result<()> {
+    let launcher = Launcher::builder()
+        .storage_root(config.storage_root.clone())
+        .build();
+    let launch_options: LaunchOptions = build_launch_config(&config);
+    let driver_spec = to_driver_spec(&config)?;
+
+    let request_instance_name = config.instance_name.clone();
+    let request_driver = driver_spec.clone();
 
     let (prepared, prepare_elapsed) = if config.local_only {
-        time_operation(driver.load_prepared(&instance)).await?
+        time_operation(launcher.load_prepared_instance(LoadPreparedInstanceRequest {
+            instance_name: request_instance_name,
+            driver: request_driver,
+        }))
+        .await?
     } else {
-        time_operation(driver.prepare(&instance, config.game_version.clone())).await?
+        time_operation(launcher.prepare_instance(PrepareInstanceRequest {
+            instance_name: request_instance_name,
+            driver: request_driver,
+        }))
+        .await?
     };
-    let (runtime, command) = driver
-        .build_launch_command(offline_authorizer(), &prepared, &launch_config)
+
+    let command_result = launcher
+        .build_launch_command(&prepared, offline_authorizer(), &launch_options)
         .await?;
 
     finalize_launch(
         &config,
-        None,
         prepare_elapsed.as_millis(),
-        &prepared.install_status,
-        &prepared.resolved_version.version,
-        runtime,
-        command,
+        command_result.runtime,
+        command_result.command,
     )
     .await
 }
 
-async fn run_fabric_like_demo(config: DemoConfig) -> Result<()> {
-    let driver =
-        FabricDriverFamily::new(fabric_flavor(config.driver)?).build_driver_with_defaults()?;
-    run_profiled_version_json_demo(config, "fabric-like", &driver).await
-}
+async fn run_list_instances(storage_root: std::path::PathBuf) -> Result<()> {
+    let launcher = Launcher::builder().storage_root(storage_root).build();
+    let instances = launcher.inspect_instances().await?;
 
-fn fabric_flavor(driver: DemoDriver) -> Result<FabricFlavor> {
-    match driver {
-        DemoDriver::Fabric => Ok(FabricFlavor::Fabric),
-        DemoDriver::LegacyFabric => Ok(FabricFlavor::LegacyFabric),
-        DemoDriver::Babric => Ok(FabricFlavor::Babric),
-        DemoDriver::Vanilla
-        | DemoDriver::Quilt
-        | DemoDriver::LiteLoader
-        | DemoDriver::Rift
-        | DemoDriver::Forge
-        | DemoDriver::Cleanroom
-        | DemoDriver::NeoForge => bail!("unsupported fabric-like demo driver: {}", driver.as_str()),
-    }
-}
-
-pub(super) async fn ensure_instance(
-    config: &DemoConfig,
-) -> Result<Storage<BaseInstanceLayout, Storage<BaseRootLayout>>> {
-    let storage = Storage::new(config.storage_root.clone(), BaseRootLayout);
-    storage
-        .ensure_instance(config.instance_name.clone(), BaseInstanceLayout)
-        .await
-}
-
-pub(super) async fn resolve_instance(
-    config: &DemoConfig,
-) -> Result<Storage<BaseInstanceLayout, Storage<BaseRootLayout>>> {
-    if config.local_only {
-        let storage = Storage::new(config.storage_root.clone(), BaseRootLayout);
-        return storage.instance(config.instance_name.clone(), BaseInstanceLayout);
+    if instances.is_empty() {
+        println!("No local instances found.");
+        return Ok(());
     }
 
-    ensure_instance(config).await
+    println!("Found {} local instance(s):", instances.len());
+    for instance in instances {
+        println!(
+            "- {} | driver={} | root={}",
+            instance.instance_name,
+            instance.driver.driver.id,
+            instance.instance_root.display()
+        );
+    }
+
+    Ok(())
 }
 
-pub(super) fn build_launch_config(config: &DemoConfig) -> VanillaLaunchConfig {
-    let mut launch_config = VanillaLaunchConfig::new();
+fn to_driver_spec(config: &DemoConfig) -> Result<DriverSpec> {
+    let game_version = config.game_version.clone();
+
+    Ok(match config.driver {
+        DemoDriver::Vanilla => DriverSpec::Vanilla(VanillaSpec { game_version }),
+        DemoDriver::Fabric => DriverSpec::Fabric(LoaderSpec {
+            game_version,
+            loader_version: require_loader_version(config, "fabric")?,
+        }),
+        DemoDriver::LegacyFabric => DriverSpec::LegacyFabric(LoaderSpec {
+            game_version,
+            loader_version: require_loader_version(config, "legacyfabric")?,
+        }),
+        DemoDriver::Babric => DriverSpec::Babric(LoaderSpec {
+            game_version,
+            loader_version: require_loader_version(config, "babric")?,
+        }),
+        DemoDriver::Quilt => DriverSpec::Quilt(LoaderSpec {
+            game_version,
+            loader_version: require_loader_version(config, "quilt")?,
+        }),
+        DemoDriver::LiteLoader => DriverSpec::LiteLoader(LoaderSpec {
+            game_version,
+            loader_version: require_loader_version(config, "liteloader")?,
+        }),
+        DemoDriver::Rift => DriverSpec::Rift(LoaderSpec {
+            game_version,
+            loader_version: require_loader_version(config, "rift")?,
+        }),
+        DemoDriver::Forge => DriverSpec::Forge(LoaderSpec {
+            game_version,
+            loader_version: require_loader_version(config, "forge")?,
+        }),
+        DemoDriver::Cleanroom => DriverSpec::Cleanroom(LoaderSpec {
+            game_version,
+            loader_version: require_loader_version(config, "cleanroom")?,
+        }),
+        DemoDriver::NeoForge => DriverSpec::NeoForge(LoaderSpec {
+            game_version,
+            loader_version: require_loader_version(config, "neoforge")?,
+        }),
+    })
+}
+
+fn require_loader_version(config: &DemoConfig, driver_label: &str) -> Result<elemental::driver::loader_version::LoaderVersionId> {
+    config
+        .loader_version
+        .clone()
+        .with_context(|| format!("{driver_label} demo requires a loader version"))
+}
+
+pub(super) fn build_launch_config(config: &DemoConfig) -> LaunchOptions {
+    let mut launch_config = LaunchOptions::new();
     launch_config.runtime_major_version = config.runtime_major_version;
     launch_config.runtime_executable_path = config.runtime_executable_path.clone();
     launch_config.runtime_validation = config.runtime_validation;
@@ -155,129 +152,6 @@ pub(super) fn offline_authorizer() -> OfflineAuthorizer {
     }
 }
 
-pub(super) fn require_loader_version(
-    config: &DemoConfig,
-    driver_label: &str,
-) -> Result<LoaderVersionId> {
-    config
-        .loader_version
-        .clone()
-        .with_context(|| format!("{driver_label} demo requires a loader version"))
-}
-
-pub(super) async fn prepare_loader_demo(
-    config: &DemoConfig,
-    driver_label: &str,
-) -> Result<(
-    LoaderVersionId,
-    Storage<BaseInstanceLayout, Storage<BaseRootLayout>>,
-    VanillaLaunchConfig,
-)> {
-    let loader_version = require_loader_version(config, driver_label)?;
-    let instance = resolve_instance(config).await?;
-    let launch_config = build_launch_config(config);
-
-    Ok((loader_version, instance, launch_config))
-}
-
-pub(super) async fn run_profiled_version_json_demo<F>(
-    config: DemoConfig,
-    driver_label: &str,
-    driver: &ProfiledVersionJsonDriver<F>,
-) -> Result<()>
-where
-    F: ProfiledVersionJsonFamily,
-{
-    let (loader_version, instance, launch_config) =
-        prepare_loader_demo(&config, driver_label).await?;
-    let (prepared, prepare_elapsed) = if config.local_only {
-        time_operation(driver.load_prepared(&instance)).await?
-    } else {
-        time_operation(driver.prepare(
-            &instance,
-            config.game_version.clone(),
-            loader_version.clone(),
-        ))
-        .await?
-    };
-    let (runtime, command) = driver
-        .build_launch_command(offline_authorizer(), &prepared, &launch_config)
-        .await?;
-
-    finalize_launch(
-        &config,
-        Some(loader_version.as_str()),
-        prepare_elapsed.as_millis(),
-        &prepared.install_status,
-        &prepared.resolved_version.version,
-        runtime,
-        command,
-    )
-    .await
-}
-
-pub(super) async fn run_profiled_version_json_family_demo<F>(
-    config: DemoConfig,
-    driver_label: &str,
-    family: F,
-) -> Result<()>
-where
-    F: ProfiledVersionJsonFamily,
-{
-    let driver = family.build_driver_with_defaults()?;
-    run_profiled_version_json_demo(config, driver_label, &driver).await
-}
-
-pub(super) async fn run_installer_family_demo<F>(
-    config: DemoConfig,
-    driver_label: &str,
-    driver: &InstallerFamilyDriver<F>,
-) -> Result<()>
-where
-    F: InstallerFamilyDriverSpec,
-{
-    let (loader_version, instance, launch_config) =
-        prepare_loader_demo(&config, driver_label).await?;
-    let (prepared, prepare_elapsed) = if config.local_only {
-        time_operation(driver.load_prepared(&instance)).await?
-    } else {
-        time_operation(driver.prepare_with_config(
-            &instance,
-            config.game_version.clone(),
-            loader_version.clone(),
-            &launch_config,
-        ))
-        .await?
-    };
-    let (runtime, command) = driver
-        .build_launch_command(offline_authorizer(), &prepared, &launch_config)
-        .await?;
-
-    finalize_launch(
-        &config,
-        Some(loader_version.as_str()),
-        prepare_elapsed.as_millis(),
-        &prepared.install_status,
-        &prepared.launch_version.resolved_version.version,
-        runtime,
-        command,
-    )
-    .await
-}
-
-pub(super) async fn run_installer_family_demo_with_defaults<F, B>(
-    config: DemoConfig,
-    driver_label: &str,
-    build_driver: B,
-) -> Result<()>
-where
-    F: InstallerFamilyDriverSpec,
-    B: FnOnce() -> Result<InstallerFamilyDriver<F>>,
-{
-    let driver = build_driver()?;
-    run_installer_family_demo(config, driver_label, &driver).await
-}
-
 pub(super) async fn time_operation<T, Fut>(operation: Fut) -> Result<(T, Duration)>
 where
     Fut: Future<Output = Result<T>>,
@@ -287,21 +161,24 @@ where
     Ok((result, started_at.elapsed()))
 }
 
-pub(super) async fn finalize_launch<L, VL>(
+use std::future::Future;
+
+pub(super) async fn finalize_launch(
     config: &DemoConfig,
-    loader_version: Option<&str>,
     prepared_ms: u128,
-    install_status: &dyn Debug,
-    version: &Storage<VL, Storage<L>>,
     runtime: Distribution,
     command: LaunchCommand,
-) -> Result<()>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
-    let diagnostics = collect_version_diagnostics(version)?;
+) -> Result<()> {
+    let storage = Storage::new(config.storage_root.clone(), BaseRootLayout);
+    let version = storage.instance(config.instance_name.clone(), BaseInstanceLayout)?;
+    let diagnostics = collect_version_diagnostics(&version)?;
     let runtime_executable = runtime.executable().to_path_buf();
+    let loader_version = config.loader_version.as_ref().map(|version| version.as_str());
+    let install_status = if config.local_only {
+        "LoadedPrepared(via facade)"
+    } else {
+        "Prepared(via facade)"
+    };
 
     print_launch_diagnostics(&LaunchDiagnostics {
         driver_name: config.driver.as_str(),
@@ -309,7 +186,7 @@ where
         instance_name: &config.instance_name,
         game_version: config.game_version.as_str(),
         prepared_ms,
-        install_status,
+        install_status: &install_status,
         runtime_executable: runtime_executable.as_path(),
         diagnostics: &diagnostics,
         command: &command,
@@ -322,7 +199,7 @@ where
         loader_version,
         runtime_executable: runtime_executable.as_path(),
         version_root: diagnostics.version_root.as_path(),
-        install_status,
+        install_status: &install_status,
         prepared_ms,
         exit_status,
     });

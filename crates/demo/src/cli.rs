@@ -4,7 +4,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use elemental::core::{minecraft::MinecraftVersionId, runtime::RuntimeValidationMode};
 use elemental::driver::loader_version::LoaderVersionId;
 
-use crate::config::{DemoConfig, DemoDriver};
+use crate::config::{DemoCommand, DemoConfig, DemoDriver};
 
 const CLEANROOM_DEMO_RUNTIME_MAJOR_VERSION: usize = 25;
 
@@ -16,11 +16,13 @@ pub struct Cli {
     #[arg(long, global = true, help = "Use only locally prepared data")]
     local_only: bool,
     #[command(subcommand)]
-    command: Option<DriverCommand>,
+    command: Option<DemoCliCommand>,
 }
 
 #[derive(Debug, Subcommand)]
-enum DriverCommand {
+enum DemoCliCommand {
+    #[command(name = "list", about = "List local prepared instances")]
+    List,
     Vanilla(VanillaArgs),
     Fabric(LoaderArgs),
     #[command(name = "legacyfabric", alias = "legacy-fabric")]
@@ -82,7 +84,7 @@ impl RuntimeValidationArg {
 }
 
 impl Cli {
-    pub fn into_demo_config(self) -> DemoConfig {
+    pub fn into_demo_command(self) -> DemoCommand {
         let storage_root = self
             .storage_root
             .unwrap_or_else(|| PathBuf::from(".minecraft"));
@@ -90,63 +92,80 @@ impl Cli {
 
         match self
             .command
-            .unwrap_or(DriverCommand::Fabric(LoaderArgs::default()))
+            .unwrap_or(DemoCliCommand::Fabric(LoaderArgs::default()))
         {
-            DriverCommand::Vanilla(arguments) => build_vanilla_config(
+            DemoCliCommand::List => DemoCommand::ListInstances { storage_root },
+            DemoCliCommand::Vanilla(arguments) => DemoCommand::Launch(build_vanilla_config(
                 local_only,
                 common_config_from_vanilla_args(storage_root, arguments),
-            ),
-            DriverCommand::Fabric(arguments) => build_loader_config(loader_config_input(
-                local_only,
-                storage_root,
-                DemoDriver::Fabric,
-                arguments,
             )),
-            DriverCommand::LegacyFabric(arguments) => build_loader_config(loader_config_input(
-                local_only,
-                storage_root,
-                DemoDriver::LegacyFabric,
-                arguments,
-            )),
-            DriverCommand::Babric(arguments) => build_loader_config(loader_config_input(
-                local_only,
-                storage_root,
-                DemoDriver::Babric,
-                arguments,
-            )),
-            DriverCommand::Quilt(arguments) => build_loader_config(loader_config_input(
-                local_only,
-                storage_root,
-                DemoDriver::Quilt,
-                arguments,
-            )),
-            DriverCommand::LiteLoader(arguments) => build_loader_config(loader_config_input(
-                local_only,
-                storage_root,
-                DemoDriver::LiteLoader,
-                arguments,
-            )),
-            DriverCommand::Rift(arguments) => build_loader_config(loader_config_input(
-                local_only,
-                storage_root,
-                DemoDriver::Rift,
-                arguments,
-            )),
-            DriverCommand::Forge(arguments) => build_loader_config(loader_config_input(
-                local_only,
-                storage_root,
-                DemoDriver::Forge,
-                arguments,
-            )),
-            DriverCommand::Cleanroom(arguments) => {
-                build_loader_config(cleanroom_config_input(local_only, storage_root, arguments))
+            DemoCliCommand::Fabric(arguments) => {
+                DemoCommand::Launch(build_loader_config(loader_config_input(
+                    local_only,
+                    storage_root,
+                    DemoDriver::Fabric,
+                    arguments,
+                )))
             }
-            DriverCommand::NeoForge(arguments) => build_loader_config(loader_config_input(
-                local_only,
-                storage_root,
-                DemoDriver::NeoForge,
-                arguments,
+            DemoCliCommand::LegacyFabric(arguments) => {
+                DemoCommand::Launch(build_loader_config(loader_config_input(
+                    local_only,
+                    storage_root,
+                    DemoDriver::LegacyFabric,
+                    arguments,
+                )))
+            }
+            DemoCliCommand::Babric(arguments) => {
+                DemoCommand::Launch(build_loader_config(loader_config_input(
+                    local_only,
+                    storage_root,
+                    DemoDriver::Babric,
+                    arguments,
+                )))
+            }
+            DemoCliCommand::Quilt(arguments) => {
+                DemoCommand::Launch(build_loader_config(loader_config_input(
+                    local_only,
+                    storage_root,
+                    DemoDriver::Quilt,
+                    arguments,
+                )))
+            }
+            DemoCliCommand::LiteLoader(arguments) => {
+                DemoCommand::Launch(build_loader_config(loader_config_input(
+                    local_only,
+                    storage_root,
+                    DemoDriver::LiteLoader,
+                    arguments,
+                )))
+            }
+            DemoCliCommand::Rift(arguments) => {
+                DemoCommand::Launch(build_loader_config(loader_config_input(
+                    local_only,
+                    storage_root,
+                    DemoDriver::Rift,
+                    arguments,
+                )))
+            }
+            DemoCliCommand::Forge(arguments) => {
+                DemoCommand::Launch(build_loader_config(loader_config_input(
+                    local_only,
+                    storage_root,
+                    DemoDriver::Forge,
+                    arguments,
+                )))
+            }
+            DemoCliCommand::Cleanroom(arguments) => DemoCommand::Launch(build_loader_config(
+                cleanroom_config_input(local_only, storage_root, arguments),
             )),
+            DemoCliCommand::NeoForge(arguments) => {
+                DemoCommand::Launch(build_loader_config(loader_config_input(
+                    local_only,
+                    storage_root,
+                    DemoDriver::NeoForge,
+                    arguments,
+                )))
+            }
         }
     }
 }

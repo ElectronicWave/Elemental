@@ -9,7 +9,11 @@ use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::inspect::LibraryPrefixSet;
 use crate::loader_version::LoaderVersionId;
-use crate::{driver::DriverDescriptor, drivers::fabric::source::FabricFlavor};
+use crate::{
+    descriptors::{BABRIC_DRIVER, FABRIC_DRIVER, LEGACY_FABRIC_DRIVER},
+    driver::DriverDescriptor,
+    drivers::fabric::source::FabricFlavor,
+};
 
 use self::common::FlavorBehavior;
 
@@ -19,19 +23,6 @@ const LEGACY_FABRIC_META_ORIGIN: &str = "https://meta.legacyfabric.net";
 const LEGACY_FABRIC_MAVEN_ORIGIN: &str = "https://maven.legacyfabric.net";
 const BABRIC_META_ORIGIN: &str = "https://meta.babric.glass-launcher.net";
 const BABRIC_MAVEN_ORIGIN: &str = "https://maven.glass-launcher.net/babric";
-
-const FABRIC_DRIVER: DriverDescriptor = DriverDescriptor {
-    id: "fabric",
-    name: "Fabric",
-};
-const LEGACY_FABRIC_DRIVER: DriverDescriptor = DriverDescriptor {
-    id: "legacyfabric",
-    name: "LegacyFabric",
-};
-const BABRIC_DRIVER: DriverDescriptor = DriverDescriptor {
-    id: "babric",
-    name: "Babric",
-};
 
 const FABRIC_LOADER_PREFIXES: LibraryPrefixSet =
     LibraryPrefixSet::new(&["net.fabricmc:fabric-loader:"]);

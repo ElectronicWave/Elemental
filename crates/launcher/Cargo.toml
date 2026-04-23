@@ -1,0 +1,11 @@
+[package]
+name = "elemental-launcher"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = { workspace = true }
+tokio = { workspace = true }
+elemental-core = { path = "../core" }
+elemental-driver = { path = "../driver" }
+elemental-infra = { path = "../infra" }

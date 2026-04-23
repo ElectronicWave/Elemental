@@ -4,6 +4,7 @@ use elemental_core::minecraft::MinecraftVersionId;
 use elemental_schema::{fabric::ProfileJson, mojang::piston::PistonMetaData};
 
 use crate::{
+    descriptors::RIFT_DRIVER,
     driver::{DriverDescriptor, InstalledDriver},
     drivers::{rift::source::RiftSource, vanilla::source::VanillaSource},
     families::version_json::direct_profiled::DirectProfiledVersionJsonDefaults,
@@ -12,10 +13,6 @@ use crate::{
     loader_version::LoaderVersionId,
 };
 
-const RIFT_DRIVER: DriverDescriptor = DriverDescriptor {
-    id: "rift",
-    name: "Rift",
-};
 const RIFT_PROFILE_ID: ProfileIdPattern = ProfileIdPattern::new("-rift-");
 const RIFT_LIBRARY_MARKERS: LibraryPrefixSet =
     LibraryPrefixSet::new(&["org.dimdev:rift:", "com.github.Chocohead:Rift:"]);

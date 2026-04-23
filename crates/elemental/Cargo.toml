@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 elemental-core = { path = "../core", optional = true, default-features = false }
 elemental-driver = { path = "../driver", optional = true, default-features = false }
+elemental-launcher = { path = "../launcher", optional = true, default-features = false }
 elemental-object = { path = "../object", optional = true, default-features = false }
 elemental-shared = { path = "../shared", optional = true, default-features = false }
 elemental-infra = { path = "../infra", optional = true, default-features = false }
@@ -19,6 +20,7 @@ shared-json = ["elemental-shared/json"]
 shared-toml = ["elemental-shared/toml"]
 
 driver = ["dep:elemental-driver"]
+launcher = ["dep:elemental-launcher"]
 
 object = ["dep:elemental-object"]
 object-notify = ["elemental-object/notify"]
@@ -27,6 +29,6 @@ infra = ["dep:elemental-infra"]
 
 schema = ["dep:elemental-schema"]
 
-full = ["driver", "object", "shared", "core", "infra", "schema"]
+full = ["driver", "launcher", "object", "shared", "core", "infra", "schema"]
 
 default = ["full", "shared-json", "object-notify"]

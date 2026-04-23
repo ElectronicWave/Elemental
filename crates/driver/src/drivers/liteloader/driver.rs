@@ -4,6 +4,7 @@ use elemental_core::minecraft::MinecraftVersionId;
 use elemental_schema::{fabric::ProfileJson, mojang::piston::PistonMetaData};
 
 use crate::{
+    descriptors::LITELOADER_DRIVER,
     driver::{DriverDescriptor, InstalledDriver},
     drivers::{liteloader::source::LiteLoaderSource, vanilla::source::VanillaSource},
     families::version_json::direct_profiled::DirectProfiledVersionJsonDefaults,
@@ -12,10 +13,6 @@ use crate::{
     loader_version::LoaderVersionId,
 };
 
-const LITELOADER_DRIVER: DriverDescriptor = DriverDescriptor {
-    id: "liteloader",
-    name: "LiteLoader",
-};
 const LITELOADER_PROFILE_ID: ProfileIdPattern = ProfileIdPattern::new("-liteloader-");
 const LITELOADER_LIBRARIES: LibraryPrefixSet = LibraryPrefixSet::new(&["com.mumfrey:liteloader:"]);
 const LITELOADER_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(

@@ -13,6 +13,7 @@ use elemental_infra::downloader::core::ElementalDownloader;
 use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::{
+    descriptors::VANILLA_DRIVER,
     driver::{Driver, DriverDescriptor, InstalledDriver},
     drivers::vanilla::{
         config::VanillaLaunchConfig,
@@ -149,10 +150,7 @@ impl VanillaDriver {
 #[async_trait]
 impl<L: Layout, VL: Layout> Driver<L, VL> for VanillaDriver {
     fn descriptor(&self) -> DriverDescriptor {
-        DriverDescriptor {
-            id: "vanilla",
-            name: "Vanilla",
-        }
+        VANILLA_DRIVER
     }
 
     async fn inspect(&self, probe: &InstanceProbe<L, VL>) -> Result<Option<InstalledDriver>> {

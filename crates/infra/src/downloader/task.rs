@@ -106,10 +106,10 @@ impl DownloadSessionRequest {
     }
 
     fn validate(&self) -> Result<()> {
-        if let DownloadExecutionPolicy::Custom { parallelism, .. } = self.execution_policy {
-            if parallelism == 0 {
-                bail!("download session parallelism must be greater than zero");
-            }
+        if let DownloadExecutionPolicy::Custom { parallelism, .. } = self.execution_policy
+            && parallelism == 0
+        {
+            bail!("download session parallelism must be greater than zero");
         }
 
         Ok(())

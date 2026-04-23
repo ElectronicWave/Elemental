@@ -1,7 +1,8 @@
 pub(crate) mod anyhost;
+pub(crate) mod control;
 pub mod core;
 pub mod plan;
-pub mod report;
+pub mod session;
 pub mod storage;
 pub mod task;
 pub(crate) mod tracking;

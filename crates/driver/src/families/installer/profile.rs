@@ -13,7 +13,10 @@ use elemental_core::{
         layout::{Layout, Layoutable},
     },
 };
-use elemental_infra::downloader::{core::ElementalDownloader, task::DownloadPlan};
+use elemental_infra::downloader::{
+    core::ElementalDownloader,
+    task::{DownloadExecutionPolicy, DownloadPlan},
+};
 use elemental_schema::{
     forge::ForgeInstallerProfile,
     mojang::piston::{
@@ -265,23 +268,14 @@ pub async fn ensure_installer_artifact_downloaded(
     installer_artifact: &InstallerArtifact,
     family_name: &str,
 ) -> Result<()> {
-    let report = downloader
+    downloader
         .run_plan(DownloadPlan::named(
             format!("{family_name}-installer-{}", installer_artifact.coordinate),
+            DownloadExecutionPolicy::ServiceDefault,
             vec![installer_artifact.download_task()],
-        ))
+        )?)
         .await
         .with_context(|| format!("download {family_name} installer failed"))?;
-
-    if report.failed > 0 {
-        let failures = report
-            .failures
-            .iter()
-            .map(|failure| format!("{}: {}", failure.task_id, failure.error))
-            .collect::<Vec<String>>()
-            .join("\n");
-        bail!("{family_name} installer download failed:\n{failures}");
-    }
 
     Ok(())
 }

@@ -1,26 +1,29 @@
 use anyhow::{Context, Result, bail};
 use futures::StreamExt;
 use reqwest::{ClientBuilder, header::HeaderMap, retry};
-use scc::{HashMap, hash_map::OccupiedEntry};
+use scc::HashMap;
 use std::{
     fmt,
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     sync::{Arc, Weak},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::{
     io::{AsyncWriteExt, BufWriter},
-    sync::{Mutex as AsyncMutex, Notify, Semaphore, mpsc},
-    task::JoinHandle,
+    sync::{Mutex as AsyncMutex, Notify, mpsc},
 };
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 use super::anyhost::ANY_HOST;
+use super::control::{BandwidthLimiter, ConcurrencyController};
 use super::plan::DownloadPlanner;
-pub use super::report::{SessionExecutionReport, TaskExecutionFailure};
+pub use super::session::{DownloadSessionSnapshot, TaskExecutionFailure};
 use super::storage::StagedDownload;
 pub use super::storage::{DownloadStorage, HardlinkCachedStorage, LocalFsStorage};
-pub use super::task::{DownloadPlan, DownloadTask, SessionId};
+pub use super::task::{
+    ByteRate, DownloadExecutionPolicy, DownloadPlan, DownloadRateLimit, DownloadSessionRequest,
+    DownloadTask, SessionId,
+};
 use super::tracking::build_task_id;
 pub use super::tracking::{TaskId, TrackedInfo, TrackedTaskStatus};
 use super::validation::StreamingValidator;
@@ -29,11 +32,12 @@ use super::validation::StreamingValidator;
 pub struct ElementalDownloader {
     client: reqwest::Client,
     sessions: HashMap<SessionId, Arc<SessionHandler>>,
-    pub tracker: Arc<ElementalTaskTracker>,
-    connections: Arc<Semaphore>,
+    tracker: Arc<ElementalTaskTracker>,
+    concurrency: Arc<ConcurrencyController>,
+    bandwidth_limiter: Arc<BandwidthLimiter>,
     storage: Arc<dyn DownloadStorage>,
-    worker_count: usize,
-    queue_capacity: usize,
+    session_parallelism: usize,
+    session_queue_capacity: usize,
     next_session_id: AtomicU64,
     me: Weak<Self>,
 }
@@ -41,16 +45,17 @@ pub struct ElementalDownloader {
 #[derive(Debug, Clone)]
 pub struct DownloadSession {
     id: SessionId,
-    name: Option<String>,
+    request: DownloadSessionRequest,
     downloader: Weak<ElementalDownloader>,
 }
 
 pub struct SessionHandler {
-    name: Option<String>,
+    request: DownloadSessionRequest,
     workers: TaskTracker,
     sender: std::sync::Mutex<Option<mpsc::Sender<QueuedDownloadTask>>>,
-    report: std::sync::Mutex<SessionExecutionState>,
+    state: std::sync::Mutex<SessionProgressState>,
     submission: AsyncMutex<()>,
+    bandwidth_limiter: Arc<BandwidthLimiter>,
     pending: AtomicUsize,
     idle: Notify,
     closed: AtomicBool,
@@ -59,7 +64,7 @@ pub struct SessionHandler {
 impl fmt::Debug for SessionHandler {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SessionHandler")
-            .field("name", &self.name)
+            .field("request", &self.request)
             .field("is_closed", &self.is_closed())
             .field("pending", &self.pending.load(Ordering::Acquire))
             .finish()
@@ -74,7 +79,7 @@ struct QueuedDownloadTask {
 }
 
 #[derive(Debug, Default)]
-struct SessionExecutionState {
+struct SessionProgressState {
     accepted: usize,
     enqueued: usize,
     downloaded: usize,
@@ -83,35 +88,64 @@ struct SessionExecutionState {
     cancelled_task_ids: Vec<TaskId>,
 }
 
-#[derive(Debug)]
-pub struct ElementalTaskTracker {
-    pub sessions: HashMap<SessionId, SessionState>,
-    downloader: Weak<ElementalDownloader>,
+#[derive(Debug, Clone)]
+struct SessionSnapshotData {
+    session_name: Option<String>,
+    accepted: usize,
+    enqueued: usize,
+    downloaded: usize,
+    skipped: usize,
+    failed: usize,
+    cancelled: usize,
+    pending: usize,
+    is_closed: bool,
+    failures: Vec<TaskExecutionFailure>,
+    cancelled_task_ids: Vec<TaskId>,
 }
 
 #[derive(Debug)]
-pub struct SessionState {
-    pub tasks: HashMap<TaskId, TrackedInfo>,
-    pub bps: DownloadBytesPerSecond,
-    pub token: CancellationToken,
-    counter: JoinHandle<()>,
+struct ElementalTaskTracker {
+    sessions: HashMap<SessionId, SessionState>,
+}
+
+#[derive(Debug)]
+struct SessionState {
+    tasks: HashMap<TaskId, TrackedInfo>,
+    bps: DownloadBytesPerSecond,
+    token: CancellationToken,
 }
 
 #[derive(Debug)]
 pub struct ElementalDownloaderConfig {
     pub max_connections: usize,
+    pub session_parallelism: usize,
+    pub session_queue_capacity: usize,
     pub connect_timeout: Duration,
     pub retry_times: u32,
+    pub rate_limit: DownloadRateLimit,
 }
 
 impl Default for ElementalDownloaderConfig {
     fn default() -> Self {
         Self {
             max_connections: 8,
+            session_parallelism: 8,
+            session_queue_capacity: build_queue_capacity(8),
             connect_timeout: Duration::from_secs(10),
             retry_times: 3,
+            rate_limit: DownloadRateLimit::Unlimited,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ValidatedDownloaderConfig {
+    max_connections: usize,
+    session_parallelism: usize,
+    session_queue_capacity: usize,
+    connect_timeout: Duration,
+    retry_times: u32,
+    rate_limit: DownloadRateLimit,
 }
 
 impl DownloadSession {
@@ -126,7 +160,11 @@ impl DownloadSession {
     }
 
     pub fn name(&self) -> Option<&str> {
-        self.name.as_deref()
+        self.request.name.as_deref()
+    }
+
+    pub fn request(&self) -> &DownloadSessionRequest {
+        &self.request
     }
 
     pub async fn add_task(&self, task: DownloadTask) -> Result<()> {
@@ -141,8 +179,8 @@ impl DownloadSession {
         self.downloader()?.add_plan(self.id, plan).await
     }
 
-    pub async fn report(&self) -> Result<SessionExecutionReport> {
-        self.downloader()?.session_report(self.id).await
+    pub async fn snapshot(&self) -> Result<DownloadSessionSnapshot> {
+        self.downloader()?.session_snapshot(self.id).await
     }
 
     pub async fn close(&self) -> Result<bool> {
@@ -153,12 +191,12 @@ impl DownloadSession {
         self.downloader()?.wait_session_empty(self.id).await
     }
 
-    pub async fn wait(&self) -> Result<()> {
-        self.downloader()?.wait_session(self.id).await
+    pub async fn finish(&self) -> Result<()> {
+        self.downloader()?.finish_session(self.id).await
     }
 
-    pub async fn wait_result(&self) -> Result<SessionExecutionReport> {
-        self.downloader()?.wait_session_result(self.id).await
+    pub async fn finish_snapshot(&self) -> Result<DownloadSessionSnapshot> {
+        self.downloader()?.finish_session_snapshot(self.id).await
     }
 
     pub async fn remove(&self) -> Result<()> {
@@ -167,13 +205,18 @@ impl DownloadSession {
 }
 
 impl SessionHandler {
-    fn new(name: Option<String>, sender: mpsc::Sender<QueuedDownloadTask>) -> Self {
+    fn new(
+        request: DownloadSessionRequest,
+        sender: mpsc::Sender<QueuedDownloadTask>,
+        bandwidth_limiter: Arc<BandwidthLimiter>,
+    ) -> Self {
         Self {
-            name,
+            request,
             workers: TaskTracker::new(),
             sender: std::sync::Mutex::new(Some(sender)),
-            report: std::sync::Mutex::new(SessionExecutionState::default()),
+            state: std::sync::Mutex::new(SessionProgressState::default()),
             submission: AsyncMutex::new(()),
+            bandwidth_limiter,
             pending: AtomicUsize::new(0),
             idle: Notify::new(),
             closed: AtomicBool::new(false),
@@ -192,43 +235,43 @@ impl SessionHandler {
     }
 
     fn mark_enqueued(&self) {
-        let mut report = self.report.lock().expect("session report mutex poisoned");
-        report.accepted += 1;
-        report.enqueued += 1;
+        let mut state = self.state.lock().expect("session state mutex poisoned");
+        state.accepted += 1;
+        state.enqueued += 1;
     }
 
     fn mark_downloaded(&self) {
-        self.report
+        self.state
             .lock()
-            .expect("session report mutex poisoned")
+            .expect("session state mutex poisoned")
             .downloaded += 1;
     }
 
     fn mark_skipped(&self) {
-        self.report
+        self.state
             .lock()
-            .expect("session report mutex poisoned")
+            .expect("session state mutex poisoned")
             .skipped += 1;
     }
 
     fn mark_accepted_skip(&self) {
-        let mut report = self.report.lock().expect("session report mutex poisoned");
-        report.accepted += 1;
-        report.skipped += 1;
+        let mut state = self.state.lock().expect("session state mutex poisoned");
+        state.accepted += 1;
+        state.skipped += 1;
     }
 
     fn mark_failed(&self, task_id: TaskId, error: String) {
-        self.report
+        self.state
             .lock()
-            .expect("session report mutex poisoned")
+            .expect("session state mutex poisoned")
             .failures
             .push(TaskExecutionFailure { task_id, error });
     }
 
     fn mark_cancelled(&self, task_id: TaskId) {
-        self.report
+        self.state
             .lock()
-            .expect("session report mutex poisoned")
+            .expect("session state mutex poisoned")
             .cancelled_task_ids
             .push(task_id);
     }
@@ -274,11 +317,10 @@ impl SessionHandler {
         self.closed.load(Ordering::Acquire) || self.workers.is_closed()
     }
 
-    fn snapshot_report(&self, session_id: SessionId) -> SessionExecutionReport {
-        let state = self.report.lock().expect("session report mutex poisoned");
-        SessionExecutionReport {
-            session_id,
-            session_name: self.name.clone(),
+    fn snapshot_data(&self) -> SessionSnapshotData {
+        let state = self.state.lock().expect("session state mutex poisoned");
+        SessionSnapshotData {
+            session_name: self.request.name.clone(),
             accepted: state.accepted,
             enqueued: state.enqueued,
             downloaded: state.downloaded,
@@ -294,39 +336,63 @@ impl SessionHandler {
 }
 
 impl SessionState {
-    pub fn new(session_id: SessionId, downloader: Arc<ElementalDownloader>) -> Self {
+    pub fn new() -> Self {
         Self {
             tasks: HashMap::new(),
             bps: DownloadBytesPerSecond::default(),
             token: CancellationToken::new(),
-            counter: tokio::spawn(async move {
-                loop {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                    if let Some(mut state) =
-                        downloader.tracker.sessions.get_async(&session_id).await
-                    {
-                        state.bps.value = state.bps.count;
-                        state.bps.count = 0;
-                    } else {
-                        break;
-                    }
-                }
-            }),
         }
     }
 }
 
-#[derive(Debug, Default)]
-pub struct DownloadBytesPerSecond {
-    pub count: usize,
-    pub value: usize,
+#[derive(Debug)]
+struct DownloadBytesPerSecond {
+    window_started_at: Instant,
+    current_window_bytes: usize,
+    value: usize,
+}
+
+impl Default for DownloadBytesPerSecond {
+    fn default() -> Self {
+        Self {
+            window_started_at: Instant::now(),
+            current_window_bytes: 0,
+            value: 0,
+        }
+    }
+}
+
+impl DownloadBytesPerSecond {
+    fn record(&mut self, bytes: usize, now: Instant) {
+        self.roll_window(now);
+        self.current_window_bytes = self.current_window_bytes.saturating_add(bytes);
+    }
+
+    fn value(&mut self, now: Instant) -> usize {
+        self.roll_window(now);
+        self.value
+    }
+
+    fn roll_window(&mut self, now: Instant) {
+        let elapsed = now.saturating_duration_since(self.window_started_at);
+        if elapsed < Duration::from_secs(1) {
+            return;
+        }
+
+        self.value = if elapsed < Duration::from_secs(2) {
+            self.current_window_bytes
+        } else {
+            0
+        };
+        self.current_window_bytes = 0;
+        self.window_started_at = now;
+    }
 }
 
 impl ElementalTaskTracker {
-    pub fn new(downloader: Weak<ElementalDownloader>) -> Self {
+    pub fn new() -> Self {
         Self {
             sessions: HashMap::new(),
-            downloader,
         }
     }
 
@@ -359,40 +425,24 @@ impl ElementalTaskTracker {
     }
 
     pub async fn create_session(&self, session_id: SessionId) -> Result<()> {
-        let downloader = self
-            .downloader
-            .upgrade()
-            .context("unexpected downloader drop")?;
-
         let popout = self
             .sessions
-            .upsert_async(session_id, SessionState::new(session_id, downloader))
+            .upsert_async(session_id, SessionState::new())
             .await;
 
         if let Some(old) = popout {
             old.token.cancel();
-            old.counter.abort();
-            let _ = old.counter.await;
         }
 
         Ok(())
-    }
-
-    pub async fn cancel_session(&self, session_id: SessionId) {
-        if let Some(token) = self.session_token(session_id).await {
-            token.cancel();
-        }
     }
 
     pub async fn remove_session(&self, session_id: SessionId) {
         if let Some(token) = self.session_token(session_id).await {
             token.cancel();
         }
-        self.sessions.remove_async(&session_id).await;
-    }
 
-    pub async fn has_session(&self, session_id: SessionId) -> bool {
-        self.sessions.contains_async(&session_id).await
+        self.sessions.remove_async(&session_id).await;
     }
 
     async fn session_token(&self, session_id: SessionId) -> Option<CancellationToken> {
@@ -404,7 +454,9 @@ impl ElementalTaskTracker {
 
 impl ElementalDownloader {
     pub fn new() -> Arc<Self> {
-        Self::from_parts(reqwest::Client::new(), Arc::new(LocalFsStorage), 8)
+        let config = validate_downloader_config(ElementalDownloaderConfig::default())
+            .expect("default downloader config must be valid");
+        Self::from_parts(reqwest::Client::new(), Arc::new(LocalFsStorage), config)
     }
 
     pub fn with_config_default() -> Result<Arc<Self>> {
@@ -419,7 +471,7 @@ impl ElementalDownloader {
         config: ElementalDownloaderConfig,
         storage: Arc<dyn DownloadStorage>,
     ) -> Result<Arc<Self>> {
-        let worker_count = config.max_connections.max(1);
+        let config = validate_downloader_config(config)?;
         let retry_policy = retry::for_host(ANY_HOST)
             .max_retries_per_request(config.retry_times)
             .classify_fn(|req_rep| {
@@ -436,22 +488,31 @@ impl ElementalDownloader {
             .connect_timeout(config.connect_timeout)
             .build()?;
 
-        Ok(Self::from_parts(client, storage, worker_count))
+        Ok(Self::from_parts(client, storage, config))
     }
 
     fn from_parts(
         client: reqwest::Client,
         storage: Arc<dyn DownloadStorage>,
-        worker_count: usize,
+        config: ValidatedDownloaderConfig,
     ) -> Arc<Self> {
+        let concurrency = Arc::new(
+            ConcurrencyController::new(config.max_connections)
+                .expect("validated downloader max_connections must be valid"),
+        );
+        let bandwidth_limiter = Arc::new(
+            BandwidthLimiter::new(config.rate_limit)
+                .expect("validated downloader rate limit must be valid"),
+        );
         Arc::new_cyclic(|me| Self {
             client,
             sessions: HashMap::new(),
-            tracker: Arc::new(ElementalTaskTracker::new(me.clone())),
-            connections: Arc::new(Semaphore::new(worker_count)),
+            tracker: Arc::new(ElementalTaskTracker::new()),
+            concurrency,
+            bandwidth_limiter,
             storage,
-            worker_count,
-            queue_capacity: build_queue_capacity(worker_count),
+            session_parallelism: config.session_parallelism,
+            session_queue_capacity: config.session_queue_capacity,
             next_session_id: AtomicU64::new(1),
             me: me.clone(),
         })
@@ -464,24 +525,39 @@ impl ElementalDownloader {
         Self::with_storage(config, Arc::new(HardlinkCachedStorage::new(cache_root)))
     }
 
-    pub async fn create_named_session(&self, name: impl Into<String>) -> Result<DownloadSession> {
-        self.create_session(Some(name.into())).await
+    pub async fn create_named_session(
+        &self,
+        name: impl Into<String>,
+        execution_policy: DownloadExecutionPolicy,
+    ) -> Result<DownloadSession> {
+        self.create_session(DownloadSessionRequest::named(name, execution_policy)?)
+            .await
     }
 
-    pub async fn create_unnamed_session(&self) -> Result<DownloadSession> {
-        self.create_session(None).await
+    pub async fn create_unnamed_session(
+        &self,
+        execution_policy: DownloadExecutionPolicy,
+    ) -> Result<DownloadSession> {
+        self.create_session(DownloadSessionRequest::unnamed(execution_policy)?)
+            .await
     }
 
-    pub async fn create_session(&self, name: Option<String>) -> Result<DownloadSession> {
+    pub async fn create_session(&self, request: DownloadSessionRequest) -> Result<DownloadSession> {
         let session_id = self.next_session_id.fetch_add(1, Ordering::Relaxed);
         self.tracker.create_session(session_id).await?;
 
         let downloader = self.me.upgrade().context("unexpected downloader drop")?;
-        let (sender, receiver) = mpsc::channel(self.queue_capacity);
+        let (sender, receiver) = mpsc::channel(self.session_queue_capacity);
         let receiver = Arc::new(AsyncMutex::new(receiver));
-        let handler = Arc::new(SessionHandler::new(name.clone(), sender));
+        let parallelism = request.effective_parallelism(self.session_parallelism);
+        let session_rate_limit = request.effective_rate_limit();
+        let handler = Arc::new(SessionHandler::new(
+            request.clone(),
+            sender,
+            Arc::new(BandwidthLimiter::new(session_rate_limit)?),
+        ));
 
-        for _ in 0..self.worker_count {
+        for _ in 0..parallelism {
             let session_id_cloned = session_id;
             let handler_cloned = handler.clone();
             let receiver_cloned = receiver.clone();
@@ -503,7 +579,7 @@ impl ElementalDownloader {
 
         Ok(DownloadSession {
             id: session_id,
-            name,
+            request,
             downloader: self.me.clone(),
         })
     }
@@ -525,23 +601,32 @@ impl ElementalDownloader {
         self.sessions.contains_async(&session_id).await
     }
 
-    pub async fn get_session(
-        &self,
-        session_id: SessionId,
-    ) -> Option<OccupiedEntry<'_, SessionId, Arc<SessionHandler>>> {
-        self.sessions.get_async(&session_id).await
-    }
-
-    pub async fn session_report(&self, session_id: SessionId) -> Result<SessionExecutionReport> {
+    pub async fn session_snapshot(&self, session_id: SessionId) -> Result<DownloadSessionSnapshot> {
         let handler = self.session_handler(session_id).await?;
-        Ok(handler.snapshot_report(session_id))
-    }
+        let snapshot = handler.snapshot_data();
+        let bytes_per_second = self
+            .tracker
+            .sessions
+            .get_async(&session_id)
+            .await
+            .map(|mut state| state.bps.value(Instant::now()))
+            .unwrap_or_default();
 
-    pub async fn get_session_state(
-        &self,
-        session_id: SessionId,
-    ) -> Option<OccupiedEntry<'_, SessionId, SessionState>> {
-        self.tracker.sessions.get_async(&session_id).await
+        Ok(DownloadSessionSnapshot {
+            session_id,
+            session_name: snapshot.session_name,
+            accepted: snapshot.accepted,
+            enqueued: snapshot.enqueued,
+            downloaded: snapshot.downloaded,
+            skipped: snapshot.skipped,
+            failed: snapshot.failed,
+            cancelled: snapshot.cancelled,
+            pending: snapshot.pending,
+            bytes_per_second,
+            is_closed: snapshot.is_closed,
+            failures: snapshot.failures,
+            cancelled_task_ids: snapshot.cancelled_task_ids,
+        })
     }
 
     pub async fn add_task(&self, session_id: SessionId, task: DownloadTask) -> Result<()> {
@@ -607,49 +692,69 @@ impl ElementalDownloader {
         Ok(())
     }
 
-    pub async fn wait_session(&self, session_id: SessionId) -> Result<()> {
+    pub async fn finish_session(&self, session_id: SessionId) -> Result<()> {
         let handler = self.session_handler(session_id).await?;
         handler.close_and_wait().await;
         Ok(())
     }
 
-    pub async fn wait_session_result(
+    pub async fn finish_session_snapshot(
         &self,
         session_id: SessionId,
-    ) -> Result<SessionExecutionReport> {
+    ) -> Result<DownloadSessionSnapshot> {
         let handler = self.session_handler(session_id).await?;
         handler.close_and_wait().await;
-        Ok(handler.snapshot_report(session_id))
+        self.session_snapshot(session_id).await
     }
 
-    pub async fn run_plan(&self, plan: DownloadPlan) -> Result<SessionExecutionReport> {
-        let session = self.create_session(plan.session_name.clone()).await?;
+    pub async fn run_plan(&self, plan: DownloadPlan) -> Result<()> {
+        let session = self.create_session(plan.session.clone()).await?;
         if let Err(error) = session.add_tasks(plan.tasks).await {
             let _ = self.remove_session(session.id()).await;
             return Err(error);
         }
-        let report = session.wait_result().await?;
-        self.remove_session(session.id()).await?;
-        Ok(report)
-    }
+        let snapshot = session.finish_snapshot().await?;
+        let execution_result = ensure_session_succeeded(&snapshot);
+        let remove_result = self.remove_session(session.id()).await;
 
-    pub async fn execute_plans(
-        &self,
-        plans: Vec<DownloadPlan>,
-    ) -> Result<Vec<SessionExecutionReport>> {
-        let mut reports = Vec::with_capacity(plans.len());
-        for plan in plans {
-            reports.push(self.run_plan(plan).await?);
+        if let Err(error) = execution_result {
+            let _ = remove_result;
+            return Err(error);
         }
-        Ok(reports)
+
+        remove_result?;
+        Ok(())
     }
 
-    pub async fn execute_planner<P>(&self, planner: &P) -> Result<Vec<SessionExecutionReport>>
+    pub async fn execute_plans(&self, plans: Vec<DownloadPlan>) -> Result<()> {
+        for plan in plans {
+            self.run_plan(plan).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn execute_planner<P>(&self, planner: &P) -> Result<()>
     where
         P: DownloadPlanner + ?Sized,
     {
         let plans = planner.plan()?;
         self.execute_plans(plans).await
+    }
+
+    pub fn max_connections(&self) -> usize {
+        self.concurrency.max_connections()
+    }
+
+    pub fn rate_limit(&self) -> DownloadRateLimit {
+        self.bandwidth_limiter.rate_limit()
+    }
+
+    pub async fn set_max_connections(&self, max_connections: usize) -> Result<()> {
+        self.concurrency.set_max_connections(max_connections).await
+    }
+
+    pub async fn set_rate_limit(&self, rate_limit: DownloadRateLimit) -> Result<()> {
+        self.bandwidth_limiter.set_rate_limit(rate_limit).await
     }
 
     async fn session_handler(&self, session_id: SessionId) -> Result<Arc<SessionHandler>> {
@@ -739,7 +844,7 @@ async fn execute_queued_task(
             .await;
             return;
         }
-        permit = downloader.connections.clone().acquire_owned() => permit,
+        permit = downloader.concurrency.acquire_owned() => permit,
     };
 
     let permit = match permit {
@@ -784,6 +889,8 @@ async fn execute_queued_task(
     let storage = downloader.storage.clone();
     let storage_for_execute = storage.clone();
     let tracker = downloader.tracker.clone();
+    let global_bandwidth_limiter = downloader.bandwidth_limiter.clone();
+    let session_bandwidth_limiter = handler.bandwidth_limiter.clone();
     let session_id_cloned = session_id;
     let task_id_cloned = task_id.clone();
     let mut validator = StreamingValidator::from_task(&task);
@@ -801,12 +908,14 @@ async fn execute_queued_task(
         let mut output = BufWriter::with_capacity(128 * 1024, file);
         while let Some(item) = stream.next().await {
             let data = item?;
+            session_bandwidth_limiter.throttle(data.len()).await;
+            global_bandwidth_limiter.throttle(data.len()).await;
             validator.update(&data);
             if let Some(mut state) = tracker.sessions.get_async(&session_id_cloned).await {
                 if let Some(mut tracked) = state.tasks.get_async(&task_id_cloned).await {
                     tracked.recv += data.len();
                 }
-                state.bps.count += data.len();
+                state.bps.record(data.len(), Instant::now());
             }
 
             output.write_all(&data).await?;
@@ -869,6 +978,61 @@ async fn execute_queued_task(
 
 fn build_queue_capacity(worker_count: usize) -> usize {
     (worker_count.saturating_mul(32)).max(128)
+}
+
+fn ensure_session_succeeded(snapshot: &DownloadSessionSnapshot) -> Result<()> {
+    let session_label = snapshot
+        .session_name
+        .as_deref()
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| snapshot.session_id.to_string());
+
+    if !snapshot.failures.is_empty() {
+        let failures = snapshot
+            .failures
+            .iter()
+            .map(|failure| format!("{}: {}", failure.task_id, failure.error))
+            .collect::<Vec<String>>()
+            .join("\n");
+        bail!("download session '{session_label}' failed:\n{failures}");
+    }
+
+    if !snapshot.cancelled_task_ids.is_empty() {
+        let cancelled = snapshot
+            .cancelled_task_ids
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<String>>()
+            .join("\n");
+        bail!("download session '{session_label}' was cancelled:\n{cancelled}");
+    }
+
+    Ok(())
+}
+
+fn validate_downloader_config(
+    config: ElementalDownloaderConfig,
+) -> Result<ValidatedDownloaderConfig> {
+    if config.max_connections == 0 {
+        bail!("downloader max_connections must be greater than zero");
+    }
+
+    if config.session_parallelism == 0 {
+        bail!("downloader session_parallelism must be greater than zero");
+    }
+
+    if config.session_queue_capacity == 0 {
+        bail!("downloader session_queue_capacity must be greater than zero");
+    }
+
+    Ok(ValidatedDownloaderConfig {
+        max_connections: config.max_connections,
+        session_parallelism: config.session_parallelism,
+        session_queue_capacity: config.session_queue_capacity,
+        connect_timeout: config.connect_timeout,
+        retry_times: config.retry_times,
+        rate_limit: config.rate_limit,
+    })
 }
 
 async fn mark_task_error(

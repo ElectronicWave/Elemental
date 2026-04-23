@@ -8,8 +8,7 @@ use elemental_core::{
 use elemental_infra::downloader::{
     core::ElementalDownloader,
     plan::DownloadPlanner,
-    report::SessionExecutionReport,
-    task::{DownloadPlan, DownloadTask},
+    task::{DownloadExecutionPolicy, DownloadPlan, DownloadTask},
 };
 use elemental_schema::mojang::piston::{
     PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaLibraries,
@@ -252,8 +251,7 @@ where
     ) -> Result<PreparedVersionJsonInstance<R, L, VL>> {
         let status = self.status().await?;
         if !status.is_downloaded() {
-            let reports = downloader.execute_planner(&self.planner()).await?;
-            ensure_download_reports_succeeded(&reports)?;
+            downloader.execute_planner(&self.planner()).await?;
         }
 
         let status = self.status().await?;
@@ -330,36 +328,6 @@ where
     }
 }
 
-fn ensure_download_reports_succeeded(reports: &[SessionExecutionReport]) -> Result<()> {
-    let failures = reports
-        .iter()
-        .flat_map(|report| {
-            report
-                .failures
-                .iter()
-                .map(|failure| format!("{}: {}", failure.task_id, failure.error))
-        })
-        .collect::<Vec<String>>();
-
-    if !failures.is_empty() {
-        bail!("version artifact download failed:\n{}", failures.join("\n"));
-    }
-
-    let cancelled = reports
-        .iter()
-        .flat_map(|report| report.cancelled_task_ids.iter().map(ToString::to_string))
-        .collect::<Vec<String>>();
-
-    if !cancelled.is_empty() {
-        bail!(
-            "version artifact download was cancelled:\n{}",
-            cancelled.join("\n")
-        );
-    }
-
-    Ok(())
-}
-
 impl<R, L, VL> PreparedVersionJsonInstance<R, L, VL>
 where
     R: VersionJsonRemoteResolver,
@@ -412,7 +380,11 @@ where
             ));
         }
 
-        Ok(DownloadPlan::named(self.version_name()?, tasks))
+        DownloadPlan::named(
+            self.version_name()?,
+            DownloadExecutionPolicy::ServiceDefault,
+            tasks,
+        )
     }
 
     fn plan_library_tasks(&self, library: &PistonMetaLibraries) -> Result<Vec<DownloadTask>> {
@@ -463,7 +435,11 @@ where
                 })
                 .collect::<Result<Vec<DownloadTask>>>()?;
 
-        Ok(DownloadPlan::named(format!("{version_name}-assets"), tasks))
+        DownloadPlan::named(
+            format!("{version_name}-assets"),
+            DownloadExecutionPolicy::ServiceDefault,
+            tasks,
+        )
     }
 }
 

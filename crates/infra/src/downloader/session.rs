@@ -6,8 +6,8 @@ pub struct TaskExecutionFailure {
     pub error: String,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct SessionExecutionReport {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DownloadSessionSnapshot {
     pub session_id: SessionId,
     pub session_name: Option<String>,
     pub accepted: usize,
@@ -17,6 +17,7 @@ pub struct SessionExecutionReport {
     pub failed: usize,
     pub cancelled: usize,
     pub pending: usize,
+    pub bytes_per_second: usize,
     pub is_closed: bool,
     pub failures: Vec<TaskExecutionFailure>,
     pub cancelled_task_ids: Vec<TaskId>,

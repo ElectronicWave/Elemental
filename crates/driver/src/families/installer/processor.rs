@@ -11,7 +11,7 @@ use elemental_core::{
 use elemental_infra::{
     downloader::{
         core::ElementalDownloader,
-        task::{DownloadPlan, DownloadTask},
+        task::{DownloadExecutionPolicy, DownloadPlan, DownloadTask},
     },
     jar::JarFile,
 };
@@ -57,23 +57,14 @@ where
         return Ok(());
     }
 
-    let report = downloader
+    downloader
         .run_plan(DownloadPlan::named(
             format!("{family_name}-install-profile"),
+            DownloadExecutionPolicy::ServiceDefault,
             tasks,
-        ))
+        )?)
         .await
         .with_context(|| format!("download {family_name} install profile libraries failed"))?;
-
-    if report.failed > 0 {
-        let failures = report
-            .failures
-            .iter()
-            .map(|failure| format!("{}: {}", failure.task_id, failure.error))
-            .collect::<Vec<String>>()
-            .join("\n");
-        bail!("{family_name} install profile library download failed:\n{failures}");
-    }
 
     Ok(())
 }

@@ -11,7 +11,11 @@ use elemental_core::{
 };
 use elemental_driver::{
     catalog::Catalog,
-    driver::Driver,
+    descriptors::{
+        BABRIC_DRIVER, CLEANROOM_DRIVER, FABRIC_DRIVER, FORGE_DRIVER, LEGACY_FABRIC_DRIVER,
+        LITELOADER_DRIVER, NEOFORGE_DRIVER, QUILT_DRIVER, RIFT_DRIVER, VANILLA_DRIVER,
+    },
+    driver::{Driver, DriverDescriptor},
     drivers::{
         cleanroom::driver::CleanroomDriverSpec,
         fabric::{driver::FabricDriverFamily, source::FabricFlavor},
@@ -36,7 +40,7 @@ use elemental_infra::downloader::core::ElementalDownloader;
 
 use crate::{
     builder::LauncherBuilder,
-    request::{LaunchOptions, LoadPreparedInstanceRequest, PrepareInstanceRequest},
+    request::{LaunchOptions, PrepareInstanceRequest},
     result::{
         Instance, LaunchCommandResult, LaunchedInstance, PreparedInstance, PreparedInstanceKind,
     },
@@ -156,21 +160,21 @@ where
         let instance = self.ensure_instance(request.instance_name).await?;
         let driver_spec = request.driver;
         let prepared_kind = self
-            .resolve_driver(&driver_spec)?
+            .resolve_driver(driver_spec.descriptor())?
             .prepare(&instance, &driver_spec)
             .await?;
-        Ok(PreparedInstance::new(driver_spec, prepared_kind))
+        Ok(PreparedInstance::new(
+            driver_spec.descriptor(),
+            prepared_kind,
+        ))
     }
 
-    pub async fn load_instance(
-        &self,
-        request: LoadPreparedInstanceRequest,
-    ) -> Result<PreparedInstance<L, VL>> {
-        let instance = self.instance(request.instance_name)?;
-        let driver_spec = request.driver;
+    pub async fn load_instance(&self, instance: Instance) -> Result<PreparedInstance<L, VL>> {
+        let layout = self.instance(instance.instance_name)?;
+        let driver_spec = instance.driver.driver;
         let prepared_kind = self
-            .resolve_driver(&driver_spec)?
-            .load_prepared(&instance)
+            .resolve_driver(driver_spec)?
+            .load_prepared(&layout)
             .await?;
         Ok(PreparedInstance::new(driver_spec, prepared_kind))
     }
@@ -184,7 +188,7 @@ where
     where
         A: Authorizer,
     {
-        self.resolve_driver(prepared.driver())?
+        self.resolve_driver(prepared.driver)?
             .build_launch_command(prepared, authorizer, options)
             .await
     }
@@ -254,30 +258,27 @@ where
         )
     }
 
-    fn resolve_driver(&self, spec: &DriverSpec) -> Result<ResolvedLauncherDriver> {
-        Ok(match spec {
-            DriverSpec::Vanilla(_) => ResolvedLauncherDriver::Vanilla(self.vanilla_driver()),
-            DriverSpec::Fabric(_) => ResolvedLauncherDriver::FabricLike(
+    fn resolve_driver(&self, desc: DriverDescriptor) -> Result<ResolvedLauncherDriver> {
+        Ok(match desc {
+            VANILLA_DRIVER => ResolvedLauncherDriver::Vanilla(self.vanilla_driver()),
+            FABRIC_DRIVER => ResolvedLauncherDriver::FabricLike(
                 self.profiled_driver(FabricDriverFamily::new(FabricFlavor::Fabric))?,
             ),
-            DriverSpec::LegacyFabric(_) => ResolvedLauncherDriver::FabricLike(
+            LEGACY_FABRIC_DRIVER => ResolvedLauncherDriver::FabricLike(
                 self.profiled_driver(FabricDriverFamily::new(FabricFlavor::LegacyFabric))?,
             ),
-            DriverSpec::Babric(_) => ResolvedLauncherDriver::FabricLike(
+            BABRIC_DRIVER => ResolvedLauncherDriver::FabricLike(
                 self.profiled_driver(FabricDriverFamily::new(FabricFlavor::Babric))?,
             ),
-            DriverSpec::Quilt(_) => {
-                ResolvedLauncherDriver::Quilt(self.profiled_driver(QuiltDriverFamily)?)
-            }
-            DriverSpec::LiteLoader(_) => {
+            QUILT_DRIVER => ResolvedLauncherDriver::Quilt(self.profiled_driver(QuiltDriverFamily)?),
+            LITELOADER_DRIVER => {
                 ResolvedLauncherDriver::LiteLoader(self.profiled_driver(LiteLoaderDriverFamily)?)
             }
-            DriverSpec::Rift(_) => {
-                ResolvedLauncherDriver::Rift(self.profiled_driver(RiftDriverFamily)?)
-            }
-            DriverSpec::Forge(_) => ResolvedLauncherDriver::Forge(self.installer_driver()),
-            DriverSpec::Cleanroom(_) => ResolvedLauncherDriver::Cleanroom(self.installer_driver()),
-            DriverSpec::NeoForge(_) => ResolvedLauncherDriver::NeoForge(self.installer_driver()),
+            RIFT_DRIVER => ResolvedLauncherDriver::Rift(self.profiled_driver(RiftDriverFamily)?),
+            FORGE_DRIVER => ResolvedLauncherDriver::Forge(self.installer_driver()),
+            CLEANROOM_DRIVER => ResolvedLauncherDriver::Cleanroom(self.installer_driver()),
+            NEOFORGE_DRIVER => ResolvedLauncherDriver::NeoForge(self.installer_driver()),
+            _ => bail!("unsupported driver '{}'", desc.id),
         })
     }
 }
@@ -509,7 +510,7 @@ where
 {
     anyhow!(
         "prepared instance variant does not match driver '{}'",
-        prepared.driver.id()
+        prepared.driver.id
     )
 }
 

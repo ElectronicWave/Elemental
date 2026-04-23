@@ -9,9 +9,3 @@ pub struct PrepareInstanceRequest {
     pub instance_name: String,
     pub driver: DriverSpec,
 }
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LoadPreparedInstanceRequest {
-    pub instance_name: String,
-    pub driver: DriverSpec,
-}

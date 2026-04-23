@@ -138,16 +138,42 @@ async fn main() -> Result<()> {
 }
 ```
 
-## 3. Runtime Discovery
+## 3. Inspect, Load, and Launch
 
 ```rust
-todo!()
-```
+use anyhow::Result;
+use elemental::{
+    core::auth::authorizers::offline::OfflineAuthorizer,
+    launcher::{LaunchOptions, Launcher},
+};
 
-## 4. Launch a existing Prepared Instance
-
-```rust
-todo!()
+// Extracting native should use multi-thread runtime to avoid blocking the async flow, but the rest of the work is single-thread-friendly so the default runtime is fine for most of the flow.
+#[tokio::main(flavor = "multi_thread")]
+async fn main() -> Result<()> {
+    let launcher = Launcher::builder().build();
+    // Find all instances in the storage and print them out
+    let instances = launcher.inspect_instances().await?;
+    println!("Instances: {:#?}", instances);
+    let instance = launcher
+        .inspect_instance("MyNeoForge-1.21.1".into())
+        .await?;
+    println!("Instance: {:#?}", instance);
+    if let Some(instance) = instance {
+        let prepared = launcher.load_instance(instance).await?;
+        let mut instance = launcher
+            .launch_prepared_instance(
+                &prepared,
+                OfflineAuthorizer {
+                    username: "Fox".into(),
+                },
+                &LaunchOptions::default(),
+            )
+            .await?;
+        let exit = instance.child.wait().await?;
+        println!("Instance exited with: {exit}");
+    }
+    Ok(())
+}
 ```
 
 ## Notes

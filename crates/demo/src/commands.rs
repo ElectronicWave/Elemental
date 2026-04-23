@@ -41,7 +41,7 @@ async fn run_launch(config: DemoConfig) -> Result<()> {
     let (prepared, prepare_elapsed) = if config.local_only {
         time_operation(launcher.load_instance(LoadPreparedInstanceRequest {
             instance_name: request_instance_name,
-            driver: request_driver,
+            driver: driver_spec.descriptor(),
         }))
         .await?
     } else {
@@ -131,7 +131,10 @@ fn to_driver_spec(config: &DemoConfig) -> Result<DriverSpec> {
     })
 }
 
-fn require_loader_version(config: &DemoConfig, driver_label: &str) -> Result<elemental::driver::loader_version::LoaderVersionId> {
+fn require_loader_version(
+    config: &DemoConfig,
+    driver_label: &str,
+) -> Result<elemental::driver::loader_version::LoaderVersionId> {
     config
         .loader_version
         .clone()
@@ -173,7 +176,10 @@ pub(super) async fn finalize_launch(
     let version = storage.instance(config.instance_name.clone(), BaseInstanceLayout)?;
     let diagnostics = collect_version_diagnostics(&version)?;
     let runtime_executable = runtime.executable().to_path_buf();
-    let loader_version = config.loader_version.as_ref().map(|version| version.as_str());
+    let loader_version = config
+        .loader_version
+        .as_ref()
+        .map(|version| version.as_str());
     let install_status = if config.local_only {
         "LoadedPrepared(via facade)"
     } else {

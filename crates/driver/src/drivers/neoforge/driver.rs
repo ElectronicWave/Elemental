@@ -16,5 +16,6 @@ impl InstallerFamilyDriverSpec for NeoForgeFamily {
         "net.neoforged:neoforge:",
         "net.neoforged:forge:",
         "net.neoforged:fmlloader:",
+        "net.neoforged.fancymodloader:",
     ];
 }

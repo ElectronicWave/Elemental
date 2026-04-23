@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use elemental_core::{launcher::command::LaunchCommand, runtime::distribution::Distribution};
 use elemental_driver::{
-    driver::InstalledDriver,
+    driver::{DriverDescriptor, InstalledDriver},
     drivers::{
         cleanroom::driver::PreparedCleanroomVersion, fabric::prepared::PreparedFabricVersion,
         forge::prepared::PreparedForgeVersion, liteloader::prepared::PreparedLiteLoaderVersion,
@@ -13,8 +13,6 @@ use elemental_driver::{
         BaseInstanceLayout, BaseRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
     },
 };
-
-use crate::spec::DriverSpec;
 
 pub struct LaunchCommandResult {
     pub runtime: Distribution,
@@ -38,7 +36,7 @@ where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    pub(crate) driver: DriverSpec,
+    pub(crate) driver: DriverDescriptor,
     pub(crate) inner: PreparedInstanceKind<L, VL>,
 }
 
@@ -62,11 +60,11 @@ where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    pub(crate) fn new(driver: DriverSpec, inner: PreparedInstanceKind<L, VL>) -> Self {
+    pub(crate) fn new(driver: DriverDescriptor, inner: PreparedInstanceKind<L, VL>) -> Self {
         Self { driver, inner }
     }
 
-    pub fn driver(&self) -> &DriverSpec {
+    pub fn driver(&self) -> &DriverDescriptor {
         &self.driver
     }
 

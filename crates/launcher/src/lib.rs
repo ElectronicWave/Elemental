@@ -6,6 +6,6 @@ mod spec;
 
 pub use builder::LauncherBuilder;
 pub use launcher::Launcher;
-pub use request::{LaunchOptions, LoadPreparedInstanceRequest, PrepareInstanceRequest};
-pub use result::{LaunchCommandResult, LaunchedInstance, Instance, PreparedInstance};
+pub use request::{LaunchOptions, PrepareInstanceRequest};
+pub use result::{Instance, LaunchCommandResult, LaunchedInstance, PreparedInstance};
 pub use spec::{DriverSpec, LoaderSpec, VanillaSpec};

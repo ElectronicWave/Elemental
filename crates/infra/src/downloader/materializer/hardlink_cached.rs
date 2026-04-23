@@ -3,17 +3,17 @@ use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 
 use super::{
-    DownloadStorage, LocalFsStorage, StagedDownload, cleanup_file, create_temp_output_file,
+    Materializer, NoCachedMaterializer, StagedDownload, cleanup_file, create_temp_output_file,
     replace_file,
 };
 use crate::downloader::{task::DownloadTask, validation::target_matches_task};
 
 #[derive(Debug, Clone)]
-pub struct HardlinkCachedStorage {
+pub struct HardlinkCachedMaterializer {
     cache_root: PathBuf,
 }
 
-impl HardlinkCachedStorage {
+impl HardlinkCachedMaterializer {
     pub fn new(cache_root: impl Into<PathBuf>) -> Self {
         Self {
             cache_root: cache_root.into(),
@@ -49,7 +49,7 @@ impl HardlinkCachedStorage {
 }
 
 #[async_trait]
-impl DownloadStorage for HardlinkCachedStorage {
+impl Materializer for HardlinkCachedMaterializer {
     async fn resolve(&self, task: &DownloadTask) -> Result<bool> {
         if target_matches_task(&task.path, task).await? {
             return Ok(true);
@@ -70,7 +70,7 @@ impl DownloadStorage for HardlinkCachedStorage {
 
     async fn create_staging(&self, task: &DownloadTask) -> Result<StagedDownload> {
         if task.sha1.is_none() {
-            return LocalFsStorage.create_staging(task).await;
+            return NoCachedMaterializer.create_staging(task).await;
         }
 
         let cache_path = self.cache_path_for_task(task)?;
@@ -88,7 +88,7 @@ impl DownloadStorage for HardlinkCachedStorage {
     async fn commit(&self, staged: StagedDownload, task: &DownloadTask) -> Result<()> {
         let cache_path = match self.cache_path_for_task(task) {
             Ok(cache_path) => cache_path,
-            Err(_) => return LocalFsStorage.commit(staged, task).await,
+            Err(_) => return NoCachedMaterializer.commit(staged, task).await,
         };
 
         if target_matches_task(&cache_path, task).await? {

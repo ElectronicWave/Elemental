@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, sync::Arc};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use elemental_core::{
     auth::authorizer::Authorizer,
@@ -191,8 +191,7 @@ where
         Ok(Self::new(
             F::Source::default(),
             VanillaSource::default(),
-            ElementalDownloader::with_config_default()
-                .context("create default elemental downloader failed")?,
+            ElementalDownloader::new(),
         ))
     }
 }

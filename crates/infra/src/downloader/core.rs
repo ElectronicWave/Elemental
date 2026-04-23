@@ -16,10 +16,10 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 use super::anyhost::ANY_HOST;
 use super::control::{BandwidthLimiter, ConcurrencyController};
+use super::materializer::StagedDownload;
+pub use super::materializer::{HardlinkCachedMaterializer, Materializer, NoCachedMaterializer};
 use super::plan::DownloadPlanner;
 pub use super::session::{DownloadSessionSnapshot, TaskExecutionFailure};
-use super::storage::StagedDownload;
-pub use super::storage::{DownloadStorage, HardlinkCachedStorage, LocalFsStorage};
 pub use super::task::{
     ByteRate, DownloadExecutionPolicy, DownloadPlan, DownloadRateLimit, DownloadSessionRequest,
     DownloadTask, SessionId,
@@ -35,11 +35,18 @@ pub struct ElementalDownloader {
     tracker: Arc<ElementalTaskTracker>,
     concurrency: Arc<ConcurrencyController>,
     bandwidth_limiter: Arc<BandwidthLimiter>,
-    storage: Arc<dyn DownloadStorage>,
+    materializer: Arc<dyn Materializer>,
     session_parallelism: usize,
     session_queue_capacity: usize,
     next_session_id: AtomicU64,
     me: Weak<Self>,
+}
+
+#[derive(Debug)]
+pub struct ElementalDownloaderBuilder {
+    config: ElementalDownloaderConfig,
+    materializer: Arc<dyn Materializer>,
+    client: Option<reqwest::Client>,
 }
 
 #[derive(Debug, Clone)]
@@ -138,6 +145,16 @@ impl Default for ElementalDownloaderConfig {
     }
 }
 
+impl Default for ElementalDownloaderBuilder {
+    fn default() -> Self {
+        Self {
+            config: ElementalDownloaderConfig::default(),
+            materializer: Arc::new(NoCachedMaterializer),
+            client: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 struct ValidatedDownloaderConfig {
     max_connections: usize,
@@ -201,6 +218,49 @@ impl DownloadSession {
 
     pub async fn remove(&self) -> Result<()> {
         self.downloader()?.remove_session(self.id).await
+    }
+}
+
+impl ElementalDownloaderBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn config(mut self, config: ElementalDownloaderConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    pub fn materializer(mut self, materializer: Arc<dyn Materializer>) -> Self {
+        self.materializer = materializer;
+        self
+    }
+
+    pub fn no_cached_materializer(self) -> Self {
+        self.materializer(Arc::new(NoCachedMaterializer))
+    }
+
+    pub fn hardlink_cached_materializer(self, cache_root: impl Into<std::path::PathBuf>) -> Self {
+        self.materializer(Arc::new(HardlinkCachedMaterializer::new(cache_root)))
+    }
+
+    pub fn client(mut self, client: reqwest::Client) -> Self {
+        self.client = Some(client);
+        self
+    }
+
+    pub fn build(self) -> Result<Arc<ElementalDownloader>> {
+        let config = validate_downloader_config(self.config)?;
+        let client = match self.client {
+            Some(client) => client,
+            None => build_downloader_client(&config)?,
+        };
+
+        Ok(ElementalDownloader::from_parts(
+            client,
+            self.materializer,
+            config,
+        ))
     }
 }
 
@@ -453,47 +513,19 @@ impl ElementalTaskTracker {
 }
 
 impl ElementalDownloader {
+    pub fn builder() -> ElementalDownloaderBuilder {
+        ElementalDownloaderBuilder::new()
+    }
+
     pub fn new() -> Arc<Self> {
-        let config = validate_downloader_config(ElementalDownloaderConfig::default())
-            .expect("default downloader config must be valid");
-        Self::from_parts(reqwest::Client::new(), Arc::new(LocalFsStorage), config)
-    }
-
-    pub fn with_config_default() -> Result<Arc<Self>> {
-        Self::with_config(ElementalDownloaderConfig::default())
-    }
-
-    pub fn with_config(config: ElementalDownloaderConfig) -> Result<Arc<Self>> {
-        Self::with_storage(config, Arc::new(LocalFsStorage))
-    }
-
-    pub fn with_storage(
-        config: ElementalDownloaderConfig,
-        storage: Arc<dyn DownloadStorage>,
-    ) -> Result<Arc<Self>> {
-        let config = validate_downloader_config(config)?;
-        let retry_policy = retry::for_host(ANY_HOST)
-            .max_retries_per_request(config.retry_times)
-            .classify_fn(|req_rep| {
-                if req_rep.error().is_some()
-                    || matches!(req_rep.status(), Some(status) if status.is_server_error())
-                {
-                    req_rep.retryable()
-                } else {
-                    req_rep.success()
-                }
-            });
-        let client = ClientBuilder::new()
-            .retry(retry_policy)
-            .connect_timeout(config.connect_timeout)
-            .build()?;
-
-        Ok(Self::from_parts(client, storage, config))
+        Self::builder()
+            .build()
+            .expect("default downloader builder must be valid")
     }
 
     fn from_parts(
         client: reqwest::Client,
-        storage: Arc<dyn DownloadStorage>,
+        materializer: Arc<dyn Materializer>,
         config: ValidatedDownloaderConfig,
     ) -> Arc<Self> {
         let concurrency = Arc::new(
@@ -510,19 +542,12 @@ impl ElementalDownloader {
             tracker: Arc::new(ElementalTaskTracker::new()),
             concurrency,
             bandwidth_limiter,
-            storage,
+            materializer,
             session_parallelism: config.session_parallelism,
             session_queue_capacity: config.session_queue_capacity,
             next_session_id: AtomicU64::new(1),
             me: me.clone(),
         })
-    }
-
-    pub fn with_hardlink_cache(
-        config: ElementalDownloaderConfig,
-        cache_root: impl Into<std::path::PathBuf>,
-    ) -> Result<Arc<Self>> {
-        Self::with_storage(config, Arc::new(HardlinkCachedStorage::new(cache_root)))
     }
 
     pub async fn create_named_session(
@@ -647,7 +672,7 @@ impl ElementalDownloader {
             bail!("download session '{}' is closed", session_id);
         }
 
-        if self.storage.resolve(&task).await? {
+        if self.materializer.resolve(&task).await? {
             handler.mark_accepted_skip();
             return Ok(());
         }
@@ -797,7 +822,7 @@ async fn execute_queued_task(
         headers,
     } = queued_task;
 
-    match downloader.storage.resolve(&task).await {
+    match downloader.materializer.resolve(&task).await {
         Ok(true) => {
             downloader.tracker.remove_task(session_id, &task_id).await;
             handler.mark_skipped();
@@ -867,7 +892,7 @@ async fn execute_queued_task(
         .update_task(session_id, &task_id, TrackedTaskStatus::ACTIVE)
         .await;
 
-    let staged_output = downloader.storage.create_staging(&task).await;
+    let staged_output = downloader.materializer.create_staging(&task).await;
     let staged = match staged_output {
         Ok(output) => output,
         Err(error) => {
@@ -886,8 +911,8 @@ async fn execute_queued_task(
     };
     let staged_path = staged.path.clone();
     let client = downloader.client.clone();
-    let storage = downloader.storage.clone();
-    let storage_for_execute = storage.clone();
+    let materializer = downloader.materializer.clone();
+    let materializer_for_execute = materializer.clone();
     let tracker = downloader.tracker.clone();
     let global_bandwidth_limiter = downloader.bandwidth_limiter.clone();
     let session_bandwidth_limiter = handler.bandwidth_limiter.clone();
@@ -923,7 +948,7 @@ async fn execute_queued_task(
         output.flush().await?;
         drop(output);
         validator.finish(&path)?;
-        storage_for_execute
+        materializer_for_execute
             .commit(StagedDownload { path, file: None }, &task)
             .await?;
         anyhow::Ok(())
@@ -938,7 +963,7 @@ async fn execute_queued_task(
                     handler.mark_downloaded();
                 }
                 Err(error) => {
-                    let _ = storage
+                    let _ = materializer
                         .abort(StagedDownload {
                             path: staged_path.clone(),
                             file: None,
@@ -963,7 +988,7 @@ async fn execute_queued_task(
                 &task_id,
             )
             .await;
-            let _ = storage
+            let _ = materializer
                 .abort(StagedDownload {
                     path: staged_path,
                     file: None,
@@ -1033,6 +1058,26 @@ fn validate_downloader_config(
         retry_times: config.retry_times,
         rate_limit: config.rate_limit,
     })
+}
+
+fn build_downloader_client(config: &ValidatedDownloaderConfig) -> Result<reqwest::Client> {
+    let retry_policy = retry::for_host(ANY_HOST)
+        .max_retries_per_request(config.retry_times)
+        .classify_fn(|req_rep| {
+            if req_rep.error().is_some()
+                || matches!(req_rep.status(), Some(status) if status.is_server_error())
+            {
+                req_rep.retryable()
+            } else {
+                req_rep.success()
+            }
+        });
+
+    ClientBuilder::new()
+        .retry(retry_policy)
+        .connect_timeout(config.connect_timeout)
+        .build()
+        .map_err(Into::into)
 }
 
 async fn mark_task_error(

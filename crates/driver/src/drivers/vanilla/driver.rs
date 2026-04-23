@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use elemental_core::{
     auth::authorizer::Authorizer,
@@ -50,8 +50,7 @@ impl VanillaDriver {
     pub fn with_defaults() -> Result<Self> {
         Ok(Self::new(
             VanillaSource::default(),
-            ElementalDownloader::with_config_default()
-                .context("create default elemental downloader failed")?,
+            ElementalDownloader::new(),
         ))
     }
 

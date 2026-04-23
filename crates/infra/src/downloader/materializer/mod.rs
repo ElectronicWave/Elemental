@@ -10,10 +10,10 @@ use tokio::{fs::OpenOptions, fs::create_dir_all};
 use super::task::DownloadTask;
 
 mod hardlink_cached;
-mod local_fs;
+mod no_cached;
 
-pub use hardlink_cached::HardlinkCachedStorage;
-pub use local_fs::LocalFsStorage;
+pub use hardlink_cached::HardlinkCachedMaterializer;
+pub use no_cached::NoCachedMaterializer;
 
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -24,7 +24,7 @@ pub struct StagedDownload {
 }
 
 #[async_trait]
-pub trait DownloadStorage: fmt::Debug + Send + Sync {
+pub trait Materializer: fmt::Debug + Send + Sync {
     async fn resolve(&self, task: &DownloadTask) -> Result<bool>;
     async fn create_staging(&self, task: &DownloadTask) -> Result<StagedDownload>;
     async fn commit(&self, staged: StagedDownload, task: &DownloadTask) -> Result<()>;

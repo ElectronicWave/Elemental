@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 use elemental_infra::downloader::core::ElementalDownloader;
@@ -41,8 +41,7 @@ impl FabricDriverFamily {
         Ok(self.clone().build_driver(
             FabricSource::new(FabricEndpoints::with_overrides(overrides)?),
             VanillaSource::default(),
-            ElementalDownloader::with_config_default()
-                .context("create default elemental downloader failed")?,
+            ElementalDownloader::new(),
         ))
     }
 }

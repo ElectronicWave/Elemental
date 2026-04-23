@@ -1,14 +1,14 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 
-use super::{DownloadStorage, StagedDownload, create_temp_output_file, replace_file};
+use super::{Materializer, StagedDownload, create_temp_output_file, replace_file};
 use crate::downloader::{task::DownloadTask, validation::target_matches_task};
 
 #[derive(Debug, Clone, Default)]
-pub struct LocalFsStorage;
+pub struct NoCachedMaterializer;
 
 #[async_trait]
-impl DownloadStorage for LocalFsStorage {
+impl Materializer for NoCachedMaterializer {
     async fn resolve(&self, task: &DownloadTask) -> Result<bool> {
         target_matches_task(&task.path, task).await
     }

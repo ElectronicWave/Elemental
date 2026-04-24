@@ -6,5 +6,5 @@ edition = "2024"
 [dependencies]
 anyhow = { workspace = true }
 clap = { version = "4.5.23", features = ["derive"] }
-elemental = { path = "../elemental" }
+elemental = { package = "elemental-kit", path = "../elemental" }
 tokio = { workspace = true }

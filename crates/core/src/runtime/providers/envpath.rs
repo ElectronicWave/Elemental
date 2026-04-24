@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use dirs::data_local_dir;
 #[cfg(target_os = "linux")]
 use dirs::home_dir;
 use std::env::consts::EXE_SUFFIX;
@@ -35,6 +34,7 @@ impl EnvPathProvider {
         let mut locations = vec![];
         #[cfg(windows)]
         {
+            use dirs::data_local_dir;
             locations.push(data_local_dir().unwrap().join(".minecraft").join("runtime"));
             locations.push(
                 data_local_dir()

@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use async_trait::async_trait;
 
@@ -107,7 +107,7 @@ impl RegistryProvider {
                     };
 
                     if let Ok(dir) = key.get_value::<String, _>(value_name) {
-                        javas.push(Path::new(&dir).to_path_buf());
+                        javas.push(PathBuf::from(&dir));
                     }
                 }
             }

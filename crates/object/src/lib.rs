@@ -12,25 +12,34 @@ mod testobj {
     use super::*;
     #[tokio::test]
     async fn test_fulfill() {
-        tokio::spawn(async {
-            println!("making delay");
-            sleep(Duration::from_secs(1)).await;
+        use std::sync::Arc;
+        use tokio::sync::Notify;
+        // FIXME: REMOVE nofity and we should resolve the wait problem by shutdown function, if the value is shutdown.
+        let ready = Arc::new(Notify::new());
+        let dropped = Arc::new(Notify::new());
+        let ready2 = ready.clone();
+        let dropped2 = dropped.clone();
+        let handle = tokio::spawn(async move {
             println!("Fulfilling value");
             provide_with_shutdown("value".to_string(), |value| async move {
                 println!("Shutting down value {}", value);
             })
             .await;
-            sleep(Duration::from_secs(1)).await;
+            ready2.notify_one();
+            dropped2.notified().await;
             println!("Fulfilling value again");
             fulfill("value2".to_string()).await;
+            ready2.notify_one();
         });
+        ready.notified().await;
         println!("Got value here {:?}", acquire::<String>().await);
-        // After acquiring, drop this value
         println!("Dropping value");
         drop_value::<String>().await;
+        dropped.notify_one();
+        ready.notified().await;
         println!("Acquired value again {:?}", acquire::<String>().await);
-
         shutdown().await;
+        handle.await.unwrap();
     }
 
     #[tokio::test]

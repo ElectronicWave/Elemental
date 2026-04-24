@@ -2,10 +2,13 @@
 name = "elemental-core"
 version = "0.1.0"
 edition = "2024"
-
+repository = "https://github.com/ElectronicWave/Elemental"
+description = "Core library for Elemental, providing common utilities and abstractions used across the project."
+license = "AGPL-3.0-only"
+include = ["src/**/*", "Cargo.toml", "./../../LICENSE"]
 
 [dependencies]
-elemental-schema = { path = "../schema" }
+elemental-schema = { path = "../schema", version = "0.1.0" }
 dirs = { workspace = true }
 futures = { workspace = true }
 md-5 = "0.11.0"
@@ -26,7 +29,7 @@ toml = { workspace = true }
 minecraft-msa-auth = "0.4.0"
 oauth2 = { version = "5.0.0", default-features = false, features = [
     "reqwest",
-    "rustls-tls"
+    "rustls-tls",
 ] }
 
 [target.'cfg(windows)'.dependencies]

@@ -6,6 +6,6 @@ edition = "2024"
 [dependencies]
 anyhow = { workspace = true }
 tokio = { workspace = true }
-elemental-core = { path = "../core" }
-elemental-driver = { path = "../driver" }
-elemental-infra = { path = "../infra" }
+elemental-core = { path = "../core", version = "0.1.0" }
+elemental-driver = { path = "../driver", version = "0.1.0" }
+elemental-infra = { path = "../infra", version = "0.1.0" }

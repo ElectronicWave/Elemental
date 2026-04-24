@@ -1,0 +1,24 @@
+name: Publish
+
+on:
+  release:
+    types: [ created ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+  publish:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v5
+      - name: Login
+        run: cargo login ${{ secrets.CARGO_TOKEN }} --verbose
+      - name: Publish
+        run: |
+          cargo package --list --workspace --exclude demo
+          cargo publish --workspace --exclude demo

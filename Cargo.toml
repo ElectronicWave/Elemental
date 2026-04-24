@@ -4,7 +4,7 @@ members = [
     "crates/core",
     "crates/demo",
     "crates/driver",
-    "crates/elemental",
+    "crates/elemental-kit",
     "crates/launcher",
     "crates/object",
     "crates/schema",

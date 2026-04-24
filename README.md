@@ -79,7 +79,7 @@ This is the smallest end-to-end flow using the library crates directly.
 [dependencies]
 anyhow = "1"
 tokio = { version = "1", features = ["macros", "process", "rt-multi-thread"] }
-elemental = { path = "crates/elemental" }
+elemental = { package = "elemental-kit", version = "0.1" }
 ```
 
 ### 1. Fetch Catalog Data

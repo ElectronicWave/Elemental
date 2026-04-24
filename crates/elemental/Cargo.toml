@@ -1,10 +1,10 @@
 [package]
-name = "elemental"
+name = "elemental-kit"
 version = "0.1.0"
 edition = "2024"
 repository = "https://github.com/ElectronicWave/Elemental"
 homepage = "https://github.com/ElectronicWave/Elemental"
-documentation = "https://docs.rs/elemental"
+documentation = "https://docs.rs/elemental-kit"
 description = "Elemental is a modular, extensible Minecraft instance management and modding framework written in Rust, designed to provide a unified interface for launching, managing, and modding Minecraft across different platforms and modloader ecosystems."
 license = "AGPL-3.0-only"
 readme = "./../../README.md"

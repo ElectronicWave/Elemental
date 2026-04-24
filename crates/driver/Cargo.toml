@@ -2,6 +2,11 @@
 name = "elemental-driver"
 version = "0.1.0"
 edition = "2024"
+repository = "https://github.com/ElectronicWave/Elemental"
+homepage = "https://github.com/ElectronicWave/Elemental"
+documentation = "https://docs.rs/elemental-driver"
+description = "Driver library for Elemental, providing implementations for interacting with different modloaders and game versions."
+license = "AGPL-3.0-only"
 
 [dependencies]
 async-trait = { workspace = true }

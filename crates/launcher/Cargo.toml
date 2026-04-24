@@ -2,6 +2,11 @@
 name = "elemental-launcher"
 version = "0.1.0"
 edition = "2024"
+repository = "https://github.com/ElectronicWave/Elemental"
+homepage = "https://github.com/ElectronicWave/Elemental"
+documentation = "https://docs.rs/elemental-launcher"
+description = "Facade and utilities for launching and managing Minecraft instances, including modded environments."
+license = "AGPL-3.0-only"
 
 [dependencies]
 anyhow = { workspace = true }

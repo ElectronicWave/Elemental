@@ -2,6 +2,11 @@
 name = "elemental-infra"
 version = "0.1.0"
 edition = "2024"
+repository = "https://github.com/ElectronicWave/Elemental"
+homepage = "https://github.com/ElectronicWave/Elemental"
+documentation = "https://docs.rs/elemental-infra"
+description = "Infrastructure library for Elemental, providing some infra objects such as downloaders, file utilities, and other common tools used across the project."
+license = "AGPL-3.0-only"
 
 [dependencies]
 reqwest = { workspace = true }

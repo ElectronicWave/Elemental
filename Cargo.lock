@@ -460,7 +460,7 @@ dependencies = [
  "minecraft-msa-auth",
  "oauth2",
  "regex",
- "reqwest 0.13.2",
+ "reqwest 0.13.3",
  "rs-release",
  "scc",
  "serde",
@@ -486,7 +486,7 @@ dependencies = [
  "elemental-shared",
  "quick-xml",
  "regex",
- "reqwest 0.13.2",
+ "reqwest 0.13.3",
  "serde",
  "serde_json",
  "tokio",
@@ -499,7 +499,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "futures",
- "reqwest 0.13.2",
+ "reqwest 0.13.3",
  "scc",
  "serde",
  "serde_json",
@@ -1632,9 +1632,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.13.2"
+version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab3f43e3283ab1488b624b44b0e988d0acea0b3214e694730a055cb6b2efa801"
+checksum = "62e0021ea2c22aed41653bc7e1419abb2c97e038ff2c33d0e1309e49a97deec0"
 dependencies = [
  "base64",
  "bytes",

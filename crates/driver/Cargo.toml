@@ -1,6 +1,6 @@
 [package]
 name = "elemental-driver"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 repository = "https://github.com/ElectronicWave/Elemental"
 homepage = "https://github.com/ElectronicWave/Elemental"
@@ -10,10 +10,10 @@ license = "AGPL-3.0-only"
 
 [dependencies]
 async-trait = { workspace = true }
-elemental-core = { path = "../core", version = "0.1.0" }
-elemental-infra = { path = "../infra", version = "0.1.0" }
-elemental-schema = { path = "../schema", version = "0.1.0" }
-elemental-shared = { path = "../shared", version = "0.1.0" }
+elemental-core = { path = "../core", version = "0.2.0" }
+elemental-infra = { path = "../infra", version = "0.2.0" }
+elemental-schema = { path = "../schema", version = "0.2.0" }
+elemental-shared = { path = "../shared", version = "0.2.0" }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

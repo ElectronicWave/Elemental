@@ -1,6 +1,6 @@
 [package]
 name = "elemental-kit"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 repository = "https://github.com/ElectronicWave/Elemental"
 homepage = "https://github.com/ElectronicWave/Elemental"
@@ -10,13 +10,13 @@ license = "AGPL-3.0-only"
 readme = "./../../README.md"
 
 [dependencies]
-elemental-core = { path = "../core", version = "0.1.0", optional = true, default-features = false }
-elemental-driver = { path = "../driver", version = "0.1.0", optional = true, default-features = false }
-elemental-launcher = { path = "../launcher", version = "0.1.0", optional = true, default-features = false }
-elemental-object = { path = "../object", version = "0.1.0", optional = true, default-features = false }
-elemental-shared = { path = "../shared", version = "0.1.0", optional = true, default-features = false }
-elemental-infra = { path = "../infra", version = "0.1.0", optional = true, default-features = false }
-elemental-schema = { path = "../schema", version = "0.1.0", optional = true, default-features = false }
+elemental-core = { path = "../core", version = "0.2.0", optional = true, default-features = false }
+elemental-driver = { path = "../driver", version = "0.2.0", optional = true, default-features = false }
+elemental-launcher = { path = "../launcher", version = "0.2.0", optional = true, default-features = false }
+elemental-object = { path = "../object", version = "0.2.0", optional = true, default-features = false }
+elemental-shared = { path = "../shared", version = "0.2.0", optional = true, default-features = false }
+elemental-infra = { path = "../infra", version = "0.2.0", optional = true, default-features = false }
+elemental-schema = { path = "../schema", version = "0.2.0", optional = true, default-features = false }
 
 [features]
 core = ["dep:elemental-core"]

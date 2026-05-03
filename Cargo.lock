@@ -379,7 +379,7 @@ dependencies = [
 
 [[package]]
 name = "demo"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -448,7 +448,7 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "elemental-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -476,7 +476,7 @@ dependencies = [
 
 [[package]]
 name = "elemental-driver"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -494,7 +494,7 @@ dependencies = [
 
 [[package]]
 name = "elemental-infra"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -511,7 +511,7 @@ dependencies = [
 
 [[package]]
 name = "elemental-kit"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "elemental-core",
  "elemental-driver",
@@ -524,7 +524,7 @@ dependencies = [
 
 [[package]]
 name = "elemental-launcher"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "elemental-core",
@@ -535,7 +535,7 @@ dependencies = [
 
 [[package]]
 name = "elemental-object"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -545,7 +545,7 @@ dependencies = [
 
 [[package]]
 name = "elemental-schema"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "serde",
@@ -554,7 +554,7 @@ dependencies = [
 
 [[package]]
 name = "elemental-shared"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "dirs",

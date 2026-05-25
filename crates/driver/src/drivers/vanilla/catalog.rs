@@ -4,9 +4,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 
-use crate::catalog::{
-    Catalog, Release, ReleaseInfo, push_single_game_release, single_game_release_info,
-};
+use crate::catalog::{Catalog, push_single_game_release};
 
 use super::source::VanillaSource;
 
@@ -18,17 +16,6 @@ pub struct VanillaCatalog {
 pub struct VanillaRelease {
     pub version_id: String,
     pub description: Option<String>,
-}
-
-#[async_trait]
-impl Release for VanillaRelease {
-    async fn info(&self) -> ReleaseInfo {
-        single_game_release_info(
-            self.version_id.clone(),
-            MinecraftVersionId::from(self.version_id.clone()),
-            self.description.clone(),
-        )
-    }
 }
 
 impl VanillaCatalog {

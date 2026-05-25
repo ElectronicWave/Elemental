@@ -6,32 +6,9 @@ use elemental_core::minecraft::MinecraftVersionId;
 
 #[async_trait]
 pub trait Catalog {
-    type Release: Release;
+    type Release;
 
     async fn releases(&self) -> Result<HashMap<MinecraftVersionId, Vec<Self::Release>>>;
-}
-
-#[async_trait]
-pub trait Release {
-    async fn info(&self) -> ReleaseInfo;
-}
-
-pub struct ReleaseInfo {
-    pub name: String,
-    pub game_version: MinecraftVersionId,
-    pub description: Option<String>,
-}
-
-pub fn single_game_release_info(
-    name: String,
-    game_version: MinecraftVersionId,
-    description: Option<String>,
-) -> ReleaseInfo {
-    ReleaseInfo {
-        name,
-        game_version,
-        description,
-    }
 }
 
 pub fn push_single_game_release<R>(

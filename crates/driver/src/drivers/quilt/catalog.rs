@@ -4,9 +4,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 
-use crate::catalog::{
-    Catalog, Release, ReleaseInfo, collect_single_game_loader_releases, single_game_release_info,
-};
+use crate::catalog::{Catalog, collect_single_game_loader_releases};
 use crate::loader_version::LoaderVersionId;
 
 use super::source::QuiltSource;
@@ -19,17 +17,6 @@ pub struct QuiltCatalog {
 pub struct QuiltRelease {
     pub game_version: MinecraftVersionId,
     pub loader_version: LoaderVersionId,
-}
-
-#[async_trait]
-impl Release for QuiltRelease {
-    async fn info(&self) -> ReleaseInfo {
-        single_game_release_info(
-            self.loader_version.to_string(),
-            self.game_version.clone(),
-            None,
-        )
-    }
 }
 
 impl QuiltCatalog {

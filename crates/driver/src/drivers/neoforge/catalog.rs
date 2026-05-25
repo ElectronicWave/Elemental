@@ -4,9 +4,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 
-use crate::catalog::{
-    Catalog, Release, ReleaseInfo, collect_single_game_releases, single_game_release_info,
-};
+use crate::catalog::{Catalog, collect_single_game_releases};
 use crate::loader_version::LoaderVersionId;
 
 use super::source::NeoForgeSource;
@@ -38,17 +36,6 @@ impl NeoForgeCatalog {
 
     pub fn source(&self) -> &NeoForgeSource {
         &self.source
-    }
-}
-
-#[async_trait]
-impl Release for NeoForgeRelease {
-    async fn info(&self) -> ReleaseInfo {
-        single_game_release_info(
-            self.loader.to_string(),
-            self.game_version_hint.clone(),
-            self.description.clone(),
-        )
     }
 }
 

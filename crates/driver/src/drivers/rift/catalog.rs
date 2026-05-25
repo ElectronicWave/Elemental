@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::catalog::{
-    Catalog, Release, ReleaseInfo, push_single_game_release, single_game_release_info,
+    Catalog, push_single_game_release,
 };
 use crate::loader_version::LoaderVersionId;
 
@@ -22,16 +22,6 @@ pub struct RiftCatalogRelease {
     pub published_at: Option<String>,
 }
 
-#[async_trait]
-impl Release for RiftCatalogRelease {
-    async fn info(&self) -> ReleaseInfo {
-        single_game_release_info(
-            self.loader_version.to_string(),
-            self.game_version.clone(),
-            self.published_at.clone(),
-        )
-    }
-}
 
 impl RiftCatalog {
     pub fn new(source: RiftSource) -> Self {

@@ -4,9 +4,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 
-use crate::catalog::{
-    Catalog, Release, ReleaseInfo, collect_single_game_releases, single_game_release_info,
-};
+use crate::catalog::{Catalog, collect_single_game_releases};
 use crate::loader_version::LoaderVersionId;
 
 use super::source::CleanroomSource;
@@ -38,17 +36,6 @@ impl CleanroomCatalog {
 
     pub fn source(&self) -> &CleanroomSource {
         &self.source
-    }
-}
-
-#[async_trait]
-impl Release for CleanroomRelease {
-    async fn info(&self) -> ReleaseInfo {
-        single_game_release_info(
-            self.loader.to_string(),
-            MinecraftVersionId::from(CLEANROOM_GAME_VERSION),
-            self.description.clone(),
-        )
     }
 }
 

@@ -1805,9 +1805,9 @@ dependencies = [
 
 [[package]]
 name = "scc"
-version = "3.8.1"
+version = "3.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38472a9b77fc7f35fcb160ff696786bc99e838503eae19291b99771bf488de9f"
+checksum = "c96a442f0f0215b6b9bdb7ebc26de2351810e6ef9b8bf39a7e10784bdf734dd2"
 dependencies = [
  "saa",
  "sdd",

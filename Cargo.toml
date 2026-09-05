@@ -29,7 +29,7 @@ scc = { version = "3.4.8", features = ["serde"] }
 anyhow = { version = "1.0.100" }
 async-trait = "0.1.89"
 toml = "1.0.0"
-dirs = { version = "6" }
+dirs = { version = "7" }
 futures = "0.3.32"
 regex = "1.12.3"
 sha1_smol = "1.0.1"

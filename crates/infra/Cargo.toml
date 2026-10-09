@@ -19,4 +19,4 @@ futures = { workspace = true }
 scc = { workspace = true }
 tokio-util = { version = "0.7.17", default-features = false, features = ["rt"] }
 sha1_smol = { workspace = true }
-zip = { version = "8.0.0", default-features = false, features = ["deflate"] }
+zip = { version = "9.0.0", default-features = false, features = ["deflate"] }

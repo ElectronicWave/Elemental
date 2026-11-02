@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
 /// https://piston-meta.mojang.com/mc/game/version_manifest_v2.json
@@ -22,7 +22,7 @@ pub struct LaunchMetaVersionData {
     pub url: String,
     pub time: String,
     #[serde(rename = "releaseTime")]
-    pub release_time: DateTime<Utc>,
+    pub release_time: Timestamp,
     pub sha1: String,
     #[serde(rename = "complianceLevel")]
     pub compliance_level: usize,

@@ -1,6 +1,6 @@
 use std::{convert::Infallible, fmt::Display, marker::PhantomData, str::FromStr};
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Version<Tag> {
     raw: String,
     tag: PhantomData<Tag>,
@@ -54,3 +54,16 @@ impl<Tag> FromStr for Version<Tag> {
         Ok(Self::from(s))
     }
 }
+
+impl<Tag: Ord> PartialOrd for Version<Tag> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl<Tag: Ord> Ord for Version<Tag> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.as_str().cmp(other.as_str())
+    }
+}
+
+// TODO: Use a number to sort different format of version, e.g. 2026.1 > 1.x.x

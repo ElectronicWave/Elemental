@@ -3,11 +3,14 @@ use crate::auth::credential::UserCredential;
 use anyhow::{Context, Result};
 use minecraft_msa_auth::MinecraftAuthorizationFlow;
 use oauth2::basic::BasicClient;
-use oauth2::reqwest::Client;
 use oauth2::{
     AuthUrl, ClientId, DeviceAuthorizationUrl, Scope, StandardDeviceAuthorizationResponse,
     TokenResponse, TokenUrl,
 };
+use oauth2_reqwest::ReqwestClient;
+use reqwest::Client;
+use reqwest::ClientBuilder;
+use reqwest::redirect::Policy;
 
 const DEVICE_CODE_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode";
 const MSA_AUTHORIZE_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize";
@@ -25,9 +28,19 @@ pub struct MicrosoftAuthorizer<F: Fn(String, String)> {
     pub verification_handler: F,
 }
 
+impl<F: Fn(String, String)> MicrosoftAuthorizer<F> {
+    fn client() -> Result<ReqwestClient> {
+        let reqwest_client = ClientBuilder::new()
+            // Following redirects opens the client up to SSRF vulnerabilities.
+            .redirect(Policy::none())
+            .build()?;
+        Ok(ReqwestClient::from(reqwest_client))
+    }
+}
+
 impl<F: Fn(String, String)> Authorizer for MicrosoftAuthorizer<F> {
     async fn authorize(&self) -> Result<UserCredential> {
-        let request_client = Client::new();
+        let reqwest_client = Self::client()?;
         let client = BasicClient::new(ClientId::new(self.client_id.clone()))
             .set_auth_uri(AuthUrl::new(MSA_AUTHORIZE_URL.to_string())?)
             .set_token_uri(TokenUrl::new(MSA_TOKEN_URL.to_string())?)
@@ -38,7 +51,7 @@ impl<F: Fn(String, String)> Authorizer for MicrosoftAuthorizer<F> {
         let details: StandardDeviceAuthorizationResponse = client
             .exchange_device_code()
             .add_scope(Scope::new("XboxLive.signin offline_access".to_string()))
-            .request_async(&request_client)
+            .request_async(&reqwest_client)
             .await?;
 
         // Handle it outside to allow custom UX.
@@ -49,7 +62,7 @@ impl<F: Fn(String, String)> Authorizer for MicrosoftAuthorizer<F> {
 
         let token = client
             .exchange_device_access_token(&details)
-            .request_async(&request_client, tokio::time::sleep, None)
+            .request_async(&reqwest_client, tokio::time::sleep, None)
             .await?;
 
         let mc_flow = MinecraftAuthorizationFlow::new(Client::new());

@@ -4,3 +4,4 @@ use crate::version::Version;
 pub struct MinecraftVersionTag;
 
 pub type MinecraftVersionId = Version<MinecraftVersionTag>;
+

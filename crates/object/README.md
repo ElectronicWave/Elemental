@@ -1,274 +1,257 @@
 # elemental-object
 
-A type-safe, thread-safe global object pool for Rust applications.
+Type-indexed async object pool for long-lived Rust services.
+
+`elemental-object` keeps one value per concrete type in a process-wide pool.
+Use it for services, runtimes, and hot-reloadable state that would otherwise be
+threaded through every function. Values are stored as `Arc<T>` and accessed
+through a concurrent hash map. An optional task-local `ObjectContext` keeps
+request- or tenant-scoped values separate from the global pool.
 
 ## Features
 
-- **Type-Safe**: Leverages Rust's type system to uniquely identify and retrieve objects
-- **Lock-Free**: Built on `scc::HashMap` for efficient concurrent access
-- **Async-Friendly**: Full support for async/await patterns
-- **Lifecycle Management**: Custom shutdown handlers for graceful cleanup
-- **Wait-for-Initialization**: Optional notification system for coordinating startup
-- **Zero-Cost Abstractions**: LazyLock ensures minimal overhead
+- One value per concrete type, keyed by `TypeId`.
+- Concurrent access through `scc::HashMap` and shared `Arc<T>` ownership.
+- Async retrieval and provisioning.
+- Optional wait-for-initialization with the default `notify` feature.
+- Async shutdown hooks when values are replaced or removed.
+- Global and task-local object pools.
+- `InstantObject` support for values with async creation and destruction.
 
-## Quick Start
-
-Add to your `Cargo.toml`:
+## Installation
 
 ```toml
 [dependencies]
-elemental-object = "0.1"
+anyhow = "1"
+async-trait = "0.1"
+elemental-object = "0.2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
-Basic usage:
+The default `notify` feature enables `acquire()` and waiter notifications.
+
+## Quick Start
 
 ```rust
-use elemental_object::{provide, require};
+use anyhow::Result;
+use elemental_object::{provide_with_shutdown, require, shutdown};
 
-#[tokio::main]
-async fn main() {
-    // Store a value
-    let config = MyConfig { 
-        database_url: "postgres://localhost".to_string() 
-    };
-    provide(config, None).await;
-
-    // Retrieve it anywhere in your app
-    let config = require::<MyConfig>()?;
-    println!("Database: {}", config.database_url);
-    
-    Ok(())
-}
-```
-
-## Common Patterns
-
-### 1. Global Singleton Service
-
-Store and access application services without passing them through every function:
-
-```rust
-use elemental_object::{provide, require};
-
-struct DatabaseConnection {
-    // ...
-}
-
-impl DatabaseConnection {
-    async fn shutdown(&self) {
-        // Cleanup code
-    }
+struct AppConfig {
+    name: String,
+    workers: usize,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let db = DatabaseConnection::new().await;
-    
-    // Register with shutdown handler
-    provide(
-        db,
-        Some(|db| async move {
-            db.shutdown().await;
-        })
-    ).await;
+    provide_with_shutdown(
+        AppConfig {
+            name: "elemental".to_owned(),
+            workers: 4,
+        },
+        |_config| async {
+            println!("AppConfig shut down");
+        },
+    )
+    .await;
 
-    // Access from anywhere
-    let db = require::<DatabaseConnection>()?;
-    // ... use db
-    
+    let config = require::<AppConfig>().await?;
+    println!("{} with {} workers", config.name, config.workers);
+
+    shutdown().await;
     Ok(())
 }
 ```
 
-### 2. Wait-for-Initialization Pattern
+`require()` returns an error immediately when the type is not present.
+`provide()` inserts or replaces a value and runs the previous shutdown hook, if
+one was registered.
 
-Coordinate startup between multiple tasks:
+## Core Concepts
+
+### Global pool
+
+The plain functions operate on a process-wide pool:
+
+- `provide`, `provide_with_shutdown`
+- `require`
+- `acquire`
+- `fulfill`, `fulfill_with_shutdown`
+- `drop_value`, `drop_entry`
+- `shutdown`
+
+Stored values must be `Any + Send + Sync`. Retrieval returns `Arc<T>`, so
+callers can share the value without copying it.
+
+### Lifecycle and replacement
+
+Providing a value for a type that already exists replaces the value and invokes
+the old shutdown hook. This is the intended hot-reload path.
+
+`drop_value::<T>()` removes the value but keeps the entry. `drop_entry::<T>()`
+removes the whole entry. `shutdown()` runs the shutdown hook for every value in
+the global pool.
+
+### Waiting for initialization
+
+`acquire::<T>()` waits until a value is provided, then returns it. If the value
+is removed while a caller is waiting, `acquire()` returns an error instead of
+blocking forever.
+
+> [!IMPORTANT]
+> `fulfill()` only fills a slot that already exists, normally created by a
+> waiter in `acquire()`, and is idempotent. Use `provide()` when the producer
+> may run before any consumer starts waiting.
+
+### Task-local contexts
+
+`ObjectContext` creates a task-local pool that is independent from the global
+one. `ObjectContext::run()` scopes a future to that pool.
+
+`require()` checks the active context before the global pool. The context-aware
+providers target the active context when one exists and fall back to the global
+pool otherwise. Plain `provide()` and `fulfill()` always target the global
+pool. `acquire()` waits in the active context when one exists and does not
+observe the global pool from that task. `drop_context_value()` and
+`drop_context_entry()` are no-ops when no context is active.
+
+## Common Patterns
+
+### Wait for initialization
 
 ```rust
-use elemental_object::{provide, acquire};
+use anyhow::Result;
+use elemental_object::{acquire, provide};
+
+#[derive(Debug)]
+struct Config {
+    port: u16,
+}
 
 #[tokio::main]
-async fn main() {
-    // Task 1: Initialize config from slow source
-    tokio::spawn(async {
-        tokio::time::sleep(Duration::from_secs(2)).await;
-        let config = load_config_from_file().await;
-        provide(config, None).await;
-    });
+async fn main() -> Result<()> {
+    let waiter = tokio::spawn(async { acquire::<Config>().await });
 
-    // Task 2: Wait until config is ready
-    let config = acquire::<AppConfig>()?;  // Blocks until provided
-    start_server(config).await;
+    provide(Config { port: 25565 }).await;
+    let config = waiter.await??;
+
+    println!("port: {}", config.port);
+    Ok(())
 }
 ```
 
-### 3. Multiple Types in One Pool
-
-Store different types without creating separate managers:
+### Request-scoped values
 
 ```rust
-use elemental_object::{provide, require};
+use anyhow::Result;
+use elemental_object::{ObjectContext, acquire, provide_context};
 
-provide(my_db, None).await;
-provide(my_cache, None).await;
-provide(my_logger, None).await;
+#[derive(Debug)]
+struct Tenant {
+    id: String,
+}
 
-// Retrieve each by type
-let db = require::<Database>()?;
-let cache = require::<Cache>()?;
-let logger = require::<Logger>()?;
+#[tokio::main]
+async fn main() -> Result<()> {
+    let context = ObjectContext::new();
+
+    let producer = context.clone().run(async {
+        provide_context(Tenant {
+            id: "acme".to_owned(),
+        })
+        .await;
+    });
+
+    let consumer = context.clone().run(async {
+        let tenant = acquire::<Tenant>().await?;
+        println!("tenant: {}", tenant.id);
+        Ok::<_, anyhow::Error>(())
+    });
+
+    let ((), result) = tokio::join!(producer, consumer);
+    result?;
+    context.shutdown().await;
+    Ok(())
+}
 ```
 
-### 4. Lifecycle with Cleanup
+### InstantObject
 
-Ensure resources are properly cleaned up when replaced or removed:
+`InstantObject` separates async construction and destruction from the value
+that is stored in the pool:
 
 ```rust
-use elemental_object::{provide, drop_value};
+use std::sync::Arc;
 
-// Provide resource with shutdown handler
-provide(
-    resource,
-    Some(|res| async move {
-        println!("Cleaning up: {}", res.name);
-        res.cleanup().await;
-    })
-).await;
+use async_trait::async_trait;
+use elemental_object::{instant::InstantObject, provide_instant, require};
 
-// Later: explicitly remove (triggers cleanup)
-drop_value::<MyResource>().await;
+struct Database;
 
-// Or replace with new value (triggers cleanup of old value)
-provide(new_resource, None).await;
+struct Connection;
+
+#[async_trait]
+impl InstantObject for Database {
+    type Output = Connection;
+
+    async fn create() -> Self::Output {
+        Connection
+    }
+
+    async fn destroy(_connection: Arc<Self::Output>) {}
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    provide_instant::<Database>().await;
+    let _connection = require::<Connection>().await?;
+    Ok(())
+}
 ```
 
 ## API Overview
 
-### Retrieving Values
+| API | Pool | Behavior |
+| --- | --- | --- |
+| `require::<T>()` | Active context, then global | Retrieve a value or return an error |
+| `acquire::<T>()` | Active context when present; otherwise global | Wait for a value, then retrieve it |
+| `provide`, `provide_with_shutdown` | Global | Insert or replace a value |
+| `provide_context`, `provide_context_with_shutdown` | Active context, then global | Insert or replace in a context pool |
+| `fulfill`, `fulfill_with_shutdown` | Global | Fill an existing slot without replacing a value |
+| `fulfill_context`, `fulfill_with_context_shutdown` | Active context, then global | Fill an existing contextual slot |
+| `provide_instant`, `provide_instant_context` | Global or context | Create and register an `InstantObject` |
+| `drop_value`, `drop_entry` | Global | Remove a value or entry |
+| `drop_context_value`, `drop_context_entry` | Active context | Remove from a context pool |
+| `shutdown`, `shutdown_local` | Global or context | Run all registered shutdown hooks |
 
-| Function | Mode | Behavior |
-|----------|------|----------|
-| `require::<T>()` | Async | Get value or return error |
-| `require_sync::<T>()` | Sync | Get value synchronously or return error |
-| `acquire::<T>()` | Async | Wait for value to be provided, then return it |
+`read`-style APIs do not mutate stored values. Replace or remove values through
+the provided lifecycle functions so shutdown hooks stay consistent.
 
-### Providing Values
+## Feature Flags
 
-| Function | Behavior |
-|----------|----------|
-| `provide::<T>(value, shutdown)` | Store owned value with optional shutdown handler |
-| `provide_arc::<T>(arc_value, shutdown)` | Store Arc-wrapped value (avoids re-wrapping) |
-| `fulfill::<T>(value)` | Mark value as fulfilled and notify waiters (idempotent) |
-| `fulfill_arc::<T>(arc_value)` | Fulfill with Arc value |
-
-### Cleanup
-
-| Function | Behavior |
-|----------|----------|
-| `drop_value::<T>()` | Remove value and call shutdown handler |
-| `drop_entry::<T>()` | Remove entire entry and call shutdown handler |
-| `shutdown()` | Gracefully shutdown all objects in pool |
-
-## Features
-
-### Default (with notification)
-
-The default configuration includes the `"notify"` feature, enabling wait-for-initialization patterns:
-
-```rust
-use elemental_object::acquire;
-
-let config = acquire::<AppConfig>()?;  // Available
-```
-
-### Minimal (without notification)
-
-For applications that don't need async waiting, reduce dependencies:
+`notify` is enabled by default and adds the Tokio notification dependency plus
+the `acquire()` API. To build without waiter support:
 
 ```toml
 [dependencies]
-elemental-object = { version = "0.1", default-features = false }
+elemental-object = { version = "0.2", default-features = false }
 ```
-
-This removes the Tokio dependency and disables `acquire()`, `fulfill()`, and `wait_value()`.
-
-## Thread Safety
-
-- All operations are thread-safe and concurrent
-- Values are wrapped in `Arc<T>` for shared ownership
-- Built on lock-free `scc::HashMap` for efficient concurrent access
-- Supports both sync and async access patterns
-
-## Type Requirements
-
-Values stored in the pool must satisfy:
-
-```rust
-T: Any + Send + Sync
-```
-
-This includes:
-- Most standard types (`String`, integers, collections)
-- Custom structs and enums
-- Trait objects (less common, as type identification becomes ambiguous)
 
 ## Error Handling
 
-When a value is not found in the pool:
+`require()` returns `anyhow::Result<Arc<T>>`. A missing value produces an error
+that includes the requested type name, for example:
 
-```rust
-use elemental_object::require;
-
-match require::<Config>() {
-    Ok(config) => { /* ... */ },
-    Err(e) => eprintln!("Config not initialized: {}", e),
-}
-```
-
-The error message includes the type name for debugging:
-```
+```text
 Cannot get object `my_app::config::Config` from pool
 ```
 
-## Examples
+`acquire()` returns the same kind of error when the value disappears while it
+is waiting.
 
-See the [tests](src/lib.rs) for more complete examples:
+## Relationship to Elemental
 
-- `test_fulfill`: Wait-for-initialization pattern
-- `test_provide`: Multiple types in pool
+This crate is part of the [Elemental](https://github.com/ElectronicWave/Elemental)
+workspace and is also available through the `elemental-kit` facade.
 
-Run with:
-
-```bash
-cargo test --features notify
-```
-
-## Performance
-
-- **Retrieval**: O(1) hash lookup
-- **Insertion/Update**: O(1) amortized
-- **Shutdown**: O(n) where n = number of types in pool
-- **Memory**: Minimal overhead (LazyLock initializes on first use)
-
-## Design Document
-
-For detailed architectural information, see [DESIGN.md](DESIGN.md).
-
-## Integration with Elemental
-
-This crate is part of the [Elemental](https://github.com/ElectronicWave/Elemental) framework and is commonly used in conjunction with:
-
-- `elemental-core`: Core framework utilities
-- `elemental-shared`: Shared configuration and persistence
-
-## License
-
-Licensed under the same terms as the Elemental project. See [LICENSE](../../LICENSE) for details.
-
-## Contributing
-
-Contributions are welcome! Please see [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
-
----
-
-For questions or issues, please open an issue on the [GitHub repository](https://github.com/ElectronicWave/Elemental).
+For implementation details and concurrency notes, see
+[DESIGN.md](https://github.com/ElectronicWave/Elemental/blob/main/crates/object/DESIGN.md).

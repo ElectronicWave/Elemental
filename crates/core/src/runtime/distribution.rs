@@ -1,8 +1,11 @@
+use std::collections::HashSet;
 use std::env::consts::EXE_SUFFIX;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use futures::future::join_all;
+use futures::stream::{self, StreamExt};
 use tokio::fs;
 use tokio::process::Command;
 use tokio::sync::OnceCell;
@@ -10,6 +13,18 @@ use tokio::sync::OnceCell;
 use crate::runtime::provider::{RuntimeProvider, runtime_providers};
 
 static DISTRIBUTION_CACHE: OnceCell<Vec<Distribution>> = OnceCell::const_new();
+const JAVA_INFO_PROBE_TIMEOUT: Duration = Duration::from_secs(15);
+const JAVA_INFO_PROBE_CONCURRENCY: usize = 8;
+const JAVA_PROBE_ENV_VARIABLES: &[&str] = &[
+    "JAVA_HOME",
+    "JRE_HOME",
+    "JAVA_ARGS",
+    "CLASSPATH",
+    "JAVA_TOOL_OPTIONS",
+    "_JAVA_OPTIONS",
+    "JAVA_OPTIONS",
+    "JDK_JAVA_OPTIONS",
+];
 
 #[derive(Debug, Default, Clone)]
 pub struct DistributionReleaseData {
@@ -47,7 +62,7 @@ impl DistributionReleaseData {
     pub fn java_major_version(&self) -> Option<usize> {
         self.major_version
             .as_deref()
-            .and_then(parse_java_major_version)
+            .and_then(Self::parse_java_major_version)
     }
 
     pub fn matches_java_major_version(&self, major_version: usize) -> bool {
@@ -55,34 +70,67 @@ impl DistributionReleaseData {
             .is_some_and(|current| current == major_version)
     }
 
-    pub async fn parse_from_commandline(root: &Path) -> Self {
-        let java_exe = root.join("bin").join("java");
-        if let Ok(output) = Command::new(&java_exe)
-            .arg("-XshowSettings:properties")
-            .output()
+    pub async fn parse_from_commandline(root: &Path) -> Result<Self> {
+        let java_exe = root.join("bin").join(format!("java{EXE_SUFFIX}"));
+        let mut command = Command::new(&java_exe);
+        command.arg("-XshowSettings:properties").kill_on_drop(true);
+        for variable_name in JAVA_PROBE_ENV_VARIABLES {
+            command.env_remove(variable_name);
+        }
+
+        let output = tokio::time::timeout(JAVA_INFO_PROBE_TIMEOUT, command.output())
             .await
-        {
-            if let Ok(stderr) = String::from_utf8(output.stderr) {
-                Self::parse_properties(&stderr)
-            } else {
-                Self::default()
-            }
-        } else {
-            Self::default()
+            .with_context(|| {
+                format!(
+                    "Java property probe timed out after {} seconds: {}",
+                    JAVA_INFO_PROBE_TIMEOUT.as_secs(),
+                    java_exe.display()
+                )
+            })?
+            .with_context(|| format!("run Java property probe failed: {}", java_exe.display()))?;
+
+        if !output.status.success() {
+            bail!(
+                "Java property probe exited unsuccessfully with {}: {}",
+                output.status,
+                java_exe.display()
+            );
         }
+
+        let release = Self::parse_properties(&String::from_utf8_lossy(&output.stderr));
+        if release.java_major_version().is_none() {
+            bail!(
+                "Java property probe returned no recognizable major version: {}",
+                java_exe.display()
+            );
+        }
+
+        Ok(release)
     }
 
-    pub async fn parse_from_release(root: &Path) -> Self {
+    pub async fn parse_from_release(root: &Path) -> Result<Self> {
         let release_path = root.join("release");
-        if let Ok(content) = fs::read_to_string(release_path).await {
-            Self::parse_release_properties(&content)
-        } else {
-            Self::default()
+        let content = fs::read_to_string(&release_path).await.with_context(|| {
+            format!("read Java release file failed: {}", release_path.display())
+        })?;
+        let release = Self::parse_release_properties(&content);
+        if release.java_major_version().is_none() {
+            bail!(
+                "Java release file has no recognizable major version: {}",
+                release_path.display()
+            );
         }
+
+        Ok(release)
     }
 
-    pub async fn parse(root: &Path) -> Self {
-        if root.join("release").exists() {
+    pub async fn parse(root: &Path) -> Result<Self> {
+        let release_path = root.join("release");
+        let release_exists = fs::try_exists(&release_path).await.with_context(|| {
+            format!("check Java release file failed: {}", release_path.display())
+        })?;
+
+        if release_exists {
             Self::parse_from_release(root).await
         } else {
             Self::parse_from_commandline(root).await
@@ -92,7 +140,7 @@ impl DistributionReleaseData {
     pub fn is_lts(&self) -> bool {
         self.major_version
             .as_deref()
-            .and_then(parse_java_major_version)
+            .and_then(Self::parse_java_major_version)
             .is_some_and(|version| matches!(version, 8 | 11 | 17 | 21))
     }
 
@@ -106,15 +154,15 @@ impl DistributionReleaseData {
         for line in output.lines() {
             let trimmed = line.trim();
             if let Some(value) = trimmed.strip_prefix("java.vm.vendor") {
-                implementor = Some(parse_property_value(value));
+                implementor = Some(Self::parse_property_value(value));
             } else if let Some(value) = trimmed.strip_prefix("os.arch") {
-                architecture = Some(parse_property_value(value));
+                architecture = Some(Self::parse_property_value(value));
             } else if let Some(value) = trimmed.strip_prefix("java.specification.version") {
-                major_version = Some(parse_property_value(value));
+                major_version = Some(Self::parse_property_value(value));
             } else if let Some(value) = trimmed.strip_prefix("java.version") {
-                jre_version = Some(parse_property_value(value));
+                jre_version = Some(Self::parse_property_value(value));
             } else if let Some(value) = trimmed.strip_prefix("java.vm.version") {
-                jvm_version = Some(parse_property_value(value));
+                jvm_version = Some(Self::parse_property_value(value));
             }
         }
 
@@ -137,19 +185,19 @@ impl DistributionReleaseData {
         for line in output.lines() {
             let trimmed = line.trim();
             if let Some(value) = trimmed.strip_prefix("IMPLEMENTOR=") {
-                implementor = Some(parse_release_value(value));
+                implementor = Some(Self::parse_release_value(value));
             } else if let Some(value) = trimmed.strip_prefix("OS_ARCH=") {
-                architecture = Some(parse_release_value(value));
+                architecture = Some(Self::parse_release_value(value));
             } else if let Some(value) = trimmed.strip_prefix("JAVA_VERSION=") {
-                jre_version = Some(parse_release_value(value));
+                jre_version = Some(Self::parse_release_value(value));
             } else if let Some(value) = trimmed.strip_prefix("JAVA_RUNTIME_VERSION=") {
-                jvm_version = Some(parse_release_value(value));
+                jvm_version = Some(Self::parse_release_value(value));
             }
         }
 
         // Extract major version from jre_version
         if let Some(ref ver) = jre_version {
-            major_version = parse_java_major_version(ver).map(|value| value.to_string());
+            major_version = Self::parse_java_major_version(ver).map(|value| value.to_string());
         }
 
         Self {
@@ -160,38 +208,83 @@ impl DistributionReleaseData {
             jvm_version,
         }
     }
-}
 
-fn parse_property_value(s: &str) -> String {
-    s.split_once('=')
-        .map(|(_, v)| v.trim())
-        .unwrap_or("")
-        .to_string()
-}
+    fn parse_property_value(s: &str) -> String {
+        s.split_once('=')
+            .map(|(_, v)| v.trim())
+            .unwrap_or("")
+            .to_string()
+    }
 
-fn parse_release_value(s: &str) -> String {
-    s.trim_matches('"').to_string()
+    fn parse_release_value(s: &str) -> String {
+        s.trim_matches('"').to_string()
+    }
+
+    fn parse_java_major_version(version: &str) -> Option<usize> {
+        let normalized = version.trim();
+        if let Some(legacy) = normalized.strip_prefix("1.") {
+            return legacy
+                .split(['.', '_', '-'])
+                .next()
+                .and_then(|value| value.parse::<usize>().ok());
+        }
+
+        normalized
+            .split(['.', '_', '-'])
+            .next()
+            .and_then(|value| value.parse::<usize>().ok())
+    }
 }
 
 impl Distribution {
-    pub async fn build_from_root(root: PathBuf, provider: &'static str) -> Self {
-        Self {
-            release: Some(DistributionReleaseData::parse(&root).await),
+    pub async fn build_from_root(root: PathBuf, provider: &'static str) -> Result<Self> {
+        let requested_root = root.clone();
+        let root = fs::canonicalize(&root).await.with_context(|| {
+            format!("canonicalize Java runtime root failed: {}", root.display())
+        })?;
+        let release = DistributionReleaseData::parse(&root)
+            .await
+            .with_context(|| {
+                format!(
+                    "determine Java runtime properties failed: {}",
+                    requested_root.display()
+                )
+            })?;
+
+        Ok(Self {
+            release: Some(release),
             path: root,
             executable_override: None,
             provider,
-        }
+        })
     }
 
     pub async fn build_from_executable(
         executable: PathBuf,
         provider: &'static str,
     ) -> Result<Self> {
-        let normalized_executable = normalize_executable_path(executable)?;
-        let runtime_root = infer_runtime_root(&normalized_executable)?;
+        let normalized_executable = Self::normalize_executable_path(executable)?;
+        let normalized_executable = fs::canonicalize(&normalized_executable)
+            .await
+            .with_context(|| {
+                format!(
+                    "canonicalize runtime executable failed: {}",
+                    normalized_executable.display()
+                )
+            })?;
+        let runtime_root = Self::infer_runtime_root(&normalized_executable)?;
+
+        let release = DistributionReleaseData::parse(&runtime_root)
+            .await
+            .with_context(|| {
+                format!(
+                    "determine Java runtime properties failed: {}",
+                    runtime_root.display()
+                )
+            })?;
 
         Ok(Self {
-            release: Some(DistributionReleaseData::parse(&runtime_root).await),
+            release: Some(release),
             path: runtime_root,
             executable_override: Some(normalized_executable),
             provider,
@@ -202,16 +295,47 @@ impl Distribution {
     where
         O: FromIterator<Self>,
     {
-        let mut futures = Vec::new();
-        for provider in providers {
-            let name = provider.name();
-            let paths = provider.list().await;
+        let provider_lists = join_all(
+            providers
+                .into_iter()
+                .map(|provider| async move { (provider.name(), provider.list().await) }),
+        )
+        .await;
+
+        let mut probes = Vec::new();
+        for (name, paths) in provider_lists {
             for path in paths {
-                futures.push(async move { Distribution::build_from_root(path, name).await });
+                probes.push(async move {
+                    Distribution::build_from_root(path, name)
+                        .await
+                        .with_context(|| {
+                            format!("build Java runtime distribution from {name} failed")
+                        })
+                });
             }
         }
-        let distributions = join_all(futures).await;
-        distributions.into_iter().collect()
+
+        let distributions: Vec<Self> = stream::iter(probes)
+            .buffer_unordered(JAVA_INFO_PROBE_CONCURRENCY)
+            .filter_map(|result| async move {
+                match result {
+                    Ok(distribution) => Some(distribution),
+                    Err(error) => {
+                        tracing::warn!(%error, "skip invalid Java runtime candidate");
+                        None
+                    }
+                }
+            })
+            .collect()
+            .await;
+
+        let mut seen_paths = HashSet::with_capacity(distributions.len());
+        let mut unique_distributions: Vec<Self> = distributions
+            .into_iter()
+            .filter(|distribution| seen_paths.insert(distribution.path.clone()))
+            .collect();
+        unique_distributions.sort_by(ordering::compare_distributions);
+        unique_distributions.into_iter().collect()
     }
 
     pub async fn cached() -> Vec<Self> {
@@ -247,72 +371,130 @@ impl Distribution {
             .clone()
             .unwrap_or_else(|| self.path.join("bin").join(format!("java{}", EXE_SUFFIX)))
     }
-}
 
-fn normalize_executable_path(executable: PathBuf) -> Result<PathBuf> {
-    let normalized = if executable.is_absolute() {
-        executable
-    } else {
-        std::env::current_dir()
-            .context("resolve current directory for runtime executable failed")?
-            .join(executable)
-    };
+    fn normalize_executable_path(executable: PathBuf) -> Result<PathBuf> {
+        let normalized = if executable.is_absolute() {
+            executable
+        } else {
+            std::env::current_dir()
+                .context("resolve current directory for runtime executable failed")?
+                .join(executable)
+        };
 
-    if !normalized.is_file() {
-        bail!(
-            "runtime executable path is not a file: {}",
-            normalized.display()
-        );
+        if !normalized.is_file() {
+            bail!(
+                "runtime executable path is not a file: {}",
+                normalized.display()
+            );
+        }
+
+        let executable_name = normalized
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .with_context(|| {
+                format!(
+                    "runtime executable path has no valid file stem: {}",
+                    normalized.display()
+                )
+            })?;
+        if executable_name != "java" && executable_name != "javaw" {
+            bail!(
+                "runtime executable must point to java or javaw: {}",
+                normalized.display()
+            );
+        }
+
+        Ok(normalized)
     }
 
-    let executable_name = normalized
-        .file_stem()
-        .and_then(|value| value.to_str())
-        .context(format!(
-            "runtime executable path has no valid file stem: {}",
-            normalized.display()
-        ))?;
-    if executable_name != "java" && executable_name != "javaw" {
-        bail!(
-            "runtime executable must point to java or javaw: {}",
-            normalized.display()
-        );
-    }
+    fn infer_runtime_root(executable: &Path) -> Result<PathBuf> {
+        let bin_directory = executable.parent().with_context(|| {
+            format!(
+                "runtime executable has no parent directory: {}",
+                executable.display()
+            )
+        })?;
+        let runtime_root = bin_directory.parent().with_context(|| {
+            format!(
+                "runtime executable is not inside a bin directory: {}",
+                executable.display()
+            )
+        })?;
 
-    Ok(normalized)
+        Ok(runtime_root.to_path_buf())
+    }
 }
 
-fn infer_runtime_root(executable: &Path) -> Result<PathBuf> {
-    let bin_directory = executable.parent().context(format!(
-        "runtime executable has no parent directory: {}",
-        executable.display()
-    ))?;
-    let runtime_root = bin_directory.parent().context(format!(
-        "runtime executable is not inside a bin directory: {}",
-        executable.display()
-    ))?;
+mod ordering {
+    use std::cmp::Ordering;
 
-    Ok(runtime_root.to_path_buf())
-}
+    use super::Distribution;
 
-fn parse_java_major_version(version: &str) -> Option<usize> {
-    let normalized = version.trim();
-    if let Some(legacy) = normalized.strip_prefix("1.") {
-        return legacy
-            .split(['.', '_', '-'])
-            .next()
-            .and_then(|value| value.parse::<usize>().ok());
+    pub(super) fn compare_distributions(left: &Distribution, right: &Distribution) -> Ordering {
+        let left_version = left
+            .release
+            .as_ref()
+            .and_then(|release| release.jre_version.as_deref());
+        let right_version = right
+            .release
+            .as_ref()
+            .and_then(|release| release.jre_version.as_deref());
+
+        right
+            .java_major_version()
+            .cmp(&left.java_major_version())
+            .then_with(|| compare_release_versions(right_version, left_version))
+            .then_with(|| left.path.cmp(&right.path))
     }
 
-    normalized
-        .split(['.', '_', '-'])
-        .next()
-        .and_then(|value| value.parse::<usize>().ok())
+    fn compare_release_versions(left: Option<&str>, right: Option<&str>) -> Ordering {
+        match (left, right) {
+            (Some(left), Some(right)) => {
+                let mut left_components = version_components(left).peekable();
+                let mut right_components = version_components(right).peekable();
+                if left_components.peek().is_none() || right_components.peek().is_none() {
+                    left.cmp(right)
+                } else {
+                    left_components.cmp(right_components)
+                }
+            }
+            (Some(_), None) => Ordering::Greater,
+            (None, Some(_)) => Ordering::Less,
+            (None, None) => Ordering::Equal,
+        }
+    }
+
+    fn version_components(version: &str) -> impl Iterator<Item = u64> + '_ {
+        version
+            .split(|character: char| !character.is_ascii_digit())
+            .filter(|component| !component.is_empty())
+            .filter_map(|component| component.parse::<u64>().ok())
+    }
 }
 
 #[tokio::test]
-async fn test_distribution_build() {
+async fn default_providers_return_deduplicated_distributions_sorted_by_major_version() {
     use super::provider::default_providers;
-    let a: Vec<_> = Distribution::from_providers(default_providers()).await;
-    println!("{:#?}", a);
+
+    let distributions: Vec<_> = Distribution::from_providers(default_providers()).await;
+    let mut paths: Vec<_> = distributions
+        .iter()
+        .map(|distribution| distribution.path.clone())
+        .collect();
+    let path_count = paths.len();
+    paths.sort();
+    paths.dedup();
+
+    assert_eq!(paths.len(), path_count);
+    assert!(
+        distributions
+            .iter()
+            .all(|distribution| distribution.java_major_version().is_some())
+    );
+    assert!(
+        distributions
+            .windows(2)
+            .all(|pair| { pair[0].java_major_version() >= pair[1].java_major_version() })
+    );
+    println!("{:#?}", distributions);
 }

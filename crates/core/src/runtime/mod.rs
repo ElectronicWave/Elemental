@@ -4,6 +4,7 @@ use anyhow::{Context, Result, bail};
 
 use crate::runtime::distribution::Distribution;
 
+pub mod discovery;
 pub mod distribution;
 pub mod provider;
 pub mod providers;

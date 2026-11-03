@@ -520,7 +520,6 @@ dependencies = [
  "oauth2-reqwest",
  "regex",
  "reqwest",
- "rs-release",
  "scc",
  "serde",
  "serde_json",
@@ -1788,12 +1787,6 @@ dependencies = [
  "untrusted",
  "windows-sys 0.52.0",
 ]
-
-[[package]]
-name = "rs-release"
-version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02846814288e8bd3bb143bb513c14963995541a100126345ff19a9387c6679ae"
 
 [[package]]
 name = "rustc-hash"

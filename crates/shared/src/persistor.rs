@@ -104,7 +104,7 @@ where
 }
 
 #[cfg(feature = "json")]
-type JsonFilePersistor<V> = CustomPersistor<
+pub type JsonFilePersistor<V> = CustomPersistor<
     V,
     String,
     str,
@@ -170,7 +170,7 @@ pub fn json_persistor<V: Serialize + DeserializeOwned>(
 }
 
 #[cfg(feature = "toml")]
-type TomlFilePersistor<V> = CustomPersistor<
+pub type TomlFilePersistor<V> = CustomPersistor<
     V,
     String,
     str,

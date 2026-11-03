@@ -12,7 +12,8 @@ pub enum Scope {
     Config,
     ConfigLocal,
     Dot,
-    Custom(PathBuf),
+    /// Uses the supplied directory as the base for scoped files.
+    Directory(PathBuf),
 }
 
 impl Scope {
@@ -23,8 +24,7 @@ impl Scope {
             Scope::Config => config_dir(),
             Scope::ConfigLocal => config_local_dir(),
             Scope::Dot => Some(PathBuf::from(".")),
-            // May need more pathbuf here
-            Scope::Custom(p) => Some(p.clone()),
+            Scope::Directory(directory) => Some(directory.clone()),
         }
     }
 

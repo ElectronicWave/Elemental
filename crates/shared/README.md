@@ -283,7 +283,7 @@ Scope::Home;
 Scope::Config;
 Scope::ConfigLocal;
 Scope::Dot;
-Scope::Custom("/tmp/example".into());
+Scope::Directory("/tmp/example".into());
 ```
 
 Files are placed under a `.elemental` directory:

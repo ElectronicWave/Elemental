@@ -303,7 +303,7 @@ Supported bases:
 - platform config directory
 - platform local config directory
 - current directory
-- custom path
+- custom directory
 
 Path creation is handled through `get_full_path` asynchronously and
 `get_full_path_blocking` synchronously.

@@ -1,5 +1,6 @@
 extern crate self as elemental_shared;
 
+pub mod error;
 pub mod loader;
 pub mod migrator;
 pub mod persistor;
@@ -11,13 +12,13 @@ pub mod version;
 #[cfg(test)]
 mod shared_test {
     use crate::{
+        error::Result,
         migrator::{Migrator, NoMigrator},
         persistor::{MemoryPersistor, json_persistor},
         profile::Profile,
         scope::Scope,
         version::Persistor,
     };
-    use anyhow::Result;
     use serde::{Deserialize, Serialize};
 
     /// A sample configuration struct for testing purposes.

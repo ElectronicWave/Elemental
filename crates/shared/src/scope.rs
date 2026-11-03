@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use crate::error::{Error, Result};
 use dirs::{config_dir, config_local_dir, document_dir, home_dir};
 use std::path::PathBuf;
 use tokio::fs::create_dir_all;
@@ -29,7 +29,7 @@ impl Scope {
     }
 
     pub fn get_full_path_blocking(&self, id: &str, suffix: Option<String>) -> Result<PathBuf> {
-        let mut path = self.path().context("There is no valid base path")?;
+        let mut path = self.path().ok_or(Error::BasePathUnavailable)?;
         path.push(PRESERVED_DIR);
         if !path.exists() {
             std::fs::create_dir_all(&path)?;

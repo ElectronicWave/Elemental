@@ -1,5 +1,7 @@
-use crate::version::{VersionControlled, Versioned};
-use anyhow::Result;
+use crate::{
+    error::Result,
+    version::{VersionControlled, Versioned},
+};
 
 pub trait Migrator<Stored: Versioned, Current: VersionControlled> {
     fn migrate(&self, stored: Stored) -> Result<Current>;

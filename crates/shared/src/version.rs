@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::Result;
 
 pub trait Versioned {
     fn version(&self) -> usize;

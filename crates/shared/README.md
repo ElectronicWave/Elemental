@@ -21,6 +21,7 @@ anything about migrations.
 - Async access through `Loader`
 - JSON and TOML file persistence
 - In-memory and no-op persistors
+- Typed errors through `thiserror`
 - Cross-platform storage locations through `Scope`
 
 ## Installation
@@ -133,6 +134,7 @@ stays clean.
 
 ```rust
 use elemental_shared::{
+    error::Result,
     migrator::Migrator,
     persistor::json_persistor,
     profile::Profile,
@@ -167,7 +169,7 @@ enum Versions {
 struct ProfileMigrator;
 
 impl Migrator<Profile<Versions>, Profile<V3Config>> for ProfileMigrator {
-    fn migrate(&self, stored: Profile<Versions>) -> anyhow::Result<Profile<V3Config>> {
+    fn migrate(&self, stored: Profile<Versions>) -> Result<Profile<V3Config>> {
         let Profile { config, version } = stored;
         let config = match config {
             Versions::V1(config) => V3Config {
@@ -184,7 +186,7 @@ impl Migrator<Profile<Versions>, Profile<V3Config>> for ProfileMigrator {
         Ok(Profile { config, version })
     }
 
-    fn encode(&self, current: &Profile<V3Config>) -> anyhow::Result<Profile<Versions>> {
+    fn encode(&self, current: &Profile<V3Config>) -> Result<Profile<Versions>> {
         Ok(Profile {
             config: Versions::V3(current.config.clone()),
             version: current.version,
@@ -293,6 +295,12 @@ Files are placed under a `.elemental` directory:
 ```
 
 ## API Summary
+
+### Errors
+
+All fallible APIs return `elemental_shared::error::Result<T>`. The error enum
+covers I/O, enabled serialization formats, missing base paths, and version
+validation failures.
 
 ### Versioned
 

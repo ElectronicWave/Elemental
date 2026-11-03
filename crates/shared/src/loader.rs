@@ -1,11 +1,11 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use crate::{
+    error::{Error, Result},
     migrator::Migrator,
     profile::Profile,
     version::{Persistor, VersionControlled, Versioned},
 };
-use anyhow::{Result, bail};
 use tokio::sync::RwLock;
 
 #[derive(Clone)]
@@ -34,11 +34,10 @@ where
         let value = match persistor.load().await? {
             Some(source) => {
                 if source.version() > target_version {
-                    bail!(
-                        "stored version {} is newer than supported version {}",
-                        source.version(),
-                        target_version
-                    );
+                    return Err(Error::StoredVersionNewer {
+                        stored: source.version(),
+                        supported: target_version,
+                    });
                 }
 
                 let should_save = source.version() < target_version;
@@ -95,11 +94,10 @@ where
     let stored_version = stored.version();
 
     if stored_version != target_version {
-        bail!(
-            "migrator encoded stored version {}, expected target version {}",
-            stored_version,
-            target_version
-        );
+        return Err(Error::EncodedVersionMismatch {
+            encoded: stored_version,
+            target: target_version,
+        });
     }
 
     Ok(stored)

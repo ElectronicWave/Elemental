@@ -1,5 +1,4 @@
-use crate::{scope::Scope, version::Persistor};
-use anyhow::Result;
+use crate::{error::Result, scope::Scope, version::Persistor};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::{io::ErrorKind, marker::PhantomData, path::PathBuf, sync::Arc};

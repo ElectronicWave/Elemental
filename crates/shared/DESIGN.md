@@ -22,6 +22,20 @@ The design uses two representations:
 4. The runtime type stays free of old-version variants.
 5. Missing storage is represented as `None`, not as a fabricated stored value.
 
+## Error Model
+
+All fallible public APIs return `crate::error::Result<T>`. `Error` uses
+`thiserror` so callers can match storage, serialization, path, and version
+failures without downcasting:
+
+- `Io` wraps filesystem errors.
+- `Json` wraps JSON failures when the `json` feature is enabled.
+- `TomlSerialize` and `TomlDeserialize` wrap TOML failures when `toml` is enabled.
+- `BasePathUnavailable` reports an unsupported platform storage location.
+- `StoredVersionNewer` rejects data from a newer schema.
+- `EncodedVersionMismatch` rejects an encoded representation with the wrong
+  version.
+
 ## Core Types
 
 | Type | Responsibility |

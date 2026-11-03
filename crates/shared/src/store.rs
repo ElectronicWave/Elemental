@@ -1,9 +1,9 @@
 use crate::{
+    error::Result,
     loader::Loader,
     migrator::Migrator,
     version::{Persistor, VersionControlled, Versioned},
 };
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Default)]

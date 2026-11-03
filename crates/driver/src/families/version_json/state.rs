@@ -4,9 +4,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::Result;
+use anyhow::Result as AnyhowResult;
 use elemental_core::storage::layout::Layout;
 use elemental_shared::{
+    error::Result,
     migrator::NoMigrator,
     store::{Store, StoreLoader},
     version::Persistor,
@@ -73,14 +74,14 @@ pub type NativeStateStore = StoreLoader<
     JsonPathPersistor<Store<NativesState>>,
 >;
 
-pub fn natives_state_path(instance_root: &Path) -> Result<PathBuf> {
+pub fn natives_state_path(instance_root: &Path) -> AnyhowResult<PathBuf> {
     BaseInstanceLayout.try_get_extended_resource(
         instance_root,
         VersionJsonInstanceResource::Elemental(Some(PathBuf::from("natives.json"))),
     )
 }
 
-pub async fn natives_state_store(instance_root: &Path) -> Result<NativeStateStore> {
+pub async fn natives_state_store(instance_root: &Path) -> AnyhowResult<NativeStateStore> {
     let persistor = JsonPathPersistor::new(natives_state_path(instance_root)?);
     let store = Store::load(NoMigrator, persistor, NATIVES_STATE_VERSION).await?;
 

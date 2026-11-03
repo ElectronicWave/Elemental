@@ -1,13 +1,19 @@
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use std::path::Path;
 use std::path::PathBuf;
-#[cfg(target_os = "linux")]
-use std::{env::consts::EXE_SUFFIX, path::Path};
 
 use async_trait::async_trait;
 
 use super::super::provider::RuntimeProvider;
+use crate::runtime::discovery::find_runtime_homes;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use crate::runtime::discovery::find_runtime_homes_with_prefixes;
+
+const PLATFORM_SCAN_DEPTH: usize = 1;
 
 #[derive(Default)]
 pub struct PackageManagerProvider;
+
 #[async_trait]
 impl RuntimeProvider for PackageManagerProvider {
     async fn list(&self) -> Vec<PathBuf> {
@@ -20,60 +26,122 @@ impl RuntimeProvider for PackageManagerProvider {
 }
 
 impl PackageManagerProvider {
-    #[cfg(target_os = "linux")]
+    #[cfg(windows)]
     async fn get_platform_java_distribution() -> Vec<PathBuf> {
-        const AOSC_JAVA_PATHS: [(&str, &str); 1] = [("/usr/lib", "java-")]; // /usr/lib/java-<major>
-        const DEBIAN_JAVA_PATHS: [(&str, &str); 1] = [("/usr/lib/jvm", "")]; // /usr/lib/jvm/java-<major>-openjdk-<arch>
-        const FEDORA_JAVA_PATHS: [(&str, &str); 1] = [("/usr/lib/jvm", "")]; // /usr/lib/jvm/java-<major>-openjdk-<full_ver>.<fedora_major>.<arch>
-        const GENTOO_JAVA_PATHS: [(&str, &str); 3] = [
-            ("/usr/lib64", "openjdk-"), // /usr/lib64/openjdk-<major>
-            ("/usr/lib", "openjdk-"),   // /usr/lib/openjdk-<major>
-            ("/opt", "openjdk-bin-"),   // /opt/openjdk-bin-<ver>
+        const VENDOR_DIRECTORIES: &[&str] = &[
+            "Java",
+            "BellSoft",
+            "AdoptOpenJDK",
+            "Zulu",
+            "Microsoft",
+            "Eclipse Foundation",
+            "Eclipse Adoptium",
+            "Semeru",
+            "Amazon Corretto",
+            "SapMachine",
         ];
-        let mut javas: Vec<PathBuf> = vec![];
-        let os_release = rs_release::get_os_release().unwrap_or_default();
 
-        let filters: &[(&str, &str)] =
-            os_release
-                .get("ID")
-                .map(|s| s.as_str())
-                .map_or(&[], |os_id| match os_id {
-                    "aosc" => &AOSC_JAVA_PATHS,
-                    "debian" | "ubuntu" => &DEBIAN_JAVA_PATHS,
-                    "fedora" => &FEDORA_JAVA_PATHS,
-                    "gentoo" => &GENTOO_JAVA_PATHS as &[(&str, &str)],
-                    "Deepin" | "deepin" => &DEBIAN_JAVA_PATHS,
-                    _ => &[],
-                });
-        for filter in filters {
-            let path = Path::new(filter.0);
-            if !tokio::fs::try_exists(path).await.unwrap_or(false) {
-                continue;
-            }
-            let Ok(mut read_dir) = tokio::fs::read_dir(path).await else {
+        let mut javas = Vec::new();
+        for variable_name in ["ProgramFiles", "ProgramFiles(x86)"] {
+            let Some(base_path) = std::env::var_os(variable_name).map(PathBuf::from) else {
                 continue;
             };
-            while let Ok(Some(sub)) = read_dir.next_entry().await {
-                if !sub.file_name().to_string_lossy().starts_with(filter.1) {
-                    continue;
-                }
-                let sub_dir_path = sub.path();
-                if sub_dir_path.is_dir() {
-                    let bin_path = sub_dir_path.join("bin");
-                    let java_exe = bin_path.join(format!("java{EXE_SUFFIX}"));
-                    if tokio::fs::try_exists(&bin_path).await.unwrap_or(false)
-                        && tokio::fs::try_exists(&java_exe).await.unwrap_or(false)
-                    {
-                        javas.push(sub_dir_path);
-                    }
-                }
+            for vendor_directory in VENDOR_DIRECTORIES {
+                javas.extend(
+                    find_runtime_homes(&base_path.join(vendor_directory), PLATFORM_SCAN_DEPTH)
+                        .await,
+                );
             }
         }
         javas
     }
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "linux")]
     async fn get_platform_java_distribution() -> Vec<PathBuf> {
-        vec![]
+        let mut javas = Vec::new();
+
+        for directory in [
+            "/usr/java",
+            "/usr/lib/jvm",
+            "/usr/lib32/jvm",
+            "/usr/lib64/jvm",
+            "/opt/jdk",
+            "/opt/jdks",
+            "/opt/ibm",
+            "/app/jdk",
+        ] {
+            javas.extend(find_runtime_homes(Path::new(directory), PLATFORM_SCAN_DEPTH).await);
+        }
+
+        javas.extend(
+            find_runtime_homes_with_prefixes(
+                Path::new("/usr/lib64"),
+                PLATFORM_SCAN_DEPTH,
+                &["openjdk-", "openj9-"],
+            )
+            .await,
+        );
+        javas.extend(
+            find_runtime_homes_with_prefixes(
+                Path::new("/usr/lib"),
+                PLATFORM_SCAN_DEPTH,
+                &["java", "openjdk-", "openj9-"],
+            )
+            .await,
+        );
+        javas.extend(
+            find_runtime_homes_with_prefixes(
+                Path::new("/opt"),
+                PLATFORM_SCAN_DEPTH,
+                &["openjdk-", "openj9-"],
+            )
+            .await,
+        );
+
+        if let Some(snap_root) = std::env::var_os("SNAP").map(PathBuf::from) {
+            for directory in ["usr/lib/jvm", "app/jdk"] {
+                javas.extend(
+                    find_runtime_homes(&snap_root.join(directory), PLATFORM_SCAN_DEPTH).await,
+                );
+            }
+        }
+
+        javas
+    }
+
+    #[cfg(target_os = "macos")]
+    async fn get_platform_java_distribution() -> Vec<PathBuf> {
+        let mut javas = Vec::new();
+
+        for directory in [
+            "/Library/Java/JavaVirtualMachines",
+            "/System/Library/Java/JavaVirtualMachines",
+        ] {
+            javas.extend(find_runtime_homes(Path::new(directory), 3).await);
+        }
+        for directory in ["/opt/homebrew/opt", "/usr/local/opt"] {
+            javas.extend(
+                find_runtime_homes_with_prefixes(
+                    Path::new(directory),
+                    PLATFORM_SCAN_DEPTH,
+                    &["openjdk", "java"],
+                )
+                .await,
+            );
+        }
+
+        for directory in [
+            "/Library/Internet Plug-Ins/JavaAppletPlugin.plugin/Contents/Home",
+            "/Applications/Xcode.app/Contents/Applications/Application Loader.app/Contents/MacOS/itms/java",
+        ] {
+            javas.extend(find_runtime_homes(Path::new(directory), 0).await);
+        }
+
+        javas
+    }
+
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+    async fn get_platform_java_distribution() -> Vec<PathBuf> {
+        Vec::new()
     }
 }

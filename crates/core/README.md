@@ -13,8 +13,8 @@ spawning launch commands. Minecraft-specific installation logic lives in
 
 - Tagged version types for Minecraft and loader version identifiers.
 - Generic `Storage<L, P>` and `Layout` abstractions for nested resources.
-- Java runtime discovery from the platform registry, `PATH`, package managers,
-  and `JAVA_HOME`.
+- Java runtime discovery from platform registries, `PATH`, package-manager and
+  toolchain directories, Minecraft's bundled runtimes, and `JAVA_HOME`/`JRE_HOME`.
 - Explicit runtime selection with strict or disabled Java version validation.
 - Offline and Microsoft device-code authorizers.
 - `LaunchCommand` construction, process spawning, and streamed process logs.
@@ -154,9 +154,12 @@ adds convenience methods for reading resources through the stored layout.
 
 ### Runtime discovery
 
-The default runtime providers inspect the platform registry on Windows, the
-`PATH`, known package-manager locations, and `JAVA_HOME`. Discovery results are
-cached in a process-wide `OnceCell`.
+The default runtime providers inspect the Windows registry and installed
+vendor directories, `PATH`, `JAVA_HOME`/`JRE_HOME`, known package-manager and
+user toolchain locations (SDKMAN, asdf, Gradle, IntelliJ), and Minecraft's
+bundled runtimes. Candidate roots are canonicalized, deduplicated, and sorted
+by Java version. Runtimes without a `release` file are probed with a bounded
+timeout and a cleaned Java environment.
 
 ```rust
 use elemental_core::runtime::{
@@ -172,6 +175,11 @@ Use `Distribution::cached()` to inspect every discovered runtime, or
 `Distribution::find_cached_by_java_major()` to select one by Java major
 version. An explicit executable can be passed to `resolve_runtime`; in strict
 mode its detected major version must match the requested version.
+
+Custom runtime providers can reuse the public scanning helpers in
+`runtime::discovery`, including `find_runtime_homes()`,
+`find_runtime_homes_with_prefixes()`, and `is_runtime_home()`, instead of
+reimplementing Java runtime layout checks.
 
 > [!IMPORTANT]
 > `with_runtime_providers()` replaces the process-wide provider list. Call it

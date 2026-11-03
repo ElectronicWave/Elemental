@@ -1,14 +1,18 @@
 use scc::HashMap;
-#[cfg(feature = "notify")]
-use std::sync::atomic::AtomicBool;
+use scc::hash_map::Entry;
 use std::{
-    any::{Any, TypeId},
+    any::{Any, TypeId, type_name},
     future::Future,
     pin::Pin,
-    sync::{Arc, LazyLock, atomic::Ordering},
+    sync::{
+        Arc, LazyLock,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 #[cfg(feature = "notify")]
 use tokio::sync::Notify;
+
+use crate::error::{Error, Result};
 
 pub static POOL: LazyLock<ObjectPool> = LazyLock::new(ObjectPool::new);
 pub type ShutdownFn<T> =
@@ -17,40 +21,57 @@ pub struct PoolEntry<T: Any + Send + Sync + ?Sized> {
     value: Option<Arc<T>>,
     #[cfg(feature = "notify")]
     notify: Arc<Notify>,
-    #[cfg(feature = "notify")]
     active: AtomicBool,
     shutdown: Option<ShutdownFn<T>>,
 }
 
-impl<T: Any + Send + Sync + ?Sized> PoolEntry<T> {
-    async fn shutdown(&mut self) {
-        let old_value = self.value.take();
-        let old_shutdown = self.shutdown.take();
-        #[cfg(feature = "notify")]
-        {
-            // maybe one comsumer is going to waiting for value, but the value is shutdown, we should set active to false to avoid waiting forever.
-            self.active.store(false, Ordering::Release);
-            // maybe an acquire is waiting for this entry, we should notify it after shutdown, otherwise it may wait forever.
-            self.notify.notify_waiters();
-        }
+struct CleanupTask<T: Any + Send + Sync + ?Sized> {
+    value: Option<Arc<T>>,
+    shutdown: Option<ShutdownFn<T>>,
+    #[cfg(feature = "notify")]
+    notify: Arc<Notify>,
+}
 
-        if let (Some(v), Some(s)) = (old_value, old_shutdown) {
-            (s)(v).await;
+impl<T: Any + Send + Sync + ?Sized> CleanupTask<T> {
+    async fn run(self) {
+        #[cfg(feature = "notify")]
+        self.notify.notify_waiters();
+
+        if let (Some(value), Some(shutdown)) = (self.value, self.shutdown) {
+            shutdown(value).await;
+        }
+    }
+}
+
+impl<T: Any + Send + Sync + ?Sized> PoolEntry<T> {
+    fn take_cleanup(&mut self) -> CleanupTask<T> {
+        let value = self.value.take();
+        let shutdown = self.shutdown.take();
+        self.active.store(false, Ordering::Release);
+
+        CleanupTask {
+            value,
+            shutdown,
+            #[cfg(feature = "notify")]
+            notify: self.notify.clone(),
         }
     }
 
-    async fn reload(&mut self, value: Arc<T>, shutdown: Option<ShutdownFn<T>>) {
+    fn replace_with(&mut self, value: Arc<T>, shutdown: Option<ShutdownFn<T>>) -> CleanupTask<T> {
         let old_value = self.value.replace(value);
         let old_shutdown = std::mem::replace(&mut self.shutdown, shutdown);
-        #[cfg(feature = "notify")]
-        {
-            self.active.store(true, Ordering::Release);
-            self.notify.notify_waiters();
-        }
+        self.active.store(true, Ordering::Release);
 
-        if let (Some(v), Some(s)) = (old_value, old_shutdown) {
-            (s)(v).await;
+        CleanupTask {
+            value: old_value,
+            shutdown: old_shutdown,
+            #[cfg(feature = "notify")]
+            notify: self.notify.clone(),
         }
+    }
+
+    fn is_active(&self) -> bool {
+        self.active.load(Ordering::Acquire)
     }
 
     fn new() -> Self {
@@ -58,7 +79,6 @@ impl<T: Any + Send + Sync + ?Sized> PoolEntry<T> {
             value: None,
             #[cfg(feature = "notify")]
             notify: Arc::new(Notify::new()),
-            #[cfg(feature = "notify")]
             active: AtomicBool::new(true),
             shutdown: None,
         }
@@ -108,114 +128,127 @@ impl ObjectPool {
                 shutdown_fn(value)
             }) as ShutdownFn<dyn Any + Send + Sync>
         });
-        if self.inner.contains_async(&type_id).await {
-            // Call shutdown of old value if exists, and update the value and shutdown fn.
-            // It means the old value will be shutdown before the new value is set, so the shutdown fn can still access the old value.
-            let mut entry = self.inner.get_async(&type_id).await.unwrap();
-            entry.reload(value, shutdown).await;
-            return;
-        }
+        let cleanup = match self.inner.entry_async(type_id).await {
+            Entry::Occupied(mut entry) => Some(entry.get_mut().replace_with(value, shutdown)),
+            Entry::Vacant(entry) => {
+                let mut pool_entry = PoolEntry::new();
+                pool_entry.value = Some(value as Arc<dyn Any + Send + Sync>);
+                pool_entry.shutdown = shutdown;
+                entry.insert_entry(pool_entry);
+                None
+            }
+        };
 
-        let mut entry = PoolEntry::new();
-        entry.value = Some(value.clone() as Arc<dyn Any + Send + Sync>);
-        entry.shutdown = shutdown;
-        // The entry is new, just insert it!
-        self.inner.upsert_async(type_id, entry).await;
+        if let Some(cleanup) = cleanup {
+            cleanup.run().await;
+        }
     }
 
-    pub async fn remove_value<T: Any + Send + Sync>(&self) {
+    pub async fn remove_value<T: Any + Send + Sync>(&self) -> bool {
         let type_id = TypeId::of::<T>();
-        if let Some(mut entry) = self.inner.get_async(&type_id).await {
-            entry.shutdown().await;
+        let cleanup = if let Some(mut entry) = self.inner.get_async(&type_id).await {
+            let pool_entry = entry.get_mut();
+            let had_value = pool_entry.value.is_some();
+            Some((had_value, pool_entry.take_cleanup()))
+        } else {
+            None
+        };
+
+        if let Some((had_value, cleanup)) = cleanup {
+            cleanup.run().await;
+            return had_value;
         }
+
+        false
     }
 
-    pub async fn remove_entry<T: Any + Send + Sync>(&self) {
+    pub async fn remove_entry<T: Any + Send + Sync>(&self) -> bool {
         let type_id = TypeId::of::<T>();
         if let Some((_, mut entry)) = self.inner.remove_async(&type_id).await {
-            entry.shutdown().await;
+            entry.take_cleanup().run().await;
+            return true;
         }
+
+        false
     }
 
     #[cfg(feature = "notify")]
     pub async fn wait_value<T: Any + Send + Sync>(&self) {
         let type_id = TypeId::of::<T>();
 
-        // If the value is shutdown, return immediately to avoid waiting forever.
-        if let Some(active) = self
-            .inner
-            .read_async(&type_id, |_, v| v.active.load(Ordering::Acquire))
-            .await
-            && !active
-        {
-            return;
+        loop {
+            // Register and read the state under the same entry lock. This keeps the
+            // notification handle tied to the entry whose state is observed, even if
+            // the entry is removed and recreated concurrently.
+            let entry = self
+                .inner
+                .entry_async(type_id)
+                .await
+                .or_insert_with(PoolEntry::new);
+            let (notified, state) = {
+                let pool_entry = entry.get();
+                (
+                    pool_entry.notify.clone().notified_owned(),
+                    (pool_entry.is_active(), pool_entry.value.is_some()),
+                )
+            };
+            drop(entry);
+
+            match state {
+                (false, _) | (true, true) => return,
+                (true, false) => notified.await,
+            }
         }
-
-        if self
-            .inner
-            .read_async(&type_id, |_, v| v.value.clone())
-            .await
-            .is_some()
-        {
-            // If the value exists, return immediately.
-            return;
-        }
-
-        let notified = self
-            .inner
-            .entry_async(type_id)
-            .await
-            .or_insert(PoolEntry::new())
-            .get()
-            .notify
-            .clone();
-
-        notified.notified().await;
     }
 
     pub async fn fulfill_value<T: Any + Send + Sync>(
         &self,
         value: Arc<T>,
         shutdown: Option<ShutdownFn<T>>,
-    ) {
+    ) -> Result<bool> {
         let type_id = TypeId::of::<T>();
-        if let Some(fulfilled) = self
-            .inner
-            .read_async(&type_id, |_, v| v.value.is_some())
-            .await
-            && fulfilled
-        {
-            // Noops if already fulfilled
-            return;
-        }
-
-        if let Some(mut entry) = self.inner.get_async(&type_id).await {
-            entry.value = Some(value.clone() as Arc<dyn Any + Send + Sync>);
-            let shutdown = shutdown.map(|shutdown_fn| {
-                Box::new(move |value_any: Arc<dyn Any + Send + Sync>| {
-                    let value = value_any
-                        .downcast::<T>()
-                        .expect("Can't downcast value in shutdown fn");
-                    shutdown_fn(value)
-                }) as ShutdownFn<dyn Any + Send + Sync>
+        let shutdown = shutdown.map(|shutdown_fn| {
+            Box::new(move |value_any: Arc<dyn Any + Send + Sync>| {
+                let value = value_any
+                    .downcast::<T>()
+                    .expect("Can't downcast value in shutdown fn");
+                shutdown_fn(value)
+            }) as ShutdownFn<dyn Any + Send + Sync>
+        });
+        let Some(mut entry) = self.inner.get_async(&type_id).await else {
+            return Err(Error::NoWaitingEntry {
+                type_name: type_name::<T>(),
             });
-            entry.shutdown = shutdown;
-            #[cfg(feature = "notify")]
-            {
-                entry.active.store(true, Ordering::Release);
-                entry.notify.notify_waiters();
+        };
+
+        let cleanup = {
+            let pool_entry = entry.get_mut();
+            if pool_entry.value.is_some() {
+                return Ok(false);
             }
-        }
+            if !pool_entry.is_active() {
+                return Err(Error::EntryClosed {
+                    type_name: type_name::<T>(),
+                });
+            }
+            pool_entry.replace_with(value, shutdown)
+        };
+
+        drop(entry);
+        cleanup.run().await;
+        Ok(true)
     }
 
     pub async fn shutdown(&self) {
+        let mut cleanups = Vec::new();
         let mut iter = self.inner.begin_async().await;
         while let Some(mut entry) = iter {
-            // `OccupiedEntry` can be sent across awaits and threads.
-            // clean up the old value if it's exists
-            entry.shutdown().await;
-
+            cleanups.push(entry.get_mut().take_cleanup());
             iter = entry.next_async().await;
+        }
+
+        for cleanup in cleanups {
+            cleanup.run().await;
         }
     }
 }

@@ -2,382 +2,280 @@
 
 ## Overview
 
-The **elemental-object** crate provides a thread-safe, type-aware object pool for managing long-lived application objects. It enables dynamic registration, retrieval, and lifecycle management of heterogeneous types through a global singleton pool, with support for custom shutdown handlers.
+`elemental-object` stores one value per concrete Rust type in a concurrent,
+type-indexed pool. It supports synchronous retrieval, async provisioning,
+optional waiting, hot replacement, task-local contexts, and asynchronous
+shutdown hooks.
+
+The design optimizes for a small lifecycle surface:
+
+- one `TypeId` maps to one `PoolEntry`;
+- values are shared as `Arc<T>`;
+- state changes are serialized by `scc::HashMap` entry guards, which lock the
+  containing bucket internally;
+- notifications and shutdown hooks run after the entry state is updated and
+  after the entry lock is released.
 
 ## Architecture
 
-### Core Components
+### ObjectPool
 
-#### 1. ObjectPool
-The central data structure that stores all objects in a type-indexed HashMap.
-
-```
-ObjectPool
-├── inner: HashMap<TypeId, PoolEntry<dyn Any + Send + Sync>>
-│   └── TypeId → Unique type identifier (from std::any::TypeId)
-│   └── PoolEntry → Container for the actual value + metadata
+```rust
+pub struct ObjectPool {
+    inner: HashMap<TypeId, PoolEntry<dyn Any + Send + Sync>>,
+}
 ```
 
-**Key Characteristics:**
-- **Type-safe**: Uses `TypeId` to uniquely identify each type in the pool
-- **Concurrency**: Built on `scc::HashMap` for lock-free concurrent reads/writes
-- **Heterogeneous**: Can store values of different types in a single pool
-- **Singleton**: Wrapped in `LazyLock<POOL>` for global access
+`scc::HashMap` provides concurrent lookup and per-entry exclusive access.
+`TypeId` is the only key, so types with the same layout still have independent
+slots.
 
-#### 2. PoolEntry<T>
-Represents a single entry in the pool, holding the actual value and associated metadata.
+The process-wide pool is a `LazyLock<ObjectPool>`. `ObjectContext` owns a
+separate `ObjectPool` and exposes it through `tokio::task_local`.
+
+### PoolEntry
 
 ```rust
 pub struct PoolEntry<T: Any + Send + Sync + ?Sized> {
     value: Option<Arc<T>>,
-    notify: Arc<Notify>,              // Feature: "notify"
+    #[cfg(feature = "notify")]
+    notify: Arc<Notify>,
+    active: AtomicBool,
     shutdown: Option<ShutdownFn<T>>,
 }
 ```
 
-**Fields:**
-- `value`: The actual object wrapped in `Arc` for shared ownership
-- `notify`: (Optional) Tokio notification primitive for async waiting
-- `shutdown`: Custom cleanup function executed when the value is removed
+- `value` is the currently published object.
+- `notify` wakes waiters when this entry changes. It is compiled only with the
+  `notify` feature.
+- `active` distinguishes a pending or ready slot from a closed slot. It is
+  always present because the non-notify build still needs the same lifecycle
+  semantics.
+- `shutdown` is the hook associated with the value that is currently stored.
 
-#### 3. ShutdownFn<T>
-Type alias for custom lifecycle handlers.
+The state invariants are:
+
+| `active` | `value` | Meaning |
+| --- | --- | --- |
+| `true` | `Some` | Ready |
+| `true` | `None` | Pending, created by a waiter |
+| `false` | `None` | Closed by `drop_value()` or `shutdown()` |
+
+An inactive entry never has a value: the cleanup path clears both fields while
+holding the entry lock.
+
+### CleanupTask
+
+`CleanupTask` carries the old value, its shutdown hook, and a notification
+handle out of the entry lock. `run()` first notifies waiters, then awaits the
+shutdown hook.
+
+Keeping cleanup outside the lock has two purposes:
+
+1. A slow shutdown hook cannot block readers or writers of the same entry or
+   other entries in the same hash-map bucket.
+2. A shutdown hook can safely call back into the pool without re-entering an
+   entry lock already held by the replacement path.
+
+## State Transitions
+
+### provide
+
+`set_value()` performs one `entry_async()` operation and handles both cases:
+
+- occupied entry: replace the value and shutdown hook, then return the old
+  state as a `CleanupTask`;
+- vacant entry: insert a new active entry with the value.
+
+This removes the earlier `contains` followed by `get().unwrap()` race. It also
+means `provide()` reopens a slot closed by `drop_value()` or `shutdown()`.
+
+### fulfill
+
+`fulfill_value()` takes an exclusive entry reference and checks the state
+directly:
+
+| State | Result |
+| --- | --- |
+| No entry | `Err`: no waiting entry exists |
+| Closed entry | `Err`: use `provide` to reopen it |
+| Active with a value | `Ok(false)`: leave the existing value untouched |
+| Active and empty | `Ok(true)`: fill the slot and notify waiters |
+
+`fulfill()` is therefore not an idempotent silent no-op. It reports whether it
+actually filled a slot and never revives a closed entry.
+
+### drop_value
+
+`remove_value()` keeps the entry but calls `take_cleanup()`:
+
+- the value and shutdown hook are moved out;
+- `active` becomes `false`;
+- waiters are notified outside the lock;
+- the shutdown hook, if present, is awaited outside the lock.
+
+It returns whether a value was actually present. Waiters observe the inactive
+state and return, after which `require()` reports the missing value. A later
+`provide()` can reopen the same entry.
+
+### drop_entry
+
+`remove_entry()` removes the map entry and runs its cleanup. It returns whether
+the entry existed. A waiter that was blocked on the removed entry is notified,
+observes `None`, and starts another wait iteration on a newly created entry.
+`drop_entry()` is therefore not a signal that all future producers are gone.
+
+### shutdown
+
+`shutdown()` walks the map, marks every entry inactive, and collects each
+cleanup task. It then runs all shutdown hooks after the iteration, without
+holding entry locks. Hooks run sequentially, but no ordering guarantee is made
+across types.
+
+## Waiting Model
+
+`acquire()` is implemented by `wait_value()` followed by `require()`. The wait
+loop uses one state snapshot per iteration:
 
 ```rust
-type ShutdownFn<T> = Box<dyn Fn(Arc<T>) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
+loop {
+    let entry = self
+        .inner
+        .entry_async(type_id)
+        .await
+        .or_insert_with(PoolEntry::new);
+    let (notified, state) = {
+        let pool_entry = entry.get();
+        (
+            pool_entry.notify.clone().notified_owned(),
+            (pool_entry.is_active(), pool_entry.value.is_some()),
+        )
+    };
+    drop(entry);
+
+    match state {
+        (false, _) | (true, true) => return,
+        (true, false) => notified.await,
+    }
+}
 ```
 
-Allows code to perform asynchronous cleanup when an object is removed from the pool.
+The ordering is intentional:
 
-### Global Singleton
+1. Take one exclusive entry access, creating the entry if it is missing.
+2. Create an owned `Notified` future before reading state.
+3. Read `active` and `value` together while the same entry lock is held.
+4. Drop the lock, then decide based on that single snapshot or await the
+   already-created future.
 
-The pool is initialized as a `LazyLock<ObjectPool>`:
+Tokio's owned notification future captures the `notify_waiters()` counter at
+creation, so a notification sent after creation is observed even if the future
+has not been polled yet. Registering and reading under the same lock is what
+ties the notification handle to the entry that produced the snapshot. Without
+that, an entry could be removed and recreated between notification creation and
+the state read, leaving the waiter on the old entry's notification handle. The
+loop is required because an entry can still be removed after the lock is
+released; removal wakes the waiter, which then creates or joins the replacement
+entry.
 
-```rust
-static POOL: LazyLock<ObjectPool> = LazyLock::new(|| ObjectPool::new());
-```
+There is no generation counter. A waiter only needs to know whether a value is
+available or the slot is closed; it does not need to identify a particular
+write. If a value is replaced while a waiter is blocked, the waiter wakes and
+reads the current value. A generation or replay log would only be needed for a
+subscription API that delivers every write, which this pool does not provide.
 
-This ensures:
-- Single instance across the entire application
-- Thread-safe initialization (happens exactly once on first access)
-- Zero-cost abstraction (no runtime allocation for uninitialized pools)
+## Removal Races
+
+- `provide` races are resolved by `entry_async()` serializing the occupied and
+  vacant cases.
+- `fulfill` checks "already filled" and "closed" under the same exclusive
+  entry access used for insertion.
+- Concurrent `drop_value` calls move the state out exactly once; the second
+  call returns `false`.
+- Concurrent `drop_entry` calls remove the entry exactly once.
+- A remove operation notifies waiters after updating state, so waiters never
+  block on a state they cannot observe.
 
 ## API Layers
 
-### Low-Level API (ObjectPool methods)
-
-These methods operate directly on the pool instance:
-
-| Method | Mode | Purpose |
-|--------|------|---------|
-| `get_sync<T>()` | Sync | Retrieve value synchronously (may be None) |
-| `get_async<T>()` | Async | Retrieve value asynchronously (may be None) |
-| `set_value<T>()` | Async | Store/update value with optional shutdown handler |
-| `remove_value<T>()` | Async | Remove value and execute shutdown handler |
-| `remove_entry<T>()` | Async | Remove entire entry and execute shutdown handler |
-| `wait_value<T>()` | Async | Wait for value to be provided (requires "notify" feature) |
-| `fulfill_value<T>()` | Async | Mark value as fulfilled and notify waiters |
-| `shutdown()` | Async | Gracefully shutdown all objects in pool |
-
-### High-Level API (Module-level functions)
-
-Convenient wrappers for common operations:
-
-**Synchronous Operations:**
-```rust
-require_sync<T>() -> Result<Arc<T>>
-```
-Get value or return error if not found.
-
-**Asynchronous Retrieval:**
-```rust
-require<T>() -> Result<Arc<T>>          // Get or error
-acquire<T>() -> Result<Arc<T>>          // Wait for value then get (with "notify")
-```
-
-**Value Provisioning:**
-```rust
-// Provide owned value
-provide<T, F, Fut>(value: T, shutdown: Option<F>)
-
-// Provide Arc-wrapped value (avoid re-wrapping)
-provide_arc<T, F, Fut>(value: Arc<T>, shutdown: Option<F>)
-
-// Mark as fulfilled (idempotent, notifies waiters with "notify")
-fulfill<T>(value: T)
-fulfill_arc<T>(value: Arc<T>)
-```
-
-**Value Removal:**
-```rust
-drop_value<T>()         // Remove and shutdown value
-drop_entry<T>()         // Remove entire entry and shutdown
-```
-
-**Lifecycle:**
-```rust
-shutdown()              // Gracefully shutdown entire pool
-```
-
-## Design Patterns & Behaviors
-
-### 1. Dual Modes: Wait vs. Try-Get
-
-**Try-Get Mode** (default):
-- `require()`, `require_sync()`: Return error immediately if not found
-- Use when value must exist or graceful error handling is needed
-
-**Wait Mode** (requires "notify" feature):
-- `acquire()`: Blocks until value is provided
-- Useful for initialization patterns: one task provides, others wait
-- Prevents the "wait for initialization" race condition
-
-### 2. Idempotent Set & Fulfill
-
-**Multiple provides** on same type:
-```rust
-provide(value1, None).await;
-provide(value2, None).await; // Replaces value1, triggers shutdown
-```
-
-**Multiple fulfills** on same type:
-```rust
-fulfill(value1).await;
-fulfill(value2).await; // Ignored! Fulfillment is idempotent
-```
-
-This prevents accidental overwriting of fulfillment state in concurrent scenarios.
-
-### 3. Shutdown Semantics
-
-Values are cleaned up in three scenarios:
-
-1. **Replacement**: When `provide()` replaces an existing value
-   ```rust
-   provide(new_value, None).await;  // Old value shutdown called
-   ```
-
-2. **Explicit Removal**: When `drop_value()` or `drop_entry()` is called
-   ```rust
-   drop_value::<MyType>().await;
-   ```
-
-3. **Pool Shutdown**: When `shutdown()` is called
-   ```rust
-   shutdown().await;  // All values shutdown in iteration order
-   ```
-
-### 4. Arc Ownership Model
-
-All stored values are wrapped in `Arc<T>`:
-- Enables shared ownership across the application
-- Automatic cleanup when last reference is dropped
-- Thread-safe reference counting
-
-Values accessed via API are `Arc<T>` clones:
-```rust
-let value = require::<MyType>()?;  // Arc<MyType>
-let cloned = value.clone();        // Reference count incremented
-drop(value);                       // Reference count decremented
-```
-
-### 5. Feature-Gated Notification
-
-The `"notify"` feature (enabled by default) provides async waiting:
-
-```toml
-[features]
-notify = ["tokio"]
-default = ["notify"]
-```
-
-**With feature enabled**: 
-- `acquire()`, `fulfill()`, `wait_value()` are available
-- Each `PoolEntry` includes `Arc<Notify>` (minimal overhead)
-
-**With feature disabled**:
-- Only try-get operations available
-- Smaller memory footprint for use cases that don't need waiting
-
-## Concurrency Model
-
-### Synchronization Strategy
-
-- **Data Structure**: `scc::HashMap` (lock-free concurrent hash map)
-- **Read Operations**: Lock-free via `read_sync()/read_async()`
-- **Write Operations**: Atomic via `upsert_async()`, `get_async()`, `remove_async()`
-- **Notification**: Tokio `Notify` for async coordination (optional)
-
-### Thread Safety Guarantees
-
-1. **Type Safety**: Different types in pool don't interfere
-2. **Reference Safety**: Values behind `Arc` have shared ownership semantics
-3. **Notification Safety**: `Notify` ensures waiters wake up after fulfillment
-4. **Graceful Shutdown**: Sequential iteration during pool shutdown
-
-### Race Conditions Handled
-
-1. **Set-before-wait**: Entry created before wait begins → immediate return
-2. **Fulfill idempotence**: Multiple fulfills don't cause confusion
-3. **Concurrent shutdown**: `remove_async()` prevents double-cleanup
-
-## Usage Patterns
-
-### Pattern 1: Singleton Service
-
-```rust
-// Initialize at startup
-provide(
-    MyService::new().await,
-    Some(|service| async move { service.shutdown().await })
-).await;
-
-// Access anywhere
-let service = require::<MyService>()?;
-```
-
-### Pattern 2: Wait-for-Initialization
-
-```rust
-// Task A: Initialize
-tokio::spawn(async {
-    sleep(Duration::from_secs(2)).await;
-    let config = load_config().await;
-    provide(config, None).await;
-});
-
-// Task B: Wait and use
-let config = acquire::<Config>()?;  // Blocks until provided
-use_config(&config);
-```
-
-### Pattern 3: Replacement with Cleanup
-
-```rust
-// Database connection pool with lifecycle
-provide(
-    db_pool,
-    Some(|pool| async move {
-        pool.close().await;  // Cleanup on replacement
-    })
-).await;
-```
-
-### Pattern 4: Explicit Cleanup
-
-```rust
-// Temporary resource
-provide(TempResource::new(), Some(|res| async move {
-    res.cleanup().await;
-})).await;
-
-// Later...
-drop_value::<TempResource>().await;  // Triggers cleanup
-```
-
-## Type Safety & Limits
-
-### What Works
-
-Any type `T` where:
-- `T: Any + Send + Sync`
-- `T` is concretely known at compile time
-
-```rust
-provide(42usize, None).await;
-provide(String::from("hello"), None).await;
-provide(MyStruct { field: 42 }, None).await;
-```
-
-### What Doesn't Work
-
-- **Dynamic types without concrete representation**: Stored as trait objects, making downcasting ambiguous
-- **Non-`Send` or non-`Sync` types**: Incompatible with concurrent access
-- **Dyn traits directly**: Cannot be uniquely identified by `TypeId`
-
-## Performance Characteristics
-
-| Operation | Complexity | Notes |
-|-----------|-----------|-------|
-| `require_sync<T>()` | O(1) | Hash lookup, blocking |
-| `require<T>()` | O(1) | Hash lookup, async-friendly |
-| `provide<T>()` | O(1) amortized | Insertion/update with potential reallocation |
-| `acquire<T>()` | O(1) + wait | Hash lookup + notification wait |
-| `drop_value<T>()` | O(1) | Removal + shutdown execution |
-| `shutdown()` | O(n) | n = number of types in pool |
-
-**Memory:**
-- Per entry: `Arc<T> + Option<ShutdownFn> + Arc<Notify>`
-- No allocations when pool is unused (LazyLock)
-
-## Configuration & Features
-
-### Default Configuration
-
-```toml
-[features]
-default = ["notify"]
-```
-
-This enables async waiting and notification capabilities.
-
-### Minimal Configuration
-
-To disable notification overhead:
-
-```toml
-[dependencies]
-elemental-object = { version = "0.1", default-features = false }
-```
-
-Results in: try-get operations only, no Tokio dependency.
-
-## Testing
-
-The crate includes comprehensive async tests covering:
-
-1. **fulfill + acquire**: Waiting for provisioned values
-2. **provide + require**: Direct storage and retrieval
-3. **drop_value**: Explicit removal and cleanup
-4. **shutdown**: Graceful pool termination
-5. **multiple types**: Heterogeneous object storage
-
-Run tests with:
-```bash
-cargo test --features notify
-```
+### ObjectPool
+
+| Method | Behavior |
+| --- | --- |
+| `get_async<T>()` | Return the current `Arc<T>` or `None` |
+| `set_value<T>()` | Insert, replace, or reopen a value |
+| `remove_value<T>()` | Close a slot; return whether a value was present |
+| `remove_entry<T>()` | Remove an entry; return whether it existed |
+| `wait_value<T>()` | Wait for a value or a closed slot; `notify` only |
+| `fulfill_value<T>()` | Fill a pending slot; return `Result<bool>` |
+| `shutdown()` | Close all entries and run their shutdown hooks |
+
+### Facade
+
+- Retrieval: `require()`, `acquire()` with the `notify` feature.
+- Provisioning: `provide()`, `provide_with_shutdown()`, `provide_context()`,
+  `provide_context_with_shutdown()`, `provide_instant()`,
+  `provide_instant_context()`.
+- Fulfillment: `fulfill()`, `fulfill_with_shutdown()`, `fulfill_context()`,
+  `fulfill_with_context_shutdown()`; all return `Result<bool>`.
+- Removal: `drop_value()`, `drop_entry()`, `drop_context_value()`,
+  `drop_context_entry()`; all return `bool`.
+- Shutdown: `shutdown()`, `shutdown_local()`; `shutdown_local()` returns
+  whether a context was active.
+
+`require()` checks the active context first, then the global pool. Context-aware
+providers and fulfillers target the active context when present and fall back to
+the global pool. Context-aware removal and `shutdown_local()` do not fall back;
+they return `false` when no context is active.
+
+## Feature Flags
+
+`notify` is enabled by default and gates `acquire()`, `wait_value()`, and the
+`Notify` field. Tokio is a regular dependency because `ObjectContext` requires
+`tokio::task_local` in every configuration.
+
+Without `notify`, provisioning, retrieval, fulfillment of existing entries,
+removal, and shutdown remain available. There is no public waiter path, so a
+pending empty entry is normally not created.
+
+## Non-Goals
+
+- **Automatic type dependency resolution.** There is no dependency graph,
+  topological construction, or implicit lookup of another type during
+  provisioning. Compose values explicitly or use `InstantObject`.
+- **Generation-based event delivery.** `acquire()` returns the current value;
+  it does not replay every update.
+- **Cross-type shutdown ordering.** Hooks are independent and may not be
+  ordered relative to other types.
+- **Dynamic trait-object keys.** Values are identified by concrete `TypeId`.
+- **Distributed pools.** The pool is process-local.
 
 ## Error Handling
 
-### Errors
+- `require()` returns an `Error::ObjectNotFound` containing the requested type
+  name when no value exists.
+- `acquire()` waits, then returns the same error if the slot was closed or the
+  value disappeared before retrieval.
+- `fulfill()` returns an error for a missing entry or a closed entry and
+  `Ok(false)` for an already-filled entry.
+- Removal functions report absence with `false` rather than an error.
 
-- **Object not found**: `require<T>()` returns `Err` with context message
-  ```
-  "Cannot get object `std::string::String` from pool"
-  ```
+## Verification
 
-### Panics
+The crate's smoke tests cover:
 
-- **Shutdown handler panic**: May panic during cleanup (rare, but possible)
-- **Downcast failure**: Internal bug (should never happen with correct API usage)
+- provide, retrieve, and remove;
+- waiting for a provisioned value;
+- fulfill with and without a pending entry;
+- closed-slot and removed-entry behavior;
+- shutdown hooks running outside the entry lock;
+- task-local contexts;
+- facade-level provide, require, and drop.
 
-## Future Extensions
+Relevant commands:
 
-Potential enhancements:
-
-1. **Weak References**: `get_weak<T>()` for non-owning access
-2. **Lazy Initialization**: Auto-initialize on first access
-3. **Metrics**: Count pool hits/misses, entry lifetime
-4. **Distributed Pools**: Multiple pools with cross-pool queries
-5. **Object Factories**: Store providers instead of values
-
-## Security & Safety
-
-- **Memory Safety**: All unsafe code behind `Arc` and `downcasting` is internally verified
-- **No Injection Points**: No user-controlled keys or deserialization
-- **Type Isolation**: Objects of different types can't collide
-- **Ownership Enforcement**: Shutdown handlers execute in Arc context, ensuring proper cleanup
-
-## Conclusion
-
-The elemental-object crate provides a pragmatic, type-safe global object pool for Rust applications. It balances ease-of-use (simple module-level API) with flexibility (custom shutdown handlers, wait-for-initialization pattern) while maintaining thread safety through careful use of Rust's type system and concurrent data structures.
+```text
+cargo test -p elemental-object
+cargo test -p elemental-object --no-default-features
+cargo check -p elemental-object --no-default-features
+```

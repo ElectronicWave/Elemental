@@ -1,4 +1,3 @@
-use anyhow::{Result, anyhow};
 use scc::HashMap;
 use scc::hash_map::Entry;
 use std::{
@@ -12,6 +11,8 @@ use std::{
 };
 #[cfg(feature = "notify")]
 use tokio::sync::Notify;
+
+use crate::error::{Error, Result};
 
 pub static POOL: LazyLock<ObjectPool> = LazyLock::new(ObjectPool::new);
 pub type ShutdownFn<T> =
@@ -215,10 +216,9 @@ impl ObjectPool {
             }) as ShutdownFn<dyn Any + Send + Sync>
         });
         let Some(mut entry) = self.inner.get_async(&type_id).await else {
-            return Err(anyhow!(
-                "Cannot fulfill object `{}`: no waiting entry exists",
-                type_name::<T>()
-            ));
+            return Err(Error::NoWaitingEntry {
+                type_name: type_name::<T>(),
+            });
         };
 
         let cleanup = {
@@ -227,10 +227,9 @@ impl ObjectPool {
                 return Ok(false);
             }
             if !pool_entry.is_active() {
-                return Err(anyhow!(
-                    "Cannot fulfill object `{}`: the entry is closed; use provide instead",
-                    type_name::<T>()
-                ));
+                return Err(Error::EntryClosed {
+                    type_name: type_name::<T>(),
+                });
             }
             pool_entry.replace_with(value, shutdown)
         };

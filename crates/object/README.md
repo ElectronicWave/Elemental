@@ -23,7 +23,6 @@ request- or tenant-scoped values separate from the global pool.
 
 ```toml
 [dependencies]
-anyhow = "1"
 async-trait = "0.1"
 elemental-object = "0.2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
@@ -35,8 +34,7 @@ Tokio is a regular dependency because `ObjectContext` uses `tokio::task_local`.
 ## Quick Start
 
 ```rust
-use anyhow::Result;
-use elemental_object::{provide_with_shutdown, require, shutdown};
+use elemental_object::{Result, provide_with_shutdown, require, shutdown};
 
 struct AppConfig {
     name: String,
@@ -147,8 +145,7 @@ context is active.
 ### Wait for initialization
 
 ```rust
-use anyhow::Result;
-use elemental_object::{acquire, provide};
+use elemental_object::{Result, acquire, provide};
 
 #[derive(Debug)]
 struct Config {
@@ -170,8 +167,7 @@ async fn main() -> Result<()> {
 ### Request-scoped values
 
 ```rust
-use anyhow::Result;
-use elemental_object::{ObjectContext, acquire, provide_context};
+use elemental_object::{ObjectContext, Result, acquire, provide_context};
 
 #[derive(Debug)]
 struct Tenant {
@@ -192,7 +188,7 @@ async fn main() -> Result<()> {
     let consumer = context.clone().run(async {
         let tenant = acquire::<Tenant>().await?;
         println!("tenant: {}", tenant.id);
-        Ok::<_, anyhow::Error>(())
+        Ok::<_, elemental_object::Error>(())
     });
 
     let ((), result) = tokio::join!(producer, consumer);
@@ -229,7 +225,7 @@ impl InstantObject for Database {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> elemental_object::Result<()> {
     provide_instant::<Database>().await;
     let _connection = require::<Connection>().await?;
     Ok(())
@@ -267,8 +263,8 @@ elemental-object = { version = "0.2", default-features = false }
 
 ## Error Handling
 
-`require()` returns `anyhow::Result<Arc<T>>`. A missing value produces an error
-that includes the requested type name, for example:
+`require()` returns `elemental_object::Result<Arc<T>>`. A missing value produces
+an `Error::ObjectNotFound` that includes the requested type name, for example:
 
 ```text
 Cannot get object `my_app::config::Config` from pool
@@ -277,8 +273,9 @@ Cannot get object `my_app::config::Config` from pool
 `acquire()` returns the same kind of error when the value disappears while it
 is waiting.
 
-`fulfill()` returns `anyhow::Result<bool>`. It produces an error when no entry
-exists for the type or when the entry was closed by `drop_value()`/`shutdown()`:
+`fulfill()` returns `elemental_object::Result<bool>`. It produces
+`Error::NoWaitingEntry` when no entry exists for the type and
+`Error::EntryClosed` when the entry was closed by `drop_value()`/`shutdown()`:
 
 ```text
 Cannot fulfill object `my_app::config::Config`: no waiting entry exists

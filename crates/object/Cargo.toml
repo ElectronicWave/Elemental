@@ -10,7 +10,7 @@ license = "AGPL-3.0-only"
 
 [dependencies]
 scc = { workspace = true }
-anyhow = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"] }
 async-trait = { workspace = true }
 

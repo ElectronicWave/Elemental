@@ -1,17 +1,17 @@
 pub mod context;
+pub mod error;
 pub mod facade;
 pub mod instant;
 pub mod pool;
+pub use error::{Error, Result};
 pub use facade::*;
 
 #[cfg(test)]
 mod testobj {
     use super::*;
-    use crate::pool::{ObjectPool, ShutdownFn};
+    use crate::facade::convert_shutdown_fn;
+    use crate::pool::ObjectPool;
     use std::{
-        any::Any,
-        future::Future,
-        pin::Pin,
         sync::{
             Arc,
             atomic::{AtomicUsize, Ordering},
@@ -23,17 +23,6 @@ mod testobj {
         time::{sleep, timeout},
     };
 
-    fn test_shutdown<T, F, Fut>(shutdown: F) -> ShutdownFn<T>
-    where
-        T: Any + Send + Sync,
-        F: Fn(Arc<T>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = ()> + Send + 'static,
-    {
-        Box::new(move |value: Arc<T>| {
-            Box::pin(shutdown(value)) as Pin<Box<dyn Future<Output = ()> + Send>>
-        })
-    }
-
     #[tokio::test]
     async fn test_provide_and_remove() {
         let pool = ObjectPool::new();
@@ -42,7 +31,7 @@ mod testobj {
 
         pool.set_value(
             Arc::new("value".to_owned()),
-            Some(test_shutdown(move |_value: Arc<String>| {
+            Some(convert_shutdown_fn(move |_value: Arc<String>| {
                 let count = count.clone();
                 async move {
                     count.fetch_add(1, Ordering::SeqCst);
@@ -165,7 +154,7 @@ mod testobj {
 
         pool.set_value(
             Arc::new(1i32),
-            Some(test_shutdown(move |_value: Arc<i32>| {
+            Some(convert_shutdown_fn(move |_value: Arc<i32>| {
                 let started = started.clone();
                 let release = release.clone();
                 async move {

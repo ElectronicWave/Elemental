@@ -252,8 +252,8 @@ pending empty entry is normally not created.
 
 ## Error Handling
 
-- `require()` returns an `anyhow` error containing the requested type name when
-  no value exists.
+- `require()` returns an `Error::ObjectNotFound` containing the requested type
+  name when no value exists.
 - `acquire()` waits, then returns the same error if the slot was closed or the
   value disappeared before retrieval.
 - `fulfill()` returns an error for a missing entry or a closed entry and

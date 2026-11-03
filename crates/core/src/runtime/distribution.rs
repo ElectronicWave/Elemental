@@ -151,18 +151,14 @@ impl DistributionReleaseData {
         let mut jre_version = None;
         let mut jvm_version = None;
 
-        for line in output.lines() {
-            let trimmed = line.trim();
-            if let Some(value) = trimmed.strip_prefix("java.vm.vendor") {
-                implementor = Some(Self::parse_property_value(value));
-            } else if let Some(value) = trimmed.strip_prefix("os.arch") {
-                architecture = Some(Self::parse_property_value(value));
-            } else if let Some(value) = trimmed.strip_prefix("java.specification.version") {
-                major_version = Some(Self::parse_property_value(value));
-            } else if let Some(value) = trimmed.strip_prefix("java.version") {
-                jre_version = Some(Self::parse_property_value(value));
-            } else if let Some(value) = trimmed.strip_prefix("java.vm.version") {
-                jvm_version = Some(Self::parse_property_value(value));
+        for (key, value) in Self::property_pairs(output) {
+            match key {
+                "java.vm.vendor" => implementor = Some(value.to_string()),
+                "os.arch" => architecture = Some(value.to_string()),
+                "java.specification.version" => major_version = Some(value.to_string()),
+                "java.version" => jre_version = Some(value.to_string()),
+                "java.vm.version" => jvm_version = Some(value.to_string()),
+                _ => {}
             }
         }
 
@@ -182,16 +178,14 @@ impl DistributionReleaseData {
         let mut jre_version = None;
         let mut jvm_version = None;
 
-        for line in output.lines() {
-            let trimmed = line.trim();
-            if let Some(value) = trimmed.strip_prefix("IMPLEMENTOR=") {
-                implementor = Some(Self::parse_release_value(value));
-            } else if let Some(value) = trimmed.strip_prefix("OS_ARCH=") {
-                architecture = Some(Self::parse_release_value(value));
-            } else if let Some(value) = trimmed.strip_prefix("JAVA_VERSION=") {
-                jre_version = Some(Self::parse_release_value(value));
-            } else if let Some(value) = trimmed.strip_prefix("JAVA_RUNTIME_VERSION=") {
-                jvm_version = Some(Self::parse_release_value(value));
+        for (key, value) in Self::property_pairs(output) {
+            let value = value.trim_matches('"');
+            match key {
+                "IMPLEMENTOR" => implementor = Some(value.to_string()),
+                "OS_ARCH" => architecture = Some(value.to_string()),
+                "JAVA_VERSION" => jre_version = Some(value.to_string()),
+                "JAVA_RUNTIME_VERSION" => jvm_version = Some(value.to_string()),
+                _ => {}
             }
         }
 
@@ -209,15 +203,11 @@ impl DistributionReleaseData {
         }
     }
 
-    fn parse_property_value(s: &str) -> String {
-        s.split_once('=')
-            .map(|(_, v)| v.trim())
-            .unwrap_or("")
-            .to_string()
-    }
-
-    fn parse_release_value(s: &str) -> String {
-        s.trim_matches('"').to_string()
+    fn property_pairs(output: &str) -> impl Iterator<Item = (&str, &str)> {
+        output.lines().filter_map(|line| {
+            let (key, value) = line.trim().split_once('=')?;
+            Some((key.trim(), value.trim()))
+        })
     }
 
     fn parse_java_major_version(version: &str) -> Option<usize> {
@@ -497,4 +487,32 @@ async fn default_providers_return_deduplicated_distributions_sorted_by_major_ver
             .all(|pair| { pair[0].java_major_version() >= pair[1].java_major_version() })
     );
     println!("{:#?}", distributions);
+}
+
+#[test]
+fn parse_properties_uses_exact_keys_and_unquotes_release_values() {
+    let diagnostic = r#"
+        java.vm.vendor = Eclipse Adoptium
+        os.arch = amd64
+        java.specification.version = 21
+        java.version = 21.0.5
+        java.version.date = 2024-10-15
+        java.vm.version = 21.0.5+11-LTS
+    "#;
+    let release = DistributionReleaseData::parse_properties(diagnostic);
+    assert_eq!(release.jre_version.as_deref(), Some("21.0.5"));
+    assert_eq!(release.jvm_version.as_deref(), Some("21.0.5+11-LTS"));
+    assert_eq!(release.java_major_version(), Some(21));
+
+    let release_file = r#"
+        IMPLEMENTOR="Eclipse Adoptium"
+        OS_ARCH="x86_64"
+        JAVA_VERSION="1.8.0_452"
+        JAVA_VERSION_DATE="2025-01-21"
+        JAVA_RUNTIME_VERSION="1.8.0_452-b09"
+    "#;
+    let release = DistributionReleaseData::parse_release_properties(release_file);
+    assert_eq!(release.implementor.as_deref(), Some("Eclipse Adoptium"));
+    assert_eq!(release.jre_version.as_deref(), Some("1.8.0_452"));
+    assert_eq!(release.java_major_version(), Some(8));
 }

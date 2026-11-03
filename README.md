@@ -1,107 +1,97 @@
-## Elemental
+# Elemental
 
-[![Codacy Badge](https://app.codacy.com/project/badge/Grade/893a020791bf486a9ef80f67729dc2f4)](https://app.codacy.com/gh/ElectronicWave/Elemental/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
+[![Rust Test](https://github.com/ElectronicWave/Elemental/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/ElectronicWave/Elemental/actions/workflows/test.yml)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/893a020791bf486a9ef80f67729dc2f4)](https://app.codacy.com/gh/ElectronicWave/Elemental/dashboard)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ElectronicWave/Elemental)
-
 [![Contributors][contributors-shield]][contributors-url]
-[![Forks][forks-shield]][forks-url]
 [![Stargazers][stars-shield]][stars-url]
-[![Issues][issues-shield]][issues-url]
 [![License][license-shield]][license-url]
 
-Elemental is a Modern Minecraft Launcher SDK⚛
+**A modular Rust toolkit for Minecraft launchers and reusable application infrastructure.**
+
+Elemental provides a typed pipeline for discovering versions, preparing
+instances, resolving Java runtimes, and launching vanilla or modded Minecraft.
+It also contains standalone building blocks for version-aware persistence and
+migrations, type-indexed object pools, download infrastructure, and manifest
+schemas. Use `elemental-kit` end to end, or adopt the individual crates in other
+Rust applications.
+
+> [!NOTE]
+> Elemental is under active development. The support matrix below reflects
+> current workspace coverage, not a stability guarantee. See
+> [ROADMAP.md](https://github.com/ElectronicWave/Elemental/blob/main/ROADMAP.md)
+> for current scope and known gaps.
+
+## Highlights
+
+- **End-to-end lifecycle**: catalog, inspect, prepare/install, load, build a
+  launch command, and launch.
+- **Loader-aware design**: dedicated flows for Vanilla, Fabric-like,
+  installer-driven, and profiled legacy distributions.
+- **Typed storage and layouts**: game roots, instances, libraries, assets, and
+  version artifacts resolve through `Storage` and `Layout`.
+- **Runtime validation**: use an explicit Java executable or discover a
+  compatible local runtime from the Minecraft version metadata.
+- **Reusable infrastructure**: `elemental-shared` for versioned persistence
+  and migrations, `elemental-object` for type-indexed object pools,
+  `elemental-infra` for downloads, and `elemental-schema` for manifests.
+- **Flexible adoption**: use the `elemental-kit` facade end to end or pick the
+  individual async crates for another Rust application.
 
 ## Support Matrix
 
-| Family / Driver | Catalog | Inspect | Install | Load Installed | Launch |
-| --------------- | ------- | ------- | ------- | -------------- | ------ |
-| Vanilla         | ✅       | ✅       | ✅       | ✅              | ✅      |
-| Fabric-like     | ✅       | ✅       | ✅       | ✅              | ✅      |
-| Fabric          | ✅       | ✅       | ✅       | ✅              | ✅      |
-| LegacyFabric    | ✅       | ✅       | ✅       | ✅              | ✅      |
-| Babric          | ✅       | ✅       | ✅       | ✅              | ✅      |
-| Quilt           | ✅       | ✅       | ✅       | ✅              | ✅      |
-| Forge           | ✅       | ✅       | ✅       | ✅              | ✅      |
-| NeoForge        | ✅       | ✅       | ✅       | ✅              | ✅      |
-| CleanroomMC     | ✅       | ✅       | ✅       | ✅              | ✅      |
-| Rift            | ✅       | ✅       | ✅       | ✅              | ✅      |
-| LiteLoader      | ✅       | ✅       | ✅       | ✅              | ✅      |
+| Family | Drivers | Catalog | Inspect | Install | Load installed | Launch |
+| --- | --- | :---: | :---: | :---: | :---: | :---: |
+| Vanilla | Vanilla | Yes | Yes | Yes | Yes | Yes |
+| Fabric ecosystem | Fabric, Legacy Fabric, Babric, Quilt | Yes | Yes | Yes | Yes | Yes |
+| Installer-driven | Forge, NeoForge, CleanroomMC | Yes | Yes | Yes | Yes | Yes |
+| Profiled legacy | Rift, LiteLoader | Yes | Yes | Yes | Yes | Yes |
 
-Development is actively in progress. The matrix reflects the current workspace state rather than a stability guarantee. Verified anchors and current range claims live in [ROADMAP.md](ROADMAP.md).
+## Requirements
 
-## Why Elemental
-
-- It treats Minecraft distributions as real families instead of flattening everything into one fake `version.json` model. Vanilla, Fabric-like loaders, direct profiled legacy-era loaders such as Rift and LiteLoader, and installer-driven ecosystems such as Forge, NeoForge, and Cleanroom all land on intentional substrates instead of collapsing into special-case flags.
-- `Storage` + `Layout` make paths a typed capability, not stringly-typed launcher glue. Game roots, instances, libraries, assets, and version artifacts are resolved through explicit resource models, which keeps alternative layouts and migration work possible without hardcoding one `.minecraft` shape.
-- The instance lifecycle is explicit and product-friendly. Elemental separates catalog, inspect, install, load-installed, and launch so a launcher can discover local state, reopen prepared instances, and build launch commands without rerunning the whole install path every time.
-- Runtime handling is part of the kernel, not scattered around app code. The core can validate an explicit Java executable against the required major version or resolve a compatible local runtime automatically, which matters once old and new distributions coexist in the same launcher.
-- Older tweaker-era loaders do not automatically force a new kernel family. Rift and LiteLoader now run on the direct profiled `version_json` path, which keeps the boot surface smaller until a future target proves otherwise.
-- Installer-driven ecosystems are first-class. Forge, NeoForge, and now Cleanroom run on a shared installer-family flow with family-specific merge and runtime behavior, so the SDK can support legacy-derived installers without pretending they are just metadata overlays.
-- The workspace is split for reuse instead of forcing one monolith:
-  - `schema` for protocol types
-  - `core` for storage, runtime, and launch primitives
-  - `infra` for downloading and archive work
-  - `driver` for catalogs, families, and distribution logic
-  - `shared` for persisted state helpers
-
-## Workspace Layout
-
-- `crates/schema`: Pure protocol and serialization types
-- `crates/core`: Launcher domain logic, storage, runtime lookup, and launch primitives
-- `crates/infra`: Downloader and execution reports
-- `crates/driver`: Distribution and driver-specific logic
-- `crates/object`: Shared typed object pool
-- `crates/shared`: Versioned persisted loader, profile, and store utilities
-- `crates/elemental`: Re-export facade crate
-- `crates/demo`: End-to-end example
+- Rust 1.85 or newer. The workspace uses edition 2024.
+- A compatible Java runtime for launching Minecraft. Elemental can discover a
+  local runtime or use an executable supplied with `--runtime-executable`.
+- Network access for catalog and artifact downloads. Use `--local-only` when
+  the instance is already prepared.
 
 ## Quick Start
 
-If you just want to verify the current end-to-end example inside this repository:
+```bash
+git clone https://github.com/ElectronicWave/Elemental.git
+cd Elemental
+
+cargo run -p demo -- --help
+cargo run -p demo -- list
+```
+
+The demo writes to `.minecraft` by default. With a compatible Java runtime
+available, the default command prepares and launches Fabric 1.20.1:
 
 ```bash
 cargo run -p demo
 ```
 
-The current default demo prepares and launches a Fabric instance.
+Other drivers accept the same storage, runtime, and local-only options:
 
-Loader-specific demo entry points are also available, including `cargo run -p demo -- cleanroom --help`, `cargo run -p demo -- rift --help`, and `cargo run -p demo -- liteloader --help`.
+```bash
+cargo run -p demo -- forge 1.20.1 47.3.1
+cargo run -p demo -- --local-only fabric 1.20.1 0.16.10 MyFabric-1.20.1
+```
 
-The default demo settings live in [crates/demo/src/main.rs](crates/demo/src/main.rs).
+The demo defaults live in
+[`crates/demo/src/cli.rs`](https://github.com/ElectronicWave/Elemental/blob/main/crates/demo/src/cli.rs).
 
-## Use The Library Crates Directly
-
-This is the smallest end-to-end flow using the library crates directly.
-
-### Dependencies
+## Use as a Library
 
 ```toml
 [dependencies]
 anyhow = "1"
+elemental = { package = "elemental-kit", version = "0.2" }
 tokio = { version = "1", features = ["macros", "process", "rt-multi-thread"] }
-elemental = { package = "elemental-kit", version = "0.1" }
 ```
 
-### 1. Fetch Catalog Data
-
-```rust
-use anyhow::Result;
-use elemental::{driver::drivers::vanilla::catalog::VanillaCatalog, launcher::Launcher};
-
-#[tokio::main]
-async fn main() -> Result<()> {
-    let launcher = Launcher::builder().build();
-    let data = launcher.catalog(VanillaCatalog::with_defaults()).await?;
-    println!("Data: {:#?}", data);
-
-    Ok(())
-}
-```
-
-## 2. Prepare and Launch
-
-If you want to launch a version that is already fully prepared on disk without downloading anything,
-load it from storage first and then launch it.
+Prepare and launch a vanilla instance:
 
 ```rust
 use anyhow::Result;
@@ -110,79 +100,121 @@ use elemental::{
     launcher::{DriverSpec, LaunchOptions, Launcher, PrepareInstanceRequest, VanillaSpec},
 };
 
-// Extracting native should use multi-thread runtime to avoid blocking the async flow, but the rest of the work is single-thread-friendly so the default runtime is fine for most of the flow.
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
-    let launcher = Launcher::builder().build();
+    let launcher = Launcher::builder()
+        .storage_root(".minecraft")
+        .build();
+
     let prepared = launcher
         .prepare_instance(PrepareInstanceRequest {
-            instance_name: "Vanilla".to_string(),
+            instance_name: "Vanilla-1.20.1".to_owned(),
             driver: DriverSpec::Vanilla(VanillaSpec {
                 game_version: "1.20.1".into(),
             }),
         })
         .await?;
 
-    let mut instance = launcher
+    let mut game = launcher
         .launch_prepared_instance(
             &prepared,
             OfflineAuthorizer {
-                username: "Vanilla123".to_string(),
+                username: "Player".to_owned(),
             },
             &LaunchOptions::default(),
         )
         .await?;
-    let exit_code = instance.child.wait().await?;
-    println!("Exited with code: {exit_code}");
+
+    let status = game.child.wait().await?;
+    println!("Minecraft exited with {status}");
     Ok(())
 }
 ```
 
-## 3. Inspect, Load, and Launch
+Offline authentication keeps local development simple. Use a production
+`Authorizer` for real player accounts. When the host application owns process
+creation, call `build_launch_command` instead of `launch_prepared_instance`.
+
+Inspect and reopen an existing instance without preparing it again:
 
 ```rust
-use anyhow::Result;
-use elemental::{
-    core::auth::authorizers::offline::OfflineAuthorizer,
-    launcher::{LaunchOptions, Launcher},
-};
+let instances = launcher.inspect_instances().await?;
+for instance in instances {
+    println!("{} ({})", instance.instance_name, instance.driver.driver.id);
+}
 
-// Extracting native should use multi-thread runtime to avoid blocking the async flow, but the rest of the work is single-thread-friendly so the default runtime is fine for most of the flow.
-#[tokio::main(flavor = "multi_thread")]
-async fn main() -> Result<()> {
-    let launcher = Launcher::builder().build();
-    // Find all instances in the storage and print them out
-    let instances = launcher.inspect_instances().await?;
-    println!("Instances: {:#?}", instances);
-    let instance = launcher
-        .inspect_instance("MyNeoForge-1.21.1".into())
-        .await?;
-    println!("Instance: {:#?}", instance);
-    if let Some(instance) = instance {
-        let prepared = launcher.load_instance(instance).await?;
-        let mut instance = launcher
-            .launch_prepared_instance(
-                &prepared,
-                OfflineAuthorizer {
-                    username: "Fox".into(),
-                },
-                &LaunchOptions::default(),
-            )
-            .await?;
-        let exit = instance.child.wait().await?;
-        println!("Instance exited with: {exit}");
-    }
-    Ok(())
+if let Some(instance) = launcher.inspect_instance("MyFabric-1.20.1".to_owned()).await? {
+    let prepared = launcher.load_instance(instance).await?;
+    println!("Loaded {}", prepared.driver().id);
 }
 ```
 
-## Notes
+## Workspace
 
-- This example assumes you already have a compatible local Java runtime.
-- Elemental now auto-selects a local runtime using the Minecraft version metadata.
-- Runtime discovery uses sources such as the Windows registry, `PATH`, package-manager locations, and `JAVA_HOME`.
-- The example uses offline auth on purpose so the minimal flow stays easy to run.
-- If you want a complete runnable reference from this repository, [crates/demo/src/main.rs](crates/demo/src/main.rs) is the best starting point.
+| Crate | Purpose |
+| --- | --- |
+| [`elemental-kit`](https://github.com/ElectronicWave/Elemental/blob/main/README.md#the-elemental-kit-facade) | Re-export facade for the library crates |
+| [`elemental-core`](https://github.com/ElectronicWave/Elemental/blob/main/crates/core/README.md) | Storage, runtime discovery, authentication, and launch primitives |
+| [`elemental-driver`](https://github.com/ElectronicWave/Elemental/blob/main/crates/driver/README.md) | Distribution catalogs, families, and loader-specific logic |
+| [`elemental-launcher`](https://github.com/ElectronicWave/Elemental/blob/main/crates/launcher/README.md) | High-level launcher facade and instance lifecycle |
+| [`elemental-infra`](https://github.com/ElectronicWave/Elemental/blob/main/crates/infra/README.md) | Download planning, materialization, and archive utilities |
+| [`elemental-shared`](https://github.com/ElectronicWave/Elemental/blob/main/crates/shared/README.md) | Version-aware persistence and migrations |
+| [`elemental-object`](https://github.com/ElectronicWave/Elemental/blob/main/crates/object/README.md) | Type-indexed global and task-local object pools |
+| [`elemental-schema`](https://github.com/ElectronicWave/Elemental/blob/main/crates/schema/README.md) | Mojang and modloader manifest types |
+| [`demo`](https://github.com/ElectronicWave/Elemental/blob/main/crates/demo/README.md) | End-to-end CLI example |
+
+### The elemental-kit facade
+
+`elemental-kit` re-exports the library crates under stable module names. It is
+the single dependency for applications that want the launcher stack and the
+reusable infrastructure together.
+
+| Module | Package | Feature |
+| --- | --- | --- |
+| `elemental::core` | `elemental-core` | `core` |
+| `elemental::driver` | `elemental-driver` | `driver` |
+| `elemental::launcher` | `elemental-launcher` | `launcher` |
+| `elemental::infra` | `elemental-infra` | `infra` |
+| `elemental::object` | `elemental-object` | `object` |
+| `elemental::shared` | `elemental-shared` | `shared` |
+| `elemental::schema` | `elemental-schema` | `schema` |
+
+`full` enables every module. The default feature set is `full` plus
+`shared-json` and `object-notify`.
+
+For a smaller dependency surface, disable default features and select only the
+modules an application uses:
+
+```toml
+[dependencies]
+elemental = {
+    package = "elemental-kit",
+    version = "0.2",
+    default-features = false,
+    features = ["core", "driver", "launcher"],
+}
+```
+
+Forwarded features:
+
+| Feature | Effect |
+| --- | --- |
+| `shared-json` | Enables `elemental-shared/json` |
+| `shared-toml` | Enables `elemental-shared/toml` |
+| `object-notify` | Enables `elemental-object/notify` |
+
+> [!IMPORTANT]
+> Forwarded features do not enable the facade module itself. With
+> `default-features = false`, enable both `shared` and `shared-json` when using
+> JSON persistence, `shared` and `shared-toml` for TOML, and `object` plus
+> `object-notify` when waiter support is required.
+
+## Documentation
+
+- [Roadmap and current gaps](https://github.com/ElectronicWave/Elemental/blob/main/ROADMAP.md)
+- [API documentation](https://docs.rs/elemental-kit)
+- [Persistence and migration design](https://github.com/ElectronicWave/Elemental/blob/main/crates/shared/DESIGN.md)
+- [Object pool design](https://github.com/ElectronicWave/Elemental/blob/main/crates/object/DESIGN.md)
 
 ## Credits
 
@@ -193,11 +225,7 @@ async fn main() -> Result<()> {
 <!-- LINKS -->
 [contributors-shield]: https://img.shields.io/github/contributors/ElectronicWave/Elemental.svg?style=for-the-badge
 [contributors-url]: https://github.com/ElectronicWave/Elemental/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/ElectronicWave/Elemental.svg?style=for-the-badge
-[forks-url]: https://github.com/ElectronicWave/Elemental/network/members
 [stars-shield]: https://img.shields.io/github/stars/ElectronicWave/Elemental.svg?style=for-the-badge
 [stars-url]: https://github.com/ElectronicWave/Elemental/stargazers
-[issues-shield]: https://img.shields.io/github/issues/ElectronicWave/Elemental.svg?style=for-the-badge
-[issues-url]: https://github.com/ElectronicWave/Elemental/issues
 [license-shield]: https://img.shields.io/github/license/ElectronicWave/Elemental.svg?style=for-the-badge
-[license-url]: https://github.com/ElectronicWave/Elemental/blob/master/LICENSE
+[license-url]: https://github.com/ElectronicWave/Elemental/blob/main/LICENSE

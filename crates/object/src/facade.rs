@@ -100,24 +100,28 @@ where
     POOL.set_value(value, shutdown).await;
 }
 
-pub async fn drop_value<T: Any + Send + Sync>() {
-    POOL.remove_value::<T>().await;
+pub async fn drop_value<T: Any + Send + Sync>() -> bool {
+    POOL.remove_value::<T>().await
 }
 
-pub async fn drop_context_value<T: Any + Send + Sync>() {
+pub async fn drop_context_value<T: Any + Send + Sync>() -> bool {
     if let Some(pool) = context_pool() {
-        pool.remove_value::<T>().await;
+        return pool.remove_value::<T>().await;
     }
+
+    false
 }
 
-pub async fn drop_entry<T: Any + Send + Sync>() {
-    POOL.remove_entry::<T>().await;
+pub async fn drop_entry<T: Any + Send + Sync>() -> bool {
+    POOL.remove_entry::<T>().await
 }
 
-pub async fn drop_context_entry<T: Any + Send + Sync>() {
+pub async fn drop_context_entry<T: Any + Send + Sync>() -> bool {
     if let Some(pool) = context_pool() {
-        pool.remove_entry::<T>().await;
+        return pool.remove_entry::<T>().await;
     }
+
+    false
 }
 
 /// Acquire a value from the pool, if not exists, wait until it is provided.
@@ -135,53 +139,55 @@ pub async fn acquire<T: Any + Send + Sync>() -> Result<Arc<T>> {
     require::<T>().await
 }
 
-// Who first provide the value, we use whose shutdown function, even if the value is overwritten later, so the shutdown function can always access the value.
-pub async fn fulfill<T: Any + Send + Sync>(value: T) {
-    fulfill_arc(Arc::new(value), None, false).await;
+pub async fn fulfill<T: Any + Send + Sync>(value: T) -> Result<bool> {
+    fulfill_arc(Arc::new(value), None, false).await
 }
 
-pub async fn fulfill_with_shutdown<T, F, Fut>(value: T, shutdown: F)
+pub async fn fulfill_with_shutdown<T, F, Fut>(value: T, shutdown: F) -> Result<bool>
 where
     T: Any + Send + Sync,
     F: Fn(Arc<T>) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = ()> + Send + 'static,
 {
-    fulfill_arc(Arc::new(value), Some(convert_shutdown_fn(shutdown)), false).await;
+    fulfill_arc(Arc::new(value), Some(convert_shutdown_fn(shutdown)), false).await
 }
 
-pub async fn fulfill_context<T: Any + Send + Sync>(value: T) {
-    fulfill_arc(Arc::new(value), None, true).await;
+pub async fn fulfill_context<T: Any + Send + Sync>(value: T) -> Result<bool> {
+    fulfill_arc(Arc::new(value), None, true).await
 }
 
-pub async fn fulfill_with_context_shutdown<T, F, Fut>(value: T, shutdown: F)
+pub async fn fulfill_with_context_shutdown<T, F, Fut>(value: T, shutdown: F) -> Result<bool>
 where
     T: Any + Send + Sync,
     F: Fn(Arc<T>) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = ()> + Send + 'static,
 {
-    fulfill_arc(Arc::new(value), Some(convert_shutdown_fn(shutdown)), true).await;
+    fulfill_arc(Arc::new(value), Some(convert_shutdown_fn(shutdown)), true).await
 }
 
 async fn fulfill_arc<T: Any + Send + Sync>(
     value: Arc<T>,
     shutdown: Option<ShutdownFn<T>>,
     context: bool,
-) {
+) -> Result<bool> {
     if let Some(pool) = selected_context_pool(context) {
-        pool.fulfill_value(value, shutdown).await;
-        return;
+        return pool.fulfill_value(value, shutdown).await;
     }
-    POOL.fulfill_value(value, shutdown).await;
+
+    POOL.fulfill_value(value, shutdown).await
 }
 
 pub async fn shutdown() {
     POOL.shutdown().await;
 }
 
-pub async fn shutdown_local() {
+pub async fn shutdown_local() -> bool {
     if let Some(pool) = context_pool() {
         pool.shutdown().await;
+        return true;
     }
+
+    false
 }
 
 fn context_pool() -> Option<Arc<ObjectPool>> {

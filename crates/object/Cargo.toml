@@ -11,12 +11,12 @@ license = "AGPL-3.0-only"
 [dependencies]
 scc = { workspace = true }
 anyhow = { workspace = true }
-tokio = { workspace = true, optional = true, features = ["sync"] }
+tokio = { workspace = true, features = ["rt", "sync"] }
 async-trait = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["time"] }
 
 [features]
-notify = ["tokio"]
+notify = []
 default = ["notify"]

@@ -9,7 +9,7 @@ use elemental_core::storage::layout::Layout;
 use elemental_shared::{
     migrator::NoMigrator,
     store::{Store, StoreLoader},
-    version::{Persistor, VersionControlled},
+    version::Persistor,
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -44,7 +44,7 @@ impl<V> JsonPathPersistor<V> {
 
 impl<V> Persistor<V> for JsonPathPersistor<V>
 where
-    V: VersionControlled + Serialize + DeserializeOwned,
+    V: Serialize + DeserializeOwned,
 {
     async fn load(&self) -> Result<Option<V>> {
         match read_to_string(&self.path).await {
@@ -66,8 +66,12 @@ where
     }
 }
 
-pub type NativeStateStore =
-    StoreLoader<NoMigrator, NativesState, JsonPathPersistor<Store<NativesState>>>;
+pub type NativeStateStore = StoreLoader<
+    NoMigrator,
+    Store<NativesState>,
+    NativesState,
+    JsonPathPersistor<Store<NativesState>>,
+>;
 
 pub fn natives_state_path(instance_root: &Path) -> Result<PathBuf> {
     BaseInstanceLayout.try_get_extended_resource(
@@ -79,14 +83,6 @@ pub fn natives_state_path(instance_root: &Path) -> Result<PathBuf> {
 pub async fn natives_state_store(instance_root: &Path) -> Result<NativeStateStore> {
     let persistor = JsonPathPersistor::new(natives_state_path(instance_root)?);
     let store = Store::load(NoMigrator, persistor, NATIVES_STATE_VERSION).await?;
-
-    if store.get(|state| state.version).await != NATIVES_STATE_VERSION {
-        store
-            .set(|state| {
-                state.version = NATIVES_STATE_VERSION;
-            })
-            .await?;
-    }
 
     Ok(store)
 }

@@ -1,55 +1,66 @@
 # Elemental Shared Library
 
-A lightweight, extensible Rust library for managing application profiles and persistent configurations with built-in versioning and migration support.
+Async, version-aware persistence for application profiles and settings.
+
+`elemental-shared` separates five concerns:
+
+- `Versioned` reads the schema version from a value.
+- `VersionControlled` adds version normalization for runtime values.
+- `Migrator<Stored, Current>` converts stored data into the current runtime type and back.
+- `Persistor<Stored>` reads and writes one stored representation.
+- `Loader` applies version checks, migration, normalization, and persistence.
+
+The stored representation and current runtime type may be different. This allows
+V1, V2, and V3 data to share one current type without forcing `Persistor` to know
+anything about migrations.
 
 ## Features
 
-✨ **Key Capabilities**
-- **Profile Management**: Load, modify, and persist user configurations
-- **Version Control**: Track and migrate data across schema versions
-- **Flexible Persistence**: JSON, TOML, or custom serialization formats
-- **Cross-Platform**: Support for standard system directories (Documents, Config, Home, etc.)
-- **Thread-Safe**: Built on `Arc<RwLock<T>>` for safe concurrent access
-- **Async/Await**: Non-blocking I/O operations throughout
-- **Zero Configuration**: Smart defaults for common scenarios
+- Cross-type migrations through `Migrator<Stored, Current>`
+- Same-type migration shortcut through `NoMigrator`
+- Async access through `Loader`
+- JSON and TOML file persistence
+- In-memory and no-op persistors
+- Cross-platform storage locations through `Scope`
 
 ## Installation
-
-Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
 elemental-shared = { path = "crates/shared" }
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+anyhow = "1"
 ```
 
-### Optional Features
+Optional features:
 
 ```toml
 [dependencies]
 elemental-shared = { path = "crates/shared", features = ["json", "toml"] }
 ```
 
-- `json` (default): JSON serialization support
-- `toml`: TOML serialization support
+- `json` is enabled by default.
+- `toml` enables `toml_persistor`.
 
 ## Quick Start
 
-### Basic Profile Loading
+Use `NoMigrator` when stored data already has the current shape.
 
 ```rust
 use elemental_shared::{
-    profile::Profile,
-    persistor::json_persistor,
     migrator::NoMigrator,
+    persistor::json_persistor,
+    profile::Profile,
     scope::Scope,
 };
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct GameConfig {
-    pub player_name: String,
-    pub level: u32,
-    pub score: u64,
+struct GameConfig {
+    player_name: String,
+    level: u32,
+    score: u64,
 }
 
 impl Default for GameConfig {
@@ -64,474 +75,319 @@ impl Default for GameConfig {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Load profile from disk
     let loader = Profile::load(
         NoMigrator,
         json_persistor("game_save".to_string(), Scope::Document),
-        1,  // schema version
+        1,
     )
     .await?;
 
-    // Read configuration
-    let player_name = loader.get(|profile| {
-        profile.config.player_name.clone()
-    }).await;
-    println!("Welcome, {}!", player_name);
+    let player_name = loader
+        .get(|profile| profile.config.player_name.clone())
+        .await;
+    println!("Welcome, {player_name}!");
 
-    // Modify and save configuration
-    loader.set(|profile| {
-        profile.config.level += 1;
-        profile.config.score += 100;
-    }).await?;
+    loader
+        .set(|profile| {
+            profile.config.level += 1;
+            profile.config.score += 100;
+        })
+        .await?;
 
     Ok(())
 }
 ```
 
-## Core Concepts
+The final argument to `Profile::load` is the current schema version. The Loader
+stamps that version on the runtime value and validates the version encoded by
+the migrator before saving it.
 
-### 1. Profiles
+## Profiles and Stores
 
-A `Profile<C>` contains:
-- `name`: Human-readable profile identifier
-- `config`: Your custom configuration type (generic `C`)
-- `version`: Schema version for migrations
+`Profile<C>` is intended for profile-like data:
 
 ```rust
-#[derive(Serialize, Deserialize)]
 pub struct Profile<C> {
-    pub name: String,
     pub config: C,
     pub version: usize,
 }
 ```
 
-### 2. Loaders
-
-`Loader<M, V, P>` provides thread-safe access to your profile:
+`Store<V>` is a generic versioned wrapper:
 
 ```rust
-// Immutable read
-let value = loader.get(|profile| profile.config.score).await;
-
-// Mutable modification (auto-saves)
-loader.set(|profile| {
-    profile.config.score += 50;
-}).await?;
-
-// Clone entire profile
-let profile_copy = loader.cloned().await;
+pub struct Store<V> {
+    pub value: V,
+    pub version: usize,
+}
 ```
 
-### 3. Storage Scopes
+Both provide a `load` helper that accepts a migrator, persistor, and target
+version.
 
-Choose where files are saved:
+## Cross-Type Migration
+
+Use an enum when old configs and the current config have different shapes.
+`Profile<Versions>` is the stored representation; the current runtime value
+stays clean.
+
+```rust
+use elemental_shared::{
+    migrator::Migrator,
+    persistor::json_persistor,
+    profile::Profile,
+    scope::Scope,
+};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Serialize, Deserialize, Default)]
+struct V1Config {
+    player_name: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, Default)]
+struct V2Config {
+    display_name: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, Default)]
+struct V3Config {
+    display_name: String,
+    level: u32,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+enum Versions {
+    V1(V1Config),
+    V2(V2Config),
+    V3(V3Config),
+}
+
+struct ProfileMigrator;
+
+impl Migrator<Profile<Versions>, Profile<V3Config>> for ProfileMigrator {
+    fn migrate(&self, stored: Profile<Versions>) -> anyhow::Result<Profile<V3Config>> {
+        let Profile { config, version } = stored;
+        let config = match config {
+            Versions::V1(config) => V3Config {
+                display_name: config.player_name,
+                level: 1,
+            },
+            Versions::V2(config) => V3Config {
+                display_name: config.display_name,
+                level: 1,
+            },
+            Versions::V3(config) => return Ok(Profile { config, version }),
+        };
+
+        Ok(Profile { config, version })
+    }
+
+    fn encode(&self, current: &Profile<V3Config>) -> anyhow::Result<Profile<Versions>> {
+        Ok(Profile {
+            config: Versions::V3(current.config.clone()),
+            version: current.version,
+        })
+    }
+}
+```
+
+Load the current type with a persistor for the stored representation:
+
+```rust
+let loader = Profile::<V3Config>::load(
+    ProfileMigrator,
+    json_persistor("profile".to_string(), Scope::Config),
+    3,
+)
+.await?;
+```
+
+The migrator does not receive or set the target version. `migrate` converts the
+stored shape and may preserve the version it read; the Loader stamps the runtime
+value with the target version. `encode` must return the target version, which
+the Loader validates before saving.
+
+`Profile<C>` already implements `Versioned`, so the stored enum only describes
+the config shape and does not need its own version implementation.
+
+### Version Selection
+
+`#[serde(untagged)]` selects a variant by shape. If two config versions have
+exactly the same shape, use an explicit tagged envelope instead of relying on
+untagged deserialization.
+
+## Persistors
+
+### JSON
+
+```rust
+use elemental_shared::{persistor::json_persistor, scope::Scope};
+
+let persistor = json_persistor("config".to_string(), Scope::Config);
+```
+
+### TOML
+
+Enable the `toml` feature:
+
+```rust
+use elemental_shared::{persistor::toml_persistor, scope::Scope};
+
+let persistor = toml_persistor("settings".to_string(), Scope::Home);
+```
+
+### No Persistence
+
+`NoPersistor` always returns `None` and discards saves:
+
+```rust
+use elemental_shared::{
+    migrator::NoMigrator,
+    persistor::NoPersistor,
+    profile::Profile,
+};
+
+let loader = Profile::<GameConfig>::load(NoMigrator, NoPersistor, 1).await?;
+```
+
+The Loader creates a default runtime value. That default is not written unless
+`set()` is called.
+
+### In-Memory Persistence
+
+`MemoryPersistor<V>` stores a shared `Option<V>` in memory:
+
+```rust
+use elemental_shared::{persistor::MemoryPersistor, version::Persistor};
+
+let persistor = MemoryPersistor::new(Some(initial_value));
+let observer = persistor.clone();
+
+// After a migration or set(), another handle can observe the new value.
+let saved = observer.load().await?;
+```
+
+Use `MemoryPersistor::default()` for an empty store.
+
+## Storage Scopes
 
 ```rust
 use elemental_shared::scope::Scope;
 
-// Standard locations
-Scope::Document        // User's Documents folder
-Scope::Home            // User's home directory (~)
-Scope::Config          // System config directory (~/.config)
-Scope::ConfigLocal     // Local config directory
-Scope::Dot             // Current working directory
-
-// Custom path
-Scope::Custom(PathBuf::from("/path/to/storage"))
+Scope::Document;
+Scope::Home;
+Scope::Config;
+Scope::ConfigLocal;
+Scope::Dot;
+Scope::Custom("/tmp/example".into());
 ```
 
-Files are always stored in a `.elemental/` subdirectory:
-```
+Files are placed under a `.elemental` directory:
+
+```text
 ~/.config/.elemental/my_app.json
 ~/Documents/.elemental/game_save.json
 ./.elemental/config.toml
 ```
 
-### 4. Serialization Formats
+## API Summary
 
-#### JSON (default)
-```rust
-use elemental_shared::persistor::json_persistor;
-
-let persistor = json_persistor("config".to_string(), Scope::Config);
-```
-
-#### TOML (requires `toml` feature)
-```rust
-use elemental_shared::persistor::toml_persistor;
-
-let persistor = toml_persistor("settings".to_string(), Scope::Home);
-```
-
-#### Custom Format
-
-For custom serialization formats, create a helper function:
+### Versioned
 
 ```rust
-use elemental_shared::{
-    persistor::{CustomPersistor, AsyncFileStringIO},
-    scope::Scope,
-};
-use serde::Serialize;
-use serde::de::DeserializeOwned;
-use anyhow::Result;
-
-fn my_custom_persistor<V: Serialize + DeserializeOwned>(
-    id: String,
-    scope: Scope,
-) -> CustomPersistor<
-    V,
-    String,
-    AsyncFileStringIO,
-    impl Fn(&V) -> Result<String>,
-    impl Fn(&String) -> Result<V>,
-> {
-    CustomPersistor::new(
-        |v: &V| serde_json::to_string(v).map_err(Into::into),     // serializer
-        |s: &String| serde_json::from_str(s).map_err(Into::into), // deserializer
-        id,
-        scope,
-        Some("json".to_string()),
-    )
+pub trait Versioned {
+    fn version(&self) -> usize;
 }
-
-// Usage
-let persistor = my_custom_persistor::<MyData>("my_config".to_string(), Scope::Config);
 ```
 
-## Advanced Usage
+Stored representations only need this trait.
 
-### Version Migration
-
-Implement custom migration logic to handle schema evolution:
+### VersionControlled
 
 ```rust
-use elemental_shared::version::{Migrator, VersionControlled};
-use anyhow::Result;
-
-#[derive(Serialize, Deserialize)]
-pub struct MyConfig {
-    pub player_name: String,
-    pub level: u32,
-}
-
-impl VersionControlled for Profile<MyConfig> {
-    fn version(&self) -> usize {
-        self.version
-    }
-}
-
-pub struct MyMigrator;
-
-impl Migrator<Profile<MyConfig>> for MyMigrator {
-    fn migrate(&self, mut profile: Profile<MyConfig>, target_version: usize) -> Result<()> {
-        if profile.version < 2 && target_version >= 2 {
-            // Migration from v1 to v2: add default values
-            // Perform transformations here
-        }
-        profile.version = target_version;
-        Ok(profile)
-    }
-}
-
-// Usage
-let loader = Profile::load(
-    MyMigrator,
-    json_persistor("config".to_string(), Scope::Config),
-    2,  // target version
-).await?;
-```
-
-### No Persistence (Testing)
-
-Use `NoPersistor` for testing without file I/O:
-
-```rust
-use elemental_shared::persistor::NoPersistor;
-
-// Data loads with default values and saves are discarded
-let loader = Profile::load(
-    NoMigrator,
-    NoPersistor,
-    1,
-).await?;
-```
-
-### Direct Loader Usage
-
-For more control, use `Loader` directly:
-
-```rust
-use elemental_shared::loader::Loader;
-
-let loader = Loader::load(
-    your_migrator,
-    your_persistor,
-    current_version,
-).await?;
-
-// Access the raw inner value
-let value = loader.cloned().await;
-```
-
-## API Reference
-
-### Profile
-
-```rust
-impl<C: Default> Profile<C> {
-    pub async fn load<M, P>(
-        migrator: M,
-        persistor: P,
-        version: usize,
-    ) -> Result<ProfileLoader<M, C, P>>
+pub trait VersionControlled: Versioned {
+    fn with_version(self, version: usize) -> Self
     where
-        M: Migrator<Profile<C>>,
-        P: Persistor<Profile<C>>;
+        Self: Sized;
 }
 ```
+
+Runtime values implement this trait so the Loader can set their version.
+
+The `version` implementation is intentionally small enough to write directly;
+no derive macro is needed for stored enums.
+
+### Migrator
+
+```rust
+pub trait Migrator<Stored: Versioned, Current: VersionControlled> {
+    fn migrate(&self, stored: Stored) -> Result<Current>;
+    fn encode(&self, current: &Current) -> Result<Stored>;
+}
+```
+
+`NoMigrator` implements `Migrator<T, T>` for cloneable values.
+
+### Persistor
+
+```rust
+pub trait Persistor<V> {
+    fn save(&self, value: &V) -> impl Future<Output = Result<()>>;
+    fn load(&self) -> impl Future<Output = Result<Option<V>>>
+    where
+        Self: Sized;
+}
+```
+
+`Persistor` does not require `Versioned`; the Loader owns all version checks.
 
 ### Loader
 
 ```rust
-pub struct Loader<M, V, P> { /* ... */ }
-
-impl<M, V, P> Loader<M, V, P> {
-    pub async fn load(
-        migrator: M,
-        persistor: P,
-        loader_version: usize,
-    ) -> Result<Self>;
-
-    pub async fn get<T>(&self, f: impl FnOnce(&V) -> T) -> T;
-
-    pub async fn set(&self, f: impl FnOnce(&mut V)) -> Result<()>;
-
-    pub async fn cloned(&self) -> V where V: Clone;
-}
+pub struct Loader<M, S, V, P>
+where
+    M: Migrator<S, V>,
+    S: Versioned,
+    V: VersionControlled,
+    P: Persistor<S>;
 ```
 
-### Persistors
+Important methods:
 
 ```rust
-// JSON (requires 'json' feature)
-pub fn json_persistor<V>(id: String, scope: Scope) -> CustomPersistor<...>;
-
-// TOML (requires 'toml' feature)
-pub fn toml_persistor<V>(id: String, scope: Scope) -> CustomPersistor<...>;
-
-// No-op persistor (testing)
-pub struct NoPersistor;
+Loader::load(migrator, persistor, target_version).await?;
+loader.get(|value| projection).await;
+loader.set(|value| mutation).await?;
+loader.cloned().await;
 ```
 
-### Scope
+## Loader Semantics
 
-```rust
-pub enum Scope {
-    Document,
-    Home,
-    Config,
-    ConfigLocal,
-    Dot,
-    Custom(PathBuf),
-}
-
-impl Scope {
-    pub fn path(&self) -> Option<PathBuf>;
-    pub async fn get_full_path(&self, id: &str, suffix: Option<String>) -> Result<PathBuf>;
-}
-```
-
-### Traits
-
-```rust
-pub trait VersionControlled: Default {
-    fn version(&self) -> usize;
-    fn is_up_to_date(&self, latest_version: usize) -> bool {
-        self.version() >= latest_version
-    }
-}
-
-pub trait Migrator<V: VersionControlled> {
-    fn migrate(&self, value: V, target_version: usize) -> Result<V>;
-}
-
-pub trait Persistor<V: VersionControlled> {
-    async fn load(&self) -> Result<Option<V>>;
-    async fn save(&self, value: &V) -> Result<()>;
-}
-```
-
-## Examples
-
-### Example: Game Save System
-
-```rust
-use elemental_shared::{profile::Profile, persistor::json_persistor, scope::Scope};
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize, Clone, Default)]
-pub struct GameState {
-    pub position_x: f32,
-    pub position_y: f32,
-    pub inventory: Vec<String>,
-    pub health: i32,
-}
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    // Load game save
-    let game = Profile::load(
-        NoMigrator,
-        json_persistor("save_slot_1".to_string(), Scope::Document),
-        1,
-    ).await?;
-
-    // Read current state
-    let pos = game.get(|p| (p.config.position_x, p.config.position_y)).await;
-    println!("Player at: {:?}", pos);
-
-    // Update after action
-    game.set(|p| {
-        p.config.position_x += 5.0;
-        p.config.inventory.push("Sword".to_string());
-        p.config.health -= 10;
-    }).await?;
-
-    println!("Game saved!");
-    Ok(())
-}
-```
-
-### Example: Application Settings
-
-```rust
-use elemental_shared::{profile::Profile, persistor::toml_persistor, scope::Scope};
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize, Clone, Default)]
-pub struct AppSettings {
-    pub theme: String,
-    pub language: String,
-    pub auto_save: bool,
-}
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let settings = Profile::load(
-        NoMigrator,
-        toml_persistor("app_config".to_string(), Scope::Config),
-        1,
-    ).await?;
-
-    // Apply settings
-    let theme = settings.get(|p| p.config.theme.clone()).await;
-
-    // Update settings
-    settings.set(|p| {
-        p.config.theme = "dark".to_string();
-        p.config.auto_save = true;
-    }).await?;
-
-    Ok(())
-}
-```
-
-## Performance Considerations
-
-- **Lock Contention**: `RwLock` allows concurrent readers; minimize time in `set()` closures
-- **File I/O**: Operations are async but file operations may block; consider using a dedicated runtime executor for I/O-heavy workloads
-- **Serialization**: Large configurations may slow down save/load; consider streaming or partial updates
-
-## Common Pitfalls
-
-### ❌ Long-Running Operations in Closures
-
-```rust
-// BAD: Holds write lock during network request
-loader.set(|profile| {
-    let data = std::net::TcpStream::connect("...").unwrap(); // Blocks!
-    profile.config.data = data;
-}).await?;
-```
-
-### ✅ Proper Pattern
-
-```rust
-// GOOD: Fetch data, then update
-let data = std::net::TcpStream::connect("...").await?;
-loader.set(|profile| {
-    profile.config.data = data;
-}).await?;
-```
-
-### ❌ Ignoring Version Mismatches
-
-Always check that your schema version matches your data structure.
-
-### ✅ Proper Pattern
-
-```rust
-// Define version as constant, use consistently
-const APP_VERSION: usize = 2;
-
-Profile::load(
-    MyMigrator,
-    json_persistor("config".to_string(), Scope::Config),
-    APP_VERSION,
-).await?
-```
+- Missing storage creates `V::default()` with the target version.
+- A stored version newer than the target is rejected.
+- Older stored data is migrated, encoded again, and saved.
+- Current stored data is migrated into the runtime type but is not rewritten.
+- `set()` encodes before saving and validates that the stored version is current.
+- `set()` holds the write lock while encoding and saving.
 
 ## Testing
 
-The library includes built-in tests demonstrating:
-- Loading profiles with default values
-- Modifying and persisting data
-- Round-trip serialization verification
+Run the shared crate tests:
 
-Run tests with:
-```bash
+```sh
 cargo test -p elemental-shared
 ```
 
-## Contributing
-
-When extending this library:
-
-1. **Implement new Migrators**: Extend the trait for custom upgrade paths
-2. **Add Persistor implementations**: Support new storage backends
-3. **Enhance Scope options**: Add standard directory conventions for new platforms
-4. **Write comprehensive tests**: Use `#[tokio::test]` for async tests
-
-## License
-
-See the main repository LICENSE file.
+The tests cover no-op loading and a V1/V2/V3 cross-type migration. The
+migration test uses `MemoryPersistor` to verify that the upgraded value is saved.
 
 ## Related Crates
 
-- `serde`: Serialization framework
-- `tokio`: Async runtime
-- `dirs`: Cross-platform directory resolution
-- `anyhow`: Error handling
+- `serde`
+- `tokio`
+- `dirs`
+- `anyhow`
 
-## FAQ
-
-**Q: Can I use this without async/await?**
-A: The API requires `async`, but you can use `tokio::task::block_in_place()` to run async code in synchronous contexts.
-
-**Q: Can I share a Loader across threads?**
-A: Yes! `Loader<M, V, P>` is `Send + Sync` when all generic parameters are, so you can wrap it in `Arc` and share freely.
-
-**Q: What happens if the file is corrupted?**
-A: The `load()` method returns an error; you can handle this by falling back to defaults.
-
-**Q: Can I have multiple profiles?**
-A: Yes! Create multiple `Loader` instances with different IDs or scopes.
-
-**Q: Is data encrypted?**
-A: No. Implement encryption in a custom `Persistor` if needed.
-
----
-
-**For detailed architectural information, see [DESIGN.md](DESIGN.md)**
+See [DESIGN.md](DESIGN.md) for the architectural rationale.

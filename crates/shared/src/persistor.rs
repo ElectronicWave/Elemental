@@ -1,21 +1,46 @@
-use crate::{
-    scope::Scope,
-    version::{Persistor, VersionControlled},
-};
+use crate::{scope::Scope, version::Persistor};
 use anyhow::Result;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use std::{io::ErrorKind, marker::PhantomData, path::PathBuf};
+use std::{io::ErrorKind, marker::PhantomData, path::PathBuf, sync::Arc};
 use tokio::fs::{read_to_string, write};
+use tokio::sync::Mutex;
 
 pub struct NoPersistor;
 
-impl<V: VersionControlled> Persistor<V> for NoPersistor {
+impl<V> Persistor<V> for NoPersistor {
     async fn load(&self) -> Result<Option<V>> {
-        Ok(Some(V::default()))
+        Ok(None)
     }
 
     async fn save(&self, _value: &V) -> Result<()> {
+        Ok(())
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct MemoryPersistor<V> {
+    value: Arc<Mutex<Option<V>>>,
+}
+
+impl<V> MemoryPersistor<V> {
+    pub fn new(value: Option<V>) -> Self {
+        Self {
+            value: Arc::new(Mutex::new(value)),
+        }
+    }
+}
+
+impl<V> Persistor<V> for MemoryPersistor<V>
+where
+    V: Clone,
+{
+    async fn load(&self) -> Result<Option<V>> {
+        Ok(self.value.lock().await.clone())
+    }
+
+    async fn save(&self, value: &V) -> Result<()> {
+        self.value.lock().await.replace(value.clone());
         Ok(())
     }
 }
@@ -101,7 +126,7 @@ fn deserialize_json<V: DeserializeOwned>(value: &str) -> Result<V> {
 
 impl<V, S, D, IO, Ser, De> Persistor<V> for CustomPersistor<V, S, D, IO, Ser, De>
 where
-    V: VersionControlled + Serialize + DeserializeOwned,
+    V: Serialize + DeserializeOwned,
     D: ?Sized,
     IO: PersistorIO<S>,
     Ser: Fn(&V) -> Result<S>,

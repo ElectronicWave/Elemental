@@ -27,6 +27,7 @@ tokio = { version = "1.48.0", features = [
 ] }
 scc = { version = "3.4.8", features = ["serde"] }
 anyhow = { version = "1.0.100" }
+thiserror = "2.0.21"
 async-trait = "0.1.89"
 toml = "1.0.0"
 dirs = { version = "7" }

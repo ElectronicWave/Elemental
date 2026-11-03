@@ -1,40 +1,51 @@
 use crate::{
+    error::Result,
     loader::ProfileLoader,
-    version::{Migrator, Persistor, VersionControlled},
+    migrator::Migrator,
+    version::{Persistor, VersionControlled, Versioned},
 };
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct Profile<C> {
-    /// Profile name
-    pub name: String,
     /// Profile configuration data
     pub config: C,
     pub version: usize,
 }
 
-impl<C: Default> VersionControlled for Profile<C> {
+impl<C> Versioned for Profile<C> {
     #[inline(always)]
     fn version(&self) -> usize {
         self.version
     }
 }
 
+impl<C> VersionControlled for Profile<C> {
+    #[inline(always)]
+    fn with_version(mut self, version: usize) -> Self {
+        self.version = version;
+        self
+    }
+}
+
 impl<C: Default> Profile<C> {
-    pub async fn load<M: Migrator<Profile<C>>, P: Persistor<Profile<C>>>(
+    pub async fn load<M, S, P>(
         migrator: M,
         persistor: P,
-        version: usize,
-    ) -> Result<ProfileLoader<M, C, P>> {
-        ProfileLoader::load(migrator, persistor, version).await
+        target_version: usize,
+    ) -> Result<ProfileLoader<M, S, C, P>>
+    where
+        S: Versioned,
+        M: Migrator<S, Profile<C>>,
+        P: Persistor<S>,
+    {
+        ProfileLoader::load(migrator, persistor, target_version).await
     }
 }
 
 impl<C: Clone> Clone for Profile<C> {
     fn clone(&self) -> Self {
         Profile {
-            name: self.name.clone(),
             config: self.config.clone(),
             version: self.version,
         }

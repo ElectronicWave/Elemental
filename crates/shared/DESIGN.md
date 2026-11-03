@@ -1,236 +1,361 @@
-# Elemental Shared Library - Design Document
+# Elemental Shared Library Design
 
 ## Overview
 
-`elemental-shared` is a Rust library that provides a robust, extensible framework for managing persistent application profiles and configurations. It implements a plugin-based architecture for serialization formats and includes built-in version control and data migration capabilities.
+`elemental-shared` provides version-aware asynchronous persistence without
+forcing stored data and runtime data to have the same type.
 
-## Core Architecture
+The design uses two representations:
 
-### 1. Version Control System
+- `Stored`: the versioned representation read from and written to a persistor.
+- `Current`: the versioned representation used by the application at runtime.
 
-**Module**: `version.rs`
+`Migrator<Stored, Current>` crosses the type boundary in both directions.
+`Persistor<Stored>` remains symmetric and only understands one representation.
 
-The library is built around three foundational traits:
+## Design Principles
 
-#### `VersionControlled` Trait
+1. `Persistor` owns storage and serialization, not migrations.
+2. `Migrator` owns representation changes in both directions.
+3. `Loader` owns version checks, runtime normalization, stored-version
+   validation, and save decisions.
+4. The runtime type stays free of old-version variants.
+5. Missing storage is represented as `None`, not as a fabricated stored value.
+
+## Error Model
+
+All fallible public APIs return `crate::error::Result<T>`. `Error` uses
+`thiserror` so callers can match storage, serialization, path, and version
+failures without downcasting:
+
+- `Io` wraps filesystem errors.
+- `Json` wraps JSON failures when the `json` feature is enabled.
+- `TomlSerialize` and `TomlDeserialize` wrap TOML failures when `toml` is enabled.
+- `BasePathUnavailable` reports an unsupported platform storage location.
+- `StoredVersionNewer` rejects data from a newer schema.
+- `EncodedVersionMismatch` rejects an encoded representation with the wrong
+  version.
+
+## Core Types
+
+| Type | Responsibility |
+| --- | --- |
+| `Versioned` | Reads the schema version |
+| `VersionControlled` | Adds consuming version normalization |
+| `Migrator<Stored, Current>` | Converts `Stored` to `Current` and encodes it back |
+| `Persistor<V>` | Loads and saves one representation |
+| `Loader<M, S, V, P>` | Coordinates migration, normalization, and persistence |
+| `Profile<C>` | Versioned application profile with a generic configuration |
+| `Store<V>` | Generic versioned wrapper |
+
+## Version Model
+
+`Versioned` is the read-only contract needed by stored representations:
+
 ```rust
-pub trait VersionControlled: Default {
+pub trait Versioned {
     fn version(&self) -> usize;
-    fn is_up_to_date(&self, latest_version: usize) -> bool;
 }
 ```
 
-- Defines the versioning contract for all managed data structures
-- Allows libraries to track which version of a data structure is currently loaded
-- The `is_up_to_date()` method can be overridden for custom version comparison logic
-
-#### `Migrator<V>` Trait
-```rust
-pub trait Migrator<V: VersionControlled> {
-    fn migrate(&self, value: V, target_version: usize) -> Result<V>;
-}
-```
-
-- Responsible for upgrading data from old versions to new versions
-- Implementations must handle breaking changes between versions
-- Enables seamless schema evolution without data loss
-
-#### `Persistor<V>` Trait
-```rust
-pub trait Persistor<V: VersionControlled> {
-    async fn save(&self, value: &V) -> Result<()>;
-    async fn load(&self) -> Result<Option<V>>;
-}
-```
-
-- Handles all I/O operations for persisting data
-- Async-first design for non-blocking file operations
-- Returns `Option<V>` to gracefully handle missing files
-
-### 2. Profile Management
-
-**Module**: `profile.rs`
-
-The `Profile<C>` struct encapsulates a complete user configuration:
+`VersionControlled` extends it for runtime values whose version must be
+normalized:
 
 ```rust
-pub struct Profile<C> {
-    pub name: String,           // Profile identifier
-    pub config: C,              // User's custom configuration
-    pub version: usize,         // Schema version
+pub trait VersionControlled: Versioned {
+    fn with_version(self, version: usize) -> Self
+    where
+        Self: Sized;
 }
 ```
 
-**Key Design Decisions**:
-- Generic over the configuration type `C` to support any serializable data
-- Automatically implements `VersionControlled` when `C: Default`
-- Provides a static `load()` method that orchestrates the full loading pipeline
-
-**Load Pipeline**:
-1. Persistor attempts to load data from storage
-2. If loaded data is outdated, Migrator updates it
-3. Migrated data is saved back to disk
-4. Final result is wrapped in an async-aware `Loader`
-
-### 3. Data Loading and Access
-
-**Module**: `loader.rs`
-
-The `Loader<M, V, P>` struct manages runtime access to persisted data:
+`with_version` is consuming rather than mutating. This keeps version
+normalization out of `Migrator` and avoids a separate mutable-version trait.
+`Profile<C>` and `Store<V>` already implement `Versioned`, so a stored enum
+only needs to describe the config shape:
 
 ```rust
-pub struct Loader<M: Migrator<V>, V: VersionControlled, P: Persistor<V>> {
-    pub inner: Arc<RwLock<V>>,  // Thread-safe, async-aware storage
-    pub migrator: M,             // Migration handler
-    pub persistor: P,            // Persistence handler
+#[serde(untagged)]
+enum Versions {
+    V1(V1Config),
+    V2(V2Config),
+    V3(V3Config),
 }
 ```
 
-**Key Features**:
-- **Thread-Safety**: Uses `Arc<RwLock<V>>` for safe concurrent access
-- **Async Operations**: All operations are `async` and non-blocking
-- **Lazy Persistence**: Changes only persisted when `set()` is explicitly called
+`Profile<Versions>` is the complete stored representation. Its version is
+stored once by `Profile`, rather than duplicated inside each enum variant.
 
-**Public Methods**:
+The Loader decides which version becomes current. A migrator converts data shape
+and may preserve the source version. The Loader stamps the target version on
+the runtime value, then validates the stored version returned by `encode`.
 
-- `load()`: Creates and initializes a Loader instance
-- `get<T>()`: Immutable read access with custom projection function
-- `set()`: Mutable access with automatic persistence
-- `cloned()`: Returns a clone of the entire inner value (when `V: Clone`)
+## Cross-Type Migration
 
-### 4. Persistence Layer
-
-**Module**: `persistor.rs`
-
-Implements multiple layers of abstraction for storage flexibility:
-
-#### `PersistorIO<S>` Trait
-- Defines low-level I/O operations for arbitrary serialized types `S`
-- `AsyncFileStringIO`: Reference implementation using `tokio::fs`
-
-#### `CustomPersistor<V, S, IO, Ser, De>`
-- Generic persistor supporting custom serialization/deserialization functions
-- Separates concerns: I/O protocol, serialization format, file location
-- Parameters:
-  - `V`: Type to persist
-  - `S`: Serialized representation
-  - `IO`: I/O implementation
-  - `Ser`: Serialization closure
-  - `De`: Deserialization closure
-
-#### `NoPersistor`
-- Stub implementation that always loads defaults and discards saves
-- Useful for testing and in-memory-only scenarios
-
-#### Built-in Helpers
-- `json_persistor()`: Provides JSON serialization (requires `json` feature)
-- `toml_persistor()`: Provides TOML serialization (requires `toml` feature)
-
-### 5. File Location Management
-
-**Module**: `scope.rs`
-
-The `Scope` enum abstracts file location resolution:
+The migration contract handles both directions:
 
 ```rust
-pub enum Scope {
-    Document,                  // User's documents directory
-    Home,                      // User's home directory
-    Config,                    // System config directory (~/.config)
-    ConfigLocal,              // Local config directory
-    Dot,                      // Current working directory
-    Custom(PathBuf),          // Arbitrary custom path
+pub trait Migrator<Stored: Versioned, Current: VersionControlled> {
+    fn migrate(&self, stored: Stored) -> Result<Current>;
+    fn encode(&self, current: &Current) -> Result<Stored>;
 }
 ```
 
-**Features**:
-- Cross-platform path resolution using `dirs` crate
-- Automatic `.elemental/` directory creation in the target location
-- `get_full_path()` returns complete path with appropriate file extensions
+`migrate` is used when loading. `encode` is used when a migrated value or a
+changed current value must be written back.
 
-**Design Rationale**:
-- Abstracts away platform-specific directory conventions
-- Centralizes file location logic for easier testing and configuration
+The stored side can be `Profile<Versions>`, where the enum contains every
+supported config shape:
 
-## Data Flow
-
-```
-┌─────────────────────────────────────────────────────────┐
-│ Profile::load(migrator, persistor, version)             │
-└──────────────────┬──────────────────────────────────────┘
-                   │
-                   ▼
-        ┌──────────────────────┐
-        │ Persistor::load()    │
-        └──────────┬───────────┘
-                   │
-        ┌──────────▼────────────┐
-        │ Check version         │
-        │ is_up_to_date()?      │
-        └──────┬────────┬───────┘
-               │yes     │no
-               │        ▼
-               │   ┌─────────────────┐
-               │   │ Migrator::      │
-               │   │ migrate()       │
-               │   └────────┬────────┘
-               │            │
-               │            ▼
-               │   ┌─────────────────┐
-               │   │ Persistor::     │
-               │   │ save()          │
-               │   └────────┬────────┘
-               │            │
-               └────┬───────┘
-                    │
-                    ▼
-        ┌───────────────────────┐
-        │ Loader<M, V, P>       │
-        │ - inner: Arc<RwLock>  │
-        │ - migrator            │
-        │ - persistor           │
-        └───────────────────────┘
+```rust
+#[serde(untagged)]
+enum Versions {
+    V1(V1Config),
+    V2(V2Config),
+    V3(V3Config),
+}
 ```
 
-## Type Safety and Generics
+This allows one `Profile<V3Config>` runtime type while the persistor remains
+focused on `Profile<Versions>`.
 
-The library leverages Rust's type system:
+When `Stored` and `Current` are the same type, `NoMigrator` implements
+`Migrator<T, T>`:
 
-1. **Trait-Based Composition**: No inheritance; behaviors are composed via traits
-2. **Generic Configuration**: Support for any serializable user configuration type
-3. **Compile-Time Selection**: Features (`json`, `toml`) determined at compile time
-4. **Zero-Cost Abstractions**: Trait objects are only used where necessary
+```rust
+pub struct NoMigrator;
 
-## Concurrency Model
+impl<T> Migrator<T, T> for NoMigrator
+where
+    T: VersionControlled + Clone,
+{
+    // migrate returns the stored value
+    // encode clones the current value
+}
+```
 
-- **Arc<RwLock<V>>**: Allows multiple concurrent readers, single writer
-- **Async/Await**: Non-blocking I/O throughout
-- **Thread-Safe**: Safe to share `Loader` instances across threads/tasks
-- **No Locks During I/O**: Locks released immediately after data modification
+## Persistence Model
+
+`Persistor<V>` is symmetric:
+
+```rust
+pub trait Persistor<V> {
+    fn save(&self, value: &V) -> impl Future<Output = Result<()>>;
+    fn load(&self) -> impl Future<Output = Result<Option<V>>>
+    where
+        Self: Sized;
+}
+```
+
+The trait does not know about `Current`, migrations, or versions. Version checks
+belong to `Loader`.
+
+### File Persistors
+
+`CustomPersistor<V, S, D, IO, Ser, De>` separates:
+
+- `V`: value exposed to the Loader
+- `S`: serialized representation
+- `D`: borrowed input type used by deserialization
+- `IO`: byte/string I/O implementation
+- `Ser`: serialization function
+- `De`: deserialization function
+
+`json_persistor` and `toml_persistor` are built on this abstraction.
+
+### NoPersistor
+
+`NoPersistor` loads `None` and discards saves. It is useful when persistence is
+intentionally disabled. The Loader still creates a current default value, but
+that value is not written to storage unless `set()` is called.
+
+### MemoryPersistor
+
+`MemoryPersistor<V>` stores `Option<V>` in `Arc<Mutex<Option<V>>>`.
+
+- `load` clones the current value.
+- `save` replaces the current value.
+- Cloned handles share the same slot.
+
+It is suitable for tests, previews, and temporary in-memory workflows. It is not
+durable storage.
+
+## Load Flow
+
+```text
+Persistor::load()
+        |
+        +-- None ------------------------------+
+        |                                      |
+        |                             V::default()
+        |                                      |
+        |                            with_version(target)
+        |                                      |
+        +-- Some(stored)                        |
+                 |                              |
+          stored.version() > target?            |
+                 | yes                          |
+                 +--> error                     |
+                 | no                           |
+                 +--> Migrator::migrate()        |
+                              |                 |
+                       with_version(target)     |
+                              |                 |
+                 stored.version() < target?     |
+                         | yes      | no        |
+                         v          |           |
+               Migrator::encode()  |           |
+                         |          |           |
+          stored.version() == target?          |
+                         | no       |           |
+                         +--> error |           |
+                         | yes      |           |
+               Persistor::save()   |           |
+                         |          |           |
+                         +----------+-----------+
+                                    |
+                               Loader<V>
+```
+
+Version rules:
+
+| Stored version | Behavior |
+| --- | --- |
+| Greater than target | Return an error |
+| Equal to target | Migrate to current, do not rewrite |
+| Less than target | Migrate, encode, validate, save |
+| Missing | Create default current value, do not save |
+
+## Set Flow
+
+```text
+Loader::set(closure)
+        |
+        v
+Acquire write lock
+        |
+        v
+Apply closure to Current
+        |
+        v
+Migrator::encode()
+        |
+        v
+Stored.version() == target?
+        | no
+        +--> error
+        | yes
+        |
+        v
+Persistor::save()
+```
+
+The write lock is held through encoding and saving so concurrent readers do not
+observe a partially saved update. Long-running serialization or I/O therefore
+blocks other access to that Loader.
+
+## Type Relationships
+
+```text
+                 +----------------------+
+                 |  Migrator<S, V>      |
+                 |                      |
+     stored S -->| migrate              |
+                 | encode               |--> stored S
+                 |                      |
+                 +----------+-----------+
+                            |
+                            v
+                 +----------------------+
+                 |  Loader<M, S, V, P>  |
+                 |                      |
+                 | version rules        |
+                 | runtime normalization|
+                 | stored validation    |
+                 | save decisions       |
+                 +----------+-----------+
+                            |
+                            v
+                 +----------------------+
+                 |  Persistor<S>        |
+                 |                      |
+                 | load / save          |
+                 +----------------------+
+```
+
+## Concurrency
+
+- `Loader::inner` is `Arc<RwLock<V>>`.
+- Reads use a shared read lock.
+- Writes use an exclusive write lock.
+- `Loader` and `MemoryPersistor` can be cloned and shared.
+- The Loader does not perform background writes; `set()` and load-time upgrades
+  are explicit asynchronous operations.
+
+## Scope Resolution
+
+`Scope` resolves a base directory and appends `.elemental/<id>.<extension>`.
+
+Supported bases:
+
+- user documents
+- home directory
+- platform config directory
+- platform local config directory
+- current directory
+- custom directory
+
+Path creation is handled through `get_full_path` asynchronously and
+`get_full_path_blocking` synchronously.
 
 ## Extension Points
 
-1. **Custom Migrators**: Implement `Migrator<V>` for version upgrade logic
-2. **Custom Persistors**: Implement `Persistor<V>` for alternative storage (databases, network, etc.)
-3. **Custom Scopes**: Extend `Scope::Custom(PathBuf)` for arbitrary locations
-4. **Custom Serialization**: Implement `PersistorIO<S>` for other I/O backends
+### Custom Migrator
 
-## Feature Flags
+Implement `Migrator<Stored, Current>` when stored and current types differ or
+when old data needs structural conversion.
 
-- `json` (default): Enables JSON serialization support
-- `toml`: Enables TOML serialization support
+### Custom Persistor
 
-## Limitations and Considerations
+Implement `Persistor<V>` for databases, network storage, encrypted files, or
+other backends. Keep migration logic outside the persistor.
 
-1. **No Built-in Encryption**: Data is stored in plaintext; encryption must be implemented separately
-2. **No Concurrent Writers**: Only one task can modify data at a time (enforced by `RwLock`)
-3. **Synchronous File Operations**: The `Persistor` trait is async, but underlying I/O may block on some systems
-4. **Migration is Manual**: No automatic schema discovery; migrations must be explicitly coded
+### Custom Serialization
+
+Use `CustomPersistor` or `PersistorIO` when adding a serialization format or I/O
+backend.
+
+## Tradeoffs
+
+### Untagged Version Enums
+
+`#[serde(untagged)]` selects by data shape. Two versions with identical shapes
+cannot be distinguished by shape alone; use an explicit tagged envelope for
+that case.
+
+### Manual Migrations
+
+Schema discovery is not automatic. Each supported old representation must be
+included in `Stored` and handled by the migrator.
+
+### Plaintext Storage
+
+File-based persistors do not provide encryption. Encryption belongs in a
+custom persistor or an additional encoding layer.
+
+### Lock Duration
+
+`set()` holds the write lock across encoding and persistence. This guarantees
+consistent in-memory state but can reduce concurrency when saving is slow.
 
 ## Testing Strategy
 
-The library includes integration tests demonstrating:
-- Profile loading with default configuration
-- Configuration mutation and persistence
-- Round-trip serialization (save → load → verify)
-- Integration with JSON persistor and custom scopes
+The crate tests cover:
+
+- no-op loading with `NoMigrator`
+- V1/V2/V3 cross-type migration
+- migration back to the stored representation
+- persistence through `MemoryPersistor`
+
+`MemoryPersistor` is deliberately shared between the Loader and the test so the
+test observes the same state that was saved.

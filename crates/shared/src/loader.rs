@@ -1,33 +1,64 @@
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
 use crate::{
+    error::{Error, Result},
+    migrator::Migrator,
     profile::Profile,
-    version::{Migrator, Persistor, VersionControlled},
+    version::{Persistor, VersionControlled, Versioned},
 };
-use anyhow::Result;
 use tokio::sync::RwLock;
 
 #[derive(Clone)]
-pub struct Loader<M: Migrator<V>, V: VersionControlled, P: Persistor<V>> {
+pub struct Loader<M, S, V, P>
+where
+    M: Migrator<S, V>,
+    S: Versioned,
+    V: VersionControlled,
+    P: Persistor<S>,
+{
     pub inner: Arc<RwLock<V>>,
     pub migrator: M,
     pub persistor: P,
+    pub target_version: usize,
+    _source: PhantomData<S>,
 }
 
-impl<M: Migrator<V>, V: VersionControlled, P: Persistor<V>> Loader<M, V, P> {
-    pub async fn load(migrator: M, persistor: P, loader_version: usize) -> Result<Self> {
-        let mut value = persistor.load().await?.unwrap_or_default();
+impl<M, S, V, P> Loader<M, S, V, P>
+where
+    M: Migrator<S, V>,
+    S: Versioned,
+    V: VersionControlled + Default,
+    P: Persistor<S>,
+{
+    pub async fn load(migrator: M, persistor: P, target_version: usize) -> Result<Self> {
+        let value = match persistor.load().await? {
+            Some(source) => {
+                if source.version() > target_version {
+                    return Err(Error::StoredVersionNewer {
+                        stored: source.version(),
+                        supported: target_version,
+                    });
+                }
 
-        if !value.is_up_to_date(loader_version) {
-            value = migrator.migrate(value, loader_version)?;
-            // Save migrated value
-            persistor.save(&value).await?;
-        }
+                let should_save = source.version() < target_version;
+                let value = migrator.migrate(source)?.with_version(target_version);
+
+                if should_save {
+                    let stored = encode_for_storage(&migrator, &value, target_version)?;
+                    persistor.save(&stored).await?;
+                }
+
+                value
+            }
+            None => V::default().with_version(target_version),
+        };
 
         Ok(Self {
             inner: Arc::new(RwLock::new(value)),
             migrator,
             persistor,
+            target_version,
+            _source: PhantomData,
         })
     }
 
@@ -47,9 +78,29 @@ impl<M: Migrator<V>, V: VersionControlled, P: Persistor<V>> Loader<M, V, P> {
     pub async fn set(&self, f: impl FnOnce(&mut V)) -> Result<()> {
         let mut guard = self.inner.write().await;
         f(&mut *guard);
-        self.persistor.save(&*guard).await?;
+        let stored = encode_for_storage(&self.migrator, &*guard, self.target_version)?;
+        self.persistor.save(&stored).await?;
         Ok(())
     }
 }
 
-pub type ProfileLoader<M, C, P> = Loader<M, Profile<C>, P>;
+fn encode_for_storage<M, S, V>(migrator: &M, value: &V, target_version: usize) -> Result<S>
+where
+    M: Migrator<S, V>,
+    S: Versioned,
+    V: VersionControlled,
+{
+    let stored = migrator.encode(value)?;
+    let stored_version = stored.version();
+
+    if stored_version != target_version {
+        return Err(Error::EncodedVersionMismatch {
+            encoded: stored_version,
+            target: target_version,
+        });
+    }
+
+    Ok(stored)
+}
+
+pub type ProfileLoader<M, S, C, P> = Loader<M, S, Profile<C>, P>;

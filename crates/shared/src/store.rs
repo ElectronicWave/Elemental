@@ -1,8 +1,9 @@
 use crate::{
+    error::Result,
     loader::Loader,
-    version::{Migrator, Persistor, VersionControlled},
+    migrator::Migrator,
+    version::{Persistor, VersionControlled, Versioned},
 };
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Default)]
@@ -11,22 +12,35 @@ pub struct Store<V> {
     pub version: usize,
 }
 
-impl<T: Default> VersionControlled for Store<T> {
+impl<T> Versioned for Store<T> {
     #[inline(always)]
     fn version(&self) -> usize {
         self.version
     }
 }
 
-pub type StoreLoader<M, V, P> = Loader<M, Store<V>, P>;
+impl<T> VersionControlled for Store<T> {
+    #[inline(always)]
+    fn with_version(mut self, version: usize) -> Self {
+        self.version = version;
+        self
+    }
+}
+
+pub type StoreLoader<M, S, V, P> = Loader<M, S, Store<V>, P>;
 
 impl<V: Default> Store<V> {
-    pub async fn load<M: Migrator<Store<V>>, P: Persistor<Store<V>>>(
+    pub async fn load<M, S, P>(
         migrator: M,
         persistor: P,
-        version: usize,
-    ) -> Result<StoreLoader<M, V, P>> {
-        StoreLoader::load(migrator, persistor, version).await
+        target_version: usize,
+    ) -> Result<StoreLoader<M, S, V, P>>
+    where
+        S: Versioned,
+        M: Migrator<S, Store<V>>,
+        P: Persistor<S>,
+    {
+        StoreLoader::load(migrator, persistor, target_version).await
     }
 }
 

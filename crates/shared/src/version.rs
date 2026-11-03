@@ -1,16 +1,16 @@
-use anyhow::Result;
+use crate::error::Result;
 
-pub trait VersionControlled: Default {
+pub trait Versioned {
     fn version(&self) -> usize;
-    fn is_up_to_date(&self, latest_version: usize) -> bool {
-        self.version() >= latest_version
-    }
-}
-pub trait Migrator<V: VersionControlled> {
-    fn migrate(&self, value: V, target_version: usize) -> Result<V>;
 }
 
-pub trait Persistor<V: VersionControlled> {
+pub trait VersionControlled: Versioned {
+    fn with_version(self, version: usize) -> Self
+    where
+        Self: Sized;
+}
+
+pub trait Persistor<V> {
     fn save(&self, value: &V) -> impl Future<Output = Result<()>>;
     fn load(&self) -> impl Future<Output = Result<Option<V>>>
     where

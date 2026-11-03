@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use crate::error::{Error, Result};
 use dirs::{config_dir, config_local_dir, document_dir, home_dir};
 use std::path::PathBuf;
 use tokio::fs::create_dir_all;
@@ -12,7 +12,8 @@ pub enum Scope {
     Config,
     ConfigLocal,
     Dot,
-    Custom(PathBuf),
+    /// Uses the supplied directory as the base for scoped files.
+    Directory(PathBuf),
 }
 
 impl Scope {
@@ -23,13 +24,12 @@ impl Scope {
             Scope::Config => config_dir(),
             Scope::ConfigLocal => config_local_dir(),
             Scope::Dot => Some(PathBuf::from(".")),
-            // May need more pathbuf here
-            Scope::Custom(p) => Some(p.clone()),
+            Scope::Directory(directory) => Some(directory.clone()),
         }
     }
 
     pub fn get_full_path_blocking(&self, id: &str, suffix: Option<String>) -> Result<PathBuf> {
-        let mut path = self.path().context("There is no valid base path")?;
+        let mut path = self.path().ok_or(Error::BasePathUnavailable)?;
         path.push(PRESERVED_DIR);
         if !path.exists() {
             std::fs::create_dir_all(&path)?;

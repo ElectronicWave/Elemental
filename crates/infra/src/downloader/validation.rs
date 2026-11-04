@@ -1,6 +1,6 @@
 use anyhow::{Result, bail};
-use sha1_smol::Sha1;
 use std::path::Path;
+use sha1::{Digest, Sha1};
 use tokio::{fs::File, io::AsyncReadExt};
 
 use super::task::DownloadTask;
@@ -67,7 +67,7 @@ impl StreamingValidator {
         }
 
         if let Some(expected_sha1) = self.validation.expected_sha1 {
-            let actual_sha1 = self.sha1.unwrap_or_default().digest().to_string();
+            let actual_sha1 = hex::encode(self.sha1.unwrap_or_default().finalize());
             if actual_sha1 != expected_sha1 {
                 bail!(
                     "downloaded file sha1 mismatch for '{}': expected {}, got {}",

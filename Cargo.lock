@@ -514,6 +514,7 @@ dependencies = [
  "dirs",
  "elemental-schema",
  "futures",
+ "hex",
  "md-5",
  "minecraft-msa-auth",
  "oauth2",
@@ -523,7 +524,7 @@ dependencies = [
  "scc",
  "serde",
  "serde_json",
- "sha1_smol",
+ "sha1",
  "tokio",
  "toml",
  "tracing",
@@ -557,11 +558,12 @@ dependencies = [
  "anyhow",
  "async-trait",
  "futures",
+ "hex",
  "reqwest",
  "scc",
  "serde",
  "serde_json",
- "sha1_smol",
+ "sha1",
  "tokio",
  "tokio-util",
  "zip",
@@ -854,6 +856,12 @@ name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+
+[[package]]
+name = "hex"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "http"
@@ -2027,10 +2035,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "sha1_smol"
-version = "1.0.1"
+name = "sha1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbfa15b3dddfee50a0fff136974b3e1bde555604ba463834a7eb7deb6417705d"
+checksum = "aacc4cc499359472b4abe1bf11d0b12e688af9a805fa5e3016f9a386dc2d0214"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.3.1",
+ "digest 0.11.3",
+]
 
 [[package]]
 name = "sha2"

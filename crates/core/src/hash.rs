@@ -1,9 +1,9 @@
-use sha1_smol::Sha1;
 use std::{fs::read, io::Result, path::Path};
+use sha1::{Digest, Sha1};
 
 #[inline]
 pub fn sha1<D: AsRef<[u8]>>(data: D) -> String {
-    Sha1::from(data).digest().to_string()
+    hex::encode(Sha1::digest(data))
 }
 
 #[inline]

@@ -1,15 +1,11 @@
-use anyhow::Result;
-use elemental_schema::forge::ForgeInstallerProfile;
-
 use crate::{
-    drivers::forge::source::{ForgeEndpoints, ForgeSource, parse_installer_version},
+    drivers::forge::source::{ForgeEndpoints, ForgeSource},
     families::installer::{
         InstallerFamily, InstallerFamilyInstallStatus, InstallerFamilyRemoteResolver,
         PreparedInstallerFamilyLaunchVersion, PreparedInstallerFamilyVersion,
         ResolvedInstallerFamilyLaunchVersion, ResolvedInstallerFamilyMetadata,
-        ResolvedInstallerFamilyVersion, profile_game_and_raw_loader_version,
+        ResolvedInstallerFamilyVersion,
     },
-    loader_version::LoaderVersionId,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -30,13 +26,5 @@ impl InstallerFamily for ForgeFamily {
     type Endpoints = ForgeEndpoints;
 
     const FAMILY_NAME: &'static str = "forge";
-
-    fn profile_identity(
-        install_profile: &ForgeInstallerProfile,
-    ) -> Result<(String, LoaderVersionId)> {
-        let (game_version, raw_version) =
-            profile_game_and_raw_loader_version(install_profile, Self::FAMILY_NAME, "forge")?;
-        let (_, loader_version) = parse_installer_version(raw_version.as_str())?;
-        Ok((game_version, LoaderVersionId::from(loader_version)))
-    }
+    const LOADER_VERSION_PREFIX: &'static str = "forge-";
 }

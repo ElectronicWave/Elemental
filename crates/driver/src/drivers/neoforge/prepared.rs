@@ -26,4 +26,5 @@ impl InstallerFamily for NeoForgeFamily {
     type Endpoints = NeoForgeEndpoints;
 
     const FAMILY_NAME: &'static str = "neoforge";
+    const LOADER_VERSION_PREFIX: &'static str = "neoforge-";
 }

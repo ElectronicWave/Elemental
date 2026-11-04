@@ -10,6 +10,7 @@ use crate::{
         PreparedInstallerFamilyVersion, ResolvedInstallerFamilyLaunchVersion,
         ResolvedInstallerFamilyMetadata, ResolvedInstallerFamilyVersion,
     },
+    inspect::{LibraryPrefixSet, ProfileIdPattern, ProfiledDriverIdentity},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -35,6 +36,7 @@ impl InstallerFamily for CleanroomDriverSpec {
     type Endpoints = CleanroomEndpoints;
 
     const FAMILY_NAME: &'static str = "cleanroom";
+    const LOADER_VERSION_PREFIX: &'static str = "cleanroom-";
 
     fn merge_libraries(
         base_libraries: Vec<PistonMetaLibraries>,
@@ -52,10 +54,17 @@ impl InstallerFamily for CleanroomDriverSpec {
     }
 }
 
-impl InstallerFamilyDriverSpec for CleanroomDriverSpec {
-    const DRIVER: crate::driver::DriverDescriptor = CLEANROOM_DRIVER;
+const CLEANROOM_LIBRARIES: LibraryPrefixSet =
+    LibraryPrefixSet::new(&["com.cleanroommc:cleanroom:"]);
+const CLEANROOM_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(
+    CLEANROOM_DRIVER,
+    CLEANROOM_LIBRARIES,
+    CLEANROOM_LIBRARIES,
+    ProfileIdPattern::new("-cleanroom-"),
+);
 
-    const INSPECT_PREFIXES: &'static [&'static str] = &["com.cleanroommc:cleanroom:"];
+impl InstallerFamilyDriverSpec for CleanroomDriverSpec {
+    const IDENTITY: ProfiledDriverIdentity = CLEANROOM_IDENTITY;
 }
 
 fn is_legacy_cleanroom_runtime_library(library: &PistonMetaLibraries) -> bool {

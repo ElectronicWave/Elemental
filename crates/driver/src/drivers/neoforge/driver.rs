@@ -4,18 +4,30 @@ use crate::{
     families::installer::{
         InstallerFamilyDriver, InstallerFamilyDriverSpec, LaunchedInstallerFamilyVersion,
     },
+    inspect::{LibraryPrefixSet, ProfileIdPattern, ProfiledDriverIdentity},
 };
 
 pub type NeoForgeDriver = InstallerFamilyDriver<NeoForgeFamily>;
 pub type LaunchedNeoForgeVersion<L, VL> = LaunchedInstallerFamilyVersion<NeoForgeFamily, L, VL>;
 
-impl InstallerFamilyDriverSpec for NeoForgeFamily {
-    const DRIVER: crate::driver::DriverDescriptor = NEOFORGE_DRIVER;
+const NEOFORGE_MARKERS: LibraryPrefixSet = LibraryPrefixSet::new(&[
+    "net.neoforged:neoforge:",
+    "net.neoforged:forge:",
+    "net.neoforged:fmlloader:",
+    "net.neoforged.fancymodloader:",
+]);
+const NEOFORGE_VERSION_LIBRARIES: LibraryPrefixSet = LibraryPrefixSet::new(&[
+    "net.neoforged:neoforge:",
+    "net.neoforged:forge:",
+    "net.neoforged:fmlloader:",
+]);
+const NEOFORGE_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(
+    NEOFORGE_DRIVER,
+    NEOFORGE_MARKERS,
+    NEOFORGE_VERSION_LIBRARIES,
+    ProfileIdPattern::loader_prefixed("neoforge-"),
+);
 
-    const INSPECT_PREFIXES: &'static [&'static str] = &[
-        "net.neoforged:neoforge:",
-        "net.neoforged:forge:",
-        "net.neoforged:fmlloader:",
-        "net.neoforged.fancymodloader:",
-    ];
+impl InstallerFamilyDriverSpec for NeoForgeFamily {
+    const IDENTITY: ProfiledDriverIdentity = NEOFORGE_IDENTITY;
 }

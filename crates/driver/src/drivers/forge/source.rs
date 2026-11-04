@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::{
@@ -123,11 +123,4 @@ pub fn forge_installer_relative_path(version: &str) -> PathBuf {
         .join("forge")
         .join(version)
         .join(format!("forge-{version}-installer.jar"))
-}
-
-pub fn parse_installer_version(version: &str) -> Result<(String, String)> {
-    version
-        .split_once('-')
-        .map(|(game_version, loader_version)| (game_version.to_owned(), loader_version.to_owned()))
-        .context(format!("forge installer version is invalid: {version}"))
 }

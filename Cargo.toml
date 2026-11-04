@@ -12,6 +12,13 @@ members = [
     "crates/infra",
 ]
 
+[workspace.package]
+version = "0.2.0"
+edition = "2024"
+repository = "https://github.com/ElectronicWave/Elemental"
+homepage = "https://github.com/ElectronicWave/Elemental"
+license = "AGPL-3.0-only"
+
 [workspace.dependencies]
 reqwest = { version = "0.13.1", features = ["json", "stream", "default-tls"] }
 serde = { version = "1.0.228", features = ["derive"] }

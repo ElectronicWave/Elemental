@@ -23,6 +23,7 @@ request- or tenant-scoped values separate from the global pool.
 
 ```toml
 [dependencies]
+anyhow = "1"
 async-trait = "0.1"
 elemental-object = "0.2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
@@ -34,7 +35,8 @@ Tokio is a regular dependency because `ObjectContext` uses `tokio::task_local`.
 ## Quick Start
 
 ```rust
-use elemental_object::{Result, provide_with_shutdown, require, shutdown};
+use anyhow::Result;
+use elemental_object::{provide_with_shutdown, require, shutdown};
 
 struct AppConfig {
     name: String,
@@ -145,7 +147,8 @@ context is active.
 ### Wait for initialization
 
 ```rust
-use elemental_object::{Result, acquire, provide};
+use anyhow::Result;
+use elemental_object::{acquire, provide};
 
 #[derive(Debug)]
 struct Config {
@@ -167,7 +170,8 @@ async fn main() -> Result<()> {
 ### Request-scoped values
 
 ```rust
-use elemental_object::{ObjectContext, Result, acquire, provide_context};
+use anyhow::Result;
+use elemental_object::{ObjectContext, acquire, provide_context};
 
 #[derive(Debug)]
 struct Tenant {
@@ -188,7 +192,7 @@ async fn main() -> Result<()> {
     let consumer = context.clone().run(async {
         let tenant = acquire::<Tenant>().await?;
         println!("tenant: {}", tenant.id);
-        Ok::<_, elemental_object::Error>(())
+        Ok::<_, anyhow::Error>(())
     });
 
     let ((), result) = tokio::join!(producer, consumer);
@@ -206,6 +210,7 @@ that is stored in the pool:
 ```rust
 use std::sync::Arc;
 
+use anyhow::Result;
 use async_trait::async_trait;
 use elemental_object::{instant::InstantObject, provide_instant, require};
 
@@ -225,7 +230,7 @@ impl InstantObject for Database {
 }
 
 #[tokio::main]
-async fn main() -> elemental_object::Result<()> {
+async fn main() -> Result<()> {
     provide_instant::<Database>().await;
     let _connection = require::<Connection>().await?;
     Ok(())

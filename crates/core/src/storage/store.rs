@@ -2,9 +2,10 @@ use std::path::{Path, PathBuf};
 
 use tokio::fs::create_dir_all;
 
-use anyhow::Result;
-
-use crate::storage::layout::{Layout, Layoutable};
+use crate::storage::{
+    error::{Error, Result},
+    layout::{Layout, Layoutable},
+};
 
 #[derive(Debug, Clone)]
 pub struct Storage<L: Layout, P = ()> {
@@ -24,7 +25,11 @@ impl<L: Layout> Storage<L> {
 
     pub fn new_ensure_dir<P: AsRef<Path>>(path: P, layout: L) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
-        std::fs::create_dir_all(&path)?;
+        std::fs::create_dir_all(&path).map_err(|source| Error::Io {
+            operation: "create storage directory",
+            path: path.clone(),
+            source,
+        })?;
         Ok(Self {
             path,
             parent: (),
@@ -49,7 +54,13 @@ impl<L: Layout, P> Storage<L, P> {
     }
 
     pub async fn ensure_root(&self) -> Result<()> {
-        create_dir_all(&self.path).await?;
+        create_dir_all(&self.path)
+            .await
+            .map_err(|source| Error::Io {
+                operation: "create storage directory",
+                path: self.path.clone(),
+                source,
+            })?;
         Ok(())
     }
 

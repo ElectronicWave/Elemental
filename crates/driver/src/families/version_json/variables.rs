@@ -132,7 +132,8 @@ impl LauncherVariables {
                                 artifact.path.as_str(),
                             ))),
                         )
-                        .map(|path| path.to_string_lossy().to_string()),
+                        .map(|path| path.to_string_lossy().to_string())
+                        .map_err(anyhow::Error::from),
                 )
             })
             .collect::<Result<Vec<String>>>()?

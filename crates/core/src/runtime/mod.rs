@@ -1,13 +1,14 @@
 use std::path::Path;
 
-use anyhow::{Context, Result, bail};
-
 use crate::runtime::distribution::Distribution;
 
 pub mod discovery;
 pub mod distribution;
+pub mod error;
 pub mod provider;
 pub mod providers;
+
+pub use error::{Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeValidationMode {
@@ -25,29 +26,28 @@ pub async fn resolve_runtime(
         let distribution =
             Distribution::build_from_executable(runtime_executable_path.to_path_buf(), "Launch")
                 .await
-                .with_context(|| {
-                    format!(
-                        "resolve {} runtime from executable failed: {}",
-                        usage,
-                        runtime_executable_path.display()
-                    )
+                .map_err(|source| Error::ResolveRuntime {
+                    usage: usage.to_string(),
+                    path: runtime_executable_path.to_path_buf(),
+                    source: Box::new(source),
                 })?;
-        let actual_major_version = distribution.java_major_version().context(format!(
-            "can't determine Java major version for explicit {} runtime executable: {}",
-            usage,
-            runtime_executable_path.display()
-        ))?;
+        let actual_major_version =
+            distribution
+                .java_major_version()
+                .ok_or_else(|| Error::RuntimeVersionUnknown {
+                    usage: usage.to_string(),
+                    path: runtime_executable_path.to_path_buf(),
+                })?;
 
         if validation_mode == RuntimeValidationMode::Strict
             && actual_major_version != required_major_version
         {
-            bail!(
-                "explicit {} runtime executable has Java major version {}, expected {}: {}",
-                usage,
-                actual_major_version,
-                required_major_version,
-                runtime_executable_path.display()
-            );
+            return Err(Error::VersionMismatch {
+                usage: usage.to_string(),
+                actual: actual_major_version,
+                expected: required_major_version,
+                path: runtime_executable_path.to_path_buf(),
+            });
         }
 
         return Ok(distribution);
@@ -55,10 +55,8 @@ pub async fn resolve_runtime(
 
     Distribution::find_cached_by_java_major(required_major_version)
         .await
-        .with_context(|| {
-            format!(
-                "can't find a local Java runtime with major version {} for {}",
-                required_major_version, usage
-            )
+        .ok_or_else(|| Error::RuntimeNotFound {
+            major_version: required_major_version,
+            usage: usage.to_string(),
         })
 }

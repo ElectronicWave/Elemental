@@ -508,7 +508,6 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 name = "elemental-core"
 version = "0.2.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "const_format",
  "dirs",
@@ -520,10 +519,10 @@ dependencies = [
  "oauth2-reqwest",
  "regex",
  "reqwest",
- "scc",
  "serde",
  "serde_json",
  "sha1_smol",
+ "thiserror 2.0.21",
  "tokio",
  "toml",
  "tracing",

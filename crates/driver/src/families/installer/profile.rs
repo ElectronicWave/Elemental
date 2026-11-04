@@ -440,13 +440,13 @@ where
     VL: VersionJsonInstanceLayout,
 {
     let required_major_version = launch_version.required_java_major_version();
-    resolve_runtime(
+    Ok(resolve_runtime(
         required_major_version,
         runtime_executable_path,
         runtime_validation,
         operation_name,
     )
-    .await
+    .await?)
 }
 
 pub async fn installer_install_status<RR, L, VL>(

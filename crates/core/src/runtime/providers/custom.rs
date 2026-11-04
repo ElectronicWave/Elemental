@@ -1,7 +1,8 @@
 use std::{env::consts::EXE_SUFFIX, path::PathBuf};
 
-use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
+
+use crate::runtime::error::{Error, Result};
 
 use super::super::provider::RuntimeProvider;
 
@@ -38,19 +39,15 @@ pub fn new_custom_provider(paths: Vec<PathBuf>) -> Result<CustomProvider> {
 fn validate_runtime_path(path: PathBuf) -> Result<PathBuf> {
     let java_executable = path.join("bin").join(format!("java{EXE_SUFFIX}"));
     if !path.is_dir() {
-        bail!("custom runtime path is not a directory: {}", path.display());
+        return Err(Error::CustomRuntimeNotDirectory { path });
     }
     if !java_executable.exists() {
-        bail!(
-            "custom runtime path does not contain a java executable: {}",
-            path.display()
-        );
+        return Err(Error::CustomRuntimeMissingJava { path });
     }
 
-    path.canonicalize().with_context(|| {
-        format!(
-            "canonicalize custom runtime path failed: {}",
-            path.display()
-        )
-    })
+    path.canonicalize()
+        .map_err(|source| Error::CanonicalizeCustomRuntime {
+            path: path.clone(),
+            source,
+        })
 }

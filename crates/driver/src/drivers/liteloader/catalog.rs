@@ -4,9 +4,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 
-use crate::catalog::{
-    Catalog, push_single_game_release,
-};
+use crate::catalog::{Catalog, push_single_game_release};
 use crate::loader_version::LoaderVersionId;
 
 use super::source::LiteLoaderSource;

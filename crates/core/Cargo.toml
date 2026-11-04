@@ -8,31 +8,30 @@ documentation = "https://docs.rs/elemental-core"
 description = "Core library for Elemental, providing common utilities and abstractions used across the project."
 license = "AGPL-3.0-only"
 
+[features]
+default = []
+
 [dependencies]
-elemental-schema = { path = "../schema", version = "0.2.0" }
+async-trait = { workspace = true }
+const_format = { version = "0.2.35" }
 dirs = { workspace = true }
+elemental-schema = { path = "../schema", version = "0.2.0" }
 futures = { workspace = true }
 md-5 = "0.11.0"
+minecraft-msa-auth = "0.5.0"
+oauth2 = { version = "5.0.0", default-features = false }
+oauth2-reqwest = { version = "0.1.0-alpha.3" }
 regex = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true }
 sha1_smol = { workspace = true }
-uuid = "1.19.0"
-const_format = { version = "0.2.35" }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+toml = { workspace = true }
 tracing = "0.1.44"
 tracing-subscriber = "0.3"
-anyhow = { workspace = true }
-scc = { workspace = true }
-async-trait = { workspace = true }
-toml = { workspace = true }
-minecraft-msa-auth = "0.5.0"
-oauth2 = { version = "5.0.0", default-features = false }
-oauth2-reqwest = { version = "0.1.0-alpha.3" }
+uuid = "1.19.0"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.56.0"
-
-[features]
-default = []

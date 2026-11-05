@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::Result;
 use async_trait::async_trait;
 use elemental_core::{minecraft::MinecraftVersionId, storage::layout::Layout};
 use elemental_schema::mojang::piston::PistonMetaData;

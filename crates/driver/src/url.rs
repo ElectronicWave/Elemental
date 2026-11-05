@@ -1,7 +1,8 @@
 use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-use anyhow::{Context, Result, bail};
 use reqwest::Url;
+
+use crate::error::{Error, Result};
 
 pub trait Origin: Copy + Debug + Eq + Hash + Send + Sync + 'static {
     fn canonical(self) -> &'static str;
@@ -27,8 +28,9 @@ impl<O: Origin> OriginPolicy<O> {
     }
 
     pub fn with_override(mut self, origin: O, raw_url: String) -> Result<Self> {
-        let url = Url::parse(&raw_url)
-            .with_context(|| format!("parse origin override failed: {raw_url}"))?;
+        let url = Url::parse(&raw_url).map_err(move |source| {
+            Error::invalid_url("parse origin override failed", raw_url, source)
+        })?;
         self.overrides.insert(origin, url);
         Ok(self)
     }
@@ -38,8 +40,9 @@ impl<O: Origin> OriginPolicy<O> {
             return Ok(url.clone());
         }
 
-        Url::parse(origin.canonical())
-            .with_context(|| format!("parse canonical origin failed: {}", origin.canonical()))
+        Url::parse(origin.canonical()).map_err(|source| {
+            Error::invalid_url("parse canonical origin failed", origin.canonical(), source)
+        })
     }
 
     pub fn resolve(&self, origin: O, path: &str) -> Result<String> {
@@ -54,11 +57,8 @@ impl<O: Origin> OriginPolicy<O> {
             trim_trailing_slash(base.as_str()),
             suffix
         ))
-        .with_context(|| {
-            format!(
-                "resolve origin path failed for base '{}' and path '{}'",
-                base, path
-            )
+        .map_err(|source| {
+            Error::join_url("resolve origin path failed", base.as_str(), path, source)
         })
         .map(|url| url.to_string())
     }
@@ -69,10 +69,11 @@ impl<O: Origin> OriginPolicy<O> {
         segments: [&str; N],
     ) -> Result<String> {
         let mut url = self.base_url(origin)?;
+        let raw_url = url.to_string();
         {
             let mut path_segments = url
                 .path_segments_mut()
-                .map_err(|_| anyhow::anyhow!("origin url cannot be used as a path base"))?;
+                .map_err(|()| Error::UrlNotPathBase { url: raw_url })?;
             for segment in segments {
                 path_segments.push(segment);
             }
@@ -83,18 +84,21 @@ impl<O: Origin> OriginPolicy<O> {
 
     pub fn rewrite_origin_url(&self, raw_url: &str) -> Result<String> {
         let Some(rewritten) = self.try_rewrite_origin_url(raw_url)? else {
-            bail!("can't map url to a known origin: {raw_url}")
+            return Err(Error::UnknownOrigin {
+                raw_url: raw_url.to_owned(),
+            });
         };
 
         Ok(rewritten)
     }
 
     pub fn try_rewrite_origin_url(&self, raw_url: &str) -> Result<Option<String>> {
-        let parsed = Url::parse(raw_url).with_context(|| format!("parse url failed: {raw_url}"))?;
+        let parsed = Url::parse(raw_url)
+            .map_err(|source| Error::invalid_url("parse url failed", raw_url, source))?;
 
         for origin in O::all() {
-            let canonical = Url::parse(origin.canonical()).with_context(|| {
-                format!("parse canonical origin failed: {}", origin.canonical())
+            let canonical = Url::parse(origin.canonical()).map_err(|source| {
+                Error::invalid_url("parse canonical origin failed", origin.canonical(), source)
             })?;
             if let Some(suffix) = origin_suffix(&parsed, &canonical) {
                 return self.resolve(*origin, &suffix).map(Some);
@@ -111,12 +115,13 @@ impl<O: Origin> OriginPolicy<O> {
     }
 
     pub fn rewrite_known_origin_url(&self, raw_url: &str) -> Result<Option<String>> {
-        let parsed = Url::parse(raw_url).with_context(|| format!("parse url failed: {raw_url}"))?;
+        let parsed = Url::parse(raw_url)
+            .map_err(|source| Error::invalid_url("parse url failed", raw_url, source))?;
         let mut matched_known_origin = false;
 
         for origin in O::all() {
-            let canonical = Url::parse(origin.canonical()).with_context(|| {
-                format!("parse canonical origin failed: {}", origin.canonical())
+            let canonical = Url::parse(origin.canonical()).map_err(|source| {
+                Error::invalid_url("parse canonical origin failed", origin.canonical(), source)
             })?;
 
             if same_origin(&parsed, &canonical) {
@@ -137,7 +142,9 @@ impl<O: Origin> OriginPolicy<O> {
         }
 
         if matched_known_origin {
-            bail!("url matches a known origin host but not a configured base path: {raw_url}");
+            return Err(Error::OriginBasePathMismatch {
+                raw_url: raw_url.to_owned(),
+            });
         }
 
         Ok(None)

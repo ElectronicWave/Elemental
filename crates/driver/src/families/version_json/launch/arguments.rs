@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use crate::error::{Error, Result};
 
 pub fn parse_argument_string(argument_string: &str) -> Result<Vec<String>> {
     let mut arguments = Vec::new();
@@ -10,7 +10,7 @@ pub fn parse_argument_string(argument_string: &str) -> Result<Vec<String>> {
         match active_quote {
             Some(quote) => match character {
                 '\\' => {
-                    let escaped = chars.next().context("trailing escape in argument string")?;
+                    let escaped = chars.next().ok_or(Error::TrailingArgumentEscape)?;
                     current.push(escaped);
                 }
                 value if value == quote => {
@@ -23,7 +23,7 @@ pub fn parse_argument_string(argument_string: &str) -> Result<Vec<String>> {
                     active_quote = Some(character);
                 }
                 '\\' => {
-                    let escaped = chars.next().context("trailing escape in argument string")?;
+                    let escaped = chars.next().ok_or(Error::TrailingArgumentEscape)?;
                     current.push(escaped);
                 }
                 value if value.is_whitespace() => {
@@ -37,7 +37,7 @@ pub fn parse_argument_string(argument_string: &str) -> Result<Vec<String>> {
     }
 
     if let Some(quote) = active_quote {
-        bail!("unterminated quoted argument string with quote {}", quote);
+        return Err(Error::UnterminatedArgumentQuote { quote });
     }
 
     if !current.is_empty() {

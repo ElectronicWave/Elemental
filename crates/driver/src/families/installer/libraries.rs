@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::Result;
 use elemental_schema::mojang::piston::PistonMetaLibraries;
 
 pub fn normalize_library_urls<F>(

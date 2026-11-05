@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::Result;
+use crate::error::Result;
 use elemental_core::runtime::RuntimeValidationMode;
 
 use super::parse_argument_string;

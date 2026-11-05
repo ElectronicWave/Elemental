@@ -1,4 +1,5 @@
 mod builder;
+pub mod error;
 mod launcher;
 mod request;
 mod result;

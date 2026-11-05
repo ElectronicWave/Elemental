@@ -1,4 +1,3 @@
-use anyhow::{Result, bail};
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 use elemental_schema::{fabric::ProfileJson, mojang::piston::PistonMetaData};
@@ -7,6 +6,7 @@ use crate::{
     descriptors::RIFT_DRIVER,
     driver::{DriverDescriptor, InstalledDriver},
     drivers::{rift::source::RiftSource, vanilla::source::VanillaSource},
+    error::{Error, Result},
     families::version_json::direct_profiled::DirectProfiledVersionJsonDefaults,
     families::version_json::{ProfiledVersionJsonDriver, ProfiledVersionJsonFamily},
     inspect::{LibraryPrefixSet, ProfileIdPattern, ProfiledDriverIdentity},
@@ -97,10 +97,9 @@ fn validate_requested_game_version(
         return Ok(());
     }
 
-    bail!(
-        "Rift loader '{}' targets Minecraft '{}' but '{}' was requested",
-        loader_version.as_str(),
-        profile.inherits_from,
-        requested_game_version.as_str(),
-    )
+    Err(Error::RiftGameVersionMismatch {
+        loader_version: loader_version.as_str().to_owned(),
+        actual: profile.inherits_from.clone(),
+        requested: requested_game_version.as_str().to_owned(),
+    })
 }

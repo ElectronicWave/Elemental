@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use anyhow::Result;
+use crate::error::Result;
 use serde::de::DeserializeOwned;
 
 use crate::http::{HttpSource, fetch_json};

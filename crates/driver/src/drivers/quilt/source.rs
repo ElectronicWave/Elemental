@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::Result;
 use elemental_schema::quilt::{GameVersion, LoaderGameVersion, ProfileJson};
 
 use crate::{

@@ -64,8 +64,7 @@ pub trait Layoutable<L: Layout> {
     }
 
     fn get_existing_resource(&self, resource: L::Resource) -> Option<PathBuf> {
-        self.get_resource(resource)
-            .and_then(|p| if p.exists() { Some(p) } else { None })
+        self.get_resource(resource).filter(|path| path.exists())
     }
 
     fn get_extended_resource(&self, resource: L::ExtendedResource) -> Option<PathBuf> {

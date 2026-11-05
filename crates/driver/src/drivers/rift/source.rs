@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use anyhow::{Context, Result, bail};
 use elemental_infra::jar::JarBytes;
 use elemental_schema::{
     fabric::{
@@ -12,6 +11,7 @@ use elemental_schema::{
 use serde::Deserialize;
 
 use crate::{
+    error::{Error, Result},
     families::version_json::UpstreamUrlRewriter,
     http::{HttpSource, fetch_bytes, fetch_json},
     inspect::ProfileIdPattern,
@@ -226,7 +226,9 @@ fn build_rift_release(release: GitHubRelease) -> Result<RiftRelease> {
         .assets
         .into_iter()
         .find(|asset| asset.name == expected_asset_name)
-        .with_context(|| format!("can't find Rift release asset named '{expected_asset_name}'"))?;
+        .ok_or_else(|| Error::RiftReleaseAssetNotFound {
+            asset_name: expected_asset_name,
+        })?;
 
     Ok(RiftRelease {
         tag_name: release.tag_name,
@@ -250,7 +252,9 @@ fn release_for_loader_version(loader_version: &str) -> RiftRelease {
 fn normalize_loader_version(tag_name: &str) -> Result<String> {
     let loader_version = tag_name.trim_start_matches('v').trim();
     if loader_version.is_empty() {
-        bail!("Rift release tag has no loader version: '{tag_name}'");
+        return Err(Error::RiftReleaseTagMissingLoaderVersion {
+            tag_name: tag_name.to_owned(),
+        });
     }
 
     Ok(loader_version.to_owned())
@@ -259,17 +263,15 @@ fn normalize_loader_version(tag_name: &str) -> Result<String> {
 async fn read_release_profile_json(release: &RiftRelease, jar_bytes: Vec<u8>) -> Result<String> {
     JarBytes::new(jar_bytes.as_slice())
         .by_name_string("profile.json")
-        .with_context(|| {
-            format!(
-                "read embedded Rift profile failed from '{}'",
-                release.asset_name
-            )
+        .map_err(|source| Error::ReadRiftProfile {
+            asset_name: release.asset_name.clone(),
+            source,
         })
 }
 
 fn parse_profile_json(raw_profile: &str) -> Result<ProfileJson> {
     let raw_profile: RiftRawProfileJson =
-        serde_json::from_str(raw_profile).context("decode embedded Rift profile failed")?;
+        serde_json::from_str(raw_profile).map_err(|source| Error::DecodeRiftProfile { source })?;
 
     Ok(ProfileJson {
         id: raw_profile.id,

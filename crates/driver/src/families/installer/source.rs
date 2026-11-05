@@ -1,6 +1,6 @@
 use std::{fmt::Debug, path::PathBuf};
 
-use anyhow::Result;
+use crate::error::Result;
 use elemental_core::{minecraft::MinecraftVersionId, storage::Storage};
 use elemental_schema::forge::MavenMetadataBody;
 

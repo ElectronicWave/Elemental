@@ -1,4 +1,3 @@
-use anyhow::{Context, Result, bail};
 use std::{
     sync::{
         Arc,
@@ -9,6 +8,7 @@ use std::{
 use tokio::sync::{Mutex as AsyncMutex, OwnedSemaphorePermit, Semaphore};
 
 use super::task::DownloadRateLimit;
+use crate::error::{Error, Result};
 
 #[derive(Debug)]
 pub(crate) struct ConcurrencyController {
@@ -21,7 +21,7 @@ pub(crate) struct ConcurrencyController {
 impl ConcurrencyController {
     pub(crate) fn new(max_connections: usize) -> Result<Self> {
         if max_connections == 0 {
-            bail!("downloader max_connections must be greater than zero");
+            return Err(Error::InvalidMaxConnections);
         }
 
         Ok(Self {
@@ -38,7 +38,7 @@ impl ConcurrencyController {
 
     pub(crate) async fn set_max_connections(&self, max_connections: usize) -> Result<()> {
         if max_connections == 0 {
-            bail!("downloader max_connections must be greater than zero");
+            return Err(Error::InvalidMaxConnections);
         }
 
         let _resize_guard = self.resize.lock().await;
@@ -73,7 +73,7 @@ impl ConcurrencyController {
                 .clone()
                 .acquire_owned()
                 .await
-                .context("failed to shrink downloader concurrency")?;
+                .map_err(Error::ConcurrencyShrink)?;
             held_permits.push(permit);
         }
 
@@ -86,7 +86,7 @@ impl ConcurrencyController {
             .clone()
             .acquire_owned()
             .await
-            .context("failed to acquire downloader concurrency permit")
+            .map_err(Error::ConcurrencyAcquire)
     }
 }
 

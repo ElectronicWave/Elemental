@@ -1,7 +1,8 @@
 use std::time::Duration;
 
-use anyhow::{Context, Result};
 use serde::de::DeserializeOwned;
+
+use crate::error::{Error, Result};
 
 #[derive(Debug, Clone)]
 pub struct HttpSource<E> {
@@ -43,7 +44,11 @@ where
         .await?
         .json::<T>()
         .await
-        .with_context(|| format!("decode {source_name} resource failed: {url}"))
+        .map_err(|source| Error::DecodeResource {
+            source_name: source_name.to_owned(),
+            url: url.to_owned(),
+            source,
+        })
 }
 
 pub async fn fetch_text(client: &reqwest::Client, url: &str, source_name: &str) -> Result<String> {
@@ -51,7 +56,11 @@ pub async fn fetch_text(client: &reqwest::Client, url: &str, source_name: &str) 
         .await?
         .text()
         .await
-        .with_context(|| format!("decode {source_name} resource failed: {url}"))
+        .map_err(|source| Error::DecodeResource {
+            source_name: source_name.to_owned(),
+            url: url.to_owned(),
+            source,
+        })
 }
 
 pub async fn fetch_bytes(
@@ -64,7 +73,11 @@ pub async fn fetch_bytes(
         .bytes()
         .await
         .map(|bytes| bytes.to_vec())
-        .with_context(|| format!("decode {source_name} resource failed: {url}"))
+        .map_err(|source| Error::DecodeResource {
+            source_name: source_name.to_owned(),
+            url: url.to_owned(),
+            source,
+        })
 }
 
 async fn send_ok(
@@ -76,7 +89,15 @@ async fn send_ok(
         .get(url)
         .send()
         .await
-        .with_context(|| format!("request {source_name} resource failed: {url}"))?
+        .map_err(|source| Error::RequestResource {
+            source_name: source_name.to_owned(),
+            url: url.to_owned(),
+            source,
+        })?
         .error_for_status()
-        .with_context(|| format!("{source_name} returned error status: {url}"))
+        .map_err(|source| Error::HttpStatus {
+            source_name: source_name.to_owned(),
+            url: url.to_owned(),
+            source,
+        })
 }

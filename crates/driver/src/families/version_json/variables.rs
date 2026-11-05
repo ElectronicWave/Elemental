@@ -3,12 +3,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result};
 use elemental_core::storage::layout::Layout;
 use elemental_schema::mojang::piston::PistonMetaData;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+
+use crate::error::{Error, Result};
 
 use super::{
     classpath::{classpath_separator, join_classpath},
@@ -109,7 +110,9 @@ impl LauncherVariables {
             .try_get_extended_resource(game_root, VersionJsonRootResource::Libraries(None))?;
         let version_name = version_root_path
             .file_name()
-            .context("version root has no file name")?
+            .ok_or_else(|| Error::MissingVersionRootFileName {
+                path: version_root_path.to_path_buf(),
+            })?
             .to_string_lossy()
             .to_string();
         let version_jar = instance_layout
@@ -133,7 +136,7 @@ impl LauncherVariables {
                             ))),
                         )
                         .map(|path| path.to_string_lossy().to_string())
-                        .map_err(anyhow::Error::from),
+                        .map_err(Error::from),
                 )
             })
             .collect::<Result<Vec<String>>>()?
@@ -182,7 +185,7 @@ impl LauncherVariables {
     pub fn map(&self) -> Result<Map<String, Value>> {
         Ok(serde_json::to_value(self)?
             .as_object()
-            .context("struct is not an object")?
+            .ok_or(Error::LauncherVariablesNotObject)?
             .clone())
     }
 

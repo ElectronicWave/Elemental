@@ -3,7 +3,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result, bail};
 use elemental_core::{
     runtime::distribution::Distribution,
     storage::{Storage, layout::Layoutable},
@@ -18,6 +17,8 @@ use elemental_infra::{
 use elemental_schema::forge::{ForgeInstallerProcessor, ForgeInstallerProfile};
 use regex::Regex;
 use tokio::{fs::create_dir_all, process::Command};
+
+use crate::error::{Error, ProcessorFailure, Result};
 
 use crate::families::{
     installer::{InstallerArchive, InstallerArtifact, installer_coordinate_path},
@@ -64,7 +65,10 @@ where
             tasks,
         )?)
         .await
-        .with_context(|| format!("download {family_name} install profile libraries failed"))?;
+        .map_err(|source| Error::DownloadInstallerProfileLibraries {
+            family_name: family_name.to_owned(),
+            source,
+        })?;
 
     Ok(())
 }
@@ -108,9 +112,9 @@ where
     }
 
     if !context.client_outputs_ready()? {
-        bail!(
-            "{family_name} client processors completed without producing the expected client artifacts"
-        );
+        return Err(Error::ProcessorOutputsMissing {
+            family_name: family_name.to_owned(),
+        });
     }
 
     Ok(())
@@ -294,7 +298,10 @@ impl<'a> InstallerProcessorContext<'a> {
             "SIDE" => Ok("client".to_owned()),
             _ => self
                 .resolve_data_value(key)?
-                .with_context(|| format!("unknown {} processor variable: {key}", self.family_name)),
+                .ok_or_else(|| Error::UnknownProcessorVariable {
+                    family_name: self.family_name.to_owned(),
+                    key: key.to_owned(),
+                }),
         }
     }
 
@@ -388,12 +395,10 @@ async fn run_processor(
         .current_dir(&context.root_directory)
         .output()
         .await
-        .with_context(|| {
-            format!(
-                "run {} processor failed: {}",
-                context.family_name,
-                processor.jar.as_str()
-            )
+        .map_err(|source| Error::RunProcessor {
+            family_name: context.family_name.to_owned(),
+            processor: processor.jar.clone(),
+            source,
         })?;
 
     if output.status.success() {
@@ -402,18 +407,17 @@ async fn run_processor(
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    bail!(
-        "{} processor failed: processor={}, java={}, main_class={}, classpath={}, args={:?}, exit_status={:?}, stdout=\n{}\nstderr=\n{}",
-        context.family_name,
-        processor.jar,
-        runtime.executable().display(),
+    Err(Error::ProcessorFailed(Box::new(ProcessorFailure {
+        family_name: context.family_name.to_owned(),
+        processor: processor.jar.clone(),
+        java: runtime.executable().display().to_string(),
         main_class,
         classpath,
-        resolved_args,
-        output.status.code(),
-        stdout,
-        stderr
-    );
+        args: resolved_args,
+        exit_status: output.status.code(),
+        stdout: stdout.to_string(),
+        stderr: stderr.to_string(),
+    })))
 }
 
 fn read_jar_main_class(path: &Path) -> Result<String> {
@@ -424,7 +428,9 @@ fn read_jar_main_class(path: &Path) -> Result<String> {
         .find_map(|line| line.strip_prefix("Main-Class: "))
         .map(str::trim)
         .map(ToOwned::to_owned)
-        .with_context(|| format!("jar manifest is missing Main-Class: {}", path.display()))?;
+        .ok_or_else(|| Error::JarMainClassMissing {
+            path: path.to_path_buf(),
+        })?;
     Ok(main_class)
 }
 
@@ -471,7 +477,9 @@ fn absolute_path(path: &Path) -> Result<PathBuf> {
         return Ok(path.to_path_buf());
     }
 
-    let current_directory = std::env::current_dir()
-        .with_context(|| format!("resolve current directory failed for {}", path.display()))?;
+    let current_directory = std::env::current_dir().map_err(|source| Error::CurrentDirectory {
+        path: path.to_path_buf(),
+        source,
+    })?;
     Ok(current_directory.join(path))
 }

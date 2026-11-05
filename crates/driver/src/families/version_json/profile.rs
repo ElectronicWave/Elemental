@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 
-use anyhow::{Context, Result};
 use reqwest::Url;
 
 use elemental_schema::fabric::{
@@ -13,6 +12,7 @@ use elemental_schema::mojang::piston::{
     PistonMetaLogging, PistonMetaLoggingSide, PistonMetaLoggingSideFile,
 };
 
+use crate::error::{Error, Result};
 use crate::maven::{
     artifact_path as maven_artifact_path, classifier_notation as maven_classifier_notation,
 };
@@ -114,7 +114,9 @@ fn merge_profile_arguments(
         (Some(arguments), _) => Some(arguments),
         (None, Some(arguments)) => Some(PistonMetaArguments {
             game: parse_argument_string(arguments.as_str())
-                .with_context(|| "parse base minecraftArguments failed".to_owned())?
+                .map_err(|source| Error::ParseBaseMinecraftArguments {
+                    source: Box::new(source),
+                })?
                 .into_iter()
                 .map(PistonMetaGenericArgument::Plain)
                 .collect(),
@@ -288,10 +290,17 @@ fn maven_artifact_url(base_url: &str, artifact_path: &str) -> Result<String> {
         format!("{base_url}/")
     };
     let base = Url::parse(normalized_base_url.as_str())
-        .with_context(|| format!("parse library base url failed: {base_url}"))?;
+        .map_err(|source| Error::invalid_url("parse library base url failed", base_url, source))?;
 
     base.join(artifact_path)
-        .with_context(|| format!("join library artifact url failed: {base_url} + {artifact_path}"))
+        .map_err(|source| {
+            Error::join_url(
+                "join library artifact url failed",
+                base_url,
+                artifact_path,
+                source,
+            )
+        })
         .map(|url| url.to_string())
 }
 

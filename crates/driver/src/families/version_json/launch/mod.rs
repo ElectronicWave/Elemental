@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use anyhow::Result;
+use crate::error::Result;
 use elemental_core::{
     auth::authorizer::Authorizer,
     launcher::{command::LaunchCommand, process},

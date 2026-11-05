@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::Result;
+use crate::error::Result;
 use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::{

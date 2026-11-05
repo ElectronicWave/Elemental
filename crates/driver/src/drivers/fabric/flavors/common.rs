@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::Result;
 use elemental_core::minecraft::MinecraftVersionId;
 use elemental_schema::fabric::ProfileJson;
 use elemental_schema::mojang::piston::PistonMetaData;

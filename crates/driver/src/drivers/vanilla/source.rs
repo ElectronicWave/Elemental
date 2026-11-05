@@ -1,4 +1,3 @@
-use anyhow::{Context, Result};
 use elemental_schema::mojang::{
     launcher::LaunchMetaData,
     piston::{PistonMetaAssetIndexObjects, PistonMetaData},
@@ -6,6 +5,7 @@ use elemental_schema::mojang::{
 
 use crate::{
     drivers::vanilla::prepared::ResolvedVanillaMetadata,
+    error::{Error, Result},
     families::version_json::VersionJsonRemoteResolver,
     http::{HttpSource, fetch_json},
     url::{Origin, OriginPolicy},
@@ -107,7 +107,9 @@ impl VanillaEndpoints {
 
     pub fn object_url(&self, hash: impl AsRef<str>) -> Result<String> {
         let hash = hash.as_ref();
-        let prefix = hash.get(0..2).context("asset hash is too short")?;
+        let prefix = hash.get(0..2).ok_or_else(|| Error::AssetHashTooShort {
+            hash: hash.to_owned(),
+        })?;
         self.origin_policy
             .resolve(VanillaOrigin::Resources, &format!("{prefix}/{hash}"))
     }
@@ -174,7 +176,9 @@ pub async fn resolve_vanilla_metadata(
         .versions
         .iter()
         .find(|version| version.id == game_version)
-        .with_context(|| format!("can't find vanilla version named '{game_version}'"))?
+        .ok_or_else(|| Error::VanillaVersionNotFound {
+            game_version: game_version.to_owned(),
+        })?
         .url
         .clone();
     let metadata = vanilla_source.piston_meta(metadata_url).await?;
@@ -202,6 +206,9 @@ where
         return Ok(rewritten);
     }
 
-    rewrite_family()
-        .with_context(|| format!("rewrite {family_name} upstream url failed for '{raw_url}'"))
+    rewrite_family().map_err(|source| Error::RewriteUpstream {
+        family_name: family_name.to_owned(),
+        raw_url: raw_url.to_owned(),
+        source: Box::new(source),
+    })
 }

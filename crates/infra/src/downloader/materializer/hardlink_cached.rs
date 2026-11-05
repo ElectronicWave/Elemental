@@ -1,4 +1,3 @@
-use anyhow::{Context, Result};
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 
@@ -7,6 +6,7 @@ use super::{
     replace_file,
 };
 use crate::downloader::{task::DownloadTask, validation::target_matches_task};
+use crate::error::{Error, Result};
 
 #[derive(Debug, Clone)]
 pub struct HardlinkCachedMaterializer {
@@ -21,23 +21,22 @@ impl HardlinkCachedMaterializer {
     }
 
     fn cache_path_for_task(&self, task: &DownloadTask) -> Result<PathBuf> {
-        let sha1 = task
-            .sha1
-            .as_ref()
-            .context("hardlink cache requires task sha1")?;
+        let sha1 = task.sha1.as_ref().ok_or(Error::HardlinkCacheSha1Missing)?;
         let prefix = sha1
             .get(0..2)
-            .context("task sha1 is too short for cache path")?;
+            .ok_or_else(|| Error::Sha1TooShort { sha1: sha1.clone() })?;
         Ok(self.cache_root.join(prefix).join(sha1))
     }
 
     async fn materialize_from_cache(&self, task: &DownloadTask, cache_path: &Path) -> Result<()> {
-        tokio::fs::create_dir_all(
-            task.path
-                .parent()
-                .context("Can't get target parent directory")?,
-        )
-        .await?;
+        let parent = task
+            .path
+            .parent()
+            .ok_or_else(|| Error::MissingPathComponent {
+                path: task.path.clone(),
+                component: "target parent directory",
+            })?;
+        tokio::fs::create_dir_all(parent).await?;
 
         if tokio::fs::metadata(&task.path).await.is_ok() {
             tokio::fs::remove_file(&task.path).await?;
@@ -76,10 +75,16 @@ impl Materializer for HardlinkCachedMaterializer {
         let cache_path = self.cache_path_for_task(task)?;
         let parent = cache_path
             .parent()
-            .context("Can't get cache parent directory")?;
+            .ok_or_else(|| Error::MissingPathComponent {
+                path: cache_path.clone(),
+                component: "cache parent directory",
+            })?;
         let file_name = cache_path
             .file_name()
-            .context("Can't get cache file name")?
+            .ok_or_else(|| Error::MissingPathComponent {
+                path: cache_path.clone(),
+                component: "cache file name",
+            })?
             .to_string_lossy()
             .to_string();
         create_temp_output_file(parent, file_name).await

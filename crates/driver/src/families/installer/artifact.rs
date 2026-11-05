@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
-use anyhow::{Result, anyhow};
 use elemental_core::storage::{Storage, layout::Layoutable};
 use elemental_infra::downloader::task::DownloadTask;
 
 use crate::{
+    error::{Error, Result},
     families::version_json::{VersionJsonRootLayout, VersionJsonRootResource},
     maven::artifact_path,
 };
@@ -42,7 +42,9 @@ pub fn installer_coordinate_file_name(notation: &str) -> Result<String> {
         .file_name()
         .and_then(|name| name.to_str())
         .map(ToOwned::to_owned)
-        .ok_or_else(|| anyhow!("installer coordinate has no file name: {notation}"))?;
+        .ok_or_else(|| Error::InstallerCoordinateFileNameMissing {
+            notation: notation.to_owned(),
+        })?;
     Ok(file_name)
 }
 

@@ -45,6 +45,11 @@ pub const CLEANROOM_DRIVER: DriverDescriptor = DriverDescriptor {
     name: "Cleanroom",
 };
 
+pub const OUTLANDS_DRIVER: DriverDescriptor = DriverDescriptor {
+    id: "outlands",
+    name: "Outlands",
+};
+
 pub const NEOFORGE_DRIVER: DriverDescriptor = DriverDescriptor {
     id: "neoforge",
     name: "NeoForge",

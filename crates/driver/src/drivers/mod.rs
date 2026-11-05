@@ -6,3 +6,4 @@ pub mod neoforge;
 pub mod quilt;
 pub mod rift;
 pub mod vanilla;
+pub mod outlands;

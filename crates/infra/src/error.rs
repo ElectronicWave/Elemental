@@ -1,6 +1,6 @@
 use std::{error::Error as StdError, io, path::PathBuf};
 
-use crate::downloader::core::{DownloadFailure, TaskId};
+use crate::downloader::{DownloadFailure, TaskId};
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -17,10 +17,10 @@ pub enum Error {
     #[error("HTTP request failed: {0}")]
     Http(#[from] reqwest::Error),
 
-    #[error("downloader max_connections must be greater than zero")]
-    InvalidMaxConnections,
+    #[error("downloader max_concurrent_downloads must be greater than zero")]
+    InvalidMaxConcurrentDownloads,
 
-    #[error("downloader session_parallelism must be greater than zero")]
+    #[error("session parallelism must be greater than zero")]
     InvalidSessionParallelism,
 
     #[error("downloader session_queue_capacity must be greater than zero")]
@@ -28,6 +28,18 @@ pub enum Error {
 
     #[error("downloader retry policy requires max_attempts > 0 and max_backoff >= initial_backoff")]
     InvalidRetryPolicy,
+
+    #[error("downloader read_timeout must be greater than zero")]
+    InvalidReadTimeout,
+
+    #[error("download task URL '{url}' is invalid: {reason}")]
+    InvalidTaskUrl { url: String, reason: String },
+
+    #[error("download task path '{}' is invalid: {reason}", path.display())]
+    InvalidTaskPath { path: PathBuf, reason: &'static str },
+
+    #[error("download task sha1 '{sha1}' must be 40 hexadecimal characters")]
+    InvalidSha1 { sha1: String },
 
     #[error("downloader was dropped unexpectedly")]
     DownloaderDropped,

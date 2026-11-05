@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use elemental_driver::families::version_json::{
     BaseInstanceLayout, BaseRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
 };
-use elemental_infra::downloader::core::ElementalDownloader;
+use elemental_infra::downloader::ElementalDownloader;
 
 use crate::launcher::Launcher;
 

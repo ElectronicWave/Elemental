@@ -1,13 +1,18 @@
 use std::{fmt, path::PathBuf, time::Duration};
 
-use super::{task::SessionId, tracking::TaskId};
+#[cfg(feature = "serde")]
+use serde::{Serialize, Serializer};
+
+use super::task::{SessionId, TaskId};
 use crate::error::{Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub enum DownloadPhase {
     Prepare,
     Connect,
-    Status,
+    HttpStatus,
     Download,
     Verify,
     Commit,
@@ -18,7 +23,7 @@ impl fmt::Display for DownloadPhase {
         let label = match self {
             Self::Prepare => "prepare",
             Self::Connect => "connect",
-            Self::Status => "status",
+            Self::HttpStatus => "http_status",
             Self::Download => "download",
             Self::Verify => "verify",
             Self::Commit => "commit",
@@ -28,6 +33,7 @@ impl fmt::Display for DownloadPhase {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct DownloadFailure {
     pub task_id: TaskId,
     pub group: Option<String>,
@@ -54,14 +60,27 @@ impl DownloadFailure {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
+#[cfg_attr(feature = "serde", serde(tag = "status", rename_all = "snake_case"))]
 pub enum TaskStatus {
-    Downloaded { bytes: u64, duration: Duration },
-    Skipped { bytes: u64 },
-    Failed(DownloadFailure),
+    Queued,
+    Active,
+    Downloaded {
+        bytes: u64,
+        #[cfg_attr(feature = "serde", serde(serialize_with = "serialize_duration_millis"))]
+        duration: Duration,
+    },
+    Skipped {
+        bytes: u64,
+    },
+    Failed {
+        failure: DownloadFailure,
+    },
     Cancelled,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct TaskOutcome {
     pub task_id: TaskId,
     pub group: Option<String>,
@@ -71,13 +90,15 @@ pub struct TaskOutcome {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct DownloadReport {
     pub session_id: SessionId,
     pub session_name: Option<String>,
     pub outcomes: Vec<TaskOutcome>,
     pub downloaded_bytes: u64,
     pub skipped_bytes: u64,
-    pub total_bytes: Option<u64>,
+    pub expected_bytes: Option<u64>,
+    #[cfg_attr(feature = "serde", serde(serialize_with = "serialize_duration_millis"))]
     pub elapsed: Duration,
 }
 
@@ -95,8 +116,10 @@ impl DownloadReport {
         self.outcomes
             .iter()
             .filter_map(|outcome| match &outcome.status {
-                TaskStatus::Failed(failure) => Some(failure),
-                TaskStatus::Downloaded { .. }
+                TaskStatus::Failed { failure } => Some(failure),
+                TaskStatus::Queued
+                | TaskStatus::Active
+                | TaskStatus::Downloaded { .. }
                 | TaskStatus::Skipped { .. }
                 | TaskStatus::Cancelled => None,
             })
@@ -111,9 +134,11 @@ impl DownloadReport {
             .iter()
             .filter_map(|outcome| match outcome.status {
                 TaskStatus::Cancelled => Some(&outcome.task_id),
-                TaskStatus::Downloaded { .. }
+                TaskStatus::Queued
+                | TaskStatus::Active
+                | TaskStatus::Downloaded { .. }
                 | TaskStatus::Skipped { .. }
-                | TaskStatus::Failed(_) => None,
+                | TaskStatus::Failed { .. } => None,
             })
     }
 
@@ -145,15 +170,50 @@ impl DownloadReport {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct DownloadProgress {
     pub tasks_total: usize,
     pub tasks_completed: usize,
     pub tasks_failed: usize,
     pub tasks_skipped: usize,
     pub tasks_cancelled: usize,
-    pub pending: usize,
+    pub tasks_pending: usize,
+    /// Bytes successfully written to their final destinations.
     pub bytes_downloaded: u64,
-    pub bytes_total: Option<u64>,
+    /// Bytes received from the network, including bytes from retried attempts.
+    pub bytes_received: u64,
+    /// Bytes that did not need to be downloaded.
+    pub bytes_skipped: u64,
+    pub expected_bytes: Option<u64>,
     pub bytes_per_second: u64,
+    #[cfg_attr(
+        feature = "serde",
+        serde(serialize_with = "serialize_optional_duration_millis")
+    )]
     pub eta: Option<Duration>,
+}
+
+#[cfg(feature = "serde")]
+pub(crate) fn serialize_duration_millis<S>(
+    duration: &Duration,
+    serializer: S,
+) -> std::result::Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_u64(u64::try_from(duration.as_millis()).unwrap_or(u64::MAX))
+}
+
+#[cfg(feature = "serde")]
+pub(crate) fn serialize_optional_duration_millis<S>(
+    duration: &Option<Duration>,
+    serializer: S,
+) -> std::result::Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match duration {
+        Some(duration) => serialize_duration_millis(duration, serializer),
+        None => serializer.serialize_none(),
+    }
 }

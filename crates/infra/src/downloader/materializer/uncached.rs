@@ -1,15 +1,18 @@
 use async_trait::async_trait;
 
-use super::{Materializer, StagedDownload, create_temp_output_file, replace_file};
+use super::{
+    Materializer, StagedDownload,
+    fs::{cleanup_file, create_temp_output_file, replace_file},
+};
 use crate::downloader::{task::DownloadTask, validation::target_matches_task};
 use crate::error::{Error, Result};
 
 #[derive(Debug, Clone, Default)]
-pub struct NoCachedMaterializer;
+pub struct UncachedMaterializer;
 
 #[async_trait]
-impl Materializer for NoCachedMaterializer {
-    async fn resolve(&self, task: &DownloadTask) -> Result<bool> {
+impl Materializer for UncachedMaterializer {
+    async fn try_reuse(&self, task: &DownloadTask) -> Result<bool> {
         target_matches_task(&task.path, task).await
     }
 
@@ -39,7 +42,7 @@ impl Materializer for NoCachedMaterializer {
     }
 
     async fn abort(&self, staged: StagedDownload) -> Result<()> {
-        super::cleanup_file(&staged.path).await;
+        cleanup_file(&staged.path).await;
         Ok(())
     }
 }

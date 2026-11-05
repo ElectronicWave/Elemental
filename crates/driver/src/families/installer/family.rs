@@ -7,7 +7,7 @@ use std::{
 use elemental_core::minecraft::MinecraftVersionId;
 use elemental_core::runtime::RuntimeValidationMode;
 use elemental_core::storage::{Storage, layout::Layoutable};
-use elemental_infra::downloader::core::DownloadSession;
+use elemental_infra::downloader::DownloadSession;
 use elemental_schema::{forge::ForgeInstallerProfile, mojang::piston::PistonMetaLibraries};
 
 use crate::{
@@ -277,7 +277,7 @@ where
                 .parent
                 .try_get_resource(VersionJsonRootResource::Libraries(None))?;
             let installer_state = prepare_installer_state(
-                &session,
+                session,
                 &self.installer_artifact,
                 &self.instance.path,
                 &libraries_root,
@@ -299,10 +299,10 @@ where
             })
             .await?;
 
-            launch_version.submit_install_batches(&session).await?;
+            launch_version.submit_install_batches(session).await?;
 
             submit_installer_profile_libraries(
-                &session,
+                session,
                 &self.instance,
                 &installer_state.install_profile,
                 F::FAMILY_NAME,

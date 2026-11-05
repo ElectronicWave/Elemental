@@ -9,7 +9,7 @@ use elemental_core::{
     runtime::distribution::Distribution,
     storage::{Storage, layout::Layout},
 };
-use elemental_infra::downloader::core::DownloadSession;
+use elemental_infra::downloader::DownloadSession;
 
 use crate::{
     driver::{Driver, DriverDescriptor, InstalledDriver},

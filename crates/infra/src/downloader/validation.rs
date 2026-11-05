@@ -2,7 +2,7 @@ use sha1::{Digest, Sha1};
 use std::path::Path;
 use tokio::{fs::File, io::AsyncReadExt};
 
-use super::task::DownloadTask;
+use super::task::{DownloadTask, validate_sha1};
 use crate::error::{Error, Result};
 
 const VALIDATION_BUFFER_SIZE: usize = 64 * 1024;
@@ -66,8 +66,9 @@ impl StreamingValidator {
         }
 
         if let Some(expected_sha1) = self.validation.expected_sha1 {
+            validate_sha1(&expected_sha1)?;
             let actual_sha1 = hex::encode(self.sha1.unwrap_or_default().finalize());
-            if actual_sha1 != expected_sha1 {
+            if actual_sha1 != expected_sha1.to_ascii_lowercase() {
                 return Err(Error::Sha1Mismatch {
                     path: path.to_path_buf(),
                     expected: expected_sha1,

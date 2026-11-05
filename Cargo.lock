@@ -558,7 +558,6 @@ dependencies = [
  "reqwest",
  "scc",
  "serde",
- "serde_json",
  "sha1",
  "thiserror 2.0.21",
  "tokio",

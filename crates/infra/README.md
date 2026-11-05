@@ -16,8 +16,14 @@ for launcher-style workloads.
 | `DownloadSession` | One logical operation, such as installing one Minecraft version |
 | `DownloadReport` | Final per-task outcomes plus byte and timing totals |
 | `DownloadProgress` | Live task counts, byte counters, throughput, and ETA |
+| `DownloadEvent` | Session and task events, serializable with the `serde` feature |
+| `SessionSnapshot` | Current progress and task states for initial render or resync |
 | `RetryPolicy` | Per-task attempts and exponential backoff |
 | `FailurePolicy` | What a session does after a task exhausts its retries |
+
+All downloader types are exported from `elemental_infra::downloader`. The
+submodules that hold the implementation are private, so callers have one import
+path instead of choosing between `core`, `task`, and `report`.
 
 `ElementalDownloader` is a factory and owner of shared resources such as the
 connection budget and bandwidth limiter. It does not represent one operation.
@@ -27,9 +33,17 @@ and lets the caller observe progress or inspect failures as a unit. Pass
 `&DownloadSession` to code that performs downloads instead of passing the
 downloader and creating hidden sessions.
 
+Every task is validated before its batch is accepted. URLs must use `http` or
+`https`, target paths must name a file and must not contain `..` components, and
+SHA-1 checksums must be 40 hexadecimal characters. Validation covers the whole
+batch first, so one malformed task cannot leave a half-submitted batch. This
+keeps remote metadata from escaping the download root through a crafted library
+path or cache key.
+
 Groups are labels on batches. They do not change scheduling or task identity;
 they only make reports easier to filter. Every task in a batch shares the
-batch's group.
+batch's group. A batch is submitted under one session lock, so concurrent
+submitters cannot interleave the tasks of one group with another group.
 
 Minecraft preparation uses one session per version with four groups:
 
@@ -49,12 +63,20 @@ elemental-infra = "0.2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
+Enable the `serde` feature when events, snapshots, progress, or reports need to
+be serialized:
+
+```toml
+elemental-infra = { version = "0.2", features = ["serde"] }
+serde_json = "1"
+```
+
 ## Quick start
 
 Download one file without validation:
 
 ```rust
-use elemental_infra::downloader::core::{DownloadTask, ElementalDownloader};
+use elemental_infra::downloader::{DownloadTask, ElementalDownloader};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -79,7 +101,7 @@ async fn main() -> anyhow::Result<()> {
 publishes a size or SHA-1:
 
 ```rust
-use elemental_infra::downloader::core::{DownloadTask, ElementalDownloader};
+use elemental_infra::downloader::{DownloadTask, ElementalDownloader};
 
 async fn download_library(
     downloader: &ElementalDownloader,
@@ -98,7 +120,7 @@ async fn download_library(
 Batch work uses a session directly:
 
 ```rust
-use elemental_infra::downloader::core::{
+use elemental_infra::downloader::{
     DownloadTask, ElementalDownloader,
 };
 
@@ -125,7 +147,7 @@ Build batches with `DownloadBatch::new()` and label them with
 `DownloadBatch::group()`:
 
 ```rust
-use elemental_infra::downloader::core::{
+use elemental_infra::downloader::{
     DownloadBatch, DownloadTask, ElementalDownloader,
 };
 
@@ -164,12 +186,14 @@ Retries belong to the task that failed. Each task gets its own attempt budget,
 and only transient failures are retried: connection errors, interrupted
 streams, HTTP 408, HTTP 429, HTTP 5xx, and verification mismatches. HTTP 4xx
 responses other than 408 and 429, prepare errors, and commit errors fail
-immediately.
+immediately. A retry releases the shared connection permit before waiting for
+its backoff, so one sleeping task cannot occupy a download slot that another
+queued task could use.
 
 ```rust
 use std::time::Duration;
 
-use elemental_infra::downloader::core::{
+use elemental_infra::downloader::{
     DownloadTask, ElementalDownloader, FailurePolicy, RetryPolicy,
 };
 
@@ -216,7 +240,7 @@ are needed before the next step. `wait_idle()` waits for queued work without
 closing the session, so more tasks can be added afterward:
 
 ```rust
-use elemental_infra::downloader::core::{
+use elemental_infra::downloader::{
     DownloadBatch, DownloadTask, ElementalDownloader,
 };
 
@@ -255,35 +279,47 @@ has failed or been cancelled, but it leaves the session open so more work can
 be submitted afterward. Call `finish()` once at the end of the operation to
 close the session and collect the final report.
 
-## Live progress
+## Live events and progress
 
-`progress_receiver()` returns a `tokio::sync::watch::Receiver`. It emits
-updates whenever a task is queued, finishes, fails, or receives bytes:
+`session.subscribe()` returns a session-scoped event stream, while
+`downloader.subscribe()` receives events for every session. Events are
+emitted for session start/close, task queue/start/finish, retries, aggregate
+progress, and per-task progress. With the `serde` feature enabled, they are
+also serializable. Progress events are throttled to 10 Hz; lifecycle events
+are emitted once.
+
+`SessionOpened` is emitted before `open()` returns, so it is only observable
+through `downloader.subscribe()`. A session-scoped subscriber starts from the
+current state; use `session.snapshot()` for its initial render.
 
 ```rust
-use elemental_infra::downloader::core::{
-    DownloadBatch, ElementalDownloader,
+use elemental_infra::downloader::{
+    DownloadBatch, DownloadEvent, ElementalDownloader, EventStreamError,
 };
 
-async fn download_with_progress(
+async fn download_with_events(
     downloader: &ElementalDownloader,
     batch: DownloadBatch,
 ) -> anyhow::Result<()> {
     let session = downloader.session("assets").open().await?;
+    let monitor_session = session.clone();
+    let mut events = session.subscribe();
     session.submit(batch).await?;
 
-    let mut progress = session.progress_receiver();
     let monitor = tokio::spawn(async move {
-        while progress.changed().await.is_ok() {
-            let current = progress.borrow().clone();
-            println!(
-                "{}/{} tasks, {} bytes, {:?}",
-                current.tasks_completed,
-                current.tasks_total,
-                current.bytes_downloaded,
-                current.eta
-            );
+        loop {
+            match events.recv().await {
+                Ok(DownloadEvent::SessionClosed { .. }) => break,
+                Ok(event) => println!("{}", serde_json::to_string(&event)?),
+                Err(EventStreamError::Lagged(_)) => {
+                    let snapshot = monitor_session.snapshot().await?;
+                    println!("{}", serde_json::to_string(&snapshot)?);
+                }
+                Err(EventStreamError::Closed) => break,
+            }
         }
+
+        Ok::<(), anyhow::Error>(())
     });
 
     let report = session.finish().await?;
@@ -293,7 +329,10 @@ async fn download_with_progress(
 }
 ```
 
-Use `session.progress()` for a synchronous snapshot of the latest value.
+Use `session.snapshot()` to initialize the frontend or recover after a
+`Lagged` event. The snapshot contains the current aggregate progress and every
+task state. `session.progress()` and `progress_receiver()` remain available for
+consumers that only need the aggregate `DownloadProgress`.
 
 ## Failures and cancellation
 
@@ -310,33 +349,42 @@ Use `session.progress()` for a synchronous snapshot of the latest value.
   returns a report. Queued tasks appear as cancelled.
 
 `DownloadSession` is cloneable; cancelling any clone cancels the whole session.
+Dropping the last clone without calling `finish()` or `cancel()` also cancels
+and removes the session, so a forgotten session cannot keep the downloader
+alive. Prefer the explicit methods when you need the final report.
 
 ## Configuration
 
 | Setting | Default |
 | --- | --- |
-| `max_connections` | 8 |
-| `session_parallelism` | 8 |
+| `max_concurrent_downloads` | 8 |
+| `default_session_parallelism` | 8 |
 | `session_queue_capacity` | 256 |
 | `connect_timeout` | 10 seconds |
+| `read_timeout` | 30 seconds |
 | `rate_limit` | Unlimited |
 | session retry | 3 attempts, 500 ms to 8 s backoff |
+
+Rate limiting uses a token bucket shared by the downloader and an optional
+second bucket per session. Large chunks are charged in full instead of being
+clamped to one second of budget, so the configured rate is an actual ceiling.
 
 Override the defaults through `ElementalDownloaderBuilder::config()`:
 
 ```rust
 use std::time::Duration;
 
-use elemental_infra::downloader::core::{
+use elemental_infra::downloader::{
     ByteRate, DownloadRateLimit, ElementalDownloader, ElementalDownloaderConfig,
 };
 
 fn build_downloader() -> anyhow::Result<std::sync::Arc<ElementalDownloader>> {
     let config = ElementalDownloaderConfig {
-        max_connections: 16,
-        session_parallelism: 4,
+        max_concurrent_downloads: 16,
+        default_session_parallelism: 4,
         session_queue_capacity: 256,
         connect_timeout: Duration::from_secs(15),
+        read_timeout: Duration::from_secs(30),
         rate_limit: DownloadRateLimit::Limited(ByteRate::mib_per_sec(
             std::num::NonZeroUsize::new(20).expect("non-zero rate"),
         )),
@@ -351,7 +399,7 @@ Override parallelism or the session rate limit on the session builder:
 ```rust
 use std::num::NonZeroUsize;
 
-use elemental_infra::downloader::core::{
+use elemental_infra::downloader::{
     ByteRate, DownloadRateLimit, ElementalDownloader, FailurePolicy, RetryPolicy,
 };
 
@@ -369,19 +417,19 @@ let session = downloader
 
 ## Materialization
 
-`NoCachedMaterializer` is the default. Each download is staged next to its
+`UncachedMaterializer` is the default. Each download is staged next to its
 destination and committed only after validation succeeds.
 
-`HardlinkCachedMaterializer` stores verified content in a SHA-1-addressed cache
+`HardlinkCacheMaterializer` stores verified content in a SHA-1-addressed cache
 and hardlinks it into the destination. Tasks without a SHA-1 use the non-cached
 path.
 
 ```rust
-use elemental_infra::downloader::core::ElementalDownloader;
+use elemental_infra::downloader::ElementalDownloader;
 
 fn main() -> anyhow::Result<()> {
     let _downloader = ElementalDownloader::builder()
-        .hardlink_cached_materializer(".cache/elemental")
+        .with_hardlink_cache(".cache/elemental")
         .build()?;
     Ok(())
 }

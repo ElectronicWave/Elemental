@@ -12,16 +12,17 @@ use elemental_driver::{
     catalog::Catalog,
     descriptors::{
         BABRIC_DRIVER, CLEANROOM_DRIVER, FABRIC_DRIVER, FORGE_DRIVER, LEGACY_FABRIC_DRIVER,
-        LITELOADER_DRIVER, NEOFORGE_DRIVER, QUILT_DRIVER, RIFT_DRIVER, VANILLA_DRIVER,
+        LITELOADER_DRIVER, NEOFORGE_DRIVER, OUTLANDS_DRIVER, QUILT_DRIVER, RIFT_DRIVER,
+        VANILLA_DRIVER,
     },
     driver::{Driver, DriverDescriptor},
     drivers::{
         cleanroom::driver::CleanroomDriverSpec,
-        outlands::driver::OutlandsDriverSpec,
         fabric::{driver::FabricDriverFamily, source::FabricFlavor},
         forge::prepared::ForgeFamily,
         liteloader::driver::LiteLoaderDriverFamily,
         neoforge::prepared::NeoForgeFamily,
+        outlands::driver::OutlandsDriverSpec,
         quilt::driver::QuiltDriverFamily,
         rift::driver::RiftDriverFamily,
         vanilla::{driver::VanillaDriver, source::VanillaSource},
@@ -36,7 +37,7 @@ use elemental_driver::{
     },
     inspect::InstalledInstance,
 };
-use elemental_infra::downloader::core::{DownloadSession, ElementalDownloader};
+use elemental_infra::downloader::{DownloadSession, ElementalDownloader};
 
 use crate::{
     builder::LauncherBuilder,
@@ -277,7 +278,7 @@ where
             RIFT_DRIVER => ResolvedLauncherDriver::Rift(self.profiled_driver(RiftDriverFamily)?),
             FORGE_DRIVER => ResolvedLauncherDriver::Forge(self.installer_driver()),
             CLEANROOM_DRIVER => ResolvedLauncherDriver::Cleanroom(self.installer_driver()),
-            OUTLAND_DRIVER => ResolvedLauncherDriver::Outlands(self.installer_driver()),
+            OUTLANDS_DRIVER => ResolvedLauncherDriver::Outlands(self.installer_driver()),
             NEOFORGE_DRIVER => ResolvedLauncherDriver::NeoForge(self.installer_driver()),
             _ => {
                 return Err(Error::UnsupportedDriver {
@@ -377,6 +378,7 @@ impl ResolvedLauncherDriver {
             (Self::Outlands(driver), DriverSpec::Outlands(loader_spec)) => {
                 let prepared = driver
                     .prepare(
+                        session,
                         instance,
                         loader_spec.game_version.clone(),
                         loader_spec.loader_version.clone(),

@@ -12,8 +12,7 @@ use elemental_core::{
         layout::{Layout, Layoutable},
     },
 };
-use elemental_infra::downloader::core::DownloadSession;
-use elemental_infra::downloader::task::DownloadBatch;
+use elemental_infra::downloader::{DownloadBatch, DownloadSession};
 use elemental_schema::{
     forge::ForgeInstallerProfile,
     mojang::piston::{
@@ -364,13 +363,13 @@ where
         request.merge_libraries,
         request.family_name,
     )?;
-    Ok(ResolvedVersionJsonMetadata::new(
+    ResolvedVersionJsonMetadata::new(
         request.remote_resolver.clone(),
         merged_metadata,
         base_metadata.asset_index_objects,
     )
     .persist(request.instance)
-    .await?)
+    .await
 }
 
 pub struct InstallerLaunchVersionRequest<'a, RR, L, VL, F, M>

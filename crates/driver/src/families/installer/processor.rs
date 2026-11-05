@@ -8,10 +8,7 @@ use elemental_core::{
     storage::{Storage, layout::Layoutable},
 };
 use elemental_infra::{
-    downloader::{
-        core::DownloadSession,
-        task::{DownloadBatch, DownloadTask},
-    },
+    downloader::{DownloadBatch, DownloadSession, DownloadTask},
     jar::JarFile,
 };
 use elemental_schema::forge::{ForgeInstallerProcessor, ForgeInstallerProfile};

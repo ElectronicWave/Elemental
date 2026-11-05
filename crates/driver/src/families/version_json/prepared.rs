@@ -4,10 +4,7 @@ use elemental_core::{
     runtime::distribution::Distribution,
     storage::{Storage, layout::Layoutable},
 };
-use elemental_infra::downloader::{
-    core::DownloadSession,
-    task::{DownloadBatch, DownloadTask},
-};
+use elemental_infra::downloader::{DownloadBatch, DownloadSession, DownloadTask};
 use elemental_schema::mojang::piston::{
     PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaLibraries,
     PistonMetaLibrariesDownloadsArtifact,

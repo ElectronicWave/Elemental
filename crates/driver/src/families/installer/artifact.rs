@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use elemental_core::storage::{Storage, layout::Layoutable};
-use elemental_infra::downloader::task::DownloadTask;
+use elemental_infra::downloader::DownloadTask;
 
 use crate::{
     error::{Error, Result},

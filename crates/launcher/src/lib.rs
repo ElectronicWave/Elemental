@@ -6,7 +6,7 @@ mod result;
 mod spec;
 
 pub use builder::LauncherBuilder;
-pub use elemental_infra::downloader::core::DownloadSession;
+pub use elemental_infra::downloader::DownloadSession;
 pub use launcher::Launcher;
 pub use request::{LaunchOptions, PrepareInstanceRequest};
 pub use result::{Instance, LaunchCommandResult, LaunchedInstance, PreparedInstance};

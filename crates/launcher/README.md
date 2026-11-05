@@ -162,7 +162,7 @@ The default storage root is `.minecraft`, and the builder creates a shared
 downloader automatically. Applications can override either:
 
 ```rust
-use elemental_infra::downloader::core::ElementalDownloader;
+use elemental_infra::downloader::ElementalDownloader;
 use elemental_launcher::Launcher;
 
 let launcher = Launcher::builder()

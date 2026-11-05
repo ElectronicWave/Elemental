@@ -33,6 +33,7 @@ object = ["dep:elemental-object"]
 object-notify = ["elemental-object/notify"]
 
 infra = ["dep:elemental-infra"]
+infra-serde = ["infra", "elemental-infra/serde"]
 
 schema = ["dep:elemental-schema"]
 

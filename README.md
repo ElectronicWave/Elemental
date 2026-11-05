@@ -211,13 +211,15 @@ Forwarded features:
 | --- | --- |
 | `shared-json` | Enables `elemental-shared/json` |
 | `shared-toml` | Enables `elemental-shared/toml` |
+| `infra-serde` | Enables `elemental-infra/serde` |
 | `object-notify` | Enables `elemental-object/notify` |
 
 > [!IMPORTANT]
 > Forwarded features do not enable the facade module itself. With
 > `default-features = false`, enable both `shared` and `shared-json` when using
 > JSON persistence, `shared` and `shared-toml` for TOML, and `object` plus
-> `object-notify` when waiter support is required.
+> `object-notify` when waiter support is required. Enable both `infra` and
+> `infra-serde` when downloader events or reports need serialization.
 
 ## Documentation
 

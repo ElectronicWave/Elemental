@@ -40,12 +40,12 @@ Rust applications.
 
 ## Support Matrix
 
-| Family | Drivers | Catalog | Inspect | Install | Load installed | Launch |
-| --- | --- | :---: | :---: | :---: | :---: | :---: |
-| Vanilla | Vanilla | Yes | Yes | Yes | Yes | Yes |
-| Fabric ecosystem | Fabric, Legacy Fabric, Babric, Quilt | Yes | Yes | Yes | Yes | Yes |
-| Installer-driven | Forge, NeoForge, CleanroomMC | Yes | Yes | Yes | Yes | Yes |
-| Profiled legacy | Rift, LiteLoader | Yes | Yes | Yes | Yes | Yes |
+| Family | Drivers                                | Catalog | Inspect | Install | Load installed | Launch |
+| --- |----------------------------------------| :---: | :---: | :---: | :---: | :---: |
+| Vanilla | Vanilla                                | Yes | Yes | Yes | Yes | Yes |
+| Fabric ecosystem | Fabric, Legacy Fabric, Babric, Quilt   | Yes | Yes | Yes | Yes | Yes |
+| Installer-driven | Forge, NeoForge, CleanroomMC, Outlands | Yes | Yes | Yes | Yes | Yes |
+| Profiled legacy | Rift, LiteLoader                       | Yes | Yes | Yes | Yes | Yes |
 
 ## Requirements
 

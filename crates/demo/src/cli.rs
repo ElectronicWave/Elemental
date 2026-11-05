@@ -7,6 +7,7 @@ use elemental::driver::loader_version::LoaderVersionId;
 use crate::config::{DemoCommand, DemoConfig, DemoDriver};
 
 const CLEANROOM_DEMO_RUNTIME_MAJOR_VERSION: usize = 25;
+const OUTLANDS_DEMO_RUNTIME_MAJOR_VERSION: usize = 25;
 
 #[derive(Debug, Parser)]
 #[command(name = "demo", about = "Elemental demo CLI")]
@@ -34,6 +35,7 @@ enum DemoCliCommand {
     Rift(LoaderArgs),
     Forge(LoaderArgs),
     Cleanroom(LoaderArgs),
+    Outlands(LoaderArgs),
     #[command(name = "neoforge", alias = "neo-forge")]
     NeoForge(LoaderArgs),
 }
@@ -127,6 +129,9 @@ impl Cli {
             )),
             DemoCliCommand::Cleanroom(arguments) => DemoCommand::Launch(build_loader_config(
                 cleanroom_config_input(local_only, storage_root, arguments),
+            )),
+            DemoCliCommand::Outlands(arguments) => DemoCommand::Launch(build_loader_config(
+                outlands_config_input(local_only, storage_root, arguments),
             )),
             DemoCliCommand::NeoForge(arguments) => DemoCommand::Launch(build_loader_config(
                 loader_config_input(local_only, storage_root, DemoDriver::NeoForge, arguments),
@@ -240,6 +245,38 @@ fn cleanroom_config_input(
     }
 }
 
+fn outlands_config_input(
+    local_only: bool,
+    storage_root: PathBuf,
+    arguments: LoaderArgs,
+) -> LoaderConfigInput {
+    let LoaderArgs {
+        runtime_major_version,
+        runtime_validation,
+        runtime_paths,
+        runtime_executable_path,
+        game_version,
+        loader_version,
+        instance_name,
+    } = arguments;
+
+    LoaderConfigInput {
+        driver: DemoDriver::Outlands,
+        local_only,
+        common: CommonConfigInput {
+            storage_root,
+            runtime_major_version: runtime_major_version
+                .or(Some(OUTLANDS_DEMO_RUNTIME_MAJOR_VERSION)),
+            runtime_validation: runtime_validation.into_runtime_validation_mode(),
+            runtime_paths,
+            runtime_executable_path,
+            game_version: game_version.map(MinecraftVersionId::from),
+            instance_name,
+        },
+        loader_version: loader_version.map(LoaderVersionId::from),
+    }
+}
+
 fn build_vanilla_config(local_only: bool, input: CommonConfigInput) -> DemoConfig {
     let resolved_game_version = input
         .game_version
@@ -298,6 +335,7 @@ fn default_loader_game_version(
         DemoDriver::Rift => MinecraftVersionId::from("1.13.2"),
         DemoDriver::Forge => MinecraftVersionId::from("1.20.1"),
         DemoDriver::Cleanroom => MinecraftVersionId::from("1.12.2"),
+        DemoDriver::Outlands => MinecraftVersionId::from("1.12.2"),
         DemoDriver::NeoForge => MinecraftVersionId::from("1.21.1"),
         DemoDriver::Vanilla => unreachable!("vanilla is handled separately"),
     })
@@ -316,6 +354,7 @@ fn default_loader_version(
         DemoDriver::Rift => LoaderVersionId::from("1.0.4-106"),
         DemoDriver::Forge => LoaderVersionId::from("47.3.1"),
         DemoDriver::Cleanroom => LoaderVersionId::from("0.5.8-alpha"),
+        DemoDriver::Outlands => LoaderVersionId::from("2026.11.05"), // ALPHA SUPPORTING
         DemoDriver::NeoForge => LoaderVersionId::from("21.1.199"),
         DemoDriver::Vanilla => unreachable!("vanilla is handled separately"),
     })
@@ -331,6 +370,7 @@ fn default_loader_instance_name(driver: DemoDriver, game_version: &MinecraftVers
         DemoDriver::Rift => format!("MyRift-{game_version}"),
         DemoDriver::Forge => format!("MyForge-{game_version}"),
         DemoDriver::Cleanroom => format!("MyCleanroom-{game_version}"),
+        DemoDriver::Outlands => format!("MyOutlands-{game_version}"),
         DemoDriver::NeoForge => format!("MyNeoForge-{game_version}"),
         DemoDriver::Vanilla => unreachable!("vanilla is handled separately"),
     }

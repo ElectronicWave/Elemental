@@ -1,12 +1,13 @@
 [package]
 name = "elemental-infra"
-version = "0.2.0"
-edition = "2024"
-repository = "https://github.com/ElectronicWave/Elemental"
-homepage = "https://github.com/ElectronicWave/Elemental"
 documentation = "https://docs.rs/elemental-infra"
 description = "Infrastructure library for Elemental, providing some infra objects such as downloaders, file utilities, and other common tools used across the project."
-license = "AGPL-3.0-only"
+
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
 
 [dependencies]
 reqwest = { workspace = true }
@@ -18,5 +19,6 @@ async-trait = { workspace = true }
 futures = { workspace = true }
 scc = { workspace = true }
 tokio-util = { version = "0.7.17", default-features = false, features = ["rt"] }
-sha1_smol = { workspace = true }
+sha1 = { workspace = true }
+hex = { workspace = true }
 zip = { version = "9.0.0", default-features = false, features = ["deflate"] }

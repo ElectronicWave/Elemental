@@ -59,6 +59,7 @@ pub trait InstallerFamily: Clone + Copy + Debug + Send + Sync + 'static {
     type Endpoints: InstallerArtifactEndpoints;
 
     const FAMILY_NAME: &'static str;
+    const LOADER_VERSION_PREFIX: &'static str;
 
     fn source_endpoints(source: &Self::Source) -> &Self::Endpoints {
         source.endpoints()
@@ -79,7 +80,17 @@ pub trait InstallerFamily: Clone + Copy + Debug + Send + Sync + 'static {
     fn profile_identity(
         install_profile: &ForgeInstallerProfile,
     ) -> Result<(String, LoaderVersionId)> {
-        profile_game_and_raw_loader_version(install_profile, Self::FAMILY_NAME, Self::FAMILY_NAME)
+        let (game_version, raw_version) = profile_game_and_raw_loader_version(
+            install_profile,
+            Self::FAMILY_NAME,
+            Self::FAMILY_NAME,
+        )?;
+        let loader_version = normalize_profile_loader_version(
+            raw_version.as_str(),
+            game_version.as_str(),
+            Self::LOADER_VERSION_PREFIX,
+        );
+        Ok((game_version, LoaderVersionId::from(loader_version)))
     }
 
     fn normalize_libraries(
@@ -105,6 +116,21 @@ pub trait InstallerFamily: Clone + Copy + Debug + Send + Sync + 'static {
     fn default_artifact_url(endpoints: &Self::Endpoints, artifact_path: &str) -> Result<String> {
         endpoints.artifact_url(artifact_path)
     }
+}
+
+fn normalize_profile_loader_version<'a>(
+    raw_version: &'a str,
+    game_version: &str,
+    loader_prefix: &str,
+) -> &'a str {
+    let without_game = raw_version
+        .strip_prefix(game_version)
+        .and_then(|version| version.strip_prefix('-'))
+        .unwrap_or(raw_version);
+
+    without_game
+        .split_once(loader_prefix)
+        .map_or(without_game, |(_, loader_version)| loader_version)
 }
 
 #[derive(Debug, Clone)]
@@ -171,7 +197,7 @@ where
             return F::default_artifact_url(&self.endpoints, artifact_path);
         }
 
-        F::rewrite_upstream(&self.endpoints, raw_url)
+        self.rewrite_upstream(raw_url)
     }
 }
 

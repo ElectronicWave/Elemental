@@ -1,12 +1,13 @@
 [package]
 name = "elemental-object"
-version = "0.2.0"
-edition = "2024"
-repository = "https://github.com/ElectronicWave/Elemental"
-homepage = "https://github.com/ElectronicWave/Elemental"
 documentation = "https://docs.rs/elemental-object"
 description = "TypeId-based object pool for hotreloadable, cross-runtime shared state management."
-license = "AGPL-3.0-only"
+
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
+license.workspace = true
 
 [dependencies]
 scc = { workspace = true }

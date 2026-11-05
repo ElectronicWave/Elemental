@@ -4,13 +4,20 @@ use crate::{
     families::installer::{
         InstallerFamilyDriver, InstallerFamilyDriverSpec, LaunchedInstallerFamilyVersion,
     },
+    inspect::{LibraryPrefixSet, ProfileIdPattern, ProfiledDriverIdentity},
 };
 
 pub type ForgeDriver = InstallerFamilyDriver<ForgeFamily>;
 pub type LaunchedForgeVersion<L, VL> = LaunchedInstallerFamilyVersion<ForgeFamily, L, VL>;
 
-impl InstallerFamilyDriverSpec for ForgeFamily {
-    const DRIVER: crate::driver::DriverDescriptor = FORGE_DRIVER;
+const FORGE_LIBRARIES: LibraryPrefixSet = LibraryPrefixSet::new(&["net.minecraftforge:fmlloader:"]);
+const FORGE_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(
+    FORGE_DRIVER,
+    FORGE_LIBRARIES,
+    FORGE_LIBRARIES,
+    ProfileIdPattern::new("-forge-"),
+);
 
-    const INSPECT_PREFIXES: &'static [&'static str] = &["net.minecraftforge:fmlloader:"];
+impl InstallerFamilyDriverSpec for ForgeFamily {
+    const IDENTITY: ProfiledDriverIdentity = FORGE_IDENTITY;
 }

@@ -65,24 +65,73 @@ impl LibraryPrefixSet {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProfileIdPattern {
     separator: &'static str,
+    form: ProfileIdForm,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProfileIdForm {
+    GameAndLoader,
+    LoaderPrefixed,
 }
 
 impl ProfileIdPattern {
     pub const fn new(separator: &'static str) -> Self {
-        Self { separator }
+        Self {
+            separator,
+            form: ProfileIdForm::GameAndLoader,
+        }
+    }
+
+    pub const fn loader_prefixed(separator: &'static str) -> Self {
+        Self {
+            separator,
+            form: ProfileIdForm::LoaderPrefixed,
+        }
     }
 
     pub fn build(self, game_version: &str, loader_version: &str) -> String {
-        format!("{game_version}{}{loader_version}", self.separator)
+        match self.form {
+            ProfileIdForm::GameAndLoader => {
+                format!("{game_version}{}{loader_version}", self.separator)
+            }
+            ProfileIdForm::LoaderPrefixed => format!("{}{loader_version}", self.separator),
+        }
     }
 
     pub fn loader_version(self, metadata_id: &str) -> Option<String> {
-        metadata_id
-            .split_once(self.separator)
-            .map(|(_, loader_version)| loader_version.to_owned())
+        let loader_version = match self.form {
+            ProfileIdForm::GameAndLoader => metadata_id
+                .split_once(self.separator)
+                .map(|(_, loader_version)| loader_version),
+            ProfileIdForm::LoaderPrefixed => metadata_id.strip_prefix(self.separator),
+        };
+
+        loader_version
+            .filter(|loader_version| !loader_version.is_empty())
+            .map(ToOwned::to_owned)
     }
 }
 
+/// Identity of a driver whose installed loader version can be recovered from
+/// version JSON metadata.
+///
+/// To support a new driver:
+/// - Set `descriptor` to the driver's `DriverDescriptor`.
+/// - Put Maven coordinates that only appear when the loader is installed in
+///   `markers`. If the loader leaves no such library behind, matching falls back
+///   to the profile id shape.
+/// - Put the coordinates that carry the installed loader version in
+///   `version_libraries`. Coordinates that merely prove the loader is present
+///   must stay in `markers`, not here.
+/// - Describe the profile id with `ProfileIdPattern`: use `ProfileIdPattern::new`
+///   for `<game><separator><loader>` ids and `ProfileIdPattern::loader_prefixed`
+///   for `<prefix><loader>` ids.
+/// - Add `with_stale_markers` when a legacy coordinate must force a metadata
+///   refresh.
+///
+/// Version lookup prefers `version_libraries` and falls back to the profile id.
+/// The shared installer/version-json inspection path consumes this identity
+/// directly, so a driver does not need to override `inspect_installed`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProfiledDriverIdentity {
     descriptor: DriverDescriptor,
@@ -113,6 +162,10 @@ impl ProfiledDriverIdentity {
             stale_markers: Some(stale_markers),
             ..self
         }
+    }
+
+    pub fn descriptor(self) -> DriverDescriptor {
+        self.descriptor
     }
 
     pub fn build_profile_id(self, game_version: &str, loader_version: &str) -> String {

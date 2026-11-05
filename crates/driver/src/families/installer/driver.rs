@@ -24,13 +24,12 @@ use crate::{
             build_version_json_launch_command, launch_wrapped_version,
         },
     },
-    inspect::{InstanceProbe, LibraryPrefixSet},
+    inspect::{InstanceProbe, ProfiledDriverIdentity},
     loader_version::LoaderVersionId,
 };
 
 pub trait InstallerFamilyDriverSpec: InstallerFamily {
-    const DRIVER: DriverDescriptor;
-    const INSPECT_PREFIXES: &'static [&'static str];
+    const IDENTITY: ProfiledDriverIdentity;
 }
 
 #[derive(Debug, Clone)]
@@ -205,7 +204,7 @@ where
     VL: Layout,
 {
     fn descriptor(&self) -> DriverDescriptor {
-        F::DRIVER
+        F::IDENTITY.descriptor()
     }
 
     async fn inspect(&self, probe: &InstanceProbe<L, VL>) -> Result<Option<InstalledDriver>> {
@@ -213,6 +212,6 @@ where
             return Ok(None);
         };
 
-        Ok(LibraryPrefixSet::new(F::INSPECT_PREFIXES).installed_driver(metadata, F::DRIVER))
+        Ok(F::IDENTITY.inspect_installed(metadata))
     }
 }

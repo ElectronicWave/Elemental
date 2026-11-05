@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, sync::Arc};
+use std::marker::PhantomData;
 
 use crate::error::Result;
 use async_trait::async_trait;
@@ -9,7 +9,7 @@ use elemental_core::{
     runtime::distribution::Distribution,
     storage::{Storage, layout::Layout},
 };
-use elemental_infra::downloader::core::ElementalDownloader;
+use elemental_infra::downloader::core::DownloadSession;
 
 use crate::{
     driver::{Driver, DriverDescriptor, InstalledDriver},
@@ -39,7 +39,6 @@ where
 {
     source: F::Source,
     vanilla_source: VanillaSource,
-    downloader: Arc<ElementalDownloader>,
     family: PhantomData<F>,
 }
 
@@ -58,21 +57,17 @@ impl<F> InstallerFamilyDriver<F>
 where
     F: InstallerFamilyDriverSpec,
 {
-    pub fn new(
-        source: F::Source,
-        vanilla_source: VanillaSource,
-        downloader: Arc<ElementalDownloader>,
-    ) -> Self {
+    pub fn new(source: F::Source, vanilla_source: VanillaSource) -> Self {
         Self {
             source,
             vanilla_source,
-            downloader,
             family: PhantomData,
         }
     }
 
     pub async fn prepare<L, VL>(
         &self,
+        session: &DownloadSession,
         instance: &Storage<VL, Storage<L>>,
         game_version: MinecraftVersionId,
         loader_version: LoaderVersionId,
@@ -82,6 +77,7 @@ where
         VL: VersionJsonInstanceLayout + Clone,
     {
         self.prepare_with_config(
+            session,
             instance,
             game_version,
             loader_version,
@@ -92,6 +88,7 @@ where
 
     pub async fn prepare_with_config<L, VL>(
         &self,
+        session: &DownloadSession,
         instance: &Storage<VL, Storage<L>>,
         game_version: MinecraftVersionId,
         loader_version: LoaderVersionId,
@@ -108,7 +105,7 @@ where
             loader_version,
         )?
         .prepare(
-            self.downloader.as_ref(),
+            session,
             &self.vanilla_source,
             &self.remote_resolver(),
             config.runtime_executable_path.as_deref(),
@@ -187,11 +184,7 @@ where
     F::Source: Default,
 {
     pub fn with_defaults() -> Result<Self> {
-        Ok(Self::new(
-            F::Source::default(),
-            VanillaSource::default(),
-            ElementalDownloader::new(),
-        ))
+        Ok(Self::new(F::Source::default(), VanillaSource::default()))
     }
 }
 

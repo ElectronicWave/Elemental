@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::error::Result;
 use async_trait::async_trait;
 use elemental_core::{
@@ -9,7 +7,7 @@ use elemental_core::{
     runtime::distribution::Distribution,
     storage::{Storage, layout::Layout},
 };
-use elemental_infra::downloader::core::ElementalDownloader;
+use elemental_infra::downloader::core::DownloadSession;
 use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::{
@@ -40,19 +38,15 @@ const LOADER_MARKERS: LibraryPrefixSet = LibraryPrefixSet::new(&[
 
 pub struct VanillaDriver {
     source: VanillaSource,
-    downloader: Arc<ElementalDownloader>,
 }
 
 impl VanillaDriver {
-    pub fn new(source: VanillaSource, downloader: Arc<ElementalDownloader>) -> Self {
-        Self { source, downloader }
+    pub fn new(source: VanillaSource) -> Self {
+        Self { source }
     }
 
     pub fn with_defaults() -> Result<Self> {
-        Ok(Self::new(
-            VanillaSource::default(),
-            ElementalDownloader::new(),
-        ))
+        Ok(Self::new(VanillaSource::default()))
     }
 
     pub async fn prepare<
@@ -60,13 +54,11 @@ impl VanillaDriver {
         VL: VersionJsonInstanceLayout + Clone,
     >(
         &self,
+        session: &DownloadSession,
         instance: &Storage<VL, Storage<L>>,
         version_id: MinecraftVersionId,
     ) -> Result<PreparedVanillaVersion<L, VL>> {
-        prepare_version_json(self.downloader.as_ref(), || {
-            self.resolve_or_load(instance, version_id)
-        })
-        .await
+        prepare_version_json(session, || self.resolve_or_load(instance, version_id)).await
     }
 
     pub async fn load_prepared<

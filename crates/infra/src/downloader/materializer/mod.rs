@@ -76,10 +76,6 @@ pub(super) async fn replace_file(source_path: &Path, target_path: &Path) -> Resu
         })?;
     create_dir_all(parent).await?;
 
-    if tokio::fs::metadata(target_path).await.is_ok() {
-        tokio::fs::remove_file(target_path).await?;
-    }
-
     tokio::fs::rename(source_path, target_path).await?;
     Ok(())
 }

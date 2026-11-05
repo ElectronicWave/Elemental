@@ -125,6 +125,7 @@ pub async fn target_matches_task(path: &Path, task: &DownloadTask) -> Result<boo
 
     match validate_file(path, &validation).await {
         Ok(()) => Ok(true),
-        Err(_) => Ok(false),
+        Err(Error::SizeMismatch { .. } | Error::Sha1Mismatch { .. }) => Ok(false),
+        Err(error) => Err(error),
     }
 }

@@ -7,7 +7,7 @@ use std::{
 use elemental_core::minecraft::MinecraftVersionId;
 use elemental_core::runtime::RuntimeValidationMode;
 use elemental_core::storage::{Storage, layout::Layoutable};
-use elemental_infra::downloader::core::ElementalDownloader;
+use elemental_infra::downloader::core::DownloadSession;
 use elemental_schema::{forge::ForgeInstallerProfile, mojang::piston::PistonMetaLibraries};
 
 use crate::{
@@ -18,12 +18,12 @@ use crate::{
     families::{
         installer::{
             InstallerArtifact, InstallerInstallStatus, InstallerLaunchVersionRequest,
-            ensure_installer_profile_libraries_downloaded, installer_has_client_processors,
-            installer_install_status, load_persisted_installer_state,
-            merge_libraries_prefer_embedded, normalize_library_urls,
-            prepare_installer_launch_version, prepare_installer_state,
+            installer_has_client_processors, installer_install_status,
+            load_persisted_installer_state, merge_libraries_prefer_embedded,
+            normalize_library_urls, persist_installer_launch_version, prepare_installer_state,
             profile_game_and_raw_loader_version, resolve_installer_processor_runtime,
-            run_installer_client_processors, validate_installer_profile_identity,
+            run_installer_client_processors, submit_installer_profile_libraries,
+            validate_installer_profile_identity,
         },
         version_json::{
             PreparedVersionJsonInstance, ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata,
@@ -265,48 +265,58 @@ where
 {
     pub async fn prepare(
         &self,
-        downloader: &ElementalDownloader,
+        session: &DownloadSession,
         vanilla_source: &VanillaSource,
         remote_resolver: &InstallerFamilyRemoteResolver<F>,
         runtime_executable_path: Option<&Path>,
         runtime_validation: RuntimeValidationMode,
     ) -> Result<PreparedInstallerFamilyVersion<F, L, VL>> {
-        let libraries_root = self
-            .instance
-            .parent
-            .try_get_resource(VersionJsonRootResource::Libraries(None))?;
-        let installer_state = prepare_installer_state(
-            downloader,
-            &self.installer_artifact,
-            &self.instance.path,
-            &libraries_root,
-            F::FAMILY_NAME,
-            |install_profile| self.validate_profile_identity(install_profile),
-        )
-        .await?;
+        let (installer_state, launch_version) = async {
+            let libraries_root = self
+                .instance
+                .parent
+                .try_get_resource(VersionJsonRootResource::Libraries(None))?;
+            let installer_state = prepare_installer_state(
+                &session,
+                &self.installer_artifact,
+                &self.instance.path,
+                &libraries_root,
+                F::FAMILY_NAME,
+                |install_profile| self.validate_profile_identity(install_profile),
+            )
+            .await?;
 
-        let endpoints = F::source_endpoints(&self.source);
-        let launch_version = prepare_installer_launch_version(InstallerLaunchVersionRequest {
-            instance: &self.instance,
-            game_version: &self.game_version,
-            remote_resolver,
-            downloader,
-            vanilla_source,
-            embedded_version: installer_state.embedded_version.as_ref(),
-            normalize_libraries: |libraries| F::normalize_libraries(endpoints, libraries),
-            merge_libraries: F::merge_libraries,
-            family_name: F::FAMILY_NAME,
-        })
-        .await?;
+            let endpoints = F::source_endpoints(&self.source);
+            let launch_version = persist_installer_launch_version(InstallerLaunchVersionRequest {
+                instance: &self.instance,
+                game_version: &self.game_version,
+                remote_resolver,
+                vanilla_source,
+                embedded_version: installer_state.embedded_version.as_ref(),
+                normalize_libraries: |libraries| F::normalize_libraries(endpoints, libraries),
+                merge_libraries: F::merge_libraries,
+                family_name: F::FAMILY_NAME,
+            })
+            .await?;
 
-        ensure_installer_profile_libraries_downloaded(
-            downloader,
-            &self.instance,
-            &installer_state.install_profile,
-            F::FAMILY_NAME,
-            |raw_url, artifact_path| remote_resolver.artifact_url(raw_url, artifact_path),
-        )
+            launch_version.submit_install_batches(&session).await?;
+
+            submit_installer_profile_libraries(
+                &session,
+                &self.instance,
+                &installer_state.install_profile,
+                F::FAMILY_NAME,
+                |raw_url, artifact_path| remote_resolver.artifact_url(raw_url, artifact_path),
+            )
+            .await?;
+
+            session.wait_idle().await?;
+            Ok::<_, Error>((installer_state, launch_version))
+        }
         .await?;
+        session.success().await?;
+
+        let launch_version = launch_version.finish_preparation().await?;
 
         if installer_has_client_processors(&installer_state.install_profile) {
             let processor_operation_name = format!("{} processors", F::FAMILY_NAME);

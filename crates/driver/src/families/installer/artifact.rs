@@ -20,12 +20,14 @@ pub struct InstallerArtifact {
 
 impl InstallerArtifact {
     pub fn download_task(&self) -> DownloadTask {
-        DownloadTask::new(
-            self.url.clone(),
-            self.path.clone(),
-            self.expected_size,
-            self.sha1.clone(),
-        )
+        let mut task = DownloadTask::new(self.url.clone(), self.path.clone());
+        if let Some(expected_size) = self.expected_size {
+            task = task.size(expected_size);
+        }
+        if let Some(sha1) = &self.sha1 {
+            task = task.sha1(sha1.clone());
+        }
+        task
     }
 }
 

@@ -1,6 +1,6 @@
 use std::{error::Error as StdError, io, path::PathBuf};
 
-use crate::downloader::core::{TaskExecutionFailure, TaskId};
+use crate::downloader::core::{DownloadFailure, TaskId};
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -17,9 +17,6 @@ pub enum Error {
     #[error("HTTP request failed: {0}")]
     Http(#[from] reqwest::Error),
 
-    #[error("planner failed: {0}")]
-    Planner(#[source] Box<dyn std::error::Error + Send + Sync>),
-
     #[error("downloader max_connections must be greater than zero")]
     InvalidMaxConnections,
 
@@ -29,8 +26,8 @@ pub enum Error {
     #[error("downloader session_queue_capacity must be greater than zero")]
     InvalidSessionQueueCapacity,
 
-    #[error("download session parallelism must be greater than zero")]
-    InvalidSessionRequestParallelism,
+    #[error("downloader retry policy requires max_attempts > 0 and max_backoff >= initial_backoff")]
+    InvalidRetryPolicy,
 
     #[error("downloader was dropped unexpectedly")]
     DownloaderDropped,
@@ -40,6 +37,11 @@ pub enum Error {
 
     #[error("download session '{session_id}' not found")]
     SessionNotFound { session_id: u64 },
+
+    #[error(
+        "download session '{session_id}' is not accepting new tasks because an earlier task failed"
+    )]
+    SessionNotAcceptingTasks { session_id: u64 },
 
     #[error("download session is closed")]
     SessionSenderClosed,
@@ -57,7 +59,7 @@ pub enum Error {
     #[error("download session '{session}' failed:\n{}", format_failures(failures))]
     SessionFailed {
         session: String,
-        failures: Vec<TaskExecutionFailure>,
+        failures: Vec<DownloadFailure>,
     },
 
     #[error(
@@ -113,10 +115,10 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-fn format_failures(failures: &[TaskExecutionFailure]) -> String {
+fn format_failures(failures: &[DownloadFailure]) -> String {
     failures
         .iter()
-        .map(|failure| format!("{}: {}", failure.task_id, failure.error))
+        .map(|failure| format!("{}: {}", failure.task_id, failure.summary()))
         .collect::<Vec<String>>()
         .join("\n")
 }

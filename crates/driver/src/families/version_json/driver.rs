@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::error::Result;
 use async_trait::async_trait;
 use elemental_core::{
@@ -9,7 +7,7 @@ use elemental_core::{
     runtime::distribution::Distribution,
     storage::{Storage, layout::Layout},
 };
-use elemental_infra::downloader::core::ElementalDownloader;
+use elemental_infra::downloader::core::DownloadSession;
 
 use crate::{
     driver::{Driver, DriverDescriptor, InstalledDriver},
@@ -34,24 +32,17 @@ where
     family: F,
     source: F::Source,
     vanilla_source: VanillaSource,
-    downloader: Arc<ElementalDownloader>,
 }
 
 impl<F> ProfiledVersionJsonDriver<F>
 where
     F: ProfiledVersionJsonFamily,
 {
-    pub fn new(
-        family: F,
-        source: F::Source,
-        vanilla_source: VanillaSource,
-        downloader: Arc<ElementalDownloader>,
-    ) -> Self {
+    pub fn new(family: F, source: F::Source, vanilla_source: VanillaSource) -> Self {
         Self {
             family,
             source,
             vanilla_source,
-            downloader,
         }
     }
 
@@ -60,12 +51,12 @@ where
             family.clone(),
             family.default_source()?,
             VanillaSource::default(),
-            ElementalDownloader::new(),
         ))
     }
 
     pub async fn prepare<L, VL>(
         &self,
+        session: &DownloadSession,
         instance: &Storage<VL, Storage<L>>,
         game_version: MinecraftVersionId,
         loader_version: LoaderVersionId,
@@ -74,7 +65,7 @@ where
         L: VersionJsonRootLayout + Clone,
         VL: VersionJsonInstanceLayout + Clone,
     {
-        prepare_version_json(self.downloader.as_ref(), || {
+        prepare_version_json(session, || {
             self.resolve_or_load(instance, game_version, loader_version)
         })
         .await

@@ -48,11 +48,25 @@ async fn run_launch(config: DemoConfig) -> Result<()> {
         )
         .await?
     } else {
-        time_operation(launcher.prepare_instance(PrepareInstanceRequest {
-            instance_name: request_instance_name,
-            driver: request_driver,
-        }))
-        .await?
+        let session = launcher
+            .downloader()
+            .session(format!("prepare {request_instance_name}"))
+            .open()
+            .await?;
+        let started_at = std::time::Instant::now();
+        let result = launcher
+            .prepare_instance(
+                &session,
+                PrepareInstanceRequest {
+                    instance_name: request_instance_name,
+                    driver: request_driver,
+                },
+            )
+            .await;
+        let report = session.finish().await?;
+        let prepared = result?;
+        report.success()?;
+        (prepared, started_at.elapsed())
     };
 
     let command_result = launcher

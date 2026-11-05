@@ -105,15 +105,25 @@ async fn main() -> Result<()> {
     let launcher = Launcher::builder()
         .storage_root(".minecraft")
         .build();
+    let session = launcher
+        .downloader()
+        .session("prepare Vanilla-1.20.1")
+        .open()
+        .await?;
 
     let prepared = launcher
-        .prepare_instance(PrepareInstanceRequest {
-            instance_name: "Vanilla-1.20.1".to_owned(),
-            driver: DriverSpec::Vanilla(VanillaSpec {
-                game_version: "1.20.1".into(),
-            }),
-        })
+        .prepare_instance(
+            &session,
+            PrepareInstanceRequest {
+                instance_name: "Vanilla-1.20.1".to_owned(),
+                driver: DriverSpec::Vanilla(VanillaSpec {
+                    game_version: "1.20.1".into(),
+                }),
+            },
+        )
         .await?;
+    let report = session.finish().await?;
+    report.success()?;
 
     let mut game = launcher
         .launch_prepared_instance(

@@ -1,9 +1,8 @@
-use std::{fmt::Debug, sync::Arc};
+use std::fmt::Debug;
 
 use crate::error::Result;
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
-use elemental_infra::downloader::core::ElementalDownloader;
 use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::{
@@ -58,9 +57,8 @@ pub trait ProfiledVersionJsonFamilyExt: ProfiledVersionJsonFamily + Sized {
         self,
         source: Self::Source,
         vanilla_source: VanillaSource,
-        downloader: Arc<ElementalDownloader>,
     ) -> ProfiledVersionJsonDriver<Self> {
-        ProfiledVersionJsonDriver::new(self, source, vanilla_source, downloader)
+        ProfiledVersionJsonDriver::new(self, source, vanilla_source)
     }
 
     fn build_driver_with_defaults(self) -> Result<ProfiledVersionJsonDriver<Self>> {

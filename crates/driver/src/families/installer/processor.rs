@@ -9,8 +9,8 @@ use elemental_core::{
 };
 use elemental_infra::{
     downloader::{
-        core::ElementalDownloader,
-        task::{DownloadExecutionPolicy, DownloadPlan, DownloadTask},
+        core::DownloadSession,
+        task::{DownloadBatch, DownloadTask},
     },
     jar::JarFile,
 };
@@ -40,8 +40,8 @@ const CLIENT_PROCESSOR_DATA_KEYS: &[&str] = &[
     "PATCHED",
 ];
 
-pub async fn ensure_installer_profile_libraries_downloaded<L, VL, F>(
-    downloader: &ElementalDownloader,
+pub async fn submit_installer_profile_libraries<L, VL, F>(
+    session: &DownloadSession,
     instance: &Storage<VL, Storage<L>>,
     install_profile: &ForgeInstallerProfile,
     family_name: &str,
@@ -58,19 +58,13 @@ where
         return Ok(());
     }
 
-    downloader
-        .run_plan(DownloadPlan::named(
-            format!("{family_name}-install-profile"),
-            DownloadExecutionPolicy::ServiceDefault,
-            tasks,
-        )?)
+    session
+        .submit(DownloadBatch::new(tasks).group("profile-libraries"))
         .await
         .map_err(|source| Error::DownloadInstallerProfileLibraries {
             family_name: family_name.to_owned(),
             source,
-        })?;
-
-    Ok(())
+        })
 }
 
 pub async fn run_installer_client_processors<L, VL>(
@@ -183,12 +177,17 @@ where
             continue;
         }
 
-        tasks.push(DownloadTask::new(
+        let mut task = DownloadTask::new(
             artifact_url(artifact.url.as_str(), artifact.path.as_str())?,
             path,
-            artifact.size.map(|size| size as u64),
-            artifact.sha1.clone(),
-        ));
+        );
+        if let Some(size) = artifact.size {
+            task = task.size(size as u64);
+        }
+        if let Some(sha1) = &artifact.sha1 {
+            task = task.sha1(sha1.clone());
+        }
+        tasks.push(task);
     }
 
     Ok(tasks)

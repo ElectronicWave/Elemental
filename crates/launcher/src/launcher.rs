@@ -35,7 +35,7 @@ use elemental_driver::{
     },
     inspect::InstalledInstance,
 };
-use elemental_infra::downloader::core::ElementalDownloader;
+use elemental_infra::downloader::core::{DownloadSession, ElementalDownloader};
 
 use crate::{
     builder::LauncherBuilder,
@@ -155,13 +155,14 @@ where
 
     pub async fn prepare_instance(
         &self,
+        session: &DownloadSession,
         request: PrepareInstanceRequest,
     ) -> Result<PreparedInstance<L, VL>> {
         let instance = self.ensure_instance(request.instance_name).await?;
         let driver_spec = request.driver;
         let prepared_kind = self
             .resolve_driver(driver_spec.descriptor())?
-            .prepare(&instance, &driver_spec)
+            .prepare(session, &instance, &driver_spec)
             .await?;
         Ok(PreparedInstance::new(
             driver_spec.descriptor(),
@@ -234,18 +235,16 @@ where
     }
 
     fn vanilla_driver(&self) -> VanillaDriver {
-        VanillaDriver::new(VanillaSource::default(), self.downloader.clone())
+        VanillaDriver::new(VanillaSource::default())
     }
 
     fn profiled_driver<F>(&self, family: F) -> Result<ProfiledVersionJsonDriver<F>>
     where
         F: ProfiledVersionJsonFamily,
     {
-        Ok(family.clone().build_driver(
-            family.default_source()?,
-            VanillaSource::default(),
-            self.downloader.clone(),
-        ))
+        Ok(family
+            .clone()
+            .build_driver(family.default_source()?, VanillaSource::default()))
     }
 
     fn installer_driver<F>(&self) -> InstallerFamilyDriver<F>
@@ -253,11 +252,7 @@ where
         F: InstallerFamilyDriverSpec,
         F::Source: Default,
     {
-        InstallerFamilyDriver::new(
-            F::Source::default(),
-            VanillaSource::default(),
-            self.downloader.clone(),
-        )
+        InstallerFamilyDriver::new(F::Source::default(), VanillaSource::default())
     }
 
     fn resolve_driver(&self, desc: DriverDescriptor) -> Result<ResolvedLauncherDriver> {
@@ -292,6 +287,7 @@ where
 impl ResolvedLauncherDriver {
     async fn prepare<L, VL>(
         &self,
+        session: &DownloadSession,
         instance: &LauncherInstanceStorage<L, VL>,
         spec: &DriverSpec,
     ) -> Result<PreparedInstanceKind<L, VL>>
@@ -302,7 +298,7 @@ impl ResolvedLauncherDriver {
         match (self, spec) {
             (Self::Vanilla(driver), DriverSpec::Vanilla(vanilla_spec)) => {
                 let prepared = driver
-                    .prepare(instance, vanilla_spec.game_version.clone())
+                    .prepare(session, instance, vanilla_spec.game_version.clone())
                     .await?;
                 Ok(PreparedInstanceKind::Vanilla(prepared))
             }
@@ -311,6 +307,7 @@ impl ResolvedLauncherDriver {
             | (Self::FabricLike(driver), DriverSpec::Babric(loader_spec)) => {
                 let prepared = driver
                     .prepare(
+                        session,
                         instance,
                         loader_spec.game_version.clone(),
                         loader_spec.loader_version.clone(),
@@ -321,6 +318,7 @@ impl ResolvedLauncherDriver {
             (Self::Quilt(driver), DriverSpec::Quilt(loader_spec)) => {
                 let prepared = driver
                     .prepare(
+                        session,
                         instance,
                         loader_spec.game_version.clone(),
                         loader_spec.loader_version.clone(),
@@ -331,6 +329,7 @@ impl ResolvedLauncherDriver {
             (Self::LiteLoader(driver), DriverSpec::LiteLoader(loader_spec)) => {
                 let prepared = driver
                     .prepare(
+                        session,
                         instance,
                         loader_spec.game_version.clone(),
                         loader_spec.loader_version.clone(),
@@ -341,6 +340,7 @@ impl ResolvedLauncherDriver {
             (Self::Rift(driver), DriverSpec::Rift(loader_spec)) => {
                 let prepared = driver
                     .prepare(
+                        session,
                         instance,
                         loader_spec.game_version.clone(),
                         loader_spec.loader_version.clone(),
@@ -351,6 +351,7 @@ impl ResolvedLauncherDriver {
             (Self::Forge(driver), DriverSpec::Forge(loader_spec)) => {
                 let prepared = driver
                     .prepare(
+                        session,
                         instance,
                         loader_spec.game_version.clone(),
                         loader_spec.loader_version.clone(),
@@ -361,6 +362,7 @@ impl ResolvedLauncherDriver {
             (Self::Cleanroom(driver), DriverSpec::Cleanroom(loader_spec)) => {
                 let prepared = driver
                     .prepare(
+                        session,
                         instance,
                         loader_spec.game_version.clone(),
                         loader_spec.loader_version.clone(),
@@ -371,6 +373,7 @@ impl ResolvedLauncherDriver {
             (Self::NeoForge(driver), DriverSpec::NeoForge(loader_spec)) => {
                 let prepared = driver
                     .prepare(
+                        session,
                         instance,
                         loader_spec.game_version.clone(),
                         loader_spec.loader_version.clone(),

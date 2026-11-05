@@ -17,6 +17,7 @@ use elemental_driver::{
     driver::{Driver, DriverDescriptor},
     drivers::{
         cleanroom::driver::CleanroomDriverSpec,
+        outlands::driver::OutlandsDriverSpec,
         fabric::{driver::FabricDriverFamily, source::FabricFlavor},
         forge::prepared::ForgeFamily,
         liteloader::driver::LiteLoaderDriverFamily,
@@ -60,6 +61,7 @@ struct InspectDrivers {
     rift: ProfiledVersionJsonDriver<RiftDriverFamily>,
     forge: InstallerFamilyDriver<ForgeFamily>,
     cleanroom: InstallerFamilyDriver<CleanroomDriverSpec>,
+    outlands: InstallerFamilyDriver<OutlandsDriverSpec>,
     neoforge: InstallerFamilyDriver<NeoForgeFamily>,
 }
 
@@ -71,6 +73,7 @@ enum ResolvedLauncherDriver {
     Rift(ProfiledVersionJsonDriver<RiftDriverFamily>),
     Forge(InstallerFamilyDriver<ForgeFamily>),
     Cleanroom(InstallerFamilyDriver<CleanroomDriverSpec>),
+    Outlands(InstallerFamilyDriver<OutlandsDriverSpec>),
     NeoForge(InstallerFamilyDriver<NeoForgeFamily>),
 }
 
@@ -274,6 +277,7 @@ where
             RIFT_DRIVER => ResolvedLauncherDriver::Rift(self.profiled_driver(RiftDriverFamily)?),
             FORGE_DRIVER => ResolvedLauncherDriver::Forge(self.installer_driver()),
             CLEANROOM_DRIVER => ResolvedLauncherDriver::Cleanroom(self.installer_driver()),
+            OUTLAND_DRIVER => ResolvedLauncherDriver::Outlands(self.installer_driver()),
             NEOFORGE_DRIVER => ResolvedLauncherDriver::NeoForge(self.installer_driver()),
             _ => {
                 return Err(Error::UnsupportedDriver {
@@ -370,6 +374,16 @@ impl ResolvedLauncherDriver {
                     .await?;
                 Ok(PreparedInstanceKind::Cleanroom(prepared))
             }
+            (Self::Outlands(driver), DriverSpec::Outlands(loader_spec)) => {
+                let prepared = driver
+                    .prepare(
+                        instance,
+                        loader_spec.game_version.clone(),
+                        loader_spec.loader_version.clone(),
+                    )
+                    .await?;
+                Ok(PreparedInstanceKind::Outlands(prepared))
+            }
             (Self::NeoForge(driver), DriverSpec::NeoForge(loader_spec)) => {
                 let prepared = driver
                     .prepare(
@@ -415,6 +429,9 @@ impl ResolvedLauncherDriver {
                 driver.load_prepared(instance).await?,
             )),
             Self::Cleanroom(driver) => Ok(PreparedInstanceKind::Cleanroom(
+                driver.load_prepared(instance).await?,
+            )),
+            Self::Outlands(driver) => Ok(PreparedInstanceKind::Outlands(
                 driver.load_prepared(instance).await?,
             )),
             Self::NeoForge(driver) => Ok(PreparedInstanceKind::NeoForge(
@@ -498,6 +515,15 @@ impl ResolvedLauncherDriver {
                     .await?;
                 Ok(LaunchCommandResult { runtime, command })
             }
+            Self::Outlands(driver) => {
+                let PreparedInstanceKind::Outlands(version) = &prepared.inner else {
+                    return Err(prepared_variant_mismatch(prepared));
+                };
+                let (runtime, command) = driver
+                    .build_launch_command(authorizer, version, launch_options)
+                    .await?;
+                Ok(LaunchCommandResult { runtime, command })
+            }
             Self::NeoForge(driver) => {
                 let PreparedInstanceKind::NeoForge(version) = &prepared.inner else {
                     return Err(prepared_variant_mismatch(prepared));
@@ -538,11 +564,12 @@ impl InspectDrivers {
             rift: launcher.profiled_driver(RiftDriverFamily)?,
             forge: launcher.installer_driver::<ForgeFamily>(),
             cleanroom: launcher.installer_driver::<CleanroomDriverSpec>(),
+            outlands: launcher.installer_driver::<OutlandsDriverSpec>(),
             neoforge: launcher.installer_driver::<NeoForgeFamily>(),
         })
     }
 
-    fn as_array<L, VL>(&self) -> [&dyn Driver<L, VL>; 10]
+    fn as_array<L, VL>(&self) -> [&dyn Driver<L, VL>; 11]
     where
         L: elemental_core::storage::layout::Layout,
         VL: elemental_core::storage::layout::Layout,
@@ -556,6 +583,7 @@ impl InspectDrivers {
             &self.rift,
             &self.forge,
             &self.cleanroom,
+            &self.outlands,
             &self.neoforge,
             // Every instance could be a vanilla instance, so the vanilla driver should be last to allow other drivers to take precedence when applicable
             &self.vanilla,

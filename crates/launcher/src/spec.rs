@@ -1,8 +1,5 @@
 use elemental_core::minecraft::MinecraftVersionId;
-use elemental_driver::descriptors::{
-    BABRIC_DRIVER, CLEANROOM_DRIVER, FABRIC_DRIVER, FORGE_DRIVER, LEGACY_FABRIC_DRIVER,
-    LITELOADER_DRIVER, NEOFORGE_DRIVER, QUILT_DRIVER, RIFT_DRIVER, VANILLA_DRIVER,
-};
+use elemental_driver::descriptors::{BABRIC_DRIVER, CLEANROOM_DRIVER, FABRIC_DRIVER, FORGE_DRIVER, LEGACY_FABRIC_DRIVER, LITELOADER_DRIVER, NEOFORGE_DRIVER, OUTLANDS_DRIVER, QUILT_DRIVER, RIFT_DRIVER, VANILLA_DRIVER};
 use elemental_driver::driver::DriverDescriptor;
 use elemental_driver::loader_version::LoaderVersionId;
 
@@ -28,6 +25,7 @@ pub enum DriverSpec {
     Rift(LoaderSpec),
     Forge(LoaderSpec),
     Cleanroom(LoaderSpec),
+    Outlands(LoaderSpec),
     NeoForge(LoaderSpec),
 }
 
@@ -43,6 +41,7 @@ impl DriverSpec {
             Self::Rift(_) => RIFT_DRIVER,
             Self::Forge(_) => FORGE_DRIVER,
             Self::Cleanroom(_) => CLEANROOM_DRIVER,
+            Self::Outlands(_) => OUTLANDS_DRIVER,
             Self::NeoForge(_) => NEOFORGE_DRIVER,
         }
     }
@@ -66,6 +65,7 @@ impl DriverSpec {
             | Self::Rift(spec)
             | Self::Forge(spec)
             | Self::Cleanroom(spec)
+            | Self::Outlands(spec)
             | Self::NeoForge(spec) => &spec.game_version,
         }
     }
@@ -81,6 +81,7 @@ impl DriverSpec {
             | Self::Rift(spec)
             | Self::Forge(spec)
             | Self::Cleanroom(spec)
+            | Self::Outlands(spec)
             | Self::NeoForge(spec) => Some(&spec.loader_version),
         }
     }

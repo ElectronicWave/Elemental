@@ -14,6 +14,7 @@ pub enum DemoDriver {
     Rift,
     Forge,
     Cleanroom,
+    Outlands,
     NeoForge,
 }
 
@@ -49,6 +50,7 @@ impl DemoDriver {
             Self::Rift => "Rift",
             Self::Forge => "Forge",
             Self::Cleanroom => "Cleanroom",
+            Self::Outlands => "Outlands",
             Self::NeoForge => "NeoForge",
         }
     }

@@ -141,6 +141,10 @@ fn to_driver_spec(config: &DemoConfig) -> Result<DriverSpec> {
             game_version,
             loader_version: require_loader_version(config, "cleanroom")?,
         }),
+        DemoDriver::Outlands => DriverSpec::Outlands(LoaderSpec {
+            game_version,
+            loader_version: require_loader_version(config, "outlands")?,
+        }),
         DemoDriver::NeoForge => DriverSpec::NeoForge(LoaderSpec {
             game_version,
             loader_version: require_loader_version(config, "neoforge")?,

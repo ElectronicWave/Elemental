@@ -13,6 +13,7 @@ use elemental_driver::{
         BaseInstanceLayout, BaseRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
     },
 };
+use elemental_driver::drivers::outlands::driver::PreparedOutlandsVersion;
 
 pub struct LaunchCommandResult {
     pub runtime: Distribution,
@@ -52,6 +53,7 @@ where
     Rift(PreparedRiftVersion<L, VL>),
     Forge(PreparedForgeVersion<L, VL>),
     Cleanroom(PreparedCleanroomVersion<L, VL>),
+    Outlands(PreparedOutlandsVersion<L, VL>),
     NeoForge(PreparedNeoForgeVersion<L, VL>),
 }
 
@@ -89,6 +91,9 @@ where
                 prepared.resolved_version.instance.path.as_path()
             }
             PreparedInstanceKind::Cleanroom(prepared) => {
+                prepared.resolved_version.instance.path.as_path()
+            }
+            PreparedInstanceKind::Outlands(prepared) => {
                 prepared.resolved_version.instance.path.as_path()
             }
             PreparedInstanceKind::NeoForge(prepared) => {

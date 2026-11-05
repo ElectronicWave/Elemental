@@ -1,9 +1,9 @@
-use anyhow::{Result, bail};
-use std::path::Path;
 use sha1::{Digest, Sha1};
+use std::path::Path;
 use tokio::{fs::File, io::AsyncReadExt};
 
 use super::task::DownloadTask;
+use crate::error::{Error, Result};
 
 const VALIDATION_BUFFER_SIZE: usize = 64 * 1024;
 
@@ -58,23 +58,21 @@ impl StreamingValidator {
         if let Some(expected_size) = self.validation.expected_size
             && self.actual_size != expected_size
         {
-            bail!(
-                "downloaded file size mismatch for '{}': expected {}, got {}",
-                path.display(),
-                expected_size,
-                self.actual_size
-            );
+            return Err(Error::SizeMismatch {
+                path: path.to_path_buf(),
+                expected: expected_size,
+                actual: self.actual_size,
+            });
         }
 
         if let Some(expected_sha1) = self.validation.expected_sha1 {
             let actual_sha1 = hex::encode(self.sha1.unwrap_or_default().finalize());
             if actual_sha1 != expected_sha1 {
-                bail!(
-                    "downloaded file sha1 mismatch for '{}': expected {}, got {}",
-                    path.display(),
-                    expected_sha1,
-                    actual_sha1
-                );
+                return Err(Error::Sha1Mismatch {
+                    path: path.to_path_buf(),
+                    expected: expected_sha1,
+                    actual: actual_sha1,
+                });
             }
         }
 

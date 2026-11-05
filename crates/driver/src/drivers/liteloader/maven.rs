@@ -1,9 +1,11 @@
-use anyhow::{Context, Result, bail};
 use quick_xml::de::from_str;
 use reqwest::Url;
 use serde::Deserialize;
 
-use crate::http::fetch_text;
+use crate::{
+    error::{Error, Result},
+    http::fetch_text,
+};
 
 #[derive(Debug, Deserialize)]
 struct SnapshotMavenMetadata {
@@ -80,8 +82,12 @@ pub(super) async fn resolve_snapshot_artifact(
         "liteloader snapshot metadata",
     )
     .await?;
-    let metadata: SnapshotMavenMetadata = from_str(raw_metadata.as_str())
-        .with_context(|| format!("decode liteloader snapshot metadata failed: {metadata_url}"))?;
+    let metadata: SnapshotMavenMetadata =
+        from_str(raw_metadata.as_str()).map_err(|source| Error::DecodeMavenMetadata {
+            source_label: "liteloader snapshot metadata".to_owned(),
+            url: metadata_url,
+            source,
+        })?;
     // Snapshot repositories publish timestamped files instead of the plain -SNAPSHOT artifact name.
     let resolved_version = format!(
         "{}-{}-{}",
@@ -106,7 +112,12 @@ pub(super) fn parse_maven_notation(
     let (group, artifact, version, classifier) = match segments.as_slice() {
         [group, artifact, version] => (*group, *artifact, *version, None),
         [group, artifact, version, classifier] => (*group, *artifact, *version, Some(*classifier)),
-        _ => bail!("invalid {invalid_label} notation: {notation}"),
+        _ => {
+            return Err(Error::InvalidNotation {
+                label: invalid_label.to_owned(),
+                notation: notation.to_owned(),
+            });
+        }
     };
 
     Ok(ParsedMavenNotation {
@@ -120,14 +131,21 @@ pub(super) fn parse_maven_notation(
 
 pub(super) fn join_artifact_url(repository_base_url: &str, artifact_path: &str) -> Result<String> {
     let base =
-        Url::parse(ensure_trailing_slash(repository_base_url).as_str()).with_context(|| {
-            format!("parse LiteLoader repository url failed: {repository_base_url}")
+        Url::parse(ensure_trailing_slash(repository_base_url).as_str()).map_err(|source| {
+            Error::invalid_url(
+                "parse LiteLoader repository url failed",
+                repository_base_url,
+                source,
+            )
         })?;
 
     base.join(artifact_path)
-        .with_context(|| {
-            format!(
-                "join LiteLoader repository artifact url failed: {repository_base_url} + {artifact_path}"
+        .map_err(|source| {
+            Error::join_url(
+                "join LiteLoader repository artifact url failed",
+                repository_base_url,
+                artifact_path,
+                source,
             )
         })
         .map(|url| url.to_string())

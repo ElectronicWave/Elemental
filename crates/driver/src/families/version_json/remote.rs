@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use anyhow::Result;
+use crate::error::Result;
 
 use crate::drivers::vanilla::source::{VanillaEndpoints, rewrite_upstream_with_vanilla_fallback};
 

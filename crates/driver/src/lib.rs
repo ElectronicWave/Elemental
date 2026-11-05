@@ -2,6 +2,7 @@ pub mod catalog;
 pub mod descriptors;
 pub mod driver;
 pub mod drivers;
+pub mod error;
 pub mod families;
 mod http;
 pub mod inspect;

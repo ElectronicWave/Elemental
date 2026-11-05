@@ -5,8 +5,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::Result;
 use zip::ZipArchive;
+
+use crate::error::Result;
 
 #[derive(Debug, Clone)]
 pub struct JarFile<P: AsRef<Path>> {

@@ -1,4 +1,3 @@
-use anyhow::{Context, Result, bail};
 use futures::StreamExt;
 use reqwest::{ClientBuilder, header::HeaderMap, retry};
 use scc::HashMap;
@@ -27,6 +26,7 @@ pub use super::task::{
 use super::tracking::build_task_id;
 pub use super::tracking::{TaskId, TrackedInfo, TrackedTaskStatus};
 use super::validation::StreamingValidator;
+use crate::error::{Error, Result};
 
 #[derive(Debug)]
 pub struct ElementalDownloader {
@@ -167,9 +167,7 @@ struct ValidatedDownloaderConfig {
 
 impl DownloadSession {
     fn downloader(&self) -> Result<Arc<ElementalDownloader>> {
-        self.downloader
-            .upgrade()
-            .context("unexpected downloader drop")
+        self.downloader.upgrade().ok_or(Error::DownloaderDropped)
     }
 
     pub fn id(&self) -> SessionId {
@@ -571,7 +569,7 @@ impl ElementalDownloader {
         let session_id = self.next_session_id.fetch_add(1, Ordering::Relaxed);
         self.tracker.create_session(session_id).await?;
 
-        let downloader = self.me.upgrade().context("unexpected downloader drop")?;
+        let downloader = self.me.upgrade().ok_or(Error::DownloaderDropped)?;
         let (sender, receiver) = mpsc::channel(self.session_queue_capacity);
         let receiver = Arc::new(AsyncMutex::new(receiver));
         let parallelism = request.effective_parallelism(self.session_parallelism);
@@ -669,7 +667,7 @@ impl ElementalDownloader {
         let _submission_guard = handler.submission.lock().await;
 
         if handler.is_closed() {
-            bail!("download session '{}' is closed", session_id);
+            return Err(Error::SessionClosed { session_id });
         }
 
         if self.materializer.resolve(&task).await? {
@@ -677,9 +675,7 @@ impl ElementalDownloader {
             return Ok(());
         }
 
-        let sender = handler
-            .clone_sender()
-            .context("download session is closed")?;
+        let sender = handler.clone_sender().ok_or(Error::SessionSenderClosed)?;
         let task_id = build_task_id(session_id, &task);
         self.tracker.create_task(session_id, task_id.clone()).await;
         handler.start_task();
@@ -693,7 +689,10 @@ impl ElementalDownloader {
         if let Err(error) = sender.send(queued).await {
             self.tracker.remove_task(session_id, &task_id).await;
             handler.finish_task();
-            bail!("failed to enqueue task '{}': {}", task_id, error);
+            return Err(Error::EnqueueTask {
+                task_id: task_id.to_string(),
+                source: Box::new(error),
+            });
         }
 
         handler.mark_enqueued();
@@ -786,7 +785,7 @@ impl ElementalDownloader {
         self.sessions
             .read_async(&session_id, |_, handler| handler.clone())
             .await
-            .context("download session not found")
+            .ok_or(Error::SessionNotFound { session_id })
     }
 }
 
@@ -921,7 +920,7 @@ async fn execute_queued_task(
     let mut validator = StreamingValidator::from_task(&task);
     let executer = async move {
         let StagedDownload { path, file } = staged;
-        let file = file.context("staged download missing file handle")?;
+        let file = file.ok_or(Error::StagedFileMissing)?;
         let mut stream = client
             .get(task.url.clone())
             .headers(headers)
@@ -951,7 +950,7 @@ async fn execute_queued_task(
         materializer_for_execute
             .commit(StagedDownload { path, file: None }, &task)
             .await?;
-        anyhow::Ok(())
+        Ok::<(), Error>(())
     };
 
     tokio::select! {
@@ -1013,23 +1012,17 @@ fn ensure_session_succeeded(snapshot: &DownloadSessionSnapshot) -> Result<()> {
         .unwrap_or_else(|| snapshot.session_id.to_string());
 
     if !snapshot.failures.is_empty() {
-        let failures = snapshot
-            .failures
-            .iter()
-            .map(|failure| format!("{}: {}", failure.task_id, failure.error))
-            .collect::<Vec<String>>()
-            .join("\n");
-        bail!("download session '{session_label}' failed:\n{failures}");
+        return Err(Error::SessionFailed {
+            session: session_label,
+            failures: snapshot.failures.clone(),
+        });
     }
 
     if !snapshot.cancelled_task_ids.is_empty() {
-        let cancelled = snapshot
-            .cancelled_task_ids
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<String>>()
-            .join("\n");
-        bail!("download session '{session_label}' was cancelled:\n{cancelled}");
+        return Err(Error::SessionCancelled {
+            session: session_label,
+            tasks: snapshot.cancelled_task_ids.clone(),
+        });
     }
 
     Ok(())
@@ -1039,15 +1032,15 @@ fn validate_downloader_config(
     config: ElementalDownloaderConfig,
 ) -> Result<ValidatedDownloaderConfig> {
     if config.max_connections == 0 {
-        bail!("downloader max_connections must be greater than zero");
+        return Err(Error::InvalidMaxConnections);
     }
 
     if config.session_parallelism == 0 {
-        bail!("downloader session_parallelism must be greater than zero");
+        return Err(Error::InvalidSessionParallelism);
     }
 
     if config.session_queue_capacity == 0 {
-        bail!("downloader session_queue_capacity must be greater than zero");
+        return Err(Error::InvalidSessionQueueCapacity);
     }
 
     Ok(ValidatedDownloaderConfig {
@@ -1077,7 +1070,7 @@ fn build_downloader_client(config: &ValidatedDownloaderConfig) -> Result<reqwest
         .retry(retry_policy)
         .connect_timeout(config.connect_timeout)
         .build()
-        .map_err(Into::into)
+        .map_err(Error::from)
 }
 
 async fn mark_task_error(

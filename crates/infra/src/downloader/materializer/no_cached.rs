@@ -1,8 +1,8 @@
-use anyhow::{Context, Result};
 use async_trait::async_trait;
 
 use super::{Materializer, StagedDownload, create_temp_output_file, replace_file};
 use crate::downloader::{task::DownloadTask, validation::target_matches_task};
+use crate::error::{Error, Result};
 
 #[derive(Debug, Clone, Default)]
 pub struct NoCachedMaterializer;
@@ -14,17 +14,24 @@ impl Materializer for NoCachedMaterializer {
     }
 
     async fn create_staging(&self, task: &DownloadTask) -> Result<StagedDownload> {
-        create_temp_output_file(
-            task.path
-                .parent()
-                .context("Can't get target parent directory")?,
-            task.path
-                .file_name()
-                .context("Can't get target file name")?
-                .to_string_lossy()
-                .to_string(),
-        )
-        .await
+        let parent = task
+            .path
+            .parent()
+            .ok_or_else(|| Error::MissingPathComponent {
+                path: task.path.clone(),
+                component: "target parent directory",
+            })?;
+        let file_name = task
+            .path
+            .file_name()
+            .ok_or_else(|| Error::MissingPathComponent {
+                path: task.path.clone(),
+                component: "target file name",
+            })?
+            .to_string_lossy()
+            .to_string();
+
+        create_temp_output_file(parent, file_name).await
     }
 
     async fn commit(&self, staged: StagedDownload, task: &DownloadTask) -> Result<()> {

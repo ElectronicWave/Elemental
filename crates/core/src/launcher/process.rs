@@ -1,13 +1,15 @@
 use std::process::Stdio;
 
-use anyhow::{Result, bail};
 use tokio::{
     io::{AsyncBufReadExt, AsyncRead, BufReader},
     process::{Child, Command},
     sync::mpsc::{UnboundedReceiver, unbounded_channel},
 };
 
-use super::command::LaunchCommand;
+use super::{
+    command::LaunchCommand,
+    error::{Error, Result},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProcessLogSource {
@@ -28,7 +30,7 @@ pub struct LoggedChild {
 
 pub fn spawn_command(command: LaunchCommand) -> Result<Child> {
     if command.program.as_os_str().is_empty() {
-        bail!("launch executable is empty");
+        return Err(Error::EmptyExecutable);
     }
 
     let mut child = Command::new(&command.program);
@@ -42,12 +44,15 @@ pub fn spawn_command(command: LaunchCommand) -> Result<Child> {
         child.env(key, value);
     }
 
-    Ok(child.spawn()?)
+    child.spawn().map_err(|source| Error::Spawn {
+        program: command.program,
+        source,
+    })
 }
 
 pub fn spawn_command_logged(command: LaunchCommand) -> Result<LoggedChild> {
     if command.program.as_os_str().is_empty() {
-        bail!("launch executable is empty");
+        return Err(Error::EmptyExecutable);
     }
 
     let mut child = Command::new(&command.program);
@@ -64,7 +69,11 @@ pub fn spawn_command_logged(command: LaunchCommand) -> Result<LoggedChild> {
     let mut child = child
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .spawn()?;
+        .spawn()
+        .map_err(|source| Error::Spawn {
+            program: command.program,
+            source,
+        })?;
     let (sender, receiver) = unbounded_channel();
 
     if let Some(stdout) = child.stdout.take() {

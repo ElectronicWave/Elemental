@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Result, anyhow};
+use crate::storage::error::{Error, Result};
 
 pub trait Layout: Send + Sync {
     type Resource: Send + 'static;
@@ -22,14 +22,12 @@ pub trait Layout: Send + Sync {
         Self::Resource: Debug,
     {
         let resource_name = format!("{resource:?}");
-        self.get_resource(root, resource).ok_or_else(|| {
-            anyhow!(
-                "layout '{}' is missing resource {} for '{}'",
-                self.name(),
-                resource_name,
-                root.display()
-            )
-        })
+        self.get_resource(root, resource)
+            .ok_or_else(|| Error::ResourceNotFound {
+                layout: self.name(),
+                resource: resource_name,
+                root: root.to_path_buf(),
+            })
     }
 
     fn try_get_extended_resource(
@@ -41,14 +39,12 @@ pub trait Layout: Send + Sync {
         Self::ExtendedResource: Debug,
     {
         let resource_name = format!("{resource:?}");
-        self.get_extended_resource(root, resource).ok_or_else(|| {
-            anyhow!(
-                "layout '{}' is missing extended resource {} for '{}'",
-                self.name(),
-                resource_name,
-                root.display()
-            )
-        })
+        self.get_extended_resource(root, resource)
+            .ok_or_else(|| Error::ResourceNotFound {
+                layout: self.name(),
+                resource: resource_name,
+                root: root.to_path_buf(),
+            })
     }
 }
 
@@ -68,8 +64,7 @@ pub trait Layoutable<L: Layout> {
     }
 
     fn get_existing_resource(&self, resource: L::Resource) -> Option<PathBuf> {
-        self.get_resource(resource)
-            .and_then(|p| if p.exists() { Some(p) } else { None })
+        self.get_resource(resource).filter(|path| path.exists())
     }
 
     fn get_extended_resource(&self, resource: L::ExtendedResource) -> Option<PathBuf> {

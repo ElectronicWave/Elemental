@@ -158,12 +158,13 @@ pub(super) fn offline_authorizer() -> OfflineAuthorizer {
     }
 }
 
-pub(super) async fn time_operation<T, Fut>(operation: Fut) -> Result<(T, Duration)>
+pub(super) async fn time_operation<T, E, Fut>(operation: Fut) -> Result<(T, Duration)>
 where
-    Fut: Future<Output = Result<T>>,
+    Fut: Future<Output = std::result::Result<T, E>>,
+    E: Into<anyhow::Error>,
 {
     let started_at = std::time::Instant::now();
-    let result = operation.await?;
+    let result = operation.await.map_err(Into::into)?;
     Ok((result, started_at.elapsed()))
 }
 

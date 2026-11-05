@@ -1,6 +1,5 @@
 use std::{future::Future, path::PathBuf};
 
-use anyhow::{Context, Result, bail};
 use elemental_core::{
     runtime::distribution::Distribution,
     storage::{Storage, layout::Layoutable},
@@ -14,6 +13,8 @@ use elemental_schema::mojang::piston::{
     PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaLibraries,
     PistonMetaLibrariesDownloadsArtifact,
 };
+
+use crate::error::{Error, Result};
 
 use crate::families::version_json::{
     PistonMetaLibrariesExt, VersionJsonGameStorageExt, VersionJsonInstanceLayout,
@@ -200,8 +201,16 @@ where
     pub async fn into_prepared(self) -> Result<PreparedVersionJsonInstance<R, L, VL>> {
         let status = self.status().await?;
         if !status.is_ready() {
-            let version_name = self.version.name().context("get version name failed")?;
-            bail!("local version '{version_name}' is not prepared: {status:?}");
+            let version_name = self
+                .version
+                .name()
+                .ok_or_else(|| Error::MissingVersionName {
+                    path: self.version.path.clone(),
+                })?;
+            return Err(Error::VersionNotPrepared {
+                version: version_name,
+                status: format!("{status:?}"),
+            });
         }
 
         Ok(PreparedVersionJsonInstance {
@@ -346,7 +355,11 @@ where
     VL: VersionJsonInstanceLayout,
 {
     fn version_name(&self) -> Result<String> {
-        self.version.name().context("get version name failed")
+        self.version
+            .name()
+            .ok_or_else(|| Error::MissingVersionName {
+                path: self.version.path.clone(),
+            })
     }
 
     fn plan_version_artifacts(&self) -> Result<DownloadPlan> {
@@ -380,11 +393,11 @@ where
             ));
         }
 
-        DownloadPlan::named(
+        Ok(DownloadPlan::named(
             self.version_name()?,
             DownloadExecutionPolicy::ServiceDefault,
             tasks,
-        )
+        )?)
     }
 
     fn plan_library_tasks(&self, library: &PistonMetaLibraries) -> Result<Vec<DownloadTask>> {
@@ -435,11 +448,11 @@ where
                 })
                 .collect::<Result<Vec<DownloadTask>>>()?;
 
-        DownloadPlan::named(
+        Ok(DownloadPlan::named(
             format!("{version_name}-assets"),
             DownloadExecutionPolicy::ServiceDefault,
             tasks,
-        )
+        )?)
     }
 }
 
@@ -449,7 +462,19 @@ where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    fn plan(&self) -> Result<Vec<DownloadPlan>> {
+    fn plan(&self) -> elemental_infra::error::Result<Vec<DownloadPlan>> {
+        self.plan_typed()
+            .map_err(|source| elemental_infra::error::Error::Planner(Box::new(source)))
+    }
+}
+
+impl<'a, R, L, VL> VersionJsonInstallPlanner<'a, R, L, VL>
+where
+    R: VersionJsonRemoteResolver,
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+{
+    pub fn plan_typed(&self) -> Result<Vec<DownloadPlan>> {
         let mut plans = Vec::new();
 
         let version_plan = self.plan_version_artifacts()?;

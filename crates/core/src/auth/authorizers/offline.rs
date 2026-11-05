@@ -1,5 +1,4 @@
-use crate::auth::{authorizer::Authorizer, credential::UserCredential};
-use anyhow::Result;
+use crate::auth::{authorizer::Authorizer, credential::UserCredential, error::Result};
 use md5::{Digest, Md5};
 use uuid::Uuid;
 

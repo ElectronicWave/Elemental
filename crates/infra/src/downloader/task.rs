@@ -1,5 +1,6 @@
-use anyhow::{Result, bail};
 use std::{num::NonZeroUsize, path::PathBuf};
+
+use crate::error::{Error, Result};
 
 pub type SessionId = u64;
 
@@ -109,7 +110,7 @@ impl DownloadSessionRequest {
         if let DownloadExecutionPolicy::Custom { parallelism, .. } = self.execution_policy
             && parallelism == 0
         {
-            bail!("download session parallelism must be greater than zero");
+            return Err(Error::InvalidSessionRequestParallelism);
         }
 
         Ok(())

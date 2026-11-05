@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use anyhow::Result;
+use crate::error::Result;
 use elemental_shared::{
     migrator::NoMigrator,
     persistor::{JsonFilePersistor, json_persistor},

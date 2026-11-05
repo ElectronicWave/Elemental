@@ -1,6 +1,8 @@
-use crate::auth::authorizer::Authorizer;
-use crate::auth::credential::UserCredential;
-use anyhow::{Context, Result};
+use crate::auth::{
+    authorizer::Authorizer,
+    credential::UserCredential,
+    error::{Error, Result},
+};
 use minecraft_msa_auth::MinecraftAuthorizationFlow;
 use oauth2::basic::BasicClient;
 use oauth2::{
@@ -23,61 +25,88 @@ struct MinecraftProfileResponse {
     name: String,
 }
 
-pub struct MicrosoftAuthorizer<F: Fn(String, String)> {
+/// Result returned by [`MicrosoftAuthorizer::verification_handler`].
+pub type VerificationHandlerResult =
+    std::result::Result<(), Box<dyn std::error::Error + Send + Sync>>;
+
+pub struct MicrosoftAuthorizer<F: Fn(String, String) -> VerificationHandlerResult> {
     pub client_id: String,
+    /// Receives the verification URI and user code. Returning an error aborts authorization.
     pub verification_handler: F,
 }
 
-impl<F: Fn(String, String)> MicrosoftAuthorizer<F> {
+impl<F: Fn(String, String) -> VerificationHandlerResult> MicrosoftAuthorizer<F> {
     fn client() -> Result<ReqwestClient> {
         let reqwest_client = ClientBuilder::new()
             // Following redirects opens the client up to SSRF vulnerabilities.
             .redirect(Policy::none())
-            .build()?;
+            .build()
+            .map_err(|source| Error::HttpClientBuild { source })?;
         Ok(ReqwestClient::from(reqwest_client))
     }
 }
 
-impl<F: Fn(String, String)> Authorizer for MicrosoftAuthorizer<F> {
+impl<F: Fn(String, String) -> VerificationHandlerResult> Authorizer for MicrosoftAuthorizer<F> {
     async fn authorize(&self) -> Result<UserCredential> {
         let reqwest_client = Self::client()?;
         let client = BasicClient::new(ClientId::new(self.client_id.clone()))
-            .set_auth_uri(AuthUrl::new(MSA_AUTHORIZE_URL.to_string())?)
-            .set_token_uri(TokenUrl::new(MSA_TOKEN_URL.to_string())?)
-            .set_device_authorization_url(DeviceAuthorizationUrl::new(
-                DEVICE_CODE_URL.to_string(),
-            )?);
+            .set_auth_uri(
+                AuthUrl::new(MSA_AUTHORIZE_URL.to_string()).map_err(|source| Error::Endpoint {
+                    endpoint: "authorize",
+                    source,
+                })?,
+            )
+            .set_token_uri(TokenUrl::new(MSA_TOKEN_URL.to_string()).map_err(|source| {
+                Error::Endpoint {
+                    endpoint: "token",
+                    source,
+                }
+            })?)
+            .set_device_authorization_url(
+                DeviceAuthorizationUrl::new(DEVICE_CODE_URL.to_string()).map_err(|source| {
+                    Error::Endpoint {
+                        endpoint: "device authorization",
+                        source,
+                    }
+                })?,
+            );
 
         let details: StandardDeviceAuthorizationResponse = client
             .exchange_device_code()
             .add_scope(Scope::new("XboxLive.signin offline_access".to_string()))
             .request_async(&reqwest_client)
-            .await?;
+            .await
+            .map_err(|source| Error::DeviceCodeRequest { source })?;
 
-        // Handle it outside to allow custom UX.
+        // Handle it outside to allow custom UX. A handler error aborts authorization.
         (self.verification_handler)(
             details.verification_uri().to_string(),
             details.user_code().secret().to_string(),
-        );
+        )
+        .map_err(|source| Error::VerificationHandler { source })?;
 
         let token = client
             .exchange_device_access_token(&details)
             .request_async(&reqwest_client, tokio::time::sleep, None)
-            .await?;
+            .await
+            .map_err(|source| Error::DeviceTokenRequest { source })?;
 
         let mc_flow = MinecraftAuthorizationFlow::new(Client::new());
         let mc_token = mc_flow
             .exchange_microsoft_token(token.access_token().secret())
-            .await?;
+            .await
+            .map_err(|source| Error::MinecraftExchange { source })?;
         let profile = reqwest::Client::new()
             .get(MINECRAFT_PROFILE_URL)
             .bearer_auth(mc_token.access_token().as_ref())
             .send()
-            .await?
-            .error_for_status()?
+            .await
+            .map_err(|source| Error::ProfileRequest { source })?
+            .error_for_status()
+            .map_err(|source| Error::ProfileStatus { source })?
             .json::<MinecraftProfileResponse>()
             .await
-            .context("fetch minecraft profile failed")?;
+            .map_err(|source| Error::ProfileDecode { source })?;
 
         Ok(UserCredential {
             username: profile.name,

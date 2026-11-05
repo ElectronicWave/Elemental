@@ -4,7 +4,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result, bail};
 use elemental_core::minecraft::MinecraftVersionId;
 use elemental_core::runtime::RuntimeValidationMode;
 use elemental_core::storage::{Storage, layout::Layoutable};
@@ -15,6 +14,7 @@ use crate::{
     drivers::vanilla::source::{
         VanillaEndpoints, VanillaSource, rewrite_upstream_with_vanilla_fallback,
     },
+    error::{Error, Result},
     families::{
         installer::{
             InstallerArtifact, InstallerInstallStatus, InstallerLaunchVersionRequest,
@@ -375,14 +375,15 @@ where
         .await?;
 
         if !install_status.processors_completed {
-            bail!(
-                "local {} instance '{}' is not fully prepared: {:?}",
-                F::FAMILY_NAME,
-                instance
-                    .name()
-                    .with_context(|| format!("get {} instance name failed", F::FAMILY_NAME))?,
-                install_status
-            );
+            let instance_name = instance.name().ok_or_else(|| Error::MissingInstanceName {
+                family_name: F::FAMILY_NAME.to_owned(),
+                path: instance.path.clone(),
+            })?;
+            return Err(Error::InstallerNotPrepared {
+                family_name: F::FAMILY_NAME.to_owned(),
+                instance: instance_name,
+                status: format!("{install_status:?}"),
+            });
         }
 
         Ok(PreparedInstallerFamilyVersion {

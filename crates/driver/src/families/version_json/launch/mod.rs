@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use anyhow::Result;
+use crate::error::Result;
 use elemental_core::{
     auth::authorizer::Authorizer,
     launcher::{command::LaunchCommand, process},
@@ -32,13 +32,13 @@ where
     let required_major_version =
         runtime_major_version.unwrap_or_else(|| prepared_version.required_java_major_version());
 
-    resolve_runtime(
+    Ok(resolve_runtime(
         required_major_version,
         runtime_executable_path,
         runtime_validation,
         "launch",
     )
-    .await
+    .await?)
 }
 
 pub fn build_version_json_launch_builder<A, RR, L, VL>(

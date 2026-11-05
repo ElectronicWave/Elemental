@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use anyhow::Result;
+use crate::error::Result;
 use elemental_infra::jar::JarFile;
 use serde::de::DeserializeOwned;
 
@@ -17,11 +17,11 @@ impl<P: AsRef<Path>> InstallerArchive<P> {
     }
 
     pub fn read_bytes(&self, name: &str) -> Result<Vec<u8>> {
-        self.jar.by_name_bytes(normalize_entry_name(name))
+        Ok(self.jar.by_name_bytes(normalize_entry_name(name))?)
     }
 
     pub fn read_string(&self, name: &str) -> Result<String> {
-        self.jar.by_name_string(normalize_entry_name(name))
+        Ok(self.jar.by_name_string(normalize_entry_name(name))?)
     }
 
     pub fn read_json<T>(&self, name: &str) -> Result<T>

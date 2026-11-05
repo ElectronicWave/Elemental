@@ -1,6 +1,6 @@
 use std::{fmt::Debug, sync::Arc};
 
-use anyhow::Result;
+use crate::error::Result;
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 use elemental_infra::downloader::core::ElementalDownloader;

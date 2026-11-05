@@ -3,14 +3,16 @@ use std::env::consts::EXE_SUFFIX;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use anyhow::{Context, Result, bail};
 use futures::future::join_all;
 use futures::stream::{self, StreamExt};
 use tokio::fs;
 use tokio::process::Command;
 use tokio::sync::OnceCell;
 
-use crate::runtime::provider::{RuntimeProvider, runtime_providers};
+use crate::runtime::{
+    error::{Error, Result},
+    provider::{RuntimeProvider, runtime_providers},
+};
 
 static DISTRIBUTION_CACHE: OnceCell<Vec<Distribution>> = OnceCell::const_new();
 const JAVA_INFO_PROBE_TIMEOUT: Duration = Duration::from_secs(15);
@@ -80,29 +82,27 @@ impl DistributionReleaseData {
 
         let output = tokio::time::timeout(JAVA_INFO_PROBE_TIMEOUT, command.output())
             .await
-            .with_context(|| {
-                format!(
-                    "Java property probe timed out after {} seconds: {}",
-                    JAVA_INFO_PROBE_TIMEOUT.as_secs(),
-                    java_exe.display()
-                )
+            .map_err(|_| Error::ProbeTimeout {
+                executable: java_exe.clone(),
+                timeout_secs: JAVA_INFO_PROBE_TIMEOUT.as_secs(),
             })?
-            .with_context(|| format!("run Java property probe failed: {}", java_exe.display()))?;
+            .map_err(|source| Error::ProbeSpawn {
+                executable: java_exe.clone(),
+                source,
+            })?;
 
         if !output.status.success() {
-            bail!(
-                "Java property probe exited unsuccessfully with {}: {}",
-                output.status,
-                java_exe.display()
-            );
+            return Err(Error::ProbeFailed {
+                executable: java_exe,
+                status: output.status,
+            });
         }
 
         let release = Self::parse_properties(&String::from_utf8_lossy(&output.stderr));
         if release.java_major_version().is_none() {
-            bail!(
-                "Java property probe returned no recognizable major version: {}",
-                java_exe.display()
-            );
+            return Err(Error::ProbeMissingVersion {
+                executable: java_exe,
+            });
         }
 
         Ok(release)
@@ -110,15 +110,16 @@ impl DistributionReleaseData {
 
     pub async fn parse_from_release(root: &Path) -> Result<Self> {
         let release_path = root.join("release");
-        let content = fs::read_to_string(&release_path).await.with_context(|| {
-            format!("read Java release file failed: {}", release_path.display())
-        })?;
+        let content =
+            fs::read_to_string(&release_path)
+                .await
+                .map_err(|source| Error::ReadRelease {
+                    path: release_path.clone(),
+                    source,
+                })?;
         let release = Self::parse_release_properties(&content);
         if release.java_major_version().is_none() {
-            bail!(
-                "Java release file has no recognizable major version: {}",
-                release_path.display()
-            );
+            return Err(Error::ReleaseMissingVersion { path: release_path });
         }
 
         Ok(release)
@@ -126,9 +127,13 @@ impl DistributionReleaseData {
 
     pub async fn parse(root: &Path) -> Result<Self> {
         let release_path = root.join("release");
-        let release_exists = fs::try_exists(&release_path).await.with_context(|| {
-            format!("check Java release file failed: {}", release_path.display())
-        })?;
+        let release_exists =
+            fs::try_exists(&release_path)
+                .await
+                .map_err(|source| Error::CheckRelease {
+                    path: release_path.clone(),
+                    source,
+                })?;
 
         if release_exists {
             Self::parse_from_release(root).await
@@ -229,16 +234,18 @@ impl DistributionReleaseData {
 impl Distribution {
     pub async fn build_from_root(root: PathBuf, provider: &'static str) -> Result<Self> {
         let requested_root = root.clone();
-        let root = fs::canonicalize(&root).await.with_context(|| {
-            format!("canonicalize Java runtime root failed: {}", root.display())
-        })?;
+        let root =
+            fs::canonicalize(&root)
+                .await
+                .map_err(|source| Error::CanonicalizeRuntimeRoot {
+                    path: root.clone(),
+                    source,
+                })?;
         let release = DistributionReleaseData::parse(&root)
             .await
-            .with_context(|| {
-                format!(
-                    "determine Java runtime properties failed: {}",
-                    requested_root.display()
-                )
+            .map_err(|source| Error::DetermineRuntimeProperties {
+                path: requested_root,
+                source: Box::new(source),
             })?;
 
         Ok(Self {
@@ -254,23 +261,20 @@ impl Distribution {
         provider: &'static str,
     ) -> Result<Self> {
         let normalized_executable = Self::normalize_executable_path(executable)?;
-        let normalized_executable = fs::canonicalize(&normalized_executable)
-            .await
-            .with_context(|| {
-                format!(
-                    "canonicalize runtime executable failed: {}",
-                    normalized_executable.display()
-                )
-            })?;
+        let normalized_executable =
+            fs::canonicalize(&normalized_executable)
+                .await
+                .map_err(|source| Error::CanonicalizeExecutable {
+                    path: normalized_executable.clone(),
+                    source,
+                })?;
         let runtime_root = Self::infer_runtime_root(&normalized_executable)?;
 
         let release = DistributionReleaseData::parse(&runtime_root)
             .await
-            .with_context(|| {
-                format!(
-                    "determine Java runtime properties failed: {}",
-                    runtime_root.display()
-                )
+            .map_err(|source| Error::DetermineRuntimeProperties {
+                path: runtime_root.clone(),
+                source: Box::new(source),
             })?;
 
         Ok(Self {
@@ -295,11 +299,14 @@ impl Distribution {
         let mut probes = Vec::new();
         for (name, paths) in provider_lists {
             for path in paths {
+                let candidate_path = path.clone();
                 probes.push(async move {
                     Distribution::build_from_root(path, name)
                         .await
-                        .with_context(|| {
-                            format!("build Java runtime distribution from {name} failed")
+                        .map_err(|source| Error::BuildDistribution {
+                            provider: name,
+                            path: candidate_path,
+                            source: Box::new(source),
                         })
                 });
             }
@@ -367,49 +374,38 @@ impl Distribution {
             executable
         } else {
             std::env::current_dir()
-                .context("resolve current directory for runtime executable failed")?
+                .map_err(|source| Error::CurrentDir { source })?
                 .join(executable)
         };
 
         if !normalized.is_file() {
-            bail!(
-                "runtime executable path is not a file: {}",
-                normalized.display()
-            );
+            return Err(Error::ExecutableNotFile { path: normalized });
         }
 
         let executable_name = normalized
             .file_stem()
             .and_then(|value| value.to_str())
-            .with_context(|| {
-                format!(
-                    "runtime executable path has no valid file stem: {}",
-                    normalized.display()
-                )
+            .ok_or_else(|| Error::ExecutableNoStem {
+                path: normalized.clone(),
             })?;
         if executable_name != "java" && executable_name != "javaw" {
-            bail!(
-                "runtime executable must point to java or javaw: {}",
-                normalized.display()
-            );
+            return Err(Error::ExecutableNotJava { path: normalized });
         }
 
         Ok(normalized)
     }
 
     fn infer_runtime_root(executable: &Path) -> Result<PathBuf> {
-        let bin_directory = executable.parent().with_context(|| {
-            format!(
-                "runtime executable has no parent directory: {}",
-                executable.display()
-            )
-        })?;
-        let runtime_root = bin_directory.parent().with_context(|| {
-            format!(
-                "runtime executable is not inside a bin directory: {}",
-                executable.display()
-            )
-        })?;
+        let bin_directory = executable
+            .parent()
+            .ok_or_else(|| Error::ExecutableNoParent {
+                path: executable.to_path_buf(),
+            })?;
+        let runtime_root = bin_directory
+            .parent()
+            .ok_or_else(|| Error::ExecutableNotInBin {
+                path: executable.to_path_buf(),
+            })?;
 
         Ok(runtime_root.to_path_buf())
     }

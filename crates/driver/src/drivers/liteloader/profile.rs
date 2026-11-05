@@ -1,10 +1,11 @@
 use std::collections::HashSet;
 
-use anyhow::{Result, bail};
 use elemental_schema::{
     fabric::{ProfileJson, ProfileLibrary, ProfileLibraryArtifact, ProfileLibraryDownloads},
     mojang::piston::{PistonMetaArguments, PistonMetaGenericArgument},
 };
+
+use crate::error::{Error, Result};
 
 use super::{
     manifest::{LiteLoaderManifestLibrary, LiteLoaderSelectedBuild},
@@ -179,10 +180,9 @@ async fn normalize_manifest_library(
         });
     }
 
-    bail!(
-        "LiteLoader library '{}' does not declare a supported repository",
-        library.name
-    )
+    Err(Error::LiteLoaderLibraryRepositoryMissing {
+        library: library.name,
+    })
 }
 
 fn default_snapshot_repository(
@@ -195,8 +195,7 @@ fn default_snapshot_repository(
             .map(|url| ensure_trailing_slash(url.as_str()));
     }
 
-    bail!(
-        "LiteLoader snapshot library '{}' does not declare a repository",
-        library_name
-    )
+    Err(Error::LiteLoaderSnapshotRepositoryMissing {
+        library: library_name.to_owned(),
+    })
 }

@@ -1,4 +1,3 @@
-use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use std::{
     fmt,
@@ -8,6 +7,7 @@ use std::{
 use tokio::{fs::OpenOptions, fs::create_dir_all};
 
 use super::task::DownloadTask;
+use crate::error::{Error, Result};
 
 mod hardlink_cached;
 mod no_cached;
@@ -62,19 +62,19 @@ pub(super) async fn create_temp_output_file(
         }
     }
 
-    bail!(
-        "failed to allocate temporary download file under '{}'",
-        parent.display()
-    )
+    Err(Error::TempFileCreation {
+        directory: parent.to_path_buf(),
+    })
 }
 
 pub(super) async fn replace_file(source_path: &Path, target_path: &Path) -> Result<()> {
-    create_dir_all(
-        target_path
-            .parent()
-            .context("Can't get target parent directory")?,
-    )
-    .await?;
+    let parent = target_path
+        .parent()
+        .ok_or_else(|| Error::MissingPathComponent {
+            path: target_path.to_path_buf(),
+            component: "target parent directory",
+        })?;
+    create_dir_all(parent).await?;
 
     if tokio::fs::metadata(target_path).await.is_ok() {
         tokio::fs::remove_file(target_path).await?;

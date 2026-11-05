@@ -4,6 +4,8 @@ use std::{
     sync::{Arc, OnceLock, RwLock},
 };
 
+use crate::runtime::error::{Error, Result};
+
 #[async_trait]
 pub trait RuntimeProvider: Send + Sync {
     async fn list(&self) -> Vec<PathBuf>;
@@ -51,11 +53,9 @@ pub fn runtime_providers() -> RuntimeProviderList {
     guard.clone().unwrap_or_else(default_providers)
 }
 
-pub fn with_runtime_providers(providers: RuntimeProviderList) -> anyhow::Result<()> {
+pub fn with_runtime_providers(providers: RuntimeProviderList) -> Result<()> {
     let storage = RUNTIME_PROVIDER_OVERRIDE.get_or_init(|| RwLock::new(None));
-    let mut guard = storage
-        .write()
-        .map_err(|_| anyhow::anyhow!("lock runtime provider override for writing failed"))?;
+    let mut guard = storage.write().map_err(|_| Error::ProviderLockPoisoned)?;
     *guard = Some(providers);
     Ok(())
 }

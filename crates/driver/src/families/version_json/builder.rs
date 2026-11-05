@@ -4,7 +4,6 @@ use std::{
     path::PathBuf,
 };
 
-use anyhow::{Context, Result, bail};
 use elemental_core::{
     auth::{authorizer::Authorizer, credential::UserCredential},
     launcher::command::LaunchCommand,
@@ -12,6 +11,8 @@ use elemental_core::{
     storage::{Storage, layout::Layoutable},
 };
 use elemental_schema::mojang::piston::PistonMetaData;
+
+use crate::error::{Error, Result};
 
 use super::{
     classpath::{classpath_separator, join_classpath},
@@ -117,14 +118,21 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
         let metadata = self
             .version
             .metadata()
-            .context("read version metadata failed")?;
+            .map_err(|source| Error::ReadVersionMetadata {
+                source: Box::new(source),
+            })?;
         let rule_context = VersionJsonRuleContext::current();
         let credential = self
             .authorizer
             .authorize()
             .await
-            .context("authorize failed")?;
-        let version_name = self.version.name().context("get version name failed")?;
+            .map_err(|source| Error::Authorize { source })?;
+        let version_name = self
+            .version
+            .name()
+            .ok_or_else(|| Error::MissingVersionName {
+                path: self.version.path.clone(),
+            })?;
         let paths = LaunchPaths::resolve(&self.version)?;
         paths.ensure_version_jar_exists()?;
 
@@ -241,10 +249,9 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
         let log_config_path = resolve_absolute_path(log_config_path)?;
 
         if !log_config_path.exists() {
-            bail!(
-                "logging config not found: {}",
-                log_config_path.to_string_lossy()
-            );
+            return Err(Error::LoggingConfigMissing {
+                path: log_config_path,
+            });
         }
 
         Ok(Some(self.inner.apply_with(
@@ -318,7 +325,7 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
 
             if argument == "-p" || argument == "--module-path" {
                 let Some(raw_value) = jvm_arguments.get(index + 1) else {
-                    bail!("module path argument is missing its value");
+                    return Err(Error::ModulePathValueMissing);
                 };
                 entries.extend(self.resolve_module_path_entries(raw_value)?);
                 index += 2;
@@ -337,7 +344,7 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
             .apply(vec![raw_value.to_owned()])?
             .into_iter()
             .next()
-            .context("resolve module path argument failed")?;
+            .ok_or(Error::ResolveModulePath)?;
 
         Ok(resolved
             .split(classpath_separator())
@@ -388,10 +395,9 @@ impl LaunchPaths {
             return Ok(());
         }
 
-        bail!(
-            "version jar not found: {}",
-            self.version_jar.to_string_lossy()
-        )
+        Err(Error::VersionJarMissing {
+            path: self.version_jar.clone(),
+        })
     }
 }
 

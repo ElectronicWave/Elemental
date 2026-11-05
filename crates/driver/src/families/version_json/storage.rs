@@ -4,7 +4,6 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use elemental_core::storage::{Storage, layout::Layoutable};
 use elemental_infra::jar::JarFile;
@@ -15,6 +14,7 @@ use super::{
     layout::{VersionJsonInstanceLayout, VersionJsonRootLayout},
     resource::{VersionJsonInstanceResource, VersionJsonRootResource},
 };
+use crate::error::{Error, Result};
 use crate::{
     driver::Driver,
     families::version_json::{
@@ -115,7 +115,7 @@ where
     {
         let name = name.into();
         if !self.instance_exists(&name, &version_layout)? {
-            return Err(anyhow!("can't find a valid instance named '{name}'"));
+            return Err(Error::InstanceNotFound { name });
         }
         let instance_root = self.try_get_resource(VersionJsonRootResource::Versions(Some(name)))?;
 
@@ -168,9 +168,10 @@ where
         objects: &PistonMetaAssetIndexObjects,
     ) -> Result<()> {
         let path = self.try_get_resource(VersionJsonRootResource::AssetIndexes(Some(id)))?;
-        let parent = path
-            .parent()
-            .context("asset index path has no parent directory")?;
+        let parent = path.parent().ok_or_else(|| Error::MissingParentDirectory {
+            context: "asset index path has no parent directory".to_owned(),
+            path: path.clone(),
+        })?;
         create_dir_all(parent).await?;
         tokio::fs::write(path, serde_json::to_vec(objects)?).await?;
         Ok(())
@@ -335,9 +336,7 @@ where
 }
 
 fn current_unix_ms() -> Result<u64> {
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .context("system time is before unix epoch")?;
+    let duration = SystemTime::now().duration_since(UNIX_EPOCH)?;
     Ok(duration.as_millis() as u64)
 }
 
@@ -386,12 +385,10 @@ impl<'a> NativesDirectory<'a> {
                 continue;
             }
 
-            std::fs::copy(&path, &target).with_context(|| {
-                format!(
-                    "copy native binary '{}' to '{}' failed",
-                    path.display(),
-                    target.display()
-                )
+            std::fs::copy(&path, &target).map_err(|source| Error::CopyNativeBinary {
+                source_path: path.clone(),
+                target_path: target.clone(),
+                source,
             })?;
         }
 

@@ -20,6 +20,7 @@ metadata in any Rust application without pulling in the launcher runtime.
 
 ```toml
 [dependencies]
+anyhow = "1"
 elemental-schema = "0.2"
 serde_json = "1"
 ```
@@ -29,9 +30,10 @@ serde_json = "1"
 Parse a Mojang version manifest and read the latest release:
 
 ```rust
+use anyhow::Result;
 use elemental_schema::mojang::launcher::LaunchMetaData;
 
-fn latest_release(raw: &str) -> Result<String, serde_json::Error> {
+fn latest_release(raw: &str) -> Result<String> {
     let manifest: LaunchMetaData = serde_json::from_str(raw)?;
     Ok(manifest.latest.release)
 }
@@ -40,9 +42,10 @@ fn latest_release(raw: &str) -> Result<String, serde_json::Error> {
 Read the Java requirement from a Piston version document:
 
 ```rust
+use anyhow::Result;
 use elemental_schema::mojang::piston::PistonMetaData;
 
-fn required_java(raw: &str) -> Result<usize, serde_json::Error> {
+fn required_java(raw: &str) -> Result<usize> {
     let metadata: PistonMetaData = serde_json::from_str(raw)?;
     Ok(metadata.java_version.major_version)
 }

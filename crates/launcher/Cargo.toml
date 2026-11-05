@@ -10,7 +10,7 @@ homepage.workspace = true
 license.workspace = true
 
 [dependencies]
-anyhow = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true }
 elemental-core = { path = "../core", version = "0.2.0" }
 elemental-driver = { path = "../driver", version = "0.2.0" }

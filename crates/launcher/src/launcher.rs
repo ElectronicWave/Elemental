@@ -4,7 +4,6 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{Result, anyhow, bail};
 use elemental_core::{
     auth::authorizer::Authorizer, launcher::process, minecraft::MinecraftVersionId,
     storage::Storage,
@@ -40,6 +39,7 @@ use elemental_infra::downloader::core::ElementalDownloader;
 
 use crate::{
     builder::LauncherBuilder,
+    error::{Error, Result},
     request::{LaunchOptions, PrepareInstanceRequest},
     result::{
         Instance, LaunchCommandResult, LaunchedInstance, PreparedInstance, PreparedInstanceKind,
@@ -150,7 +150,7 @@ where
         &self,
         catalog: C,
     ) -> Result<HashMap<MinecraftVersionId, Vec<R>>> {
-        catalog.releases().await
+        Ok(catalog.releases().await?)
     }
 
     pub async fn prepare_instance(
@@ -221,14 +221,16 @@ where
         &self,
         instance_name: String,
     ) -> Result<LauncherInstanceStorage<L, VL>> {
-        self.game_storage()
+        Ok(self
+            .game_storage()
             .ensure_instance(instance_name, self.instance_layout.clone())
-            .await
+            .await?)
     }
 
     fn instance(&self, instance_name: String) -> Result<LauncherInstanceStorage<L, VL>> {
-        self.game_storage()
-            .instance(instance_name, self.instance_layout.clone())
+        Ok(self
+            .game_storage()
+            .instance(instance_name, self.instance_layout.clone())?)
     }
 
     fn vanilla_driver(&self) -> VanillaDriver {
@@ -278,7 +280,11 @@ where
             FORGE_DRIVER => ResolvedLauncherDriver::Forge(self.installer_driver()),
             CLEANROOM_DRIVER => ResolvedLauncherDriver::Cleanroom(self.installer_driver()),
             NEOFORGE_DRIVER => ResolvedLauncherDriver::NeoForge(self.installer_driver()),
-            _ => bail!("unsupported driver '{}'", desc.id),
+            _ => {
+                return Err(Error::UnsupportedDriver {
+                    id: desc.id.to_owned(),
+                });
+            }
         })
     }
 }
@@ -372,10 +378,9 @@ impl ResolvedLauncherDriver {
                     .await?;
                 Ok(PreparedInstanceKind::NeoForge(prepared))
             }
-            _ => bail!(
-                "resolved launcher driver does not support '{}' prepare flow",
-                spec.id()
-            ),
+            _ => Err(Error::UnsupportedDriverFlow {
+                id: spec.id().to_owned(),
+            }),
         }
     }
 
@@ -503,15 +508,14 @@ impl ResolvedLauncherDriver {
     }
 }
 
-fn prepared_variant_mismatch<L, VL>(prepared: &PreparedInstance<L, VL>) -> anyhow::Error
+fn prepared_variant_mismatch<L, VL>(prepared: &PreparedInstance<L, VL>) -> Error
 where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    anyhow!(
-        "prepared instance variant does not match driver '{}'",
-        prepared.driver.id
-    )
+    Error::PreparedVariantMismatch {
+        driver: prepared.driver.id.to_owned(),
+    }
 }
 
 impl InspectDrivers {

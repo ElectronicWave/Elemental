@@ -508,7 +508,6 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 name = "elemental-core"
 version = "0.2.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "const_format",
  "dirs",
@@ -522,6 +521,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "thiserror 2.0.21",
  "tokio",
  "toml",
  "tracing",
@@ -534,7 +534,6 @@ dependencies = [
 name = "elemental-driver"
 version = "0.2.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "elemental-core",
  "elemental-infra",
@@ -545,6 +544,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "thiserror 2.0.21",
  "tokio",
 ]
 
@@ -552,7 +552,6 @@ dependencies = [
 name = "elemental-infra"
 version = "0.2.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "futures",
  "hex",
@@ -561,6 +560,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha1",
+ "thiserror 2.0.21",
  "tokio",
  "tokio-util",
  "zip",
@@ -583,10 +583,10 @@ dependencies = [
 name = "elemental-launcher"
 version = "0.2.0"
 dependencies = [
- "anyhow",
  "elemental-core",
  "elemental-driver",
  "elemental-infra",
+ "thiserror 2.0.21",
  "tokio",
 ]
 

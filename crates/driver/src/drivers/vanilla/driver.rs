@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::Result;
+use crate::error::Result;
 use async_trait::async_trait;
 use elemental_core::{
     auth::authorizer::Authorizer,

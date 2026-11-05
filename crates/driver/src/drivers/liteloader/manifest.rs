@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use anyhow::{Context, Result};
 use serde::Deserialize;
+
+use crate::error::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LiteLoaderRelease {
@@ -102,18 +103,18 @@ pub(super) fn select_build(
     game_version: &str,
     loader_version: &str,
 ) -> Result<LiteLoaderSelectedBuild> {
-    let game_entry = manifest
-        .versions
-        .get(game_version)
-        .with_context(|| format!("can't find LiteLoader Minecraft version '{game_version}'"))?;
+    let game_entry = manifest.versions.get(game_version).ok_or_else(|| {
+        Error::LiteLoaderMinecraftVersionNotFound {
+            game_version: game_version.to_owned(),
+        }
+    })?;
 
     collect_builds_for_game(game_version, game_entry)
         .into_iter()
         .find(|build| build.build.version == loader_version)
-        .with_context(|| {
-            format!(
-                "can't find LiteLoader loader version '{loader_version}' for Minecraft '{game_version}'"
-            )
+        .ok_or_else(|| Error::LiteLoaderLoaderVersionNotFound {
+            loader_version: loader_version.to_owned(),
+            game_version: game_version.to_owned(),
         })
 }
 

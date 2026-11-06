@@ -1,28 +1,17 @@
-use crate::error::Result;
+use elemental_core::minecraft::MinecraftVersionId;
 use elemental_schema::quilt::{GameVersion, LoaderGameVersion, ProfileJson};
 
 use crate::{
+    error::Result,
     families::version_json::{LoaderMetaEndpoints, LoaderMetaSource, UpstreamUrlRewriter},
-    url::{Origin, OriginPolicy},
+    loader_version::LoaderVersionId,
+    url::{Origin, OriginEndpoints},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum QuiltOrigin {
     Meta,
     Maven,
-}
-
-#[derive(Debug, Clone)]
-pub struct QuiltEndpoints {
-    origin_policy: OriginPolicy<QuiltOrigin>,
-}
-
-pub type QuiltSource = LoaderMetaSource<QuiltEndpoints>;
-
-impl Default for QuiltEndpoints {
-    fn default() -> Self {
-        Self::official()
-    }
 }
 
 impl Origin for QuiltOrigin {
@@ -39,19 +28,10 @@ impl Origin for QuiltOrigin {
     }
 }
 
+pub type QuiltEndpoints = OriginEndpoints<QuiltOrigin>;
+pub type QuiltSource = LoaderMetaSource<QuiltEndpoints>;
+
 impl QuiltEndpoints {
-    pub fn new(origin_policy: OriginPolicy<QuiltOrigin>) -> Self {
-        Self { origin_policy }
-    }
-
-    pub fn official() -> Self {
-        Self::new(OriginPolicy::default())
-    }
-
-    pub fn origin_policy(&self) -> &OriginPolicy<QuiltOrigin> {
-        &self.origin_policy
-    }
-
     pub fn game_versions_url(&self) -> Result<String> {
         self.resolve_meta_segments(["v3", "versions", "game"])
     }
@@ -72,13 +52,8 @@ impl QuiltEndpoints {
         ])
     }
 
-    pub fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
-        self.origin_policy.rewrite_known_origin_url_or_keep(raw_url)
-    }
-
     fn resolve_meta_segments<const N: usize>(&self, segments: [&str; N]) -> Result<String> {
-        self.origin_policy
-            .resolve_segments(QuiltOrigin::Meta, segments)
+        self.resolve_segments(QuiltOrigin::Meta, segments)
     }
 }
 
@@ -86,6 +61,7 @@ impl LoaderMetaEndpoints for QuiltEndpoints {
     type GameVersion = GameVersion;
     type LoaderGameVersion = LoaderGameVersion;
     type ProfileJson = ProfileJson;
+    type Release = crate::catalog::LoaderRelease;
 
     const SOURCE_NAME: &'static str = "quilt source";
 
@@ -100,10 +76,24 @@ impl LoaderMetaEndpoints for QuiltEndpoints {
     fn profile_json_url(&self, game_version: &str, loader_version: &str) -> Result<String> {
         QuiltEndpoints::profile_json_url(self, game_version, loader_version)
     }
+
+    fn game_version_id(version: Self::GameVersion) -> MinecraftVersionId {
+        MinecraftVersionId::from(version.version)
+    }
+
+    fn release(
+        game_version: MinecraftVersionId,
+        version: Self::LoaderGameVersion,
+    ) -> crate::catalog::LoaderRelease {
+        crate::catalog::LoaderRelease::new(
+            game_version,
+            LoaderVersionId::from(version.loader.version),
+        )
+    }
 }
 
 impl UpstreamUrlRewriter for QuiltEndpoints {
     fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
-        QuiltEndpoints::rewrite_upstream(self, raw_url)
+        self.rewrite_known_or_keep(raw_url)
     }
 }

@@ -1,3 +1,4 @@
+use elemental_core::minecraft::MinecraftVersionId;
 use elemental_schema::forge::MavenMetadataBody;
 use quick_xml::de::from_str;
 
@@ -44,4 +45,23 @@ pub async fn fetch_maven_metadata(
         url,
         source,
     })
+}
+
+pub fn infer_neoforge_game_version(loader_version: &str) -> Option<MinecraftVersionId> {
+    let core_version = loader_version.split('-').next().unwrap_or(loader_version);
+    let parts = core_version.split('.').collect::<Vec<&str>>();
+    let [major, minor, ..] = parts.as_slice() else {
+        return None;
+    };
+
+    let major_number = major.parse::<u32>().ok()?;
+    if major_number >= 26 {
+        let game_version = match parts.get(2).copied() {
+            Some("0") | None => format!("{major}.{minor}"),
+            Some(hotfix) => format!("{major}.{minor}.{hotfix}"),
+        };
+        return Some(MinecraftVersionId::from(game_version));
+    }
+
+    Some(MinecraftVersionId::from(format!("1.{major}.{minor}")))
 }

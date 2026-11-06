@@ -8,8 +8,7 @@ use crate::{
     driver::{DriverDescriptor, InstalledDriver},
     drivers::{quilt::source::QuiltSource, vanilla::source::VanillaSource},
     families::version_json::{
-        PASSTHROUGH_PROFILE_BEHAVIOR, ProfiledVersionJsonDriver, ProfiledVersionJsonFamily,
-        VanillaFallbackRemoteResolver, merge_profile_with_behavior,
+        ProfiledVersionJsonDriver, ProfiledVersionJsonFamily, VanillaFallbackRemoteResolver,
     },
     inspect::LibraryPrefixSet,
     loader_version::LoaderVersionId,
@@ -24,15 +23,10 @@ pub struct QuiltDriverFamily;
 #[async_trait(?Send)]
 impl ProfiledVersionJsonFamily for QuiltDriverFamily {
     type Source = QuiltSource;
-    type Profile = ProfileJson;
     type RemoteResolver = super::prepared::QuiltRemoteResolver;
 
     fn descriptor(&self) -> DriverDescriptor {
         QUILT_DRIVER
-    }
-
-    fn default_source(&self) -> Result<Self::Source> {
-        Ok(QuiltSource::default())
     }
 
     fn remote_resolver(
@@ -52,18 +46,10 @@ impl ProfiledVersionJsonFamily for QuiltDriverFamily {
         source: &Self::Source,
         game_version: &MinecraftVersionId,
         loader_version: &LoaderVersionId,
-    ) -> Result<Self::Profile> {
+    ) -> Result<ProfileJson> {
         source
             .profile_json(game_version.as_str(), loader_version.as_str())
             .await
-    }
-
-    fn merge_profile(
-        &self,
-        base_metadata: PistonMetaData,
-        profile: Self::Profile,
-    ) -> Result<PistonMetaData> {
-        merge_profile_with_behavior(&PASSTHROUGH_PROFILE_BEHAVIOR, base_metadata, profile)
     }
 
     fn local_metadata_needs_refresh(

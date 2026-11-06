@@ -1,6 +1,5 @@
 pub mod builder;
 pub mod classpath;
-pub(crate) mod direct_profiled;
 pub mod driver;
 pub mod extensions;
 pub mod family;

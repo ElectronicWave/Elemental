@@ -1,15 +1,8 @@
 use std::{collections::HashMap, future::Future};
 
-use crate::error::Result;
-use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 
-#[async_trait]
-pub trait Catalog {
-    type Release;
-
-    async fn releases(&self) -> Result<HashMap<MinecraftVersionId, Vec<Self::Release>>>;
-}
+use crate::error::Result;
 
 pub fn push_single_game_release<R>(
     releases: &mut HashMap<MinecraftVersionId, Vec<R>>,

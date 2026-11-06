@@ -1,9 +1,10 @@
 pub mod cleanroom;
+pub mod dispatch;
 pub mod fabric;
 pub mod forge;
 pub mod liteloader;
 pub mod neoforge;
+pub mod outlands;
 pub mod quilt;
 pub mod rift;
 pub mod vanilla;
-pub mod outlands;

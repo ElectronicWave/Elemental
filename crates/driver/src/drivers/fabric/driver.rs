@@ -38,7 +38,7 @@ impl FabricDriverFamily {
         overrides: FabricEndpointOverrides,
     ) -> Result<FabricDriver> {
         Ok(self.clone().build_driver(
-            FabricSource::new(FabricEndpoints::with_overrides(overrides)?),
+            FabricSource::new(FabricEndpoints::with_endpoint_overrides(overrides)?),
             VanillaSource::default(),
         ))
     }
@@ -47,7 +47,6 @@ impl FabricDriverFamily {
 #[async_trait(?Send)]
 impl ProfiledVersionJsonFamily for FabricDriverFamily {
     type Source = FabricSource;
-    type Profile = ProfileJson;
     type RemoteResolver = super::prepared::FabricRemoteResolver;
 
     fn descriptor(&self) -> DriverDescriptor {
@@ -77,7 +76,7 @@ impl ProfiledVersionJsonFamily for FabricDriverFamily {
         source: &Self::Source,
         game_version: &MinecraftVersionId,
         loader_version: &LoaderVersionId,
-    ) -> Result<Self::Profile> {
+    ) -> Result<ProfileJson> {
         source
             .profile_json(game_version.as_str(), loader_version.as_str())
             .await
@@ -86,7 +85,7 @@ impl ProfiledVersionJsonFamily for FabricDriverFamily {
     fn merge_profile(
         &self,
         base_metadata: PistonMetaData,
-        profile: Self::Profile,
+        profile: ProfileJson,
     ) -> Result<PistonMetaData> {
         flavor_spec(self.flavor()).merge_profile(base_metadata, profile)
     }

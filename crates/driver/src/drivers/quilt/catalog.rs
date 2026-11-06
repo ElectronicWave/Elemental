@@ -1,55 +1,5 @@
-use std::collections::HashMap;
+use crate::catalog::LoaderMetaCatalog;
 
-use crate::error::Result;
-use async_trait::async_trait;
-use elemental_core::minecraft::MinecraftVersionId;
+use super::source::QuiltEndpoints;
 
-use crate::catalog::{Catalog, collect_single_game_loader_releases};
-use crate::loader_version::LoaderVersionId;
-
-use super::source::QuiltSource;
-
-pub struct QuiltCatalog {
-    source: QuiltSource,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct QuiltRelease {
-    pub game_version: MinecraftVersionId,
-    pub loader_version: LoaderVersionId,
-}
-
-impl QuiltCatalog {
-    pub fn new(source: QuiltSource) -> Self {
-        Self { source }
-    }
-
-    pub fn with_defaults() -> Self {
-        Self::new(QuiltSource::default())
-    }
-}
-
-#[async_trait]
-impl Catalog for QuiltCatalog {
-    type Release = QuiltRelease;
-
-    async fn releases(&self) -> Result<HashMap<MinecraftVersionId, Vec<Self::Release>>> {
-        let game_versions = self
-            .source
-            .game_versions()
-            .await?
-            .into_iter()
-            .map(|game_version| MinecraftVersionId::from(game_version.version))
-            .collect::<Vec<MinecraftVersionId>>();
-
-        collect_single_game_loader_releases(
-            game_versions,
-            |game_version| async move { self.source.loader_versions(game_version.as_str()).await },
-            |game_version, loader| QuiltRelease {
-                game_version: game_version.clone(),
-                loader_version: LoaderVersionId::from(loader.loader.version),
-            },
-        )
-        .await
-    }
-}
+pub type QuiltCatalog = LoaderMetaCatalog<QuiltEndpoints>;

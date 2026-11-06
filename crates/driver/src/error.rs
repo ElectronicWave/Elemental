@@ -355,6 +355,12 @@ pub enum Error {
 
     #[error("unterminated quoted argument string with quote {quote}")]
     UnterminatedArgumentQuote { quote: char },
+
+    #[error("driver '{id}' does not support the requested prepare flow")]
+    UnsupportedDriverFlow { id: String },
+
+    #[error("prepared variant does not match driver '{id}'")]
+    PreparedVariantMismatch { id: String },
 }
 
 #[derive(Debug, thiserror::Error)]

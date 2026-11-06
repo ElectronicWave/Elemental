@@ -65,6 +65,10 @@ where
         }
     }
 
+    pub fn descriptor(&self) -> DriverDescriptor {
+        F::IDENTITY.descriptor()
+    }
+
     pub async fn prepare<L, VL>(
         &self,
         session: &DownloadSession,

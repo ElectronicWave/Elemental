@@ -46,12 +46,19 @@ where
         }
     }
 
-    pub fn with_defaults(family: F) -> Result<Self> {
+    pub fn with_defaults(family: F) -> Result<Self>
+    where
+        F::Source: Default,
+    {
         Ok(Self::new(
             family.clone(),
             family.default_source()?,
             VanillaSource::default(),
         ))
+    }
+
+    pub fn descriptor(&self) -> DriverDescriptor {
+        self.family.descriptor()
     }
 
     pub async fn prepare<L, VL>(

@@ -14,7 +14,6 @@ use crate::{
     descriptors::VANILLA_DRIVER,
     driver::{Driver, DriverDescriptor, InstalledDriver},
     drivers::vanilla::{
-        config::VanillaLaunchConfig,
         prepared::{
             LaunchedVanillaVersion, PreparedVanillaVersion, ResolvedVanillaMetadata,
             ResolvedVanillaVersion,
@@ -22,9 +21,9 @@ use crate::{
         source::{VanillaSource, resolve_vanilla_metadata},
     },
     families::version_json::{
-        VersionJsonInstanceLayout, VersionJsonRootLayout, build_version_json_launch_command,
-        launch_version_json_instance, load_prepared_version_json, persist_version_json,
-        prepare_version_json,
+        VersionJsonInstanceLayout, VersionJsonLaunchConfig, VersionJsonRootLayout,
+        build_version_json_launch_command, launch_version_json_instance,
+        load_prepared_version_json, persist_version_json, prepare_version_json,
     },
     inspect::{InstanceProbe, LibraryPrefixSet},
 };
@@ -78,7 +77,7 @@ impl VanillaDriver {
     >(
         &self,
         prepared_version: PreparedVanillaVersion<L, VL>,
-        config: &VanillaLaunchConfig,
+        config: &VersionJsonLaunchConfig,
         authorizer: A,
     ) -> Result<LaunchedVanillaVersion<L, VL>>
     where
@@ -95,7 +94,7 @@ impl VanillaDriver {
         &self,
         authorizer: A,
         prepared_version: &PreparedVanillaVersion<L, VL>,
-        config: &VanillaLaunchConfig,
+        config: &VersionJsonLaunchConfig,
     ) -> Result<(Distribution, LaunchCommand)>
     where
         A: Authorizer,

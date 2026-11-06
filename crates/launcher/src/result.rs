@@ -43,9 +43,9 @@ where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    Vanilla(PreparedVanillaVersion<L, VL>),
-    Profiled(ProfiledPrepared<L, VL>),
-    Installer(InstallerPrepared<L, VL>),
+    Vanilla(Box<PreparedVanillaVersion<L, VL>>),
+    Profiled(Box<ProfiledPrepared<L, VL>>),
+    Installer(Box<InstallerPrepared<L, VL>>),
 }
 
 impl<L, VL> PreparedInstance<L, VL>

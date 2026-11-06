@@ -7,7 +7,9 @@ use std::{
 use async_trait::async_trait;
 use elemental_core::storage::{Storage, layout::Layoutable};
 use elemental_infra::jar::JarFile;
-use elemental_schema::mojang::piston::{PistonMetaAssetIndexObjects, PistonMetaData};
+use elemental_schema::mojang::piston::{
+    PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaLibrariesDownloadsArtifact,
+};
 use tokio::fs::create_dir_all;
 
 use super::{
@@ -79,14 +81,10 @@ where
         Self::Layout: Clone,
         VL: VersionJsonInstanceLayout + Send,
     {
-        let instance_root = self.try_get_resource(VersionJsonRootResource::Versions(Some(name)))?;
+        let instance_root = instance_root(self, name)?;
         create_dir_all(&instance_root).await?;
 
-        Ok(Storage::with_parent(
-            instance_root,
-            self.clone(),
-            version_layout,
-        ))
+        Ok(open_instance(self, instance_root, version_layout))
     }
 
     fn instance_exists<VL>(&self, name: impl AsRef<str>, version_layout: &VL) -> Result<bool>
@@ -117,13 +115,9 @@ where
         if !self.instance_exists(&name, &version_layout)? {
             return Err(Error::InstanceNotFound { name });
         }
-        let instance_root = self.try_get_resource(VersionJsonRootResource::Versions(Some(name)))?;
+        let instance_root = instance_root(self, name)?;
 
-        Ok(Storage::with_parent(
-            instance_root,
-            self.clone(),
-            version_layout,
-        ))
+        Ok(open_instance(self, instance_root, version_layout))
     }
 
     fn instance_names<VL>(&self, version_layout: &VL) -> Result<Vec<String>>
@@ -219,47 +213,15 @@ where
     }
 
     async fn natives_are_extracted(&self) -> bool {
-        let metadata = match self.metadata() {
-            Ok(metadata) => metadata,
-            Err(_) => return false,
+        let Some(expected) = expected_natives(self) else {
+            return false;
         };
-        let rule_context = VersionJsonRuleContext::current();
-        let natives_root = match self.try_get_resource(VersionJsonInstanceResource::Natives) {
-            Ok(path) => path,
-            Err(_) => return false,
-        };
-        let store = match natives_state_store(&self.path).await {
-            Ok(store) => store,
-            Err(_) => return false,
+        let Ok(store) = natives_state_store(&self.path).await else {
+            return false;
         };
         let state = store.cloned().await;
-        if state.value.path.is_empty() {
-            return false;
-        }
 
-        let expected_path = natives_root.to_string_lossy().to_string();
-        if state.value.path != expected_path {
-            return false;
-        }
-
-        let expected_artifacts = collect_native_artifact_paths(&metadata, &rule_context);
-        if state.value.native_artifacts != expected_artifacts {
-            return false;
-        }
-
-        if expected_artifacts.is_empty() {
-            return true;
-        }
-
-        if state.value.extracted_files.is_empty() {
-            return false;
-        }
-
-        state
-            .value
-            .extracted_files
-            .iter()
-            .all(|file| natives_root.join(file).exists())
+        natives_state_matches(&state.value, &expected)
     }
 
     async fn ensure_platform_natives_path(&self) -> Result<PathBuf> {
@@ -274,53 +236,133 @@ where
         let rule_context = VersionJsonRuleContext::current();
         std::fs::create_dir_all(&destination)?;
 
-        tokio::task::block_in_place(|| -> Result<()> {
-            let natives_directory = NativesDirectory::new(&destination);
-
-            for library in &metadata.libraries {
-                if !library.is_allowed(&rule_context) {
-                    continue;
-                }
-
-                for artifact in library
-                    .native_source_artifacts(rule_context.platform())
-                    .into_iter()
-                    .flatten()
-                {
-                    let source =
-                        self.parent
-                            .try_get_resource(VersionJsonRootResource::Libraries(Some(
-                                PathBuf::from(artifact.path.as_str()),
-                            )))?;
-                    JarFile::new(source).extract_blocking(&destination)?;
-                }
-            }
-
-            natives_directory.flatten_binaries()
-        })?;
-        let extracted_files = NativesDirectory::new(&destination)
-            .root_binaries()?
-            .into_iter()
-            .filter_map(|path| {
-                path.file_name()
-                    .map(|name| name.to_string_lossy().to_string())
-            })
-            .collect::<Vec<String>>();
-        let checked_at_unix_ms = current_unix_ms()?;
-        let store = natives_state_store(&self.path).await?;
-        store
-            .set(|state| {
-                state.value = NativesState {
-                    path: destination.to_string_lossy().to_string(),
-                    native_artifacts: collect_native_artifact_paths(&metadata, &rule_context),
-                    extracted_files,
-                    checked_at_unix_ms,
-                };
-            })
-            .await?;
-
-        Ok(())
+        extract_native_libraries(self, &metadata, &destination, &rule_context)?;
+        record_natives_state(self, &metadata, &destination, &rule_context).await
     }
+}
+
+fn instance_root<L>(storage: &Storage<L>, name: String) -> Result<PathBuf>
+where
+    L: VersionJsonRootLayout,
+{
+    Ok(storage.try_get_resource(VersionJsonRootResource::Versions(Some(name)))?)
+}
+
+fn open_instance<L, VL>(
+    storage: &Storage<L>,
+    instance_root: PathBuf,
+    version_layout: VL,
+) -> Storage<VL, Storage<L>>
+where
+    L: VersionJsonRootLayout + Clone,
+    VL: VersionJsonInstanceLayout,
+{
+    Storage::with_parent(instance_root, storage.clone(), version_layout)
+}
+
+fn expected_natives<L, VL>(storage: &Storage<VL, Storage<L>>) -> Option<NativesExpectation>
+where
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+{
+    let metadata = storage.metadata().ok()?;
+    let rule_context = VersionJsonRuleContext::current();
+    let destination = storage
+        .try_get_resource(VersionJsonInstanceResource::Natives)
+        .ok()?;
+
+    Some(NativesExpectation {
+        destination,
+        native_artifacts: collect_native_artifact_paths(&metadata, &rule_context),
+    })
+}
+
+fn extract_native_libraries<L, VL>(
+    storage: &Storage<VL, Storage<L>>,
+    metadata: &PistonMetaData,
+    destination: &Path,
+    rule_context: &VersionJsonRuleContext,
+) -> Result<()>
+where
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+{
+    tokio::task::block_in_place(|| {
+        for artifact in native_source_artifacts(metadata, rule_context) {
+            let source = storage
+                .parent
+                .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
+                    artifact.path.as_str(),
+                ))))?;
+            JarFile::new(source).extract_blocking(destination)?;
+        }
+
+        NativesDirectory::new(destination).flatten_binaries()
+    })
+}
+
+async fn record_natives_state<L, VL>(
+    storage: &Storage<VL, Storage<L>>,
+    metadata: &PistonMetaData,
+    destination: &Path,
+    rule_context: &VersionJsonRuleContext,
+) -> Result<()>
+where
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+{
+    let extracted_files = NativesDirectory::new(destination)
+        .root_binaries()?
+        .into_iter()
+        .filter_map(binary_file_name)
+        .collect();
+    let checked_at_unix_ms = current_unix_ms()?;
+    let store = natives_state_store(&storage.path).await?;
+    store
+        .set(|state| {
+            state.value = NativesState {
+                path: destination.to_string_lossy().to_string(),
+                native_artifacts: collect_native_artifact_paths(metadata, rule_context),
+                extracted_files,
+                checked_at_unix_ms,
+            };
+        })
+        .await?;
+
+    Ok(())
+}
+
+struct NativesExpectation {
+    destination: PathBuf,
+    native_artifacts: Vec<String>,
+}
+
+fn natives_state_matches(state: &NativesState, expected: &NativesExpectation) -> bool {
+    if state.path.is_empty() {
+        return false;
+    }
+    if state.path != expected.destination.to_string_lossy() {
+        return false;
+    }
+    if state.native_artifacts != expected.native_artifacts {
+        return false;
+    }
+    if expected.native_artifacts.is_empty() {
+        return true;
+    }
+    if state.extracted_files.is_empty() {
+        return false;
+    }
+
+    state
+        .extracted_files
+        .iter()
+        .all(|file| expected.destination.join(file).exists())
+}
+
+fn binary_file_name(path: PathBuf) -> Option<String> {
+    path.file_name()
+        .map(|name| name.to_string_lossy().to_string())
 }
 
 pub async fn inspect_instances<L, VL>(
@@ -344,25 +386,25 @@ fn collect_native_artifact_paths(
     metadata: &PistonMetaData,
     rule_context: &VersionJsonRuleContext,
 ) -> Vec<String> {
-    let mut paths = Vec::new();
-
-    for library in &metadata.libraries {
-        if !library.is_allowed(rule_context) {
-            continue;
-        }
-
-        for artifact in library
-            .native_source_artifacts(rule_context.platform())
-            .into_iter()
-            .flatten()
-        {
-            paths.push(artifact.path.clone());
-        }
-    }
+    let mut paths = native_source_artifacts(metadata, rule_context)
+        .map(|artifact| artifact.path.clone())
+        .collect::<Vec<String>>();
 
     paths.sort();
     paths.dedup();
     paths
+}
+
+fn native_source_artifacts<'a>(
+    metadata: &'a PistonMetaData,
+    rule_context: &'a VersionJsonRuleContext,
+) -> impl Iterator<Item = &'a PistonMetaLibrariesDownloadsArtifact> + 'a {
+    metadata
+        .libraries
+        .iter()
+        .filter(|library| library.is_allowed(rule_context))
+        .flat_map(|library| library.native_source_artifacts(rule_context.platform()))
+        .flatten()
 }
 
 #[derive(Debug, Clone, Copy)]

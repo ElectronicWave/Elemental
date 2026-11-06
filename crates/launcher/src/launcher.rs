@@ -321,7 +321,7 @@ impl ResolvedLauncherDriver {
                 let prepared = driver
                     .prepare(session, instance, vanilla_spec.game_version.clone())
                     .await?;
-                Ok(PreparedInstanceKind::Vanilla(prepared))
+                Ok(PreparedInstanceKind::Vanilla(Box::new(prepared)))
             }
             (
                 Self::Profiled(driver),
@@ -333,17 +333,9 @@ impl ResolvedLauncherDriver {
                 | DriverSpec::Rift(_)),
             ) => {
                 let prepared = driver
-                    .prepare(
-                        session,
-                        instance,
-                        LoaderRequest {
-                            descriptor: spec.descriptor(),
-                            game_version: spec.game_version().clone(),
-                            loader_version: loader_version(spec)?,
-                        },
-                    )
+                    .prepare(session, instance, loader_request(spec)?)
                     .await?;
-                Ok(PreparedInstanceKind::Profiled(prepared))
+                Ok(PreparedInstanceKind::Profiled(Box::new(prepared)))
             }
             (
                 Self::Installer(driver),
@@ -353,17 +345,9 @@ impl ResolvedLauncherDriver {
                 | DriverSpec::NeoForge(_)),
             ) => {
                 let prepared = driver
-                    .prepare(
-                        session,
-                        instance,
-                        LoaderRequest {
-                            descriptor: spec.descriptor(),
-                            game_version: spec.game_version().clone(),
-                            loader_version: loader_version(spec)?,
-                        },
-                    )
+                    .prepare(session, instance, loader_request(spec)?)
                     .await?;
-                Ok(PreparedInstanceKind::Installer(prepared))
+                Ok(PreparedInstanceKind::Installer(Box::new(prepared)))
             }
             _ => Err(Error::UnsupportedDriverFlow {
                 id: spec.id().to_owned(),
@@ -380,15 +364,15 @@ impl ResolvedLauncherDriver {
         VL: VersionJsonInstanceLayout + Clone,
     {
         match self {
-            Self::Vanilla(driver) => Ok(PreparedInstanceKind::Vanilla(
+            Self::Vanilla(driver) => Ok(PreparedInstanceKind::Vanilla(Box::new(
                 driver.load_prepared(instance).await?,
-            )),
-            Self::Profiled(driver) => Ok(PreparedInstanceKind::Profiled(
+            ))),
+            Self::Profiled(driver) => Ok(PreparedInstanceKind::Profiled(Box::new(
                 driver.load_prepared(instance).await?,
-            )),
-            Self::Installer(driver) => Ok(PreparedInstanceKind::Installer(
+            ))),
+            Self::Installer(driver) => Ok(PreparedInstanceKind::Installer(Box::new(
                 driver.load_prepared(instance).await?,
-            )),
+            ))),
         }
     }
 
@@ -451,6 +435,14 @@ fn loader_version(spec: &DriverSpec) -> Result<LoaderVersionId> {
         .ok_or_else(|| Error::UnsupportedDriverFlow {
             id: spec.id().to_owned(),
         })
+}
+
+fn loader_request(spec: &DriverSpec) -> Result<LoaderRequest> {
+    Ok(LoaderRequest {
+        descriptor: spec.descriptor(),
+        game_version: spec.game_version().clone(),
+        loader_version: loader_version(spec)?,
+    })
 }
 
 impl InspectDrivers {

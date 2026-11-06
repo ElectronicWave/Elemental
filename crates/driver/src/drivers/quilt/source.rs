@@ -1,5 +1,6 @@
 use elemental_core::minecraft::MinecraftVersionId;
-use elemental_schema::quilt::{GameVersion, LoaderGameVersion, ProfileJson};
+use elemental_schema::quilt::{GameVersion, ProfileJson};
+use serde::Deserialize;
 
 use crate::{
     error::Result,
@@ -31,6 +32,16 @@ impl Origin for QuiltOrigin {
 pub type QuiltEndpoints = OriginEndpoints<QuiltOrigin>;
 pub type QuiltSource = LoaderMetaSource<QuiltEndpoints>;
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct QuiltLoaderListEntry {
+    pub loader: QuiltLoaderListVersion,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct QuiltLoaderListVersion {
+    pub version: String,
+}
+
 impl QuiltEndpoints {
     pub fn game_versions_url(&self) -> Result<String> {
         self.resolve_meta_segments(["v3", "versions", "game"])
@@ -59,9 +70,8 @@ impl QuiltEndpoints {
 
 impl LoaderMetaEndpoints for QuiltEndpoints {
     type GameVersion = GameVersion;
-    type LoaderGameVersion = LoaderGameVersion;
+    type LoaderGameVersion = QuiltLoaderListEntry;
     type ProfileJson = ProfileJson;
-    type Release = crate::catalog::LoaderRelease;
 
     const SOURCE_NAME: &'static str = "quilt source";
 
@@ -77,8 +87,12 @@ impl LoaderMetaEndpoints for QuiltEndpoints {
         QuiltEndpoints::profile_json_url(self, game_version, loader_version)
     }
 
-    fn game_version_id(version: Self::GameVersion) -> MinecraftVersionId {
-        MinecraftVersionId::from(version.version)
+    fn game_version(version: Self::GameVersion) -> crate::catalog::GameVersion {
+        crate::catalog::GameVersion {
+            id: MinecraftVersionId::from(version.version),
+            description: None,
+            stream: Some(if version.stable { "stable" } else { "snapshot" }.to_owned()),
+        }
     }
 
     fn release(

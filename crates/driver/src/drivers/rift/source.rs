@@ -45,12 +45,14 @@ pub struct RiftRelease {
     pub asset_name: String,
     pub asset_size: Option<usize>,
     pub published_at: Option<String>,
+    pub prerelease: bool,
 }
 
 #[derive(Debug, Deserialize)]
 struct GitHubRelease {
     tag_name: String,
     draft: bool,
+    prerelease: bool,
     published_at: Option<String>,
     assets: Vec<GitHubReleaseAsset>,
 }
@@ -236,6 +238,7 @@ fn build_rift_release(release: GitHubRelease) -> Result<RiftRelease> {
         asset_name: asset.name,
         asset_size: Some(asset.size),
         published_at: release.published_at,
+        prerelease: release.prerelease,
     })
 }
 
@@ -246,6 +249,7 @@ fn release_for_loader_version(loader_version: &str) -> RiftRelease {
         asset_name: format!("Rift-{loader_version}.jar"),
         asset_size: None,
         published_at: None,
+        prerelease: false,
     }
 }
 
@@ -258,15 +262,6 @@ fn normalize_loader_version(tag_name: &str) -> Result<String> {
     }
 
     Ok(loader_version.to_owned())
-}
-
-async fn read_release_profile_json(release: &RiftRelease, jar_bytes: Vec<u8>) -> Result<String> {
-    JarBytes::new(jar_bytes.as_slice())
-        .by_name_string("profile.json")
-        .map_err(|source| Error::ReadRiftProfile {
-            asset_name: release.asset_name.clone(),
-            source,
-        })
 }
 
 fn parse_profile_json(raw_profile: &str) -> Result<ProfileJson> {
@@ -421,4 +416,12 @@ fn build_rift_mixin_library(endpoints: &RiftEndpoints) -> ProfileLibrary {
 fn is_rift_loader_library(library_name: &str) -> bool {
     library_name.starts_with("org.dimdev:rift:")
         || library_name.starts_with("com.github.Chocohead:Rift:")
+}
+async fn read_release_profile_json(release: &RiftRelease, jar_bytes: Vec<u8>) -> Result<String> {
+    JarBytes::new(jar_bytes.as_slice())
+        .by_name_string("profile.json")
+        .map_err(|source| Error::ReadRiftProfile {
+            asset_name: release.asset_name.clone(),
+            source,
+        })
 }

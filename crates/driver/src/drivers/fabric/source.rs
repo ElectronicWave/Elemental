@@ -1,5 +1,6 @@
 use elemental_core::minecraft::MinecraftVersionId;
-use elemental_schema::fabric::{GameVersion, LoaderGameVersion, LoaderProfile, ProfileJson};
+use elemental_schema::fabric::{GameVersion, LoaderProfile, LoaderVersion, ProfileJson};
+use serde::Deserialize;
 
 use crate::{
     error::Result,
@@ -46,6 +47,11 @@ impl Origin for FabricOrigin {
 
 pub type FabricEndpoints = OriginEndpoints<FabricOrigin>;
 pub type FabricSource = LoaderMetaSource<FabricEndpoints>;
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct FabricLoaderListEntry {
+    pub loader: LoaderVersion,
+}
 
 impl FabricEndpoints {
     pub fn for_flavor(flavor: FabricFlavor) -> Result<Self> {
@@ -94,9 +100,8 @@ impl FabricEndpoints {
 
 impl LoaderMetaEndpoints for FabricEndpoints {
     type GameVersion = GameVersion;
-    type LoaderGameVersion = LoaderGameVersion;
+    type LoaderGameVersion = FabricLoaderListEntry;
     type ProfileJson = ProfileJson;
-    type Release = crate::catalog::LoaderRelease;
 
     const SOURCE_NAME: &'static str = "fabric source";
 
@@ -112,8 +117,12 @@ impl LoaderMetaEndpoints for FabricEndpoints {
         FabricEndpoints::profile_json_url(self, game_version, loader_version)
     }
 
-    fn game_version_id(version: Self::GameVersion) -> MinecraftVersionId {
-        MinecraftVersionId::from(version.version)
+    fn game_version(version: Self::GameVersion) -> crate::catalog::GameVersion {
+        crate::catalog::GameVersion {
+            id: MinecraftVersionId::from(version.version),
+            description: None,
+            stream: Some(if version.stable { "stable" } else { "snapshot" }.to_owned()),
+        }
     }
 
     fn release(

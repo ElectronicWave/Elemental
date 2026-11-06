@@ -1,8 +1,4 @@
-use std::{
-    fmt::{self, Debug},
-    marker::PhantomData,
-    path::PathBuf,
-};
+use std::{fmt::Debug, marker::PhantomData, path::PathBuf};
 
 use crate::error::Result;
 use elemental_core::{minecraft::MinecraftVersionId, storage::Storage};
@@ -33,8 +29,6 @@ pub struct InstallerMavenArtifactSpec {
 pub trait InstallerMavenEndpoints:
     InstallerArtifactEndpoints + Clone + Debug + Send + Sync + 'static
 {
-    type Release: Send;
-
     const SOURCE_NAME: &'static str;
 
     fn maven_metadata_url(&self) -> Result<String>;
@@ -45,10 +39,10 @@ pub trait InstallerMavenEndpoints:
         loader_version: &LoaderVersionId,
     ) -> Result<InstallerMavenArtifactSpec>;
 
-    fn release(version: String) -> Option<(MinecraftVersionId, Self::Release)>;
+    fn release(version: String) -> Option<(MinecraftVersionId, LoaderRelease)>;
 }
 
-pub trait MavenSpec<R = LoaderRelease>: Clone + Debug + Send + Sync + 'static {
+pub trait MavenSpec: Clone + Debug + Send + Sync + 'static {
     type Origin: Origin;
 
     const SOURCE_NAME: &'static str;
@@ -96,7 +90,7 @@ pub trait MavenSpec<R = LoaderRelease>: Clone + Debug + Send + Sync + 'static {
         })
     }
 
-    fn release(version: String) -> Option<(MinecraftVersionId, R)>;
+    fn release(version: String) -> Option<(MinecraftVersionId, LoaderRelease)>;
 
     fn rewrite_upstream(
         endpoints: &OriginEndpoints<Self::Origin>,
@@ -106,50 +100,27 @@ pub trait MavenSpec<R = LoaderRelease>: Clone + Debug + Send + Sync + 'static {
     }
 }
 
-pub struct MavenEndpoints<S, R = LoaderRelease>
+#[derive(Debug, Clone)]
+pub struct MavenEndpoints<S>
 where
-    S: MavenSpec<R>,
+    S: MavenSpec,
 {
     endpoints: OriginEndpoints<S::Origin>,
-    marker: PhantomData<fn() -> (S, R)>,
+    marker: PhantomData<S>,
 }
 
-impl<S, R> Clone for MavenEndpoints<S, R>
+impl<S> Default for MavenEndpoints<S>
 where
-    S: MavenSpec<R>,
-{
-    fn clone(&self) -> Self {
-        Self {
-            endpoints: self.endpoints.clone(),
-            marker: PhantomData,
-        }
-    }
-}
-
-impl<S, R> fmt::Debug for MavenEndpoints<S, R>
-where
-    S: MavenSpec<R>,
-{
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("MavenEndpoints")
-            .field("endpoints", &self.endpoints)
-            .finish()
-    }
-}
-
-impl<S, R> Default for MavenEndpoints<S, R>
-where
-    S: MavenSpec<R>,
+    S: MavenSpec,
 {
     fn default() -> Self {
         Self::official()
     }
 }
 
-impl<S, R> MavenEndpoints<S, R>
+impl<S> MavenEndpoints<S>
 where
-    S: MavenSpec<R>,
+    S: MavenSpec,
 {
     pub fn new(endpoints: OriginEndpoints<S::Origin>) -> Self {
         Self {
@@ -171,10 +142,9 @@ where
     }
 }
 
-impl<S, R> InstallerArtifactEndpoints for MavenEndpoints<S, R>
+impl<S> InstallerArtifactEndpoints for MavenEndpoints<S>
 where
-    S: MavenSpec<R>,
-    R: 'static,
+    S: MavenSpec,
 {
     fn artifact_url(&self, artifact_path: &str) -> Result<String> {
         self.resolve(artifact_path)
@@ -185,13 +155,10 @@ where
     }
 }
 
-impl<S, R> InstallerMavenEndpoints for MavenEndpoints<S, R>
+impl<S> InstallerMavenEndpoints for MavenEndpoints<S>
 where
-    S: MavenSpec<R> + Send + Sync + 'static,
-    R: Send + 'static,
+    S: MavenSpec,
 {
-    type Release = R;
-
     const SOURCE_NAME: &'static str = S::SOURCE_NAME;
 
     fn maven_metadata_url(&self) -> Result<String> {
@@ -206,7 +173,7 @@ where
         S::installer_artifact(&self.endpoints, game_version, loader_version)
     }
 
-    fn release(version: String) -> Option<(MinecraftVersionId, Self::Release)> {
+    fn release(version: String) -> Option<(MinecraftVersionId, LoaderRelease)> {
         S::release(version)
     }
 }

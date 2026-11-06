@@ -1,22 +1,18 @@
-use std::collections::HashMap;
+use std::collections::HashSet;
 
-use crate::error::Result;
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 
-use crate::catalog::{Catalog, push_single_game_release};
-use crate::loader_version::LoaderVersionId;
+use crate::{
+    catalog::{GameVersion, GameVersionCatalog, LoaderRelease, LoaderVersionCatalog},
+    error::Result,
+    loader_version::LoaderVersionId,
+};
 
 use super::source::LiteLoaderSource;
 
 pub struct LiteLoaderCatalog {
     source: LiteLoaderSource,
-}
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct LiteLoaderCatalogRelease {
-    pub game_version: MinecraftVersionId,
-    pub loader_version: LoaderVersionId,
-    pub stream: String,
 }
 
 impl LiteLoaderCatalog {
@@ -30,25 +26,45 @@ impl LiteLoaderCatalog {
 }
 
 #[async_trait]
-impl Catalog for LiteLoaderCatalog {
-    type Release = LiteLoaderCatalogRelease;
+impl GameVersionCatalog for LiteLoaderCatalog {
+    async fn game_versions(&self) -> Result<Vec<GameVersion>> {
+        let mut seen = HashSet::new();
+        Ok(self
+            .source
+            .releases()
+            .await?
+            .into_iter()
+            .filter_map(|release| {
+                let id = MinecraftVersionId::from(release.game_version);
+                seen.insert(id.clone()).then_some(GameVersion {
+                    id,
+                    description: None,
+                    stream: None,
+                })
+            })
+            .collect())
+    }
+}
 
-    async fn releases(&self) -> Result<HashMap<MinecraftVersionId, Vec<Self::Release>>> {
-        let mut releases = HashMap::new();
-
-        for release in self.source.releases().await? {
-            let game_version = MinecraftVersionId::from(release.game_version);
-            push_single_game_release(
-                &mut releases,
-                game_version.clone(),
-                LiteLoaderCatalogRelease {
-                    game_version,
-                    loader_version: LoaderVersionId::from(release.loader_version),
-                    stream: release.stream,
-                },
-            );
-        }
-
-        Ok(releases)
+#[async_trait]
+impl LoaderVersionCatalog for LiteLoaderCatalog {
+    async fn loader_versions(
+        &self,
+        game_version: &MinecraftVersionId,
+    ) -> Result<Vec<LoaderRelease>> {
+        Ok(self
+            .source
+            .releases()
+            .await?
+            .into_iter()
+            .filter(|release| release.game_version == game_version.as_str())
+            .map(|release| {
+                LoaderRelease::new(
+                    game_version.clone(),
+                    LoaderVersionId::from(release.loader_version),
+                )
+                .with_stream(Some(release.stream))
+            })
+            .collect())
     }
 }

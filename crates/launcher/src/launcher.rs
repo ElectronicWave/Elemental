@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -9,7 +8,7 @@ use elemental_core::{
     storage::Storage,
 };
 use elemental_driver::{
-    catalog::Catalog,
+    catalog::{GameVersion, GameVersionCatalog, LoaderRelease, LoaderVersionCatalog},
     descriptors::{
         BABRIC_DRIVER, CLEANROOM_DRIVER, FABRIC_DRIVER, FORGE_DRIVER, LEGACY_FABRIC_DRIVER,
         LITELOADER_DRIVER, NEOFORGE_DRIVER, OUTLANDS_DRIVER, QUILT_DRIVER, RIFT_DRIVER,
@@ -146,11 +145,19 @@ where
             .map(summarize_installed_instance))
     }
 
-    pub async fn catalog<R, C: Catalog<Release = R>>(
+    pub async fn game_versions<C: GameVersionCatalog>(
         &self,
         catalog: C,
-    ) -> Result<HashMap<MinecraftVersionId, Vec<R>>> {
-        Ok(catalog.releases().await?)
+    ) -> Result<Vec<GameVersion>> {
+        Ok(catalog.game_versions().await?)
+    }
+
+    pub async fn loader_versions<C: LoaderVersionCatalog>(
+        &self,
+        catalog: C,
+        game_version: &MinecraftVersionId,
+    ) -> Result<Vec<LoaderRelease>> {
+        Ok(catalog.loader_versions(game_version).await?)
     }
 
     pub async fn prepare_instance(

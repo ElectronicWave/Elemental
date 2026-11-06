@@ -1,6 +1,9 @@
 use std::fmt::Debug;
 
-use crate::error::Result;
+use crate::{
+    catalog::{GameVersion, LoaderRelease},
+    error::Result,
+};
 use elemental_core::minecraft::MinecraftVersionId;
 use serde::de::DeserializeOwned;
 
@@ -8,9 +11,8 @@ use crate::http::{HttpSource, fetch_json};
 
 pub trait LoaderMetaEndpoints: Clone + Debug + Send + Sync + 'static {
     type GameVersion: DeserializeOwned;
-    type LoaderGameVersion: DeserializeOwned;
+    type LoaderGameVersion: DeserializeOwned + Send;
     type ProfileJson: DeserializeOwned;
-    type Release: Send;
 
     const SOURCE_NAME: &'static str;
 
@@ -18,9 +20,9 @@ pub trait LoaderMetaEndpoints: Clone + Debug + Send + Sync + 'static {
     fn loader_versions_url(&self, game_version: &str) -> Result<String>;
     fn profile_json_url(&self, game_version: &str, loader_version: &str) -> Result<String>;
 
-    fn game_version_id(version: Self::GameVersion) -> MinecraftVersionId;
+    fn game_version(version: Self::GameVersion) -> GameVersion;
     fn release(game_version: MinecraftVersionId, version: Self::LoaderGameVersion)
-    -> Self::Release;
+    -> LoaderRelease;
 }
 
 pub trait LoaderProfileEndpoints: LoaderMetaEndpoints {

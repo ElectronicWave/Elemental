@@ -37,7 +37,7 @@ impl MavenSpec for CleanroomSpec {
 
     const SOURCE_NAME: &'static str = "cleanroom source";
     const MAVEN_ORIGIN: CleanroomOrigin = CleanroomOrigin;
-    const GROUP_PATH: &'static str = "com/cleanroommc/cleanroom";
+    const GROUP_PATH: &'static str = "com/cleanroommc";
     const COORDINATE_GROUP: &'static str = "com.cleanroommc";
     const ARTIFACT: &'static str = "cleanroom";
 

@@ -1,7 +1,7 @@
 use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::{
-    catalog::LoaderRelease,
+    catalog::{LoaderRelease, MavenCatalog},
     descriptors::NEOFORGE_DRIVER,
     families::installer::{
         InstallerFamily, InstallerFamilyDriver, InstallerFamilyDriverSpec, InstallerMavenSource,
@@ -36,7 +36,7 @@ impl MavenSpec for NeoForgeSpec {
 
     const SOURCE_NAME: &'static str = "neoforge source";
     const MAVEN_ORIGIN: NeoForgeOrigin = NeoForgeOrigin;
-    const GROUP_PATH: &'static str = "net/neoforged/neoforge";
+    const GROUP_PATH: &'static str = "net/neoforged";
     const COORDINATE_GROUP: &'static str = "net.neoforged";
     const ARTIFACT: &'static str = "neoforge";
 
@@ -87,3 +87,5 @@ const NEOFORGE_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(
 impl InstallerFamilyDriverSpec for NeoForgeFamily {
     const IDENTITY: ProfiledDriverIdentity = NEOFORGE_IDENTITY;
 }
+
+pub type NeoForgeCatalog = MavenCatalog<NeoForgeEndpoints>;

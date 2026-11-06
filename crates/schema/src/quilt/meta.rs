@@ -80,8 +80,10 @@ pub struct LauncherMeta {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct LoaderGameVersion {
     pub loader: LoaderVersion,
-    pub hashed: HashedVersion,
-    pub intermediary: IntermediaryVersion,
+    #[serde(default)]
+    pub hashed: Option<HashedVersion>,
+    #[serde(default)]
+    pub intermediary: Option<IntermediaryVersion>,
     #[serde(rename = "launcherMeta")]
     pub launcher_meta: LauncherMeta,
 }

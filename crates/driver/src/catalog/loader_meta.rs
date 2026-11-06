@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 
@@ -8,7 +6,7 @@ use crate::{
     families::version_json::{LoaderMetaEndpoints, LoaderMetaSource},
 };
 
-use super::{Catalog, collect_single_game_loader_releases};
+use super::{GameVersion, GameVersionCatalog, LoaderRelease, LoaderVersionCatalog};
 
 pub struct LoaderMetaCatalog<E>
 where
@@ -38,26 +36,36 @@ where
 }
 
 #[async_trait]
-impl<E> Catalog for LoaderMetaCatalog<E>
+impl<E> GameVersionCatalog for LoaderMetaCatalog<E>
 where
     E: LoaderMetaEndpoints,
 {
-    type Release = E::Release;
-
-    async fn releases(&self) -> Result<HashMap<MinecraftVersionId, Vec<Self::Release>>> {
-        let game_versions = self
+    async fn game_versions(&self) -> Result<Vec<GameVersion>> {
+        Ok(self
             .source
             .game_versions()
             .await?
             .into_iter()
-            .map(E::game_version_id)
-            .collect::<Vec<MinecraftVersionId>>();
+            .map(E::game_version)
+            .collect())
+    }
+}
 
-        collect_single_game_loader_releases(
-            game_versions,
-            |game_version| async move { self.source.loader_versions(game_version.as_str()).await },
-            |game_version, loader| E::release(game_version.clone(), loader),
-        )
-        .await
+#[async_trait]
+impl<E> LoaderVersionCatalog for LoaderMetaCatalog<E>
+where
+    E: LoaderMetaEndpoints,
+{
+    async fn loader_versions(
+        &self,
+        game_version: &MinecraftVersionId,
+    ) -> Result<Vec<LoaderRelease>> {
+        Ok(self
+            .source
+            .loader_versions(game_version.as_str())
+            .await?
+            .into_iter()
+            .map(|loader| E::release(game_version.clone(), loader))
+            .collect())
     }
 }

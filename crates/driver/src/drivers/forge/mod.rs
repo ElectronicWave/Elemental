@@ -34,12 +34,14 @@ impl MavenSpec for ForgeSpec {
 
     const SOURCE_NAME: &'static str = "forge source";
     const MAVEN_ORIGIN: ForgeOrigin = ForgeOrigin;
-    const GROUP_PATH: &'static str = "net/minecraftforge/forge";
+    const GROUP_PATH: &'static str = "net/minecraftforge";
     const COORDINATE_GROUP: &'static str = "net.minecraftforge";
     const ARTIFACT: &'static str = "forge";
 
     fn release(version: String) -> Option<(MinecraftVersionId, LoaderRelease)> {
-        let (game_version, loader_version) = version.split_once('-')?;
+        let mut parts = version.split('-');
+        let game_version = parts.next()?;
+        let loader_version = parts.next()?;
         let game_version = MinecraftVersionId::from(game_version);
         Some((
             game_version.clone(),

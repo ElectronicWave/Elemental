@@ -37,7 +37,7 @@ impl MavenSpec for OutlandsSpec {
 
     const SOURCE_NAME: &'static str = "Outlands source";
     const MAVEN_ORIGIN: OutlandsOrigin = OutlandsOrigin;
-    const GROUP_PATH: &'static str = "top/outlands/outlands";
+    const GROUP_PATH: &'static str = "top/outlands";
     const COORDINATE_GROUP: &'static str = "top.outlands";
     const ARTIFACT: &'static str = "outlands";
 

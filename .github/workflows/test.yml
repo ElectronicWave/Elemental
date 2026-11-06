@@ -28,6 +28,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+      - name: Check formatting
+        run: cargo fmt -p elemental-infra --check
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Build
         run: cargo build --verbose
       - name: Run tests

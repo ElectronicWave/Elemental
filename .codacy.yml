@@ -1,0 +1,9 @@
+---
+exclude_paths:
+  - ".agents/**"
+  - ".codex/**"
+  - ".idea/**"
+  - ".minecraft/**"
+  - "target/**"
+  - "Cargo.lock"
+  - "skills-lock.json"

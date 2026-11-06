@@ -11,7 +11,7 @@ use super::{
 };
 use crate::downloader::{
     task::{DownloadTask, validate_sha1},
-    validation::target_matches_task,
+    validation::DownloadValidation,
 };
 use crate::error::{Error, Result};
 
@@ -47,7 +47,7 @@ impl HardlinkCacheMaterializer {
             })?;
         tokio::fs::create_dir_all(parent).await?;
 
-        let file_name = task
+        let target_file_name = task
             .path
             .file_name()
             .ok_or_else(|| Error::MissingPathComponent {
@@ -55,10 +55,10 @@ impl HardlinkCacheMaterializer {
                 component: "target file name",
             })?
             .to_string_lossy()
-            .to_string();
+            .into_owned();
 
         for _ in 0..32 {
-            let temp_path = next_temp_path(parent, &file_name);
+            let temp_path = next_temp_path(parent, &target_file_name);
             match tokio::fs::hard_link(cache_path, &temp_path).await {
                 Ok(()) => {
                     let result = replace_file(&temp_path, &task.path).await;
@@ -68,8 +68,10 @@ impl HardlinkCacheMaterializer {
                     return result;
                 }
                 Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
-                Err(error) if should_fallback_to_copy(&error) => {
-                    return copy_file_into_place(cache_path, &task.path, parent, &file_name).await;
+                Err(error) if Self::should_fallback_to_copy(&error) => {
+                    return self
+                        .copy_file_into_place(cache_path, &task.path, parent, &target_file_name)
+                        .await;
                 }
                 Err(error) => return Err(error.into()),
             }
@@ -79,52 +81,57 @@ impl HardlinkCacheMaterializer {
             directory: parent.to_path_buf(),
         })
     }
-}
 
-fn should_fallback_to_copy(error: &std::io::Error) -> bool {
-    matches!(
-        error.kind(),
-        ErrorKind::CrossesDevices | ErrorKind::Unsupported | ErrorKind::PermissionDenied
-    )
-}
-
-async fn copy_file_into_place(
-    cache_path: &Path,
-    target_path: &Path,
-    parent: &Path,
-    file_name: &str,
-) -> Result<()> {
-    let StagedDownload {
-        path: temp_path,
-        file,
-    } = create_temp_output_file(parent, file_name.to_owned()).await?;
-
-    let result = copy_file_contents(cache_path, file, &temp_path, target_path).await;
-    if result.is_err() {
-        cleanup_file(&temp_path).await;
+    fn should_fallback_to_copy(error: &std::io::Error) -> bool {
+        matches!(
+            error.kind(),
+            ErrorKind::CrossesDevices | ErrorKind::Unsupported | ErrorKind::PermissionDenied
+        )
     }
-    result
-}
 
-async fn copy_file_contents(
-    cache_path: &Path,
-    file: Option<tokio::fs::File>,
-    temp_path: &Path,
-    target_path: &Path,
-) -> Result<()> {
-    let mut source = tokio::fs::File::open(cache_path).await?;
-    let mut destination = file.ok_or(Error::StagedFileMissing)?;
-    tokio::io::copy(&mut source, &mut destination).await?;
-    destination.flush().await?;
-    drop(destination);
-    drop(source);
-    replace_file(temp_path, target_path).await
+    async fn copy_file_into_place(
+        &self,
+        cache_path: &Path,
+        target_path: &Path,
+        parent: &Path,
+        file_name: &str,
+    ) -> Result<()> {
+        let StagedDownload {
+            path: temp_path,
+            file,
+        } = create_temp_output_file(parent, file_name.to_owned()).await?;
+
+        let result = self
+            .copy_file_contents(cache_path, file, &temp_path, target_path)
+            .await;
+        if result.is_err() {
+            cleanup_file(&temp_path).await;
+        }
+        result
+    }
+
+    async fn copy_file_contents(
+        &self,
+        cache_path: &Path,
+        file: Option<tokio::fs::File>,
+        temp_path: &Path,
+        target_path: &Path,
+    ) -> Result<()> {
+        let mut source = tokio::fs::File::open(cache_path).await?;
+        let mut destination = file.ok_or(Error::StagedFileMissing)?;
+        tokio::io::copy(&mut source, &mut destination).await?;
+        destination.flush().await?;
+        drop(destination);
+        drop(source);
+        replace_file(temp_path, target_path).await
+    }
 }
 
 #[async_trait]
 impl Materializer for HardlinkCacheMaterializer {
     async fn try_reuse(&self, task: &DownloadTask) -> Result<bool> {
-        if target_matches_task(&task.path, task).await? {
+        let validation = DownloadValidation::from_task(task);
+        if validation.matches(&task.path).await? {
             return Ok(true);
         }
 
@@ -134,7 +141,7 @@ impl Materializer for HardlinkCacheMaterializer {
             Err(error) => return Err(error),
         };
 
-        if !target_matches_task(&cache_path, task).await? {
+        if !validation.matches(&cache_path).await? {
             return Ok(false);
         }
 
@@ -142,30 +149,16 @@ impl Materializer for HardlinkCacheMaterializer {
         Ok(true)
     }
 
-    async fn create_staging(&self, task: &DownloadTask) -> Result<StagedDownload> {
-        if task.sha1.is_none() {
-            return UncachedMaterializer.create_staging(task).await;
+    fn staging_path(&self, task: &DownloadTask) -> Result<PathBuf> {
+        match self.cache_path_for_task(task) {
+            Ok(cache_path) => Ok(cache_path),
+            Err(Error::HardlinkCacheSha1Missing) => Ok(task.path.clone()),
+            Err(error) => Err(error),
         }
-
-        let cache_path = self.cache_path_for_task(task)?;
-        let parent = cache_path
-            .parent()
-            .ok_or_else(|| Error::MissingPathComponent {
-                path: cache_path.clone(),
-                component: "cache parent directory",
-            })?;
-        let file_name = cache_path
-            .file_name()
-            .ok_or_else(|| Error::MissingPathComponent {
-                path: cache_path.clone(),
-                component: "cache file name",
-            })?
-            .to_string_lossy()
-            .to_string();
-        create_temp_output_file(parent, file_name).await
     }
 
     async fn commit(&self, staged: StagedDownload, task: &DownloadTask) -> Result<()> {
+        let validation = DownloadValidation::from_task(task);
         let cache_path = match self.cache_path_for_task(task) {
             Ok(cache_path) => cache_path,
             Err(Error::HardlinkCacheSha1Missing) => {
@@ -174,7 +167,7 @@ impl Materializer for HardlinkCacheMaterializer {
             Err(error) => return Err(error),
         };
 
-        if target_matches_task(&cache_path, task).await? {
+        if validation.matches(&cache_path).await? {
             cleanup_file(&staged.path).await;
             self.materialize_from_cache(task, &cache_path).await?;
             return Ok(());
@@ -182,10 +175,5 @@ impl Materializer for HardlinkCacheMaterializer {
 
         replace_file(&staged.path, &cache_path).await?;
         self.materialize_from_cache(task, &cache_path).await
-    }
-
-    async fn abort(&self, staged: StagedDownload) -> Result<()> {
-        cleanup_file(&staged.path).await;
-        Ok(())
     }
 }

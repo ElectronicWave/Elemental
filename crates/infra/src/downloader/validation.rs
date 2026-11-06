@@ -24,6 +24,59 @@ impl DownloadValidation {
     pub fn is_enabled(&self) -> bool {
         self.expected_size.is_some() || self.expected_sha1.is_some()
     }
+
+    pub fn streaming(&self) -> StreamingValidator {
+        StreamingValidator::new(self.clone())
+    }
+
+    pub async fn validate_file(&self, path: &Path) -> Result<()> {
+        if !self.is_enabled() {
+            return Ok(());
+        }
+
+        let mut file = File::open(path).await?;
+        let mut validator = self.streaming();
+        let mut buffer = [0u8; VALIDATION_BUFFER_SIZE];
+
+        loop {
+            let read = file.read(&mut buffer).await?;
+            if read == 0 {
+                break;
+            }
+
+            validator.update(&buffer[..read]);
+        }
+
+        validator.finish(path)
+    }
+
+    pub async fn matches(&self, path: &Path) -> Result<bool> {
+        if !self.is_enabled() {
+            return Ok(false);
+        }
+
+        let metadata = match tokio::fs::metadata(path).await {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+            Err(error) => return Err(error.into()),
+        };
+
+        if let Some(expected_size) = self.expected_size
+            && metadata.len() != expected_size
+        {
+            return Ok(false);
+        }
+
+        if self.expected_sha1.is_none() {
+            return Ok(true);
+        }
+
+        match self.validate_file(path).await {
+            Ok(()) => Ok(true),
+            Err(Error::SizeMismatch { .. } | Error::Sha1Mismatch { .. }) => Ok(false),
+            Err(error) => Err(error),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -34,10 +87,6 @@ pub struct StreamingValidator {
 }
 
 impl StreamingValidator {
-    pub fn from_task(task: &DownloadTask) -> Self {
-        Self::new(DownloadValidation::from_task(task))
-    }
-
     pub fn new(validation: DownloadValidation) -> Self {
         let sha1 = validation.expected_sha1.as_ref().map(|_| Sha1::new());
         Self {
@@ -78,55 +127,5 @@ impl StreamingValidator {
         }
 
         Ok(())
-    }
-}
-
-pub async fn validate_file(path: &Path, validation: &DownloadValidation) -> Result<()> {
-    if !validation.is_enabled() {
-        return Ok(());
-    }
-
-    let mut file = File::open(path).await?;
-    let mut validator = StreamingValidator::new(validation.clone());
-    let mut buffer = [0u8; VALIDATION_BUFFER_SIZE];
-
-    loop {
-        let read = file.read(&mut buffer).await?;
-        if read == 0 {
-            break;
-        }
-
-        validator.update(&buffer[..read]);
-    }
-
-    validator.finish(path)
-}
-
-pub async fn target_matches_task(path: &Path, task: &DownloadTask) -> Result<bool> {
-    let validation = DownloadValidation::from_task(task);
-    if !validation.is_enabled() {
-        return Ok(false);
-    }
-
-    let metadata = match tokio::fs::metadata(path).await {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(error) => return Err(error.into()),
-    };
-
-    if let Some(expected_size) = validation.expected_size
-        && metadata.len() != expected_size
-    {
-        return Ok(false);
-    }
-
-    if validation.expected_sha1.is_none() {
-        return Ok(true);
-    }
-
-    match validate_file(path, &validation).await {
-        Ok(()) => Ok(true),
-        Err(Error::SizeMismatch { .. } | Error::Sha1Mismatch { .. }) => Ok(false),
-        Err(error) => Err(error),
     }
 }

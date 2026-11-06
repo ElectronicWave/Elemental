@@ -7,7 +7,7 @@ use super::materializer::StagedDownload;
 use super::report::DownloadPhase;
 use super::session::SessionHandler;
 use super::task::{DownloadTask, TaskId};
-use super::validation::StreamingValidator;
+use super::validation::DownloadValidation;
 use crate::error::Error;
 
 mod error;
@@ -38,7 +38,7 @@ pub(super) async fn download_attempt(
     let materializer_for_execute = materializer.clone();
     let global_bandwidth_limiter = downloader.bandwidth_limiter.clone();
     let task_for_execute = task.clone();
-    let mut validator = StreamingValidator::from_task(task);
+    let mut validator = DownloadValidation::from_task(task).streaming();
 
     let executer = async move {
         let StagedDownload { path, file } = staged;

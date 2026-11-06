@@ -203,6 +203,17 @@ impl SessionHandler {
         }
     }
 
+    pub(crate) fn finish_failed(&self, failure: DownloadFailure) {
+        self.mark_failed(failure);
+        self.apply_failure_policy();
+        self.finish_task();
+    }
+
+    pub(crate) fn finish_cancelled(&self, task_id: &TaskId) {
+        self.mark_cancelled(task_id);
+        self.finish_task();
+    }
+
     pub(crate) async fn wait_idle(&self) {
         loop {
             let notified = self.idle.notified();

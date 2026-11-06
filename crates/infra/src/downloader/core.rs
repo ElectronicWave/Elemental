@@ -6,10 +6,7 @@ use std::sync::{
 use tokio::sync::{Mutex as AsyncMutex, broadcast, mpsc};
 
 use super::batch::DownloadBatch;
-use super::config::{
-    ElementalDownloaderConfig, ValidatedDownloaderConfig, build_downloader_client,
-    validate_downloader_config,
-};
+use super::config::{ElementalDownloaderConfig, ValidatedDownloaderConfig};
 use super::event::{DownloadEvent, DownloadEventStream, SessionSnapshot};
 use super::limits::{BandwidthLimiter, ConcurrencyController};
 use super::materializer::{HardlinkCacheMaterializer, Materializer, UncachedMaterializer};
@@ -84,10 +81,10 @@ impl ElementalDownloaderBuilder {
     }
 
     pub fn build(self) -> Result<Arc<ElementalDownloader>> {
-        let config = validate_downloader_config(self.config)?;
+        let config = ValidatedDownloaderConfig::try_from(self.config)?;
         let client = match self.client {
             Some(client) => client,
-            None => build_downloader_client(&config)?,
+            None => config.client()?,
         };
 
         Ok(ElementalDownloader::from_parts(

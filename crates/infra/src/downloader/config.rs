@@ -15,6 +15,16 @@ pub(super) struct ValidatedDownloaderConfig {
     pub(super) rate_limit: DownloadRateLimit,
 }
 
+impl ValidatedDownloaderConfig {
+    pub(super) fn client(&self) -> Result<reqwest::Client> {
+        ClientBuilder::new()
+            .connect_timeout(self.connect_timeout)
+            .read_timeout(self.read_timeout)
+            .build()
+            .map_err(Error::from)
+    }
+}
+
 #[derive(Debug)]
 pub struct ElementalDownloaderConfig {
     pub max_concurrent_downloads: usize,
@@ -42,41 +52,33 @@ pub(super) fn build_queue_capacity(worker_count: usize) -> usize {
     (worker_count.saturating_mul(32)).max(128)
 }
 
-pub(super) fn validate_downloader_config(
-    config: ElementalDownloaderConfig,
-) -> Result<ValidatedDownloaderConfig> {
-    if config.max_concurrent_downloads == 0 {
-        return Err(Error::InvalidMaxConcurrentDownloads);
+impl TryFrom<ElementalDownloaderConfig> for ValidatedDownloaderConfig {
+    type Error = Error;
+
+    fn try_from(config: ElementalDownloaderConfig) -> Result<Self> {
+        if config.max_concurrent_downloads == 0 {
+            return Err(Error::InvalidMaxConcurrentDownloads);
+        }
+
+        if config.default_session_parallelism == 0 {
+            return Err(Error::InvalidSessionParallelism);
+        }
+
+        if config.session_queue_capacity == 0 {
+            return Err(Error::InvalidSessionQueueCapacity);
+        }
+
+        if config.read_timeout.is_zero() {
+            return Err(Error::InvalidReadTimeout);
+        }
+
+        Ok(Self {
+            max_concurrent_downloads: config.max_concurrent_downloads,
+            default_session_parallelism: config.default_session_parallelism,
+            session_queue_capacity: config.session_queue_capacity,
+            connect_timeout: config.connect_timeout,
+            read_timeout: config.read_timeout,
+            rate_limit: config.rate_limit,
+        })
     }
-
-    if config.default_session_parallelism == 0 {
-        return Err(Error::InvalidSessionParallelism);
-    }
-
-    if config.session_queue_capacity == 0 {
-        return Err(Error::InvalidSessionQueueCapacity);
-    }
-
-    if config.read_timeout.is_zero() {
-        return Err(Error::InvalidReadTimeout);
-    }
-
-    Ok(ValidatedDownloaderConfig {
-        max_concurrent_downloads: config.max_concurrent_downloads,
-        default_session_parallelism: config.default_session_parallelism,
-        session_queue_capacity: config.session_queue_capacity,
-        connect_timeout: config.connect_timeout,
-        read_timeout: config.read_timeout,
-        rate_limit: config.rate_limit,
-    })
-}
-
-pub(super) fn build_downloader_client(
-    config: &ValidatedDownloaderConfig,
-) -> Result<reqwest::Client> {
-    ClientBuilder::new()
-        .connect_timeout(config.connect_timeout)
-        .read_timeout(config.read_timeout)
-        .build()
-        .map_err(Error::from)
 }

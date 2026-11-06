@@ -33,7 +33,7 @@ pub(super) async fn run_session_worker(
         };
 
         if handler.is_scheduling_stopped() || handler.token().is_cancelled() {
-            finish_task_cancelled(handler.as_ref(), &queued_task.task_id);
+            handler.finish_cancelled(&queued_task.task_id);
             continue;
         }
 
@@ -55,14 +55,14 @@ async fn execute_queued_task(
     let token = handler.token().child_token();
 
     if token.is_cancelled() {
-        finish_task_cancelled(handler.as_ref(), &task_id);
+        handler.finish_cancelled(&task_id);
         return;
     }
 
     let resolved = tokio::select! {
         biased;
         () = token.cancelled() => {
-            finish_task_cancelled(handler.as_ref(), &task_id);
+            handler.finish_cancelled(&task_id);
             return;
         }
         resolved = downloader.materializer.try_reuse(&task) => resolved,
@@ -76,17 +76,14 @@ async fn execute_queued_task(
         }
         Ok(false) => {}
         Err(error) => {
-            finish_task_error(
-                handler.as_ref(),
-                task_failure(
-                    &task_id,
-                    &task,
-                    group,
-                    DownloadPhase::Prepare,
-                    None,
-                    error.to_string(),
-                ),
-            );
+            handler.finish_failed(task_failure(
+                &task_id,
+                &task,
+                group,
+                DownloadPhase::Prepare,
+                None,
+                error.to_string(),
+            ));
             return;
         }
     }
@@ -102,7 +99,7 @@ async fn execute_queued_task(
         let permit = tokio::select! {
             biased;
             () = token.cancelled() => {
-                finish_task_cancelled(handler.as_ref(), &task_id);
+                handler.finish_cancelled(&task_id);
                 return;
             }
             permit = downloader.concurrency.acquire_owned() => permit,
@@ -111,24 +108,21 @@ async fn execute_queued_task(
         let permit = match permit {
             Ok(permit) => permit,
             Err(error) => {
-                finish_task_error(
-                    handler.as_ref(),
-                    task_failure(
-                        &task_id,
-                        &record_task,
-                        group,
-                        DownloadPhase::Prepare,
-                        None,
-                        error.to_string(),
-                    ),
-                );
+                handler.finish_failed(task_failure(
+                    &task_id,
+                    &record_task,
+                    group,
+                    DownloadPhase::Prepare,
+                    None,
+                    error.to_string(),
+                ));
                 return;
             }
         };
 
         if token.is_cancelled() || handler.is_scheduling_stopped() {
             drop(permit);
-            finish_task_cancelled(handler.as_ref(), &task_id);
+            handler.finish_cancelled(&task_id);
             return;
         }
 
@@ -159,7 +153,7 @@ async fn execute_queued_task(
                 let retryable = error.is_retryable();
                 if retryable && attempt < retry_policy.max_attempts {
                     let delay = retry_policy.backoff(attempt);
-                    handler.mark_retrying(&task_id, attempt, delay, attempt_reason(&error));
+                    handler.mark_retrying(&task_id, attempt, delay, error.to_string());
                     if wait_for_retry(&token, delay).await {
                         continue;
                     }
@@ -179,13 +173,6 @@ async fn execute_queued_task(
     handler.finish_task();
 }
 
-fn attempt_reason(error: &AttemptError) -> String {
-    match error {
-        AttemptError::Transfer(error) => error.to_string(),
-        AttemptError::Cancelled => "download attempt was cancelled".to_owned(),
-    }
-}
-
 async fn wait_for_retry(token: &CancellationToken, delay: Duration) -> bool {
     if delay.is_zero() {
         return !token.is_cancelled();
@@ -196,17 +183,6 @@ async fn wait_for_retry(token: &CancellationToken, delay: Duration) -> bool {
         () = token.cancelled() => false,
         () = tokio::time::sleep(delay) => true,
     }
-}
-
-fn finish_task_error(handler: &SessionHandler, failure: DownloadFailure) {
-    handler.mark_failed(failure);
-    handler.apply_failure_policy();
-    handler.finish_task();
-}
-
-fn finish_task_cancelled(handler: &SessionHandler, task_id: &TaskId) {
-    handler.mark_cancelled(task_id);
-    handler.finish_task();
 }
 
 fn task_failure(

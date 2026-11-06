@@ -96,8 +96,8 @@ impl SessionState {
     }
 
     fn insert_record(&mut self, record: TaskRecord) {
-        let task_id = record.task_id.clone();
-        match record.expected_bytes {
+        let task_id = record.details.task_id.clone();
+        match record.details.expected_bytes {
             Some(size) => {
                 self.expected_bytes = self.expected_bytes.saturating_add(size);
             }
@@ -170,7 +170,7 @@ impl SessionState {
     ) -> SessionTransition {
         self.accepted += 1;
         let record = TaskRecord::new(task_id, task, group, now);
-        let info = record.info();
+        let info = record.details.clone();
         self.insert_record(record);
 
         self.build_update(
@@ -218,7 +218,7 @@ impl SessionState {
                     session_id: self.session_id,
                     task_id: task_id.clone(),
                     received_bytes: record.received_bytes,
-                    expected_bytes: record.expected_bytes,
+                    expected_bytes: record.details.expected_bytes,
                 });
             }
         }
@@ -259,30 +259,15 @@ impl SessionState {
         duration: Duration,
         now: Instant,
     ) -> SessionTransition {
-        let received_bytes = self
-            .records
-            .get(task_id)
-            .map(|record| record.received_bytes)
-            .unwrap_or(bytes);
-        self.bytes_in_progress = self.bytes_in_progress.saturating_sub(received_bytes);
         self.downloaded += 1;
         self.bytes_downloaded = self.bytes_downloaded.saturating_add(bytes);
 
-        let events = self
-            .records
-            .get_mut(task_id)
-            .map(|record| {
-                record.received_bytes = bytes;
-                record.status = TaskStatus::Downloaded { bytes, duration };
-                DownloadEvent::TaskFinished {
-                    session_id: self.session_id,
-                    outcome: record.outcome(),
-                }
-            })
-            .into_iter()
-            .collect();
-
-        self.build_update(now, events)
+        self.finish_task(
+            task_id,
+            TaskStatus::Downloaded { bytes, duration },
+            Some(bytes),
+            now,
+        )
     }
 
     pub(super) fn skipped(
@@ -291,71 +276,47 @@ impl SessionState {
         bytes: u64,
         now: Instant,
     ) -> SessionTransition {
-        let received_bytes = self
-            .records
-            .get(task_id)
-            .map(|record| record.received_bytes)
-            .unwrap_or(0);
-        self.bytes_in_progress = self.bytes_in_progress.saturating_sub(received_bytes);
         self.skipped += 1;
         self.bytes_skipped = self.bytes_skipped.saturating_add(bytes);
 
-        let events = self
-            .records
-            .get_mut(task_id)
-            .map(|record| {
-                record.status = TaskStatus::Skipped { bytes };
-                DownloadEvent::TaskFinished {
-                    session_id: self.session_id,
-                    outcome: record.outcome(),
-                }
-            })
-            .into_iter()
-            .collect();
-
-        self.build_update(now, events)
+        self.finish_task(task_id, TaskStatus::Skipped { bytes }, None, now)
     }
 
     pub(super) fn failed(&mut self, failure: DownloadFailure, now: Instant) -> SessionTransition {
         let task_id = failure.task_id.clone();
-        let received_bytes = self
-            .records
-            .get(&task_id)
-            .map(|record| record.received_bytes)
-            .unwrap_or(0);
-        self.bytes_in_progress = self.bytes_in_progress.saturating_sub(received_bytes);
         self.failures.push(failure.clone());
 
-        let events = self
-            .records
-            .get_mut(&task_id)
-            .map(|record| {
-                record.status = TaskStatus::Failed { failure };
-                DownloadEvent::TaskFinished {
-                    session_id: self.session_id,
-                    outcome: record.outcome(),
-                }
-            })
-            .into_iter()
-            .collect();
-
-        self.build_update(now, events)
+        self.finish_task(&task_id, TaskStatus::Failed { failure }, None, now)
     }
 
     pub(super) fn cancelled(&mut self, task_id: &TaskId, now: Instant) -> SessionTransition {
-        let received_bytes = self
+        self.cancelled_task_ids.push(task_id.clone());
+
+        self.finish_task(task_id, TaskStatus::Cancelled, None, now)
+    }
+
+    fn finish_task(
+        &mut self,
+        task_id: &TaskId,
+        status: TaskStatus,
+        final_received_bytes: Option<u64>,
+        now: Instant,
+    ) -> SessionTransition {
+        let in_progress = self
             .records
             .get(task_id)
             .map(|record| record.received_bytes)
-            .unwrap_or(0);
-        self.bytes_in_progress = self.bytes_in_progress.saturating_sub(received_bytes);
-        self.cancelled_task_ids.push(task_id.clone());
+            .unwrap_or_else(|| final_received_bytes.unwrap_or(0));
+        self.bytes_in_progress = self.bytes_in_progress.saturating_sub(in_progress);
 
         let events = self
             .records
             .get_mut(task_id)
             .map(|record| {
-                record.status = TaskStatus::Cancelled;
+                if let Some(received_bytes) = final_received_bytes {
+                    record.received_bytes = received_bytes;
+                }
+                record.status = status;
                 DownloadEvent::TaskFinished {
                     session_id: self.session_id,
                     outcome: record.outcome(),

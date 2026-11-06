@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::{DownloadSession, DownloadSessionOptions};
 use crate::downloader::core::ElementalDownloader;
 use crate::downloader::policy::{FailurePolicy, RetryPolicy};
@@ -5,14 +7,14 @@ use crate::downloader::rate::DownloadRateLimit;
 use crate::error::Result;
 
 #[derive(Debug)]
-pub struct DownloadSessionBuilder<'a> {
-    downloader: &'a ElementalDownloader,
+pub struct DownloadSessionBuilder {
+    downloader: Arc<ElementalDownloader>,
     name: String,
     options: DownloadSessionOptions,
 }
 
-impl<'a> DownloadSessionBuilder<'a> {
-    pub(crate) fn new(downloader: &'a ElementalDownloader, name: String) -> Self {
+impl DownloadSessionBuilder {
+    pub(crate) fn new(downloader: Arc<ElementalDownloader>, name: String) -> Self {
         Self {
             downloader,
             name,

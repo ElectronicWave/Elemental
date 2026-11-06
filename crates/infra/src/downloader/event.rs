@@ -162,16 +162,22 @@ impl TaskInfo {
             status,
         }
     }
+}
 
-    pub(crate) fn snapshot(&self, received_bytes: u64, status: TaskStatus) -> TaskSnapshot {
+impl TaskOutcome {
+    pub(crate) fn into_snapshot(
+        self,
+        expected_bytes: Option<u64>,
+        received_bytes: u64,
+    ) -> TaskSnapshot {
         TaskSnapshot {
-            task_id: self.task_id.clone(),
-            group: self.group.clone(),
-            url: self.url.clone(),
-            path: self.path.clone(),
-            expected_bytes: self.expected_bytes,
+            task_id: self.task_id,
+            group: self.group,
+            url: self.url,
+            path: self.path,
+            expected_bytes,
             received_bytes,
-            status,
+            status: self.status,
         }
     }
 }

@@ -41,9 +41,6 @@ pub enum Error {
     #[error("download task sha1 '{sha1}' must be 40 hexadecimal characters")]
     InvalidSha1 { sha1: String },
 
-    #[error("downloader was dropped unexpectedly")]
-    DownloaderDropped,
-
     #[error("download session '{session_id}' is closed")]
     SessionClosed { session_id: u64 },
 

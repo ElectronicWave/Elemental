@@ -1,5 +1,5 @@
 use scc::HashMap;
-use std::sync::{Arc, Weak, atomic::AtomicU64};
+use std::sync::{Arc, atomic::AtomicU64};
 use tokio::sync::broadcast;
 
 use super::config::ValidatedDownloaderConfig;
@@ -30,7 +30,6 @@ pub struct ElementalDownloader {
     default_session_parallelism: usize,
     session_queue_capacity: usize,
     next_session_id: AtomicU64,
-    me: Weak<Self>,
 }
 
 impl ElementalDownloader {
@@ -58,7 +57,7 @@ impl ElementalDownloader {
                 .expect("validated downloader rate limit must be valid"),
         );
         let (events, _) = broadcast::channel(EVENT_CHANNEL_CAPACITY);
-        Arc::new_cyclic(|me| Self {
+        Arc::new(Self {
             client,
             sessions: HashMap::new(),
             events,
@@ -68,19 +67,18 @@ impl ElementalDownloader {
             default_session_parallelism: config.default_session_parallelism,
             session_queue_capacity: config.session_queue_capacity,
             next_session_id: AtomicU64::new(1),
-            me: me.clone(),
         })
     }
 
-    pub fn session(&self, name: impl Into<String>) -> DownloadSessionBuilder<'_> {
-        DownloadSessionBuilder::new(self, name.into())
+    pub fn session(self: &Arc<Self>, name: impl Into<String>) -> DownloadSessionBuilder {
+        DownloadSessionBuilder::new(Arc::clone(self), name.into())
     }
 
     pub fn subscribe(&self) -> DownloadEventStream {
         DownloadEventStream::new(self.events.subscribe())
     }
 
-    pub async fn download(&self, task: DownloadTask) -> Result<DownloadReport> {
+    pub async fn download(self: &Arc<Self>, task: DownloadTask) -> Result<DownloadReport> {
         task.validate()?;
         let session = self
             .create_session(None, DownloadSessionOptions::default())

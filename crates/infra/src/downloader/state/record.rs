@@ -39,6 +39,7 @@ impl TaskRecord {
 
     pub(super) fn snapshot(&self) -> TaskSnapshot {
         self.details
-            .snapshot(self.received_bytes, self.status.clone())
+            .outcome(self.status.clone())
+            .into_snapshot(self.details.expected_bytes, self.received_bytes)
     }
 }

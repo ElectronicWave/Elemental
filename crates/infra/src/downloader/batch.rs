@@ -1,4 +1,5 @@
 use super::task::DownloadTask;
+use crate::error::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DownloadBatch {
@@ -22,6 +23,10 @@ impl DownloadBatch {
 
     pub(crate) fn into_parts(self) -> (Option<String>, Vec<DownloadTask>) {
         (self.group, self.tasks)
+    }
+
+    pub(crate) fn validate(&self) -> Result<()> {
+        self.tasks.iter().try_for_each(DownloadTask::validate)
     }
 }
 

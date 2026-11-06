@@ -56,3 +56,13 @@ pub enum FailurePolicy {
     /// Cancel in-flight and queued tasks immediately and reject new submissions.
     CancelAll,
 }
+
+impl FailurePolicy {
+    pub(crate) fn stops_scheduling(self) -> bool {
+        !matches!(self, Self::Continue)
+    }
+
+    pub(crate) fn cancels_in_flight(self) -> bool {
+        matches!(self, Self::CancelAll)
+    }
+}

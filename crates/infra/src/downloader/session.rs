@@ -1,6 +1,6 @@
 use std::future::Future;
 use std::sync::{
-    Arc, Weak,
+    Arc,
     atomic::{AtomicBool, Ordering},
 };
 use tokio::sync::{broadcast, watch};
@@ -10,7 +10,7 @@ use super::core::ElementalDownloader;
 use super::event::{DownloadEvent, SessionEventStream, SessionSnapshot};
 use super::report::{DownloadProgress, DownloadReport};
 use super::task::SessionId;
-use crate::error::{Error, Result};
+use crate::error::Result;
 
 mod builder;
 mod handler;
@@ -31,7 +31,7 @@ pub struct DownloadSession {
 #[derive(Debug)]
 struct SessionLease {
     id: SessionId,
-    downloader: Weak<ElementalDownloader>,
+    downloader: Arc<ElementalDownloader>,
     finished: AtomicBool,
 }
 
@@ -41,9 +41,7 @@ impl Drop for SessionLease {
             return;
         }
 
-        if let Some(downloader) = self.downloader.upgrade() {
-            downloader.abort_session_detached(self.id);
-        }
+        self.downloader.abort_session_detached(self.id);
     }
 }
 
@@ -51,7 +49,7 @@ impl DownloadSession {
     pub(super) fn new(
         id: SessionId,
         name: Option<String>,
-        downloader: Weak<ElementalDownloader>,
+        downloader: Arc<ElementalDownloader>,
         progress: watch::Receiver<DownloadProgress>,
         events: broadcast::Sender<DownloadEvent>,
     ) -> Self {
@@ -67,13 +65,6 @@ impl DownloadSession {
         }
     }
 
-    fn downloader(&self) -> Result<Arc<ElementalDownloader>> {
-        self.lease
-            .downloader
-            .upgrade()
-            .ok_or(Error::DownloaderDropped)
-    }
-
     pub fn id(&self) -> SessionId {
         self.lease.id
     }
@@ -83,7 +74,10 @@ impl DownloadSession {
     }
 
     pub async fn submit(&self, batch: impl Into<DownloadBatch>) -> Result<()> {
-        self.downloader()?.submit(self.lease.id, batch.into()).await
+        self.lease
+            .downloader
+            .submit(self.lease.id, batch.into())
+            .await
     }
 
     pub fn progress(&self) -> DownloadProgress {
@@ -99,27 +93,27 @@ impl DownloadSession {
     }
 
     pub async fn snapshot(&self) -> Result<SessionSnapshot> {
-        self.downloader()?.session_snapshot(self.lease.id).await
+        self.lease.downloader.session_snapshot(self.lease.id).await
     }
 
     pub async fn wait_idle(&self) -> Result<()> {
-        self.downloader()?.wait_session_idle(self.lease.id).await
+        self.lease.downloader.wait_session_idle(self.lease.id).await
     }
 
     pub async fn success(&self) -> Result<()> {
-        self.downloader()?.session_success(self.lease.id).await
+        self.lease.downloader.session_success(self.lease.id).await
     }
 
     pub async fn finish(self) -> Result<DownloadReport> {
-        let downloader = self.downloader()?;
         let session_id = self.lease.id;
+        let downloader = Arc::clone(&self.lease.downloader);
         self.complete(downloader.finish_session_report(session_id))
             .await
     }
 
     pub async fn cancel(self) -> Result<DownloadReport> {
-        let downloader = self.downloader()?;
         let session_id = self.lease.id;
+        let downloader = Arc::clone(&self.lease.downloader);
         self.complete(downloader.cancel_session_report(session_id))
             .await
     }

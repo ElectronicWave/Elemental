@@ -1,52 +1,30 @@
 use std::sync::{Arc, atomic::Ordering};
-use tokio::sync::{Mutex as AsyncMutex, mpsc};
 
 use super::ElementalDownloader;
 use crate::downloader::batch::DownloadBatch;
 use crate::downloader::event::{DownloadEvent, SessionSnapshot};
-use crate::downloader::limits::BandwidthLimiter;
 use crate::downloader::report::DownloadReport;
 use crate::downloader::session::{DownloadSession, DownloadSessionOptions, SessionHandler};
 use crate::downloader::task::SessionId;
-use crate::downloader::worker::run_session_worker;
 use crate::error::{Error, Result};
 
 impl ElementalDownloader {
     pub(crate) async fn create_session(
-        &self,
+        self: &Arc<Self>,
         name: Option<String>,
         options: DownloadSessionOptions,
     ) -> Result<DownloadSession> {
         options.validate()?;
         let session_id = self.next_session_id.fetch_add(1, Ordering::Relaxed);
-        let downloader = self.me.upgrade().ok_or(Error::DownloaderDropped)?;
-        let (sender, receiver) = mpsc::channel(self.session_queue_capacity);
-        let receiver = Arc::new(AsyncMutex::new(receiver));
-        let parallelism = options.effective_parallelism(self.default_session_parallelism);
-        let session_rate_limit = options.effective_rate_limit();
-        let (handler, progress) = SessionHandler::new(
+        let (handler, progress) = SessionHandler::spawn(
             session_id,
             name.clone(),
             options,
-            sender,
-            Arc::new(BandwidthLimiter::new(session_rate_limit)?),
+            self.session_queue_capacity,
+            self.default_session_parallelism,
+            Arc::clone(self),
             self.events.clone(),
-        );
-        let handler = Arc::new(handler);
-
-        for _ in 0..parallelism {
-            let handler_for_worker = handler.clone();
-            let receiver_for_worker = receiver.clone();
-            let downloader_for_worker = downloader.clone();
-            handler.spawn_worker(async move {
-                run_session_worker(
-                    downloader_for_worker,
-                    handler_for_worker,
-                    receiver_for_worker,
-                )
-                .await;
-            });
-        }
+        )?;
 
         let handler_for_event = handler.clone();
         self.sessions
@@ -61,32 +39,21 @@ impl ElementalDownloader {
         Ok(DownloadSession::new(
             session_id,
             name,
-            self.me.clone(),
+            Arc::clone(self),
             progress,
             self.events.clone(),
         ))
     }
 
     pub(crate) async fn submit(&self, session_id: SessionId, batch: DownloadBatch) -> Result<()> {
-        let (group, tasks) = batch.into_parts();
-        if tasks.is_empty() {
+        if batch.is_empty() {
             return Ok(());
         }
 
-        for task in &tasks {
-            task.validate()?;
-        }
-
-        let handler = self.session_handler(session_id).await?;
-        let _submission_guard = handler.submission_guard().await;
-
-        handler.ensure_accepting_tasks(session_id)?;
-
-        for task in tasks {
-            handler.enqueue_task(task, group.clone()).await?;
-        }
-
-        Ok(())
+        self.session_handler(session_id)
+            .await?
+            .submit_batch(batch)
+            .await
     }
 
     pub(crate) async fn wait_session_idle(&self, session_id: SessionId) -> Result<()> {
@@ -99,10 +66,10 @@ impl ElementalDownloader {
     }
 
     pub(crate) async fn session_success(&self, session_id: SessionId) -> Result<()> {
-        let handler = self.session_handler(session_id).await?;
-        let _submission_guard = handler.submission_guard().await;
-        handler.wait_idle().await;
-        handler.build_report().success()
+        self.session_handler(session_id)
+            .await?
+            .ensure_success()
+            .await
     }
 
     pub(crate) async fn finish_session_report(

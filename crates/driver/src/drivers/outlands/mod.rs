@@ -34,7 +34,6 @@ pub struct OutlandsSpec;
 
 impl MavenSpec for OutlandsSpec {
     type Origin = OutlandsOrigin;
-    type Release = LoaderRelease;
 
     const SOURCE_NAME: &'static str = "Outlands source";
     const MAVEN_ORIGIN: OutlandsOrigin = OutlandsOrigin;

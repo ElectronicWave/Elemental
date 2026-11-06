@@ -34,7 +34,6 @@ pub struct CleanroomSpec;
 
 impl MavenSpec for CleanroomSpec {
     type Origin = CleanroomOrigin;
-    type Release = LoaderRelease;
 
     const SOURCE_NAME: &'static str = "cleanroom source";
     const MAVEN_ORIGIN: CleanroomOrigin = CleanroomOrigin;

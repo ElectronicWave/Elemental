@@ -31,7 +31,6 @@ pub struct ForgeSpec;
 
 impl MavenSpec for ForgeSpec {
     type Origin = ForgeOrigin;
-    type Release = LoaderRelease;
 
     const SOURCE_NAME: &'static str = "forge source";
     const MAVEN_ORIGIN: ForgeOrigin = ForgeOrigin;

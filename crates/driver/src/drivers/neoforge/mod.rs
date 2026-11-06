@@ -33,7 +33,6 @@ pub struct NeoForgeSpec;
 
 impl MavenSpec for NeoForgeSpec {
     type Origin = NeoForgeOrigin;
-    type Release = LoaderRelease;
 
     const SOURCE_NAME: &'static str = "neoforge source";
     const MAVEN_ORIGIN: NeoForgeOrigin = NeoForgeOrigin;

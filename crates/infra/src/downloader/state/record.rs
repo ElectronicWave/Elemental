@@ -34,11 +34,7 @@ impl TaskRecord {
     }
 
     pub(super) fn outcome(&self) -> TaskOutcome {
-        let status = match &self.status {
-            TaskStatus::Queued | TaskStatus::Active => TaskStatus::Cancelled,
-            status => status.clone(),
-        };
-        self.details.outcome(status)
+        self.details.outcome(self.status.clone().finalized())
     }
 
     pub(super) fn snapshot(&self) -> TaskSnapshot {

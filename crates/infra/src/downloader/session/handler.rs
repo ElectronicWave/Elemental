@@ -3,11 +3,11 @@ use std::{
     future::Future,
     sync::{
         Arc, MutexGuard as StdMutexGuard,
-        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicU64, AtomicUsize, Ordering},
     },
     time::Instant,
 };
-use tokio::sync::{Mutex as AsyncMutex, MutexGuard, broadcast, mpsc, watch};
+use tokio::sync::{Mutex as AsyncMutex, broadcast, mpsc, watch};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 use crate::downloader::session::DownloadSessionOptions;
@@ -17,12 +17,16 @@ use crate::downloader::{
     policy::{FailurePolicy, RetryPolicy},
     report::{DownloadProgress, DownloadReport},
     state::SessionState,
-    task::{DownloadTask, SessionId, TaskId},
+    task::SessionId,
     worker::QueuedDownloadTask,
 };
-use crate::error::{Error, Result};
+use crate::error::Result;
 
+mod lifecycle;
+mod submission;
 mod tasks;
+
+use lifecycle::SessionLifecycle;
 
 pub(crate) struct SessionHandler {
     session_id: SessionId,
@@ -37,8 +41,7 @@ pub(crate) struct SessionHandler {
     next_task_id: AtomicU64,
     pending_tasks: AtomicUsize,
     idle: tokio::sync::Notify,
-    closed: AtomicBool,
-    scheduling_stopped: AtomicBool,
+    lifecycle: SessionLifecycle,
     progress: watch::Sender<DownloadProgress>,
     created_at: Instant,
     token: CancellationToken,
@@ -49,7 +52,7 @@ impl fmt::Debug for SessionHandler {
         f.debug_struct("SessionHandler")
             .field("name", &self.name)
             .field("options", &self.options)
-            .field("is_closed", &self.is_closed())
+            .field("is_closed", &self.lifecycle.is_closed())
             .field("pending_tasks", &self.pending_tasks.load(Ordering::Acquire))
             .finish()
     }
@@ -78,8 +81,7 @@ impl SessionHandler {
             next_task_id: AtomicU64::new(1),
             pending_tasks: AtomicUsize::new(0),
             idle: tokio::sync::Notify::new(),
-            closed: AtomicBool::new(false),
-            scheduling_stopped: AtomicBool::new(false),
+            lifecycle: SessionLifecycle::new(),
             progress,
             created_at: Instant::now(),
             token: CancellationToken::new(),
@@ -93,48 +95,6 @@ impl SessionHandler {
 
     pub(crate) fn emit(&self, event: DownloadEvent) {
         let _ = self.events.send(event);
-    }
-
-    pub(crate) fn allocate_task_id(&self) -> TaskId {
-        let sequence = self.next_task_id.fetch_add(1, Ordering::Relaxed);
-        format!("{}-{}", self.session_id, sequence)
-    }
-
-    pub(crate) async fn submission_guard(&self) -> MutexGuard<'_, ()> {
-        self.submission.lock().await
-    }
-
-    pub(crate) async fn enqueue_task(
-        &self,
-        task: DownloadTask,
-        group: Option<String>,
-    ) -> Result<()> {
-        let task_id = self.allocate_task_id();
-        let sender = self.clone_sender().ok_or(Error::SessionSenderClosed)?;
-
-        self.start_task();
-        self.mark_enqueued(task_id.clone(), &task, group.clone());
-
-        let queued = QueuedDownloadTask {
-            task_id: task_id.clone(),
-            task,
-            group,
-        };
-
-        if let Err(error) = sender.send(queued).await {
-            self.mark_cancelled(&task_id);
-            self.finish_task();
-            return Err(Error::EnqueueTask {
-                task_id,
-                source: Box::new(error),
-            });
-        }
-
-        Ok(())
-    }
-
-    pub(crate) fn clone_sender(&self) -> Option<mpsc::Sender<QueuedDownloadTask>> {
-        self.lock_sender().clone()
     }
 
     pub(crate) async fn wait_idle(&self) {
@@ -161,39 +121,45 @@ impl SessionHandler {
         self.wait_workers().await;
     }
 
+    pub(crate) async fn finish(&self) -> DownloadReport {
+        self.close_and_wait().await;
+        self.emit_closed_report()
+    }
+
+    pub(crate) async fn cancel(&self) -> DownloadReport {
+        self.cancel_in_flight();
+        self.close_and_wait().await;
+        self.emit_closed_report()
+    }
+
     pub(crate) async fn close(&self) {
         let _submission_guard = self.submission.lock().await;
-        self.closed.store(true, Ordering::Release);
+        self.lifecycle.close();
         self.workers.close();
         self.lock_sender().take();
     }
 
     pub(crate) fn abort_detached(&self) {
-        self.closed.store(true, Ordering::Release);
-        self.stop_scheduling();
+        self.lifecycle.stop_scheduling();
         self.token.cancel();
         self.workers.close();
         self.lock_sender().take();
     }
 
-    pub(crate) fn is_closed(&self) -> bool {
-        self.closed.load(Ordering::Acquire) || self.workers.is_closed()
+    pub(crate) fn ensure_accepting_tasks(&self, session_id: SessionId) -> Result<()> {
+        self.lifecycle.ensure_accepting_tasks(session_id)
     }
 
-    pub(crate) fn is_scheduling_stopped(&self) -> bool {
-        self.scheduling_stopped.load(Ordering::Acquire)
-    }
-
-    fn stop_scheduling(&self) {
-        self.scheduling_stopped.store(true, Ordering::Release);
+    pub(crate) fn is_draining(&self) -> bool {
+        self.lifecycle.is_draining()
     }
 
     pub(crate) fn apply_failure_policy(&self) {
         match self.options.failure_policy {
             FailurePolicy::Continue => {}
-            FailurePolicy::FinishInFlight => self.stop_scheduling(),
+            FailurePolicy::FinishInFlight => self.lifecycle.stop_scheduling(),
             FailurePolicy::CancelAll => {
-                self.stop_scheduling();
+                self.lifecycle.stop_scheduling();
                 self.token.cancel();
             }
         }
@@ -207,8 +173,8 @@ impl SessionHandler {
         &self.token
     }
 
-    pub(crate) fn cancel(&self) {
-        self.stop_scheduling();
+    pub(crate) fn cancel_in_flight(&self) {
+        self.lifecycle.stop_scheduling();
         self.token.cancel();
     }
 
@@ -223,6 +189,15 @@ impl SessionHandler {
     pub(crate) fn build_report(&self) -> DownloadReport {
         self.lock_state()
             .report(self.name.clone(), self.created_at.elapsed())
+    }
+
+    pub(crate) fn emit_closed_report(&self) -> DownloadReport {
+        let report = self.build_report();
+        self.emit(DownloadEvent::SessionClosed {
+            session_id: self.session_id,
+            report: report.clone(),
+        });
+        report
     }
 
     fn lock_state(&self) -> StdMutexGuard<'_, SessionState> {

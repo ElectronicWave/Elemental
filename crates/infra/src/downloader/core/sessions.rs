@@ -49,9 +49,10 @@ impl ElementalDownloader {
         }
 
         let handler_for_event = handler.clone();
-        if let Some(old) = self.sessions.upsert_async(session_id, handler).await {
-            old.close().await;
-        }
+        self.sessions
+            .insert_async(session_id, handler)
+            .await
+            .map_err(|_| Error::SessionIdConflict { session_id })?;
         handler_for_event.emit(DownloadEvent::SessionOpened {
             session_id,
             session_name: name.clone(),
@@ -79,13 +80,7 @@ impl ElementalDownloader {
         let handler = self.session_handler(session_id).await?;
         let _submission_guard = handler.submission_guard().await;
 
-        if handler.is_closed() {
-            return Err(Error::SessionClosed { session_id });
-        }
-
-        if handler.is_scheduling_stopped() {
-            return Err(Error::SessionNotAcceptingTasks { session_id });
-        }
+        handler.ensure_accepting_tasks(session_id)?;
 
         for task in tasks {
             handler.enqueue_task(task, group.clone()).await?;
@@ -114,30 +109,14 @@ impl ElementalDownloader {
         &self,
         session_id: SessionId,
     ) -> Result<DownloadReport> {
-        let handler = self.session_handler(session_id).await?;
-        handler.close_and_wait().await;
-        self.remove_session(session_id).await
+        Ok(self.take_session(session_id).await?.finish().await)
     }
 
     pub(crate) async fn cancel_session_report(
         &self,
         session_id: SessionId,
     ) -> Result<DownloadReport> {
-        let handler = self.session_handler(session_id).await?;
-        handler.cancel();
-        handler.close_and_wait().await;
-        self.remove_session(session_id).await
-    }
-
-    async fn remove_session(&self, session_id: SessionId) -> Result<DownloadReport> {
-        let handler = self.session_handler(session_id).await?;
-        let report = handler.build_report();
-        handler.emit(DownloadEvent::SessionClosed {
-            session_id,
-            report: report.clone(),
-        });
-        self.sessions.remove_async(&session_id).await;
-        Ok(report)
+        Ok(self.take_session(session_id).await?.cancel().await)
     }
 
     pub(crate) fn abort_session_detached(&self, session_id: SessionId) {
@@ -146,15 +125,11 @@ impl ElementalDownloader {
         };
 
         handler.abort_detached();
-        let events = self.events.clone();
         let report_handler = handler.clone();
         let wait_handler = handler.clone();
         let close = async move {
             wait_handler.wait_workers().await;
-            let _ = events.send(DownloadEvent::SessionClosed {
-                session_id,
-                report: report_handler.build_report(),
-            });
+            report_handler.emit_closed_report();
         };
 
         match tokio::runtime::Handle::try_current() {
@@ -162,10 +137,7 @@ impl ElementalDownloader {
                 handle.spawn(close);
             }
             Err(_) => {
-                handler.emit(DownloadEvent::SessionClosed {
-                    session_id,
-                    report: handler.build_report(),
-                });
+                handler.emit_closed_report();
             }
         }
     }
@@ -174,6 +146,14 @@ impl ElementalDownloader {
         self.sessions
             .read_async(&session_id, |_, handler| handler.clone())
             .await
+            .ok_or(Error::SessionNotFound { session_id })
+    }
+
+    async fn take_session(&self, session_id: SessionId) -> Result<Arc<SessionHandler>> {
+        self.sessions
+            .remove_async(&session_id)
+            .await
+            .map(|(_, handler)| handler)
             .ok_or(Error::SessionNotFound { session_id })
     }
 }

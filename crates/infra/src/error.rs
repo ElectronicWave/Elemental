@@ -50,6 +50,9 @@ pub enum Error {
     #[error("download session '{session_id}' not found")]
     SessionNotFound { session_id: u64 },
 
+    #[error("download session id '{session_id}' conflicts with an existing session")]
+    SessionIdConflict { session_id: u64 },
+
     #[error(
         "download session '{session_id}' is not accepting new tasks because an earlier task failed"
     )]

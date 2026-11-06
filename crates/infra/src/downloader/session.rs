@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::sync::{
     Arc, Weak,
     atomic::{AtomicBool, Ordering},
@@ -110,19 +111,24 @@ impl DownloadSession {
     }
 
     pub async fn finish(self) -> Result<DownloadReport> {
-        let result = self
-            .downloader()?
-            .finish_session_report(self.lease.id)
-            .await;
-        self.mark_finished();
-        result
+        let downloader = self.downloader()?;
+        let session_id = self.lease.id;
+        self.complete(downloader.finish_session_report(session_id))
+            .await
     }
 
     pub async fn cancel(self) -> Result<DownloadReport> {
-        let result = self
-            .downloader()?
-            .cancel_session_report(self.lease.id)
-            .await;
+        let downloader = self.downloader()?;
+        let session_id = self.lease.id;
+        self.complete(downloader.cancel_session_report(session_id))
+            .await
+    }
+
+    async fn complete(
+        self,
+        operation: impl Future<Output = Result<DownloadReport>>,
+    ) -> Result<DownloadReport> {
+        let result = operation.await;
         self.mark_finished();
         result
     }

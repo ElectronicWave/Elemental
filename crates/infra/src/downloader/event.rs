@@ -74,21 +74,23 @@ pub enum EventStreamError {
 }
 
 pub struct DownloadEventStream {
-    receiver: broadcast::Receiver<DownloadEvent>,
+    events: EventReceiver,
 }
 
 impl DownloadEventStream {
     pub fn new(receiver: broadcast::Receiver<DownloadEvent>) -> Self {
-        Self { receiver }
+        Self {
+            events: EventReceiver::new(receiver),
+        }
     }
 
     pub async fn recv(&mut self) -> std::result::Result<DownloadEvent, EventStreamError> {
-        recv_event(&mut self.receiver).await
+        self.events.recv().await
     }
 }
 
 pub struct SessionEventStream {
-    receiver: broadcast::Receiver<DownloadEvent>,
+    events: EventReceiver,
     session_id: SessionId,
     closed: bool,
 }
@@ -96,7 +98,7 @@ pub struct SessionEventStream {
 impl SessionEventStream {
     pub fn new(receiver: broadcast::Receiver<DownloadEvent>, session_id: SessionId) -> Self {
         Self {
-            receiver,
+            events: EventReceiver::new(receiver),
             session_id,
             closed: false,
         }
@@ -108,7 +110,7 @@ impl SessionEventStream {
         }
 
         loop {
-            let event = recv_event(&mut self.receiver).await?;
+            let event = self.events.recv().await?;
             if event.session_id() != self.session_id {
                 continue;
             }
@@ -122,13 +124,21 @@ impl SessionEventStream {
     }
 }
 
-async fn recv_event(
-    receiver: &mut broadcast::Receiver<DownloadEvent>,
-) -> std::result::Result<DownloadEvent, EventStreamError> {
-    match receiver.recv().await {
-        Ok(event) => Ok(event),
-        Err(broadcast::error::RecvError::Lagged(count)) => Err(EventStreamError::Lagged(count)),
-        Err(broadcast::error::RecvError::Closed) => Err(EventStreamError::Closed),
+struct EventReceiver {
+    receiver: broadcast::Receiver<DownloadEvent>,
+}
+
+impl EventReceiver {
+    fn new(receiver: broadcast::Receiver<DownloadEvent>) -> Self {
+        Self { receiver }
+    }
+
+    async fn recv(&mut self) -> std::result::Result<DownloadEvent, EventStreamError> {
+        match self.receiver.recv().await {
+            Ok(event) => Ok(event),
+            Err(broadcast::error::RecvError::Lagged(count)) => Err(EventStreamError::Lagged(count)),
+            Err(broadcast::error::RecvError::Closed) => Err(EventStreamError::Closed),
+        }
     }
 }
 

@@ -6,6 +6,10 @@ use serde::{Serialize, Serializer};
 use super::task::{DownloadTask, SessionId, TaskId};
 use crate::error::{Error, Result};
 
+mod progress;
+
+pub use progress::DownloadProgress;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
@@ -100,6 +104,26 @@ pub enum TaskStatus {
     Cancelled,
 }
 
+impl TaskStatus {
+    pub(crate) fn failure(&self) -> Option<&DownloadFailure> {
+        match self {
+            Self::Failed { failure } => Some(failure),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn is_cancelled(&self) -> bool {
+        matches!(self, Self::Cancelled)
+    }
+
+    pub(crate) fn finalized(self) -> Self {
+        match self {
+            Self::Queued | Self::Active => Self::Cancelled,
+            status => status,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct TaskOutcome {
@@ -136,14 +160,7 @@ impl DownloadReport {
     pub fn failures(&self) -> impl Iterator<Item = &DownloadFailure> {
         self.outcomes
             .iter()
-            .filter_map(|outcome| match &outcome.status {
-                TaskStatus::Failed { failure } => Some(failure),
-                TaskStatus::Queued
-                | TaskStatus::Active
-                | TaskStatus::Downloaded { .. }
-                | TaskStatus::Skipped { .. }
-                | TaskStatus::Cancelled => None,
-            })
+            .filter_map(|outcome| outcome.status.failure())
     }
 
     pub fn retryable_failures(&self) -> impl Iterator<Item = &DownloadFailure> {
@@ -153,14 +170,8 @@ impl DownloadReport {
     pub fn cancelled_task_ids(&self) -> impl Iterator<Item = &TaskId> {
         self.outcomes
             .iter()
-            .filter_map(|outcome| match outcome.status {
-                TaskStatus::Cancelled => Some(&outcome.task_id),
-                TaskStatus::Queued
-                | TaskStatus::Active
-                | TaskStatus::Downloaded { .. }
-                | TaskStatus::Skipped { .. }
-                | TaskStatus::Failed { .. } => None,
-            })
+            .filter(|outcome| outcome.status.is_cancelled())
+            .map(|outcome| &outcome.task_id)
     }
 
     pub fn is_success(&self) -> bool {
@@ -190,30 +201,6 @@ impl DownloadReport {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
-pub struct DownloadProgress {
-    pub tasks_total: usize,
-    pub tasks_completed: usize,
-    pub tasks_failed: usize,
-    pub tasks_skipped: usize,
-    pub tasks_cancelled: usize,
-    pub tasks_pending: usize,
-    /// Bytes successfully written to their final destinations.
-    pub bytes_downloaded: u64,
-    /// Bytes received from the network, including bytes from retried attempts.
-    pub bytes_received: u64,
-    /// Bytes that did not need to be downloaded.
-    pub bytes_skipped: u64,
-    pub expected_bytes: Option<u64>,
-    pub bytes_per_second: u64,
-    #[cfg_attr(
-        feature = "serde",
-        serde(serialize_with = "serialize_optional_duration_millis")
-    )]
-    pub eta: Option<Duration>,
-}
-
 #[cfg(feature = "serde")]
 pub(crate) fn serialize_duration_millis<S>(
     duration: &Duration,
@@ -223,18 +210,4 @@ where
     S: Serializer,
 {
     serializer.serialize_u64(u64::try_from(duration.as_millis()).unwrap_or(u64::MAX))
-}
-
-#[cfg(feature = "serde")]
-pub(crate) fn serialize_optional_duration_millis<S>(
-    duration: &Option<Duration>,
-    serializer: S,
-) -> std::result::Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    match duration {
-        Some(duration) => serialize_duration_millis(duration, serializer),
-        None => serializer.serialize_none(),
-    }
 }

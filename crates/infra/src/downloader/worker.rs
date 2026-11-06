@@ -32,7 +32,7 @@ pub(super) async fn run_session_worker(
             break;
         };
 
-        if handler.is_scheduling_stopped() || handler.token().is_cancelled() {
+        if handler.is_draining() || handler.token().is_cancelled() {
             handler.finish_cancelled(&queued_task.task_id);
             continue;
         }
@@ -122,7 +122,7 @@ async fn execute_queued_task(
             }
         };
 
-        if token.is_cancelled() || handler.is_scheduling_stopped() {
+        if token.is_cancelled() || handler.is_draining() {
             drop(permit);
             handler.finish_cancelled(&task_id);
             return;

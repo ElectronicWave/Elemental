@@ -142,6 +142,30 @@ pub struct TaskInfo {
     pub expected_bytes: Option<u64>,
 }
 
+impl TaskInfo {
+    pub(crate) fn outcome(&self, status: TaskStatus) -> TaskOutcome {
+        TaskOutcome {
+            task_id: self.task_id.clone(),
+            group: self.group.clone(),
+            url: self.url.clone(),
+            path: self.path.clone(),
+            status,
+        }
+    }
+
+    pub(crate) fn snapshot(&self, received_bytes: u64, status: TaskStatus) -> TaskSnapshot {
+        TaskSnapshot {
+            task_id: self.task_id.clone(),
+            group: self.group.clone(),
+            url: self.url.clone(),
+            path: self.path.clone(),
+            expected_bytes: self.expected_bytes,
+            received_bytes,
+            status,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct SessionSnapshot {

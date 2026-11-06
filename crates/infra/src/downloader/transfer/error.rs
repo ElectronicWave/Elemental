@@ -1,7 +1,7 @@
 use std::fmt;
 
-use super::super::report::{DownloadFailure, DownloadPhase};
-use super::super::task::{DownloadTask, TaskId};
+use crate::downloader::report::{DownloadFailure, DownloadPhase};
+use crate::downloader::task::{DownloadTask, TaskId};
 use crate::error::Error;
 
 pub(crate) enum AttemptError {
@@ -103,16 +103,15 @@ impl TransferError {
         task: &DownloadTask,
         group: Option<String>,
     ) -> DownloadFailure {
-        DownloadFailure {
-            task_id: task_id.clone(),
+        DownloadFailure::new(
+            task_id,
+            task,
             group,
-            url: task.url().to_owned(),
-            path: task.path().to_path_buf(),
-            phase: self.phase,
-            http_status: self.http_status,
-            retryable: self.is_retryable(),
-            message: self.source.to_string(),
-        }
+            self.phase,
+            self.http_status,
+            self.is_retryable(),
+            self.source.to_string(),
+        )
     }
 }
 

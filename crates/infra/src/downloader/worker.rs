@@ -76,12 +76,13 @@ async fn execute_queued_task(
         }
         Ok(false) => {}
         Err(error) => {
-            handler.finish_failed(task_failure(
+            handler.finish_failed(DownloadFailure::new(
                 &task_id,
                 &task,
                 group,
                 DownloadPhase::Prepare,
                 None,
+                false,
                 error.to_string(),
             ));
             return;
@@ -108,12 +109,13 @@ async fn execute_queued_task(
         let permit = match permit {
             Ok(permit) => permit,
             Err(error) => {
-                handler.finish_failed(task_failure(
+                handler.finish_failed(DownloadFailure::new(
                     &task_id,
                     &record_task,
                     group,
                     DownloadPhase::Prepare,
                     None,
+                    false,
                     error.to_string(),
                 ));
                 return;
@@ -182,25 +184,5 @@ async fn wait_for_retry(token: &CancellationToken, delay: Duration) -> bool {
         biased;
         () = token.cancelled() => false,
         () = tokio::time::sleep(delay) => true,
-    }
-}
-
-fn task_failure(
-    task_id: &TaskId,
-    task: &DownloadTask,
-    group: Option<String>,
-    phase: DownloadPhase,
-    http_status: Option<u16>,
-    message: String,
-) -> DownloadFailure {
-    DownloadFailure {
-        task_id: task_id.clone(),
-        group,
-        url: task.url().to_owned(),
-        path: task.path().to_path_buf(),
-        phase,
-        http_status,
-        retryable: false,
-        message,
     }
 }

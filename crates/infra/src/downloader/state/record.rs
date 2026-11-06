@@ -1,8 +1,8 @@
 use std::time::Instant;
 
-use super::super::event::{TaskInfo, TaskSnapshot};
-use super::super::report::{TaskOutcome, TaskStatus};
-use super::super::task::{DownloadTask, TaskId};
+use crate::downloader::event::{TaskInfo, TaskSnapshot};
+use crate::downloader::report::{TaskOutcome, TaskStatus};
+use crate::downloader::task::{DownloadTask, TaskId};
 
 #[derive(Debug, Clone)]
 pub(super) struct TaskRecord {
@@ -34,27 +34,15 @@ impl TaskRecord {
     }
 
     pub(super) fn outcome(&self) -> TaskOutcome {
-        TaskOutcome {
-            task_id: self.details.task_id.clone(),
-            group: self.details.group.clone(),
-            url: self.details.url.clone(),
-            path: self.details.path.clone(),
-            status: match &self.status {
-                TaskStatus::Queued | TaskStatus::Active => TaskStatus::Cancelled,
-                status => status.clone(),
-            },
-        }
+        let status = match &self.status {
+            TaskStatus::Queued | TaskStatus::Active => TaskStatus::Cancelled,
+            status => status.clone(),
+        };
+        self.details.outcome(status)
     }
 
     pub(super) fn snapshot(&self) -> TaskSnapshot {
-        TaskSnapshot {
-            task_id: self.details.task_id.clone(),
-            group: self.details.group.clone(),
-            url: self.details.url.clone(),
-            path: self.details.path.clone(),
-            expected_bytes: self.details.expected_bytes,
-            received_bytes: self.received_bytes,
-            status: self.status.clone(),
-        }
+        self.details
+            .snapshot(self.received_bytes, self.status.clone())
     }
 }

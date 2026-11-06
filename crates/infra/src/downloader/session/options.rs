@@ -1,5 +1,5 @@
-use super::super::policy::{FailurePolicy, RetryPolicy};
-use super::super::rate::DownloadRateLimit;
+use crate::downloader::policy::{FailurePolicy, RetryPolicy};
+use crate::downloader::rate::DownloadRateLimit;
 use crate::error::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

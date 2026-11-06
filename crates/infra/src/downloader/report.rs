@@ -3,7 +3,7 @@ use std::{fmt, path::PathBuf, time::Duration};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Serializer};
 
-use super::task::{SessionId, TaskId};
+use super::task::{DownloadTask, SessionId, TaskId};
 use crate::error::{Error, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -46,6 +46,27 @@ pub struct DownloadFailure {
 }
 
 impl DownloadFailure {
+    pub(crate) fn new(
+        task_id: &TaskId,
+        task: &DownloadTask,
+        group: Option<String>,
+        phase: DownloadPhase,
+        http_status: Option<u16>,
+        retryable: bool,
+        message: String,
+    ) -> Self {
+        Self {
+            task_id: task_id.clone(),
+            group,
+            url: task.url().to_owned(),
+            path: task.path().to_path_buf(),
+            phase,
+            http_status,
+            retryable,
+            message,
+        }
+    }
+
     pub fn summary(&self) -> String {
         let group = self
             .group

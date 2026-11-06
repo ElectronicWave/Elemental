@@ -4,7 +4,7 @@ use std::{
 };
 use tokio::sync::Mutex as AsyncMutex;
 
-use super::super::rate::{ByteRate, DownloadRateLimit};
+use crate::downloader::rate::{ByteRate, DownloadRateLimit};
 use crate::error::Result;
 
 #[derive(Debug)]

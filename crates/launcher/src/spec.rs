@@ -1,5 +1,8 @@
 use elemental_core::minecraft::MinecraftVersionId;
-use elemental_driver::descriptors::{BABRIC_DRIVER, CLEANROOM_DRIVER, FABRIC_DRIVER, FORGE_DRIVER, LEGACY_FABRIC_DRIVER, LITELOADER_DRIVER, NEOFORGE_DRIVER, OUTLANDS_DRIVER, QUILT_DRIVER, RIFT_DRIVER, VANILLA_DRIVER};
+use elemental_driver::descriptors::{
+    BABRIC_DRIVER, CLEANROOM_DRIVER, FABRIC_DRIVER, FORGE_DRIVER, LEGACY_FABRIC_DRIVER,
+    LITELOADER_DRIVER, NEOFORGE_DRIVER, OUTLANDS_DRIVER, QUILT_DRIVER, RIFT_DRIVER, VANILLA_DRIVER,
+};
 use elemental_driver::driver::DriverDescriptor;
 use elemental_driver::loader_version::LoaderVersionId;
 

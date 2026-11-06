@@ -354,7 +354,7 @@ fn default_loader_version(
         DemoDriver::Rift => LoaderVersionId::from("1.0.4-106"),
         DemoDriver::Forge => LoaderVersionId::from("47.3.1"),
         DemoDriver::Cleanroom => LoaderVersionId::from("0.5.8-alpha"),
-        DemoDriver::Outlands => LoaderVersionId::from("2026.11.05"), // ALPHA SUPPORTING
+        DemoDriver::Outlands => LoaderVersionId::from("2026.11.06"), // ALPHA SUPPORTING
         DemoDriver::NeoForge => LoaderVersionId::from("21.1.199"),
         DemoDriver::Vanilla => unreachable!("vanilla is handled separately"),
     })

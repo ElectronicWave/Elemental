@@ -38,8 +38,14 @@ impl TaskRecord {
     }
 
     pub(super) fn snapshot(&self) -> TaskSnapshot {
-        self.details
-            .outcome(self.status.clone())
-            .into_snapshot(self.details.expected_bytes, self.received_bytes)
+        TaskSnapshot {
+            task_id: self.details.task_id.clone(),
+            group: self.details.group.clone(),
+            url: self.details.url.clone(),
+            path: self.details.path.clone(),
+            expected_bytes: self.details.expected_bytes,
+            received_bytes: self.received_bytes,
+            status: self.status.clone(),
+        }
     }
 }

@@ -23,10 +23,18 @@ impl SessionHandler {
     ) -> Result<(Arc<Self>, watch::Receiver<DownloadProgress>)> {
         let parallelism = options.effective_parallelism(default_parallelism);
         let bandwidth_limiter = Arc::new(BandwidthLimiter::new(options.effective_rate_limit())?);
+        let headers = options.headers.clone();
         let (sender, receiver) = mpsc::channel(queue_capacity);
         let receiver = Arc::new(AsyncMutex::new(receiver));
-        let (handler, progress) =
-            Self::new(session_id, name, options, sender, bandwidth_limiter, events);
+        let (handler, progress) = Self::new(
+            session_id,
+            name,
+            options,
+            sender,
+            headers,
+            bandwidth_limiter,
+            events,
+        );
         let handler = Arc::new(handler);
 
         for _ in 0..parallelism {

@@ -59,8 +59,8 @@ impl SessionState {
         let tasks_completed = self.downloaded.saturating_add(self.skipped);
         let tasks_pending = self.accepted.saturating_sub(
             tasks_completed
-                .saturating_add(self.failures.len())
-                .saturating_add(self.cancelled_task_ids.len()),
+                .saturating_add(self.failed)
+                .saturating_add(self.cancelled),
         );
         let expected_bytes = self.expected_bytes_known.then_some(self.expected_bytes);
         let completed_bytes = self
@@ -81,9 +81,9 @@ impl SessionState {
         DownloadProgress {
             tasks_total: self.accepted,
             tasks_completed,
-            tasks_failed: self.failures.len(),
+            tasks_failed: self.failed,
             tasks_skipped: self.skipped,
-            tasks_cancelled: self.cancelled_task_ids.len(),
+            tasks_cancelled: self.cancelled,
             tasks_pending,
             bytes_downloaded: self.bytes_downloaded,
             bytes_received: self.bytes_received,

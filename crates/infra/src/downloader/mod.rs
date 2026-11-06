@@ -2,6 +2,7 @@ mod batch;
 mod config;
 mod core;
 mod event;
+mod header;
 pub(crate) mod limits;
 mod materializer;
 mod policy;

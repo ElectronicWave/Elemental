@@ -3,6 +3,7 @@ use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio_util::sync::CancellationToken;
 
 use super::core::ElementalDownloader;
+use super::header::merge_headers;
 use super::materializer::StagedDownload;
 use super::report::DownloadPhase;
 use super::session::SessionHandler;
@@ -44,8 +45,10 @@ pub(super) async fn download_attempt(
         let StagedDownload { path, file } = staged;
         let file = file
             .ok_or_else(|| TransferError::new(DownloadPhase::Prepare, Error::StagedFileMissing))?;
+        let headers = merge_headers(handler.headers(), task_for_execute.header_map());
         let response = client
             .get(task_for_execute.url())
+            .headers(headers)
             .send()
             .await
             .map_err(|error| TransferError::from_reqwest(DownloadPhase::Connect, error))?;

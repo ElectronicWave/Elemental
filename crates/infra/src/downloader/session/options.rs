@@ -1,13 +1,31 @@
+use std::fmt;
+
+use reqwest::header::HeaderMap;
+
+use crate::downloader::header::HeaderNames;
 use crate::downloader::policy::{FailurePolicy, RetryPolicy};
 use crate::downloader::rate::DownloadRateLimit;
 use crate::error::{Error, Result};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub(crate) struct DownloadSessionOptions {
     pub parallelism: Option<usize>,
     pub rate_limit: Option<DownloadRateLimit>,
     pub retry_policy: RetryPolicy,
     pub failure_policy: FailurePolicy,
+    pub headers: HeaderMap,
+}
+
+impl fmt::Debug for DownloadSessionOptions {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DownloadSessionOptions")
+            .field("parallelism", &self.parallelism)
+            .field("rate_limit", &self.rate_limit)
+            .field("retry_policy", &self.retry_policy)
+            .field("failure_policy", &self.failure_policy)
+            .field("headers", &HeaderNames(&self.headers))
+            .finish()
+    }
 }
 
 impl DownloadSessionOptions {
@@ -38,6 +56,7 @@ impl Default for DownloadSessionOptions {
             rate_limit: None,
             retry_policy: RetryPolicy::default(),
             failure_policy: FailurePolicy::Continue,
+            headers: HeaderMap::new(),
         }
     }
 }

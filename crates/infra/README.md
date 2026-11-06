@@ -11,7 +11,7 @@ for launcher-style workloads.
 
 | Type | Purpose |
 | --- | --- |
-| `DownloadTask` | One file: URL, destination, expected size, and SHA-1 |
+| `DownloadTask` | One file: URL, destination, expected size, SHA-1, and request headers |
 | `DownloadBatch` | A batch of tasks with an optional group |
 | `DownloadSession` | One logical operation, such as installing one Minecraft version |
 | `DownloadReport` | Final per-task outcomes plus byte and timing totals |
@@ -116,6 +116,28 @@ async fn download_library(
     Ok(())
 }
 ```
+
+Set headers on a session to apply them to every task, or on a task to override
+the session value for that request:
+
+```rust
+use elemental_infra::downloader::DownloadTask;
+
+let session = downloader
+    .session("authenticated")
+    .header("Authorization", format!("Bearer {token}"))?
+    .open()
+    .await?;
+
+let task = DownloadTask::new(url, path)
+    .header("Accept", "application/octet-stream")?;
+
+session.submit(task).await?;
+```
+
+Task headers replace session headers with the same name; headers with different
+names are merged. Use `.headers(HeaderMap)` to set a prebuilt map, which replaces
+the current map. Header values are redacted from `Debug` output.
 
 Batch work uses a session directly:
 

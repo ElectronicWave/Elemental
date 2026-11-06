@@ -3,11 +3,11 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
-use tokio::sync::{broadcast, watch};
+use tokio::sync::watch;
 
 use super::batch::DownloadBatch;
 use super::core::ElementalDownloader;
-use super::event::{DownloadEvent, SessionEventStream, SessionSnapshot};
+use super::event::{SessionEventStream, SessionSnapshot};
 use super::report::{DownloadProgress, DownloadReport};
 use super::task::SessionId;
 use crate::error::Result;
@@ -25,7 +25,6 @@ pub struct DownloadSession {
     lease: Arc<SessionLease>,
     name: Option<String>,
     progress: watch::Receiver<DownloadProgress>,
-    events: broadcast::Sender<DownloadEvent>,
 }
 
 #[derive(Debug)]
@@ -51,7 +50,6 @@ impl DownloadSession {
         name: Option<String>,
         downloader: Arc<ElementalDownloader>,
         progress: watch::Receiver<DownloadProgress>,
-        events: broadcast::Sender<DownloadEvent>,
     ) -> Self {
         Self {
             lease: Arc::new(SessionLease {
@@ -61,7 +59,6 @@ impl DownloadSession {
             }),
             name,
             progress,
-            events,
         }
     }
 
@@ -89,7 +86,7 @@ impl DownloadSession {
     }
 
     pub fn subscribe(&self) -> SessionEventStream {
-        SessionEventStream::new(self.events.subscribe(), self.lease.id)
+        SessionEventStream::new(self.lease.downloader.event_receiver(), self.lease.id)
     }
 
     pub async fn snapshot(&self) -> Result<SessionSnapshot> {

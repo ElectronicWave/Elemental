@@ -10,10 +10,17 @@ use std::{
 use tokio::sync::{Mutex as AsyncMutex, broadcast, mpsc, watch};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
+use reqwest::header::HeaderMap;
+
 use crate::downloader::session::DownloadSessionOptions;
 use crate::downloader::{
-    event::DownloadEvent, limits::BandwidthLimiter, policy::RetryPolicy, report::DownloadProgress,
-    state::SessionState, task::SessionId, worker::QueuedDownloadTask,
+    event::DownloadEvent,
+    limits::BandwidthLimiter,
+    policy::{FailurePolicy, RetryPolicy},
+    report::DownloadProgress,
+    state::SessionState,
+    task::SessionId,
+    worker::QueuedDownloadTask,
 };
 
 mod lifecycle;
@@ -27,11 +34,13 @@ use lifecycle::SessionLifecycle;
 pub(crate) struct SessionHandler {
     session_id: SessionId,
     name: Option<String>,
-    options: DownloadSessionOptions,
+    retry_policy: RetryPolicy,
+    failure_policy: FailurePolicy,
     workers: TaskTracker,
     sender: std::sync::Mutex<Option<mpsc::Sender<QueuedDownloadTask>>>,
     state: std::sync::Mutex<SessionState>,
     submission: AsyncMutex<()>,
+    headers: HeaderMap,
     bandwidth_limiter: Arc<BandwidthLimiter>,
     events: broadcast::Sender<DownloadEvent>,
     next_task_id: AtomicU64,
@@ -47,7 +56,8 @@ impl fmt::Debug for SessionHandler {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SessionHandler")
             .field("name", &self.name)
-            .field("options", &self.options)
+            .field("retry_policy", &self.retry_policy)
+            .field("failure_policy", &self.failure_policy)
             .field("lifecycle", &self.lifecycle)
             .field("pending_tasks", &self.pending_tasks.load(Ordering::Acquire))
             .finish()
@@ -60,6 +70,7 @@ impl SessionHandler {
         name: Option<String>,
         options: DownloadSessionOptions,
         sender: mpsc::Sender<QueuedDownloadTask>,
+        headers: HeaderMap,
         bandwidth_limiter: Arc<BandwidthLimiter>,
         events: broadcast::Sender<DownloadEvent>,
     ) -> (Self, watch::Receiver<DownloadProgress>) {
@@ -67,11 +78,13 @@ impl SessionHandler {
         let handler = Self {
             session_id,
             name,
-            options,
+            retry_policy: options.retry_policy,
+            failure_policy: options.failure_policy,
             workers: TaskTracker::new(),
             sender: std::sync::Mutex::new(Some(sender)),
             state: std::sync::Mutex::new(SessionState::new(session_id)),
             submission: AsyncMutex::new(()),
+            headers,
             bandwidth_limiter,
             events,
             next_task_id: AtomicU64::new(1),
@@ -118,7 +131,11 @@ impl SessionHandler {
     }
 
     pub(crate) fn retry_policy(&self) -> RetryPolicy {
-        self.options.retry_policy
+        self.retry_policy
+    }
+
+    pub(crate) fn headers(&self) -> &HeaderMap {
+        &self.headers
     }
 
     pub(crate) fn token(&self) -> &CancellationToken {

@@ -101,7 +101,7 @@ impl SessionHandler {
     }
 
     pub(crate) fn apply_failure_policy(&self) {
-        let policy = self.options.failure_policy;
+        let policy = self.failure_policy;
         if policy.stops_scheduling() {
             self.lifecycle.stop_scheduling();
         }

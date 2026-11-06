@@ -148,8 +148,8 @@ async fn execute_queued_task(
                 break;
             }
             Err(AttemptError::Cancelled) => {
-                handler.mark_cancelled(&task_id);
-                break;
+                handler.finish_cancelled(&task_id);
+                return;
             }
             Err(error) => {
                 let retryable = error.is_retryable();
@@ -160,14 +160,13 @@ async fn execute_queued_task(
                         continue;
                     }
 
-                    handler.mark_cancelled(&task_id);
-                    break;
+                    handler.finish_cancelled(&task_id);
+                    return;
                 }
 
                 let failure = error.into_failure(&task_id, &record_task, group);
-                handler.mark_failed(failure);
-                handler.apply_failure_policy();
-                break;
+                handler.finish_failed(failure);
+                return;
             }
         }
     }

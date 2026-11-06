@@ -164,24 +164,6 @@ impl TaskInfo {
     }
 }
 
-impl TaskOutcome {
-    pub(crate) fn into_snapshot(
-        self,
-        expected_bytes: Option<u64>,
-        received_bytes: u64,
-    ) -> TaskSnapshot {
-        TaskSnapshot {
-            task_id: self.task_id,
-            group: self.group,
-            url: self.url,
-            path: self.path,
-            expected_bytes,
-            received_bytes,
-            status: self.status,
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct SessionSnapshot {

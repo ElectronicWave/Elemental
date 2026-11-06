@@ -41,7 +41,6 @@ impl ElementalDownloader {
             name,
             Arc::clone(self),
             progress,
-            self.events.clone(),
         ))
     }
 

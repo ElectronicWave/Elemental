@@ -1,6 +1,5 @@
 use std::{collections::HashMap as StdHashMap, time::Instant};
 
-use super::report::DownloadFailure;
 use super::task::{SessionId, TaskId};
 
 mod progress;
@@ -25,8 +24,8 @@ pub(super) struct SessionState {
     bytes_in_progress: u64,
     expected_bytes: u64,
     expected_bytes_known: bool,
-    failures: Vec<DownloadFailure>,
-    cancelled_task_ids: Vec<TaskId>,
+    failed: usize,
+    cancelled: usize,
     records: StdHashMap<TaskId, TaskRecord>,
     record_order: Vec<TaskId>,
     throughput: ThroughputMeter,
@@ -46,8 +45,8 @@ impl SessionState {
             bytes_in_progress: 0,
             expected_bytes: 0,
             expected_bytes_known: true,
-            failures: Vec::new(),
-            cancelled_task_ids: Vec::new(),
+            failed: 0,
+            cancelled: 0,
             records: StdHashMap::new(),
             record_order: Vec::new(),
             throughput: ThroughputMeter::default(),

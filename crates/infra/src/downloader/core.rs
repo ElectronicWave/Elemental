@@ -78,6 +78,10 @@ impl ElementalDownloader {
         DownloadEventStream::new(self.events.subscribe())
     }
 
+    pub(crate) fn event_receiver(&self) -> broadcast::Receiver<DownloadEvent> {
+        self.events.subscribe()
+    }
+
     pub async fn download(self: &Arc<Self>, task: DownloadTask) -> Result<DownloadReport> {
         task.validate()?;
         let session = self

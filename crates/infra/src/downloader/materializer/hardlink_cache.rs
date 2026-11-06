@@ -1,10 +1,7 @@
 use async_trait::async_trait;
 use std::path::PathBuf;
 
-use super::{
-    Materializer, StagedDownload, UncachedMaterializer,
-    fs::{cleanup_file, replace_file},
-};
+use super::{Materializer, StagedDownload, UncachedMaterializer, fs::replace_file};
 use crate::downloader::{task::DownloadTask, validation::DownloadValidation};
 use crate::error::{Error, Result};
 
@@ -55,7 +52,6 @@ impl Materializer for HardlinkCacheMaterializer {
     }
 
     async fn commit(&self, staged: StagedDownload, task: &DownloadTask) -> Result<()> {
-        let validation = DownloadValidation::from_task(task);
         let cache_path = match self.cache_path_for_task(task) {
             Ok(cache_path) => cache_path,
             Err(Error::HardlinkCacheSha1Missing) => {
@@ -63,12 +59,6 @@ impl Materializer for HardlinkCacheMaterializer {
             }
             Err(error) => return Err(error),
         };
-
-        if validation.matches(&cache_path).await? {
-            cleanup_file(&staged.path).await;
-            self.materialize_from_cache(task, &cache_path).await?;
-            return Ok(());
-        }
 
         replace_file(&staged.path, &cache_path).await?;
         self.materialize_from_cache(task, &cache_path).await

@@ -131,13 +131,13 @@ impl SessionState {
 
     pub(crate) fn failed(&mut self, failure: DownloadFailure, now: Instant) -> SessionTransition {
         let task_id = failure.task_id.clone();
-        self.failures.push(failure.clone());
+        self.failed += 1;
 
         self.finish_task(&task_id, TaskStatus::Failed { failure }, None, now)
     }
 
     pub(crate) fn cancelled(&mut self, task_id: &TaskId, now: Instant) -> SessionTransition {
-        self.cancelled_task_ids.push(task_id.clone());
+        self.cancelled += 1;
 
         self.finish_task(task_id, TaskStatus::Cancelled, None, now)
     }

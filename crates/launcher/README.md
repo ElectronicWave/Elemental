@@ -49,15 +49,25 @@ async fn main() -> Result<()> {
     let launcher = Launcher::builder()
         .storage_root(".minecraft")
         .build();
+    let session = launcher
+        .downloader()
+        .session("prepare Vanilla-1.20.1")
+        .open()
+        .await?;
 
     let prepared = launcher
-        .prepare_instance(PrepareInstanceRequest {
-            instance_name: "Vanilla-1.20.1".to_owned(),
-            driver: DriverSpec::Vanilla(VanillaSpec {
-                game_version: "1.20.1".into(),
-            }),
-        })
+        .prepare_instance(
+            &session,
+            PrepareInstanceRequest {
+                instance_name: "Vanilla-1.20.1".to_owned(),
+                driver: DriverSpec::Vanilla(VanillaSpec {
+                    game_version: "1.20.1".into(),
+                }),
+            },
+        )
         .await?;
+    let report = session.finish().await?;
+    report.success()?;
 
     let command = launcher
         .build_launch_command(
@@ -82,13 +92,17 @@ async fn main() -> Result<()> {
 pass the prepared instance and command to `launch_prepared_instance()`, or use
 the returned `LaunchCommand` yourself.
 
+The caller owns the download session. Choose its name and configure retry,
+failure, parallelism, and rate-limit settings before `open()`. Pass the opened
+session to `prepare_instance()`, then call `finish()` or `cancel()` yourself.
+
 ## Instance Lifecycle
 
 | Operation | Method |
 | --- | --- |
 | Discover local instances | `inspect_instances()` |
 | Detect one instance and its driver | `inspect_instance(name)` |
-| Install or refresh an instance | `prepare_instance(request)` |
+| Install or refresh an instance | `prepare_instance(session, request)` |
 | Reload an existing installation | `load_instance(instance)` |
 | Build a command without spawning | `build_launch_command(...)` |
 | Spawn the configured Java process | `launch_prepared_instance(...)` |
@@ -148,7 +162,7 @@ The default storage root is `.minecraft`, and the builder creates a shared
 downloader automatically. Applications can override either:
 
 ```rust
-use elemental_infra::downloader::core::ElementalDownloader;
+use elemental_infra::downloader::ElementalDownloader;
 use elemental_launcher::Launcher;
 
 let launcher = Launcher::builder()

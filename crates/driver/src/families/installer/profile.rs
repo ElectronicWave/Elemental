@@ -12,10 +12,7 @@ use elemental_core::{
         layout::{Layout, Layoutable},
     },
 };
-use elemental_infra::downloader::{
-    core::ElementalDownloader,
-    task::{DownloadExecutionPolicy, DownloadPlan},
-};
+use elemental_infra::downloader::{DownloadBatch, DownloadSession};
 use elemental_schema::{
     forge::ForgeInstallerProfile,
     mojang::piston::{
@@ -265,28 +262,8 @@ pub fn read_embedded_version<P: AsRef<Path>>(
     ))
 }
 
-pub async fn ensure_installer_artifact_downloaded(
-    downloader: &ElementalDownloader,
-    installer_artifact: &InstallerArtifact,
-    family_name: &str,
-) -> Result<()> {
-    downloader
-        .run_plan(DownloadPlan::named(
-            format!("{family_name}-installer-{}", installer_artifact.coordinate),
-            DownloadExecutionPolicy::ServiceDefault,
-            vec![installer_artifact.download_task()],
-        )?)
-        .await
-        .map_err(|source| Error::DownloadInstaller {
-            family_name: family_name.to_owned(),
-            source,
-        })?;
-
-    Ok(())
-}
-
 pub async fn prepare_installer_state<V>(
-    downloader: &ElementalDownloader,
+    session: &DownloadSession,
     installer_artifact: &InstallerArtifact,
     instance_root: &Path,
     libraries_root: &Path,
@@ -296,8 +273,41 @@ pub async fn prepare_installer_state<V>(
 where
     V: Fn(&ForgeInstallerProfile) -> Result<()>,
 {
-    ensure_installer_artifact_downloaded(downloader, installer_artifact, family_name).await?;
+    session
+        .submit(DownloadBatch::new(vec![installer_artifact.download_task()]).group("installer"))
+        .await
+        .map_err(|source| Error::DownloadInstaller {
+            family_name: family_name.to_owned(),
+            source,
+        })?;
+    session
+        .wait_idle()
+        .await
+        .map_err(|source| Error::DownloadInstaller {
+            family_name: family_name.to_owned(),
+            source,
+        })?;
 
+    read_installer_state(
+        installer_artifact,
+        instance_root,
+        libraries_root,
+        family_name,
+        validate_profile,
+    )
+    .await
+}
+
+async fn read_installer_state<V>(
+    installer_artifact: &InstallerArtifact,
+    instance_root: &Path,
+    libraries_root: &Path,
+    family_name: &str,
+    validate_profile: V,
+) -> Result<InstallerPersistedState>
+where
+    V: Fn(&ForgeInstallerProfile) -> Result<()>,
+{
     let archive = InstallerArchive::new(installer_artifact.path.clone());
     let state_paths = InstallerStatePaths::new(instance_root, family_name);
     let install_profile = archive
@@ -328,9 +338,9 @@ where
     })
 }
 
-pub async fn prepare_installer_launch_version<RR, L, VL, F, M>(
+pub async fn persist_installer_launch_version<RR, L, VL, F, M>(
     request: InstallerLaunchVersionRequest<'_, RR, L, VL, F, M>,
-) -> Result<PreparedVersionJsonInstance<RR, L, VL>>
+) -> Result<ResolvedVersionJsonInstance<RR, L, VL>>
 where
     RR: VersionJsonRemoteResolver + Clone,
     L: VersionJsonRootLayout + Clone,
@@ -353,15 +363,13 @@ where
         request.merge_libraries,
         request.family_name,
     )?;
-    let launch_version = ResolvedVersionJsonMetadata::new(
+    ResolvedVersionJsonMetadata::new(
         request.remote_resolver.clone(),
         merged_metadata,
         base_metadata.asset_index_objects,
     )
     .persist(request.instance)
-    .await?;
-
-    launch_version.prepare(request.downloader).await
+    .await
 }
 
 pub struct InstallerLaunchVersionRequest<'a, RR, L, VL, F, M>
@@ -375,7 +383,6 @@ where
     pub instance: &'a Storage<VL, Storage<L>>,
     pub game_version: &'a MinecraftVersionId,
     pub remote_resolver: &'a RR,
-    pub downloader: &'a ElementalDownloader,
     pub vanilla_source: &'a VanillaSource,
     pub embedded_version: Option<&'a serde_json::Value>,
     pub normalize_libraries: F,

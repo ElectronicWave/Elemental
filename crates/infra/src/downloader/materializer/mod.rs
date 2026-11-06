@@ -1,21 +1,15 @@
 use async_trait::async_trait;
-use std::{
-    fmt,
-    path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
-};
-use tokio::{fs::OpenOptions, fs::create_dir_all};
+use std::{fmt, path::PathBuf};
 
 use super::task::DownloadTask;
 use crate::error::{Error, Result};
 
-mod hardlink_cached;
-mod no_cached;
+mod fs;
+mod hardlink_cache;
+mod uncached;
 
-pub use hardlink_cached::HardlinkCachedMaterializer;
-pub use no_cached::NoCachedMaterializer;
-
-static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
+pub use hardlink_cache::HardlinkCacheMaterializer;
+pub use uncached::UncachedMaterializer;
 
 #[derive(Debug)]
 pub struct StagedDownload {
@@ -25,65 +19,31 @@ pub struct StagedDownload {
 
 #[async_trait]
 pub trait Materializer: fmt::Debug + Send + Sync {
-    async fn resolve(&self, task: &DownloadTask) -> Result<bool>;
-    async fn create_staging(&self, task: &DownloadTask) -> Result<StagedDownload>;
-    async fn commit(&self, staged: StagedDownload, task: &DownloadTask) -> Result<()>;
-    async fn abort(&self, staged: StagedDownload) -> Result<()>;
-}
-
-pub(super) async fn create_temp_output_file(
-    parent: &Path,
-    file_name: String,
-) -> Result<StagedDownload> {
-    create_dir_all(parent).await?;
-
-    for _ in 0..32u32 {
-        let suffix = TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let temp_path = parent.join(format!(
-            ".{}.part.{}.{}",
-            file_name,
-            std::process::id(),
-            suffix
-        ));
-        match OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&temp_path)
-            .await
-        {
-            Ok(file) => {
-                return Ok(StagedDownload {
-                    path: temp_path,
-                    file: Some(file),
-                });
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(error) => return Err(error.into()),
-        }
+    async fn try_reuse(&self, task: &DownloadTask) -> Result<bool>;
+    fn staging_path(&self, task: &DownloadTask) -> Result<PathBuf>;
+    async fn create_staging(&self, task: &DownloadTask) -> Result<StagedDownload> {
+        let staging_path = self.staging_path(task)?;
+        let parent = staging_path
+            .parent()
+            .ok_or_else(|| Error::MissingPathComponent {
+                path: staging_path.clone(),
+                component: "staging parent directory",
+            })?;
+        let file_name = staging_path
+            .file_name()
+            .ok_or_else(|| Error::MissingPathComponent {
+                path: staging_path.clone(),
+                component: "staging file name",
+            })?
+            .to_string_lossy()
+            .into_owned();
+        fs::create_temp_output_file(parent, file_name).await
     }
-
-    Err(Error::TempFileCreation {
-        directory: parent.to_path_buf(),
-    })
-}
-
-pub(super) async fn replace_file(source_path: &Path, target_path: &Path) -> Result<()> {
-    let parent = target_path
-        .parent()
-        .ok_or_else(|| Error::MissingPathComponent {
-            path: target_path.to_path_buf(),
-            component: "target parent directory",
-        })?;
-    create_dir_all(parent).await?;
-
-    if tokio::fs::metadata(target_path).await.is_ok() {
-        tokio::fs::remove_file(target_path).await?;
+    async fn commit(&self, staged: StagedDownload, task: &DownloadTask) -> Result<()> {
+        fs::replace_file(&staged.path, &task.path).await
     }
-
-    tokio::fs::rename(source_path, target_path).await?;
-    Ok(())
-}
-
-pub(super) async fn cleanup_file(path: &Path) {
-    let _ = tokio::fs::remove_file(path).await;
+    async fn abort(&self, staged: StagedDownload) -> Result<()> {
+        fs::cleanup_file(&staged.path).await;
+        Ok(())
+    }
 }

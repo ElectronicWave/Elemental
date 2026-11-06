@@ -76,12 +76,18 @@ If backward compatibility is not possible, provide a migration path.
 ### No `panic!` in Library Code
 
 * **Do not** use `panic!` for recoverable errors.
-* Prefer `anyhow::Result<T>` or a well-defined error enum.
+* Prefer `thiserror` to define a well-defined error enum.
 
 ```rust
-use anyhow::Result;
+use thiserror::Error;
 
-fn parse(input: &str) -> Result<Ast> {
+#[derive(Error, Debug)]
+pub enum MyError {
+    #[error("Invalid input")]
+    InvalidInput,
+}
+
+fn parse(input: &str) -> Result<Ast, MyError> {
     // ...
 }
 ```

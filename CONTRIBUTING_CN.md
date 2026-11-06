@@ -76,12 +76,19 @@ fn load(path: &Path, strict: bool, cache: bool) -> Config
 ### 库代码中禁止使用 `panic!`
 
 * **不要**使用 `panic!` 处理可恢复错误。
-* 优先使用 `anyhow::Result<T>` 或明确定义的错误类型。
+* 优先使用 `thiserror` 明确定义的错误类型。
+
 
 ```rust
-use anyhow::Result;
+use thiserror::Error;
 
-fn parse(input: &str) -> Result<Ast> {
+#[derive(Error, Debug)]
+pub enum MyError {
+    #[error("Invalid input")]
+    InvalidInput,
+}
+
+fn parse(input: &str) -> Result<Ast, MyError> {
     // ...
 }
 ```
@@ -98,15 +105,6 @@ fn parse(input: &str) -> Result<Ast> {
 ---
 
 ## 代码风格
-
-### 格式化
-
-* 所有 Rust 代码必须通过 `rustfmt` 格式化。
-* 不要依赖编辑器私有的格式化规则。
-
-```sh
-cargo fmt
-```
 
 ### 可读性优先于技巧性
 

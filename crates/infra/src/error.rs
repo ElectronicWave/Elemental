@@ -1,6 +1,6 @@
 use std::{error::Error as StdError, io, path::PathBuf};
 
-use crate::downloader::core::{TaskExecutionFailure, TaskId};
+use crate::downloader::{DownloadFailure, TaskId};
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -17,29 +17,49 @@ pub enum Error {
     #[error("HTTP request failed: {0}")]
     Http(#[from] reqwest::Error),
 
-    #[error("planner failed: {0}")]
-    Planner(#[source] Box<dyn std::error::Error + Send + Sync>),
+    #[error("downloader max_concurrent_downloads must be greater than zero")]
+    InvalidMaxConcurrentDownloads,
 
-    #[error("downloader max_connections must be greater than zero")]
-    InvalidMaxConnections,
-
-    #[error("downloader session_parallelism must be greater than zero")]
+    #[error("session parallelism must be greater than zero")]
     InvalidSessionParallelism,
 
     #[error("downloader session_queue_capacity must be greater than zero")]
     InvalidSessionQueueCapacity,
 
-    #[error("download session parallelism must be greater than zero")]
-    InvalidSessionRequestParallelism,
+    #[error("downloader retry policy requires max_attempts > 0 and max_backoff >= initial_backoff")]
+    InvalidRetryPolicy,
 
-    #[error("downloader was dropped unexpectedly")]
-    DownloaderDropped,
+    #[error("downloader read_timeout must be greater than zero")]
+    InvalidReadTimeout,
+
+    #[error("download task URL '{url}' is invalid: {reason}")]
+    InvalidTaskUrl { url: String, reason: String },
+
+    #[error("download task path '{}' is invalid: {reason}", path.display())]
+    InvalidTaskPath { path: PathBuf, reason: &'static str },
+
+    #[error("download task sha1 '{sha1}' must be 40 hexadecimal characters")]
+    InvalidSha1 { sha1: String },
+
+    #[error("download header name '{name}' is invalid: {reason}")]
+    InvalidHeaderName { name: String, reason: String },
+
+    #[error("download header value for '{name}' is invalid: {reason}")]
+    InvalidHeaderValue { name: String, reason: String },
 
     #[error("download session '{session_id}' is closed")]
     SessionClosed { session_id: u64 },
 
     #[error("download session '{session_id}' not found")]
     SessionNotFound { session_id: u64 },
+
+    #[error("download session id '{session_id}' conflicts with an existing session")]
+    SessionIdConflict { session_id: u64 },
+
+    #[error(
+        "download session '{session_id}' is not accepting new tasks because an earlier task failed"
+    )]
+    SessionNotAcceptingTasks { session_id: u64 },
 
     #[error("download session is closed")]
     SessionSenderClosed,
@@ -57,7 +77,7 @@ pub enum Error {
     #[error("download session '{session}' failed:\n{}", format_failures(failures))]
     SessionFailed {
         session: String,
-        failures: Vec<TaskExecutionFailure>,
+        failures: Vec<DownloadFailure>,
     },
 
     #[error(
@@ -113,10 +133,10 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-fn format_failures(failures: &[TaskExecutionFailure]) -> String {
+fn format_failures(failures: &[DownloadFailure]) -> String {
     failures
         .iter()
-        .map(|failure| format!("{}: {}", failure.task_id, failure.error))
+        .map(|failure| format!("{}: {}", failure.task_id, failure.summary()))
         .collect::<Vec<String>>()
         .join("\n")
 }

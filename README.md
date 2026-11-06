@@ -105,15 +105,25 @@ async fn main() -> Result<()> {
     let launcher = Launcher::builder()
         .storage_root(".minecraft")
         .build();
+    let session = launcher
+        .downloader()
+        .session("prepare Vanilla-1.20.1")
+        .open()
+        .await?;
 
     let prepared = launcher
-        .prepare_instance(PrepareInstanceRequest {
-            instance_name: "Vanilla-1.20.1".to_owned(),
-            driver: DriverSpec::Vanilla(VanillaSpec {
-                game_version: "1.20.1".into(),
-            }),
-        })
+        .prepare_instance(
+            &session,
+            PrepareInstanceRequest {
+                instance_name: "Vanilla-1.20.1".to_owned(),
+                driver: DriverSpec::Vanilla(VanillaSpec {
+                    game_version: "1.20.1".into(),
+                }),
+            },
+        )
         .await?;
+    let report = session.finish().await?;
+    report.success()?;
 
     let mut game = launcher
         .launch_prepared_instance(
@@ -201,13 +211,15 @@ Forwarded features:
 | --- | --- |
 | `shared-json` | Enables `elemental-shared/json` |
 | `shared-toml` | Enables `elemental-shared/toml` |
+| `infra-serde` | Enables `elemental-infra/serde` |
 | `object-notify` | Enables `elemental-object/notify` |
 
 > [!IMPORTANT]
 > Forwarded features do not enable the facade module itself. With
 > `default-features = false`, enable both `shared` and `shared-json` when using
 > JSON persistence, `shared` and `shared-toml` for TOML, and `object` plus
-> `object-notify` when waiter support is required.
+> `object-notify` when waiter support is required. Enable both `infra` and
+> `infra-serde` when downloader events or reports need serialization.
 
 ## Documentation
 

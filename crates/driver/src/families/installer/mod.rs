@@ -24,16 +24,15 @@ pub use family::{
 };
 pub use libraries::normalize_library_urls;
 pub use processor::{
-    ensure_installer_profile_libraries_downloaded, installer_client_processors_ready,
-    installer_has_client_processors, run_installer_client_processors,
+    installer_client_processors_ready, installer_has_client_processors,
+    run_installer_client_processors, submit_installer_profile_libraries,
 };
 pub use profile::{
     InstallerInstallStatus, InstallerLaunchVersionRequest, InstallerPersistedState,
-    embedded_version_path, ensure_installer_artifact_downloaded, install_profile_path,
-    installer_install_status, load_persisted_installer_state, merge_libraries_prefer_embedded,
-    persist_embedded_version, persist_install_profile, prepare_installer_launch_version,
-    prepare_installer_state, profile_game_and_raw_loader_version, profile_libraries_ready,
-    read_embedded_version, resolve_installer_processor_runtime,
-    validate_installer_profile_identity,
+    embedded_version_path, install_profile_path, installer_install_status,
+    load_persisted_installer_state, merge_libraries_prefer_embedded, persist_embedded_version,
+    persist_install_profile, persist_installer_launch_version, prepare_installer_state,
+    profile_game_and_raw_loader_version, profile_libraries_ready, read_embedded_version,
+    resolve_installer_processor_runtime, validate_installer_profile_identity,
 };
 pub use source::{InstallerMavenArtifactSpec, InstallerMavenEndpoints, InstallerMavenSource};

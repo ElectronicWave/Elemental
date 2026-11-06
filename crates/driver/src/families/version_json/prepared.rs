@@ -4,11 +4,7 @@ use elemental_core::{
     runtime::distribution::Distribution,
     storage::{Storage, layout::Layoutable},
 };
-use elemental_infra::downloader::{
-    core::ElementalDownloader,
-    plan::DownloadPlanner,
-    task::{DownloadExecutionPolicy, DownloadPlan, DownloadTask},
-};
+use elemental_infra::downloader::{DownloadBatch, DownloadSession, DownloadTask};
 use elemental_schema::mojang::piston::{
     PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaLibraries,
     PistonMetaLibrariesDownloadsArtifact,
@@ -136,7 +132,7 @@ impl<R: VersionJsonRemoteResolver> ResolvedVersionJsonMetadata<R> {
 }
 
 pub async fn prepare_version_json<R, L, VL, ResolveFn, ResolveFut>(
-    downloader: &ElementalDownloader,
+    session: &DownloadSession,
     resolve_or_load: ResolveFn,
 ) -> Result<PreparedVersionJsonInstance<R, L, VL>>
 where
@@ -147,7 +143,7 @@ where
     ResolveFut: Future<Output = Result<ResolvedVersionJsonInstance<R, L, VL>>>,
 {
     let resolved = resolve_or_load().await?;
-    resolved.prepare(downloader).await
+    resolved.prepare(session).await
 }
 
 pub async fn persist_version_json<R, L, VL, ResolveFn, ResolveFut>(
@@ -256,13 +252,28 @@ where
 
     pub async fn prepare(
         self,
-        downloader: &ElementalDownloader,
+        session: &DownloadSession,
     ) -> Result<PreparedVersionJsonInstance<R, L, VL>> {
         let status = self.status().await?;
         if !status.is_downloaded() {
-            downloader.execute_planner(&self.planner()).await?;
+            let batches = self.planner().download_batches()?;
+            for batch in batches {
+                session.submit(batch).await?;
+            }
+            session.success().await?;
         }
 
+        self.finish_preparation().await
+    }
+
+    pub async fn submit_install_batches(&self, session: &DownloadSession) -> Result<()> {
+        for batch in self.planner().download_batches()? {
+            session.submit(batch).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn finish_preparation(self) -> Result<PreparedVersionJsonInstance<R, L, VL>> {
         let status = self.status().await?;
         if !status.natives_extracted {
             self.version.extract_natives().await?;
@@ -354,24 +365,18 @@ where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    fn version_name(&self) -> Result<String> {
-        self.version
-            .name()
-            .ok_or_else(|| Error::MissingVersionName {
-                path: self.version.path.clone(),
-            })
-    }
-
-    fn plan_version_artifacts(&self) -> Result<DownloadPlan> {
+    fn batch_version_artifacts(&self) -> Result<DownloadBatch> {
         let mut tasks = Vec::new();
-        tasks.push(DownloadTask::new(
-            self.remote_resolver
-                .rewrite_upstream(self.metadata.downloads.client.url.as_str())?,
-            self.version
-                .try_get_resource(VersionJsonInstanceResource::Jar)?,
-            Some(self.metadata.downloads.client.size as u64),
-            Some(self.metadata.downloads.client.sha1.clone()),
-        ));
+        tasks.push(
+            DownloadTask::new(
+                self.remote_resolver
+                    .rewrite_upstream(self.metadata.downloads.client.url.as_str())?,
+                self.version
+                    .try_get_resource(VersionJsonInstanceResource::Jar)?,
+            )
+            .size(self.metadata.downloads.client.size as u64)
+            .sha1(self.metadata.downloads.client.sha1.clone()),
+        );
 
         for library in &self.metadata.libraries {
             tasks.extend(self.plan_library_tasks(library)?);
@@ -380,24 +385,20 @@ where
         if let Some(logging) = &self.metadata.logging
             && let Some(client) = &logging.client
         {
-            tasks.push(DownloadTask::new(
-                self.remote_resolver
-                    .rewrite_upstream(client.file.url.as_str())?,
-                self.version
-                    .parent
-                    .try_get_resource(VersionJsonRootResource::AssetLogConfigs(Some(
-                        client.file.id.clone(),
-                    )))?,
-                Some(client.file.size as u64),
-                Some(client.file.sha1.clone()),
-            ));
+            tasks.push(
+                DownloadTask::new(
+                    self.remote_resolver
+                        .rewrite_upstream(client.file.url.as_str())?,
+                    self.version.parent.try_get_resource(
+                        VersionJsonRootResource::AssetLogConfigs(Some(client.file.id.clone())),
+                    )?,
+                )
+                .size(client.file.size as u64)
+                .sha1(client.file.sha1.clone()),
+            );
         }
 
-        Ok(DownloadPlan::named(
-            self.version_name()?,
-            DownloadExecutionPolicy::ServiceDefault,
-            tasks,
-        )?)
+        Ok(DownloadBatch::new(tasks).group("version"))
     }
 
     fn plan_library_tasks(&self, library: &PistonMetaLibraries) -> Result<Vec<DownloadTask>> {
@@ -417,7 +418,7 @@ where
         &self,
         artifact: &PistonMetaLibrariesDownloadsArtifact,
     ) -> Result<DownloadTask> {
-        Ok(DownloadTask::new(
+        let mut task = DownloadTask::new(
             self.remote_resolver
                 .rewrite_upstream(artifact.url.as_str())?,
             self.version
@@ -425,13 +426,17 @@ where
                 .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
                     artifact.path.as_str(),
                 ))))?,
-            artifact.size.map(|size| size as u64),
-            artifact.sha1.clone(),
-        ))
+        );
+        if let Some(size) = artifact.size {
+            task = task.size(size as u64);
+        }
+        if let Some(sha1) = &artifact.sha1 {
+            task = task.sha1(sha1.clone());
+        }
+        Ok(task)
     }
 
-    fn plan_assets(&self) -> Result<DownloadPlan> {
-        let version_name = self.version_name()?;
+    fn batch_assets(&self) -> Result<DownloadBatch> {
         let tasks =
             self.asset_index_objects
                 .objects
@@ -442,29 +447,13 @@ where
                         self.version.parent.try_get_resource(
                             VersionJsonRootResource::AssetObjects(Some(object.hash.clone())),
                         )?,
-                        Some(object.size as u64),
-                        Some(object.hash.clone()),
-                    ))
+                    )
+                    .size(object.size as u64)
+                    .sha1(object.hash.clone()))
                 })
                 .collect::<Result<Vec<DownloadTask>>>()?;
 
-        Ok(DownloadPlan::named(
-            format!("{version_name}-assets"),
-            DownloadExecutionPolicy::ServiceDefault,
-            tasks,
-        )?)
-    }
-}
-
-impl<'a, R, L, VL> DownloadPlanner for VersionJsonInstallPlanner<'a, R, L, VL>
-where
-    R: VersionJsonRemoteResolver,
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
-    fn plan(&self) -> elemental_infra::error::Result<Vec<DownloadPlan>> {
-        self.plan_typed()
-            .map_err(|source| elemental_infra::error::Error::Planner(Box::new(source)))
+        Ok(DownloadBatch::new(tasks).group("assets"))
     }
 }
 
@@ -474,19 +463,19 @@ where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    pub fn plan_typed(&self) -> Result<Vec<DownloadPlan>> {
-        let mut plans = Vec::new();
+    pub fn download_batches(&self) -> Result<Vec<DownloadBatch>> {
+        let mut batches = Vec::new();
 
-        let version_plan = self.plan_version_artifacts()?;
-        if !version_plan.tasks.is_empty() {
-            plans.push(version_plan);
+        let version_batch = self.batch_version_artifacts()?;
+        if !version_batch.is_empty() {
+            batches.push(version_batch);
         }
 
-        let assets_plan = self.plan_assets()?;
-        if !assets_plan.tasks.is_empty() {
-            plans.push(assets_plan);
+        let assets_batch = self.batch_assets()?;
+        if !assets_batch.is_empty() {
+            batches.push(assets_batch);
         }
 
-        Ok(plans)
+        Ok(batches)
     }
 }

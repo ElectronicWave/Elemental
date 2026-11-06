@@ -1,7 +1,6 @@
 use crate::error::Result;
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
-use elemental_infra::downloader::core::ElementalDownloader;
 use elemental_schema::{fabric::ProfileJson, mojang::piston::PistonMetaData};
 
 use crate::{
@@ -41,7 +40,6 @@ impl FabricDriverFamily {
         Ok(self.clone().build_driver(
             FabricSource::new(FabricEndpoints::with_overrides(overrides)?),
             VanillaSource::default(),
-            ElementalDownloader::new(),
         ))
     }
 }

@@ -6,5 +6,6 @@ pub mod liteloader;
 pub mod neoforge;
 pub mod outlands;
 pub mod quilt;
+pub mod retrofutura;
 pub mod rift;
 pub mod vanilla;

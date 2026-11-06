@@ -53,7 +53,7 @@ pub fn merge_profile_with_behavior(
         behavior,
     )?;
 
-    let arguments = merge_profile_arguments(
+    let arguments = merge_piston_meta_arguments(
         base_metadata.arguments.clone(),
         base_metadata.minecraft_arguments.clone(),
         profile.arguments,
@@ -105,10 +105,10 @@ where
     })
 }
 
-fn merge_profile_arguments(
+pub fn merge_piston_meta_arguments(
     base_arguments: Option<PistonMetaArguments>,
     base_minecraft_arguments: Option<String>,
-    profile_arguments: Option<PistonMetaArguments>,
+    overlay_arguments: Option<PistonMetaArguments>,
 ) -> Result<Option<PistonMetaArguments>> {
     let base_arguments = match (base_arguments, base_minecraft_arguments) {
         (Some(arguments), _) => Some(arguments),
@@ -125,13 +125,13 @@ fn merge_profile_arguments(
         (None, None) => None,
     };
 
-    match (base_arguments, profile_arguments) {
+    match (base_arguments, overlay_arguments) {
         (None, None) => Ok(None),
         (Some(base_arguments), None) => Ok(Some(base_arguments)),
-        (None, Some(profile_arguments)) => Ok(Some(profile_arguments)),
-        (Some(mut base_arguments), Some(profile_arguments)) => {
-            base_arguments.game.extend(profile_arguments.game);
-            base_arguments.jvm.extend(profile_arguments.jvm);
+        (None, Some(overlay_arguments)) => Ok(Some(overlay_arguments)),
+        (Some(mut base_arguments), Some(overlay_arguments)) => {
+            base_arguments.game.extend(overlay_arguments.game);
+            base_arguments.jvm.extend(overlay_arguments.jvm);
             Ok(Some(base_arguments))
         }
     }

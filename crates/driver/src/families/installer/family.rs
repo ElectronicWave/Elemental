@@ -11,6 +11,7 @@ use elemental_infra::downloader::DownloadSession;
 use elemental_schema::{forge::ForgeInstallerProfile, mojang::piston::PistonMetaLibraries};
 
 use crate::{
+    driver::DriverDescriptor,
     drivers::vanilla::source::{
         VanillaEndpoints, VanillaSource, rewrite_upstream_with_vanilla_fallback,
     },
@@ -18,7 +19,7 @@ use crate::{
     families::{
         installer::{
             InstallerArtifact, InstallerInstallStatus, InstallerLaunchVersionRequest,
-            installer_has_client_processors, installer_install_status,
+            InstallerStatePaths, installer_has_client_processors, installer_install_status,
             load_persisted_installer_state, merge_libraries_prefer_embedded,
             normalize_library_urls, persist_installer_launch_version, prepare_installer_state,
             profile_game_and_raw_loader_version, resolve_installer_processor_runtime,
@@ -31,6 +32,7 @@ use crate::{
             VersionJsonRootResource,
         },
     },
+    inspect::ProfiledDriverIdentity,
     loader_version::LoaderVersionId,
 };
 
@@ -58,8 +60,13 @@ pub trait InstallerFamily: Clone + Copy + Debug + Send + Sync + 'static {
     type Source: InstallerArtifactSource<Endpoints = Self::Endpoints>;
     type Endpoints: InstallerArtifactEndpoints;
 
+    const IDENTITY: ProfiledDriverIdentity;
     const FAMILY_NAME: &'static str;
     const LOADER_VERSION_PREFIX: &'static str;
+
+    fn descriptor() -> DriverDescriptor {
+        Self::IDENTITY.descriptor()
+    }
 
     fn source_endpoints(source: &Self::Source) -> &Self::Endpoints {
         source.endpoints()
@@ -147,8 +154,6 @@ pub type ResolvedInstallerFamilyMetadata<F> =
     ResolvedVersionJsonMetadata<InstallerFamilyRemoteResolver<F>>;
 pub type ResolvedInstallerFamilyLaunchVersion<F, L, VL> =
     ResolvedVersionJsonInstance<InstallerFamilyRemoteResolver<F>, L, VL>;
-pub type PreparedInstallerFamilyLaunchVersion<F, L, VL> =
-    PreparedVersionJsonInstance<InstallerFamilyRemoteResolver<F>, L, VL>;
 pub type InstallerFamilyInstallStatus = InstallerInstallStatus;
 
 #[derive(Debug, Clone)]
@@ -167,17 +172,18 @@ where
 }
 
 #[derive(Debug, Clone)]
-pub struct PreparedInstallerFamilyVersion<F, L, VL>
+pub struct PreparedInstallerVersion<L, VL>
 where
-    F: InstallerFamily,
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    pub resolved_version: ResolvedInstallerFamilyVersion<F, L, VL>,
+    pub instance: Storage<VL, Storage<L>>,
     pub install_profile: ForgeInstallerProfile,
     pub embedded_version: Option<serde_json::Value>,
-    pub launch_version: PreparedInstallerFamilyLaunchVersion<F, L, VL>,
+    pub launch_version: PreparedVersionJsonInstance<L, VL>,
     pub install_status: InstallerFamilyInstallStatus,
+    install_profile_path: PathBuf,
+    embedded_version_path: PathBuf,
 }
 
 impl<F> InstallerFamilyRemoteResolver<F>
@@ -270,7 +276,8 @@ where
         remote_resolver: &InstallerFamilyRemoteResolver<F>,
         runtime_executable_path: Option<&Path>,
         runtime_validation: RuntimeValidationMode,
-    ) -> Result<PreparedInstallerFamilyVersion<F, L, VL>> {
+    ) -> Result<PreparedInstallerVersion<L, VL>> {
+        let state_paths = InstallerStatePaths::new(&self.instance.path, F::FAMILY_NAME);
         let (installer_state, launch_version) = async {
             let libraries_root = self
                 .instance
@@ -341,17 +348,19 @@ where
             &self.instance,
             &self.installer_artifact,
             &installer_state.install_profile,
-            &launch_version.resolved_version,
+            launch_version.install_status.is_ready(),
             F::FAMILY_NAME,
         )
         .await?;
 
-        Ok(PreparedInstallerFamilyVersion {
-            resolved_version: self.clone(),
+        Ok(PreparedInstallerVersion {
+            instance: self.instance.clone(),
             install_profile: installer_state.install_profile,
             embedded_version: installer_state.embedded_version,
             launch_version,
             install_status,
+            install_profile_path: state_paths.install_profile_path(),
+            embedded_version_path: state_paths.embedded_version_path(),
         })
     }
 
@@ -359,16 +368,18 @@ where
         source: F::Source,
         remote_resolver: InstallerFamilyRemoteResolver<F>,
         instance: Storage<VL, Storage<L>>,
-    ) -> Result<PreparedInstallerFamilyVersion<F, L, VL>> {
+    ) -> Result<PreparedInstallerVersion<L, VL>> {
+        let state_paths = InstallerStatePaths::new(&instance.path, F::FAMILY_NAME);
         let installer_state = load_persisted_installer_state(&instance.path, F::FAMILY_NAME)?;
 
         let (game_version, loader_version) = F::profile_identity(&installer_state.install_profile)?;
-        let resolved_version = ResolvedInstallerFamilyVersion::new(
-            source,
-            instance.clone(),
-            MinecraftVersionId::from(game_version),
-            loader_version,
-        )?;
+        let resolved_version: ResolvedInstallerFamilyVersion<F, L, VL> =
+            ResolvedInstallerFamilyVersion::new(
+                source,
+                instance.clone(),
+                MinecraftVersionId::from(game_version),
+                loader_version,
+            )?;
         let launch_version = ResolvedInstallerFamilyLaunchVersion::<F, L, VL>::load(
             remote_resolver,
             instance.clone(),
@@ -379,7 +390,7 @@ where
             &resolved_version.instance,
             &resolved_version.installer_artifact,
             &installer_state.install_profile,
-            &launch_version.resolved_version,
+            launch_version.install_status.is_ready(),
             F::FAMILY_NAME,
         )
         .await?;
@@ -396,34 +407,33 @@ where
             });
         }
 
-        Ok(PreparedInstallerFamilyVersion {
-            resolved_version,
+        Ok(PreparedInstallerVersion {
+            instance: resolved_version.instance,
             install_profile: installer_state.install_profile,
             embedded_version: installer_state.embedded_version,
             launch_version,
             install_status,
+            install_profile_path: state_paths.install_profile_path(),
+            embedded_version_path: state_paths.embedded_version_path(),
         })
     }
 }
 
-impl<F, L, VL> PreparedInstallerFamilyVersion<F, L, VL>
+impl<L, VL> PreparedInstallerVersion<L, VL>
 where
-    F: InstallerFamily,
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
+    pub fn instance_root(&self) -> &Path {
+        self.instance.path.as_path()
+    }
+
     pub fn install_profile_path(&self) -> PathBuf {
-        crate::families::installer::install_profile_path(
-            &self.resolved_version.instance.path,
-            F::FAMILY_NAME,
-        )
+        self.install_profile_path.clone()
     }
 
     pub fn embedded_version_path(&self) -> PathBuf {
-        crate::families::installer::embedded_version_path(
-            &self.resolved_version.instance.path,
-            F::FAMILY_NAME,
-        )
+        self.embedded_version_path.clone()
     }
 
     pub fn required_java_major_version(&self) -> usize {

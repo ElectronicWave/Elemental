@@ -3,10 +3,7 @@ use std::marker::PhantomData;
 use crate::error::Result;
 use async_trait::async_trait;
 use elemental_core::{
-    auth::authorizer::Authorizer,
-    launcher::command::LaunchCommand,
     minecraft::MinecraftVersionId,
-    runtime::distribution::Distribution,
     storage::{Storage, layout::Layout},
 };
 use elemental_infra::downloader::DownloadSession;
@@ -16,46 +13,28 @@ use crate::{
     drivers::vanilla::source::VanillaSource,
     families::{
         installer::{
-            InstallerFamily, InstallerFamilyRemoteResolver, PreparedInstallerFamilyVersion,
+            InstallerFamily, InstallerFamilyRemoteResolver, PreparedInstallerVersion,
             ResolvedInstallerFamilyVersion,
         },
-        version_json::{
-            VersionJsonInstanceLayout, VersionJsonLaunchConfig, VersionJsonRootLayout,
-            build_version_json_launch_command, launch_wrapped_version,
-        },
+        version_json::{VersionJsonInstanceLayout, VersionJsonLaunchConfig, VersionJsonRootLayout},
     },
-    inspect::{InstanceProbe, ProfiledDriverIdentity},
+    inspect::InstanceProbe,
     loader_version::LoaderVersionId,
 };
-
-pub trait InstallerFamilyDriverSpec: InstallerFamily {
-    const IDENTITY: ProfiledDriverIdentity;
-}
 
 #[derive(Debug, Clone)]
 pub struct InstallerFamilyDriver<F>
 where
-    F: InstallerFamilyDriverSpec,
+    F: InstallerFamily,
 {
     source: F::Source,
     vanilla_source: VanillaSource,
     family: PhantomData<F>,
 }
 
-pub struct LaunchedInstallerFamilyVersion<F, L, VL>
-where
-    F: InstallerFamilyDriverSpec,
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
-    pub prepared_version: PreparedInstallerFamilyVersion<F, L, VL>,
-    pub runtime: Distribution,
-    pub child: tokio::process::Child,
-}
-
 impl<F> InstallerFamilyDriver<F>
 where
-    F: InstallerFamilyDriverSpec,
+    F: InstallerFamily,
 {
     pub fn new(source: F::Source, vanilla_source: VanillaSource) -> Self {
         Self {
@@ -66,7 +45,7 @@ where
     }
 
     pub fn descriptor(&self) -> DriverDescriptor {
-        F::IDENTITY.descriptor()
+        F::descriptor()
     }
 
     pub async fn prepare<L, VL>(
@@ -75,7 +54,7 @@ where
         instance: &Storage<VL, Storage<L>>,
         game_version: MinecraftVersionId,
         loader_version: LoaderVersionId,
-    ) -> Result<PreparedInstallerFamilyVersion<F, L, VL>>
+    ) -> Result<PreparedInstallerVersion<L, VL>>
     where
         L: VersionJsonRootLayout + Clone,
         VL: VersionJsonInstanceLayout + Clone,
@@ -97,7 +76,7 @@ where
         game_version: MinecraftVersionId,
         loader_version: LoaderVersionId,
         config: &VersionJsonLaunchConfig,
-    ) -> Result<PreparedInstallerFamilyVersion<F, L, VL>>
+    ) -> Result<PreparedInstallerVersion<L, VL>>
     where
         L: VersionJsonRootLayout + Clone,
         VL: VersionJsonInstanceLayout + Clone,
@@ -121,7 +100,7 @@ where
     pub async fn load_prepared<L, VL>(
         &self,
         instance: &Storage<VL, Storage<L>>,
-    ) -> Result<PreparedInstallerFamilyVersion<F, L, VL>>
+    ) -> Result<PreparedInstallerVersion<L, VL>>
     where
         L: VersionJsonRootLayout + Clone,
         VL: VersionJsonInstanceLayout + Clone,
@@ -134,46 +113,6 @@ where
         .await
     }
 
-    pub async fn launch<A, L, VL>(
-        &self,
-        prepared_version: PreparedInstallerFamilyVersion<F, L, VL>,
-        config: &VersionJsonLaunchConfig,
-        authorizer: A,
-    ) -> Result<LaunchedInstallerFamilyVersion<F, L, VL>>
-    where
-        A: Authorizer,
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
-        launch_wrapped_version(
-            authorizer,
-            prepared_version,
-            config,
-            |prepared_version| &prepared_version.launch_version,
-            |prepared_version, runtime, child| LaunchedInstallerFamilyVersion {
-                prepared_version,
-                runtime,
-                child,
-            },
-        )
-        .await
-    }
-
-    pub async fn build_launch_command<A, L, VL>(
-        &self,
-        authorizer: A,
-        prepared_version: &PreparedInstallerFamilyVersion<F, L, VL>,
-        config: &VersionJsonLaunchConfig,
-    ) -> Result<(Distribution, LaunchCommand)>
-    where
-        A: Authorizer,
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
-        build_version_json_launch_command(authorizer, &prepared_version.launch_version, config)
-            .await
-    }
-
     fn remote_resolver(&self) -> InstallerFamilyRemoteResolver<F> {
         InstallerFamilyRemoteResolver::new(
             self.vanilla_source.endpoints().clone(),
@@ -184,7 +123,7 @@ where
 
 impl<F> InstallerFamilyDriver<F>
 where
-    F: InstallerFamilyDriverSpec,
+    F: InstallerFamily,
     F::Source: Default,
 {
     pub fn with_defaults() -> Result<Self> {
@@ -195,13 +134,13 @@ where
 #[async_trait]
 impl<F, L, VL> Driver<L, VL> for InstallerFamilyDriver<F>
 where
-    F: InstallerFamilyDriverSpec,
+    F: InstallerFamily,
     F::Source: Sync,
     L: Layout,
     VL: Layout,
 {
     fn descriptor(&self) -> DriverDescriptor {
-        F::IDENTITY.descriptor()
+        F::descriptor()
     }
 
     async fn inspect(&self, probe: &InstanceProbe<L, VL>) -> Result<Option<InstalledDriver>> {

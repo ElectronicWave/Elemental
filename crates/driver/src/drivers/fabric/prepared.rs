@@ -1,7 +1,5 @@
 use crate::{
-    drivers::fabric::source::FabricEndpoints,
-    families::version_json::{PreparedVersionJsonInstance, VanillaFallbackRemoteResolver},
+    drivers::fabric::source::FabricEndpoints, families::version_json::VanillaFallbackRemoteResolver,
 };
 
 pub type FabricRemoteResolver = VanillaFallbackRemoteResolver<FabricEndpoints>;
-pub type PreparedFabricVersion<L, VL> = PreparedVersionJsonInstance<FabricRemoteResolver, L, VL>;

@@ -1,7 +1,5 @@
 use crate::{
-    drivers::rift::source::RiftEndpoints,
-    families::version_json::{PreparedVersionJsonInstance, VanillaFallbackRemoteResolver},
+    drivers::rift::source::RiftEndpoints, families::version_json::VanillaFallbackRemoteResolver,
 };
 
 pub type RiftRemoteResolver = VanillaFallbackRemoteResolver<RiftEndpoints>;
-pub type PreparedRiftVersion<L, VL> = PreparedVersionJsonInstance<RiftRemoteResolver, L, VL>;

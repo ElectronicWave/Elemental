@@ -1,10 +1,7 @@
 use crate::error::Result;
 use async_trait::async_trait;
 use elemental_core::{
-    auth::authorizer::Authorizer,
-    launcher::command::LaunchCommand,
     minecraft::MinecraftVersionId,
-    runtime::distribution::Distribution,
     storage::{Storage, layout::Layout},
 };
 use elemental_infra::downloader::DownloadSession;
@@ -17,11 +14,8 @@ use crate::{
 };
 
 use super::{
-    LaunchedVersionJsonInstance, PreparedVersionJsonInstance, ResolvedVersionJsonInstance,
-    ResolvedVersionJsonMetadata, VersionJsonInstanceLayout, VersionJsonLaunchConfig,
-    VersionJsonRootLayout, build_version_json_launch_command, family::ProfiledVersionJsonFamily,
-    launch_version_json_instance, load_prepared_version_json, persist_version_json,
-    prepare_version_json,
+    PreparedVersionJsonInstance, ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata,
+    VersionJsonInstanceLayout, VersionJsonRootLayout, family::ProfiledVersionJsonFamily,
 };
 
 #[derive(Debug, Clone)]
@@ -67,54 +61,28 @@ where
         instance: &Storage<VL, Storage<L>>,
         game_version: MinecraftVersionId,
         loader_version: LoaderVersionId,
-    ) -> Result<PreparedVersionJsonInstance<F::RemoteResolver, L, VL>>
+    ) -> Result<PreparedVersionJsonInstance<L, VL>>
     where
         L: VersionJsonRootLayout + Clone,
         VL: VersionJsonInstanceLayout + Clone,
     {
-        prepare_version_json(session, || {
-            self.resolve_or_load(instance, game_version, loader_version)
-        })
-        .await
+        self.resolve_or_load(instance, game_version, loader_version)
+            .await?
+            .prepare(session)
+            .await
     }
 
     pub async fn load_prepared<L, VL>(
         &self,
         instance: &Storage<VL, Storage<L>>,
-    ) -> Result<PreparedVersionJsonInstance<F::RemoteResolver, L, VL>>
+    ) -> Result<PreparedVersionJsonInstance<L, VL>>
     where
         L: VersionJsonRootLayout + Clone,
         VL: VersionJsonInstanceLayout + Clone,
     {
-        load_prepared_version_json(self.remote_resolver(), instance).await
-    }
-
-    pub async fn launch<A, L, VL>(
-        &self,
-        prepared_version: PreparedVersionJsonInstance<F::RemoteResolver, L, VL>,
-        config: &VersionJsonLaunchConfig,
-        authorizer: A,
-    ) -> Result<LaunchedVersionJsonInstance<F::RemoteResolver, L, VL>>
-    where
-        A: Authorizer,
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
-        launch_version_json_instance(authorizer, prepared_version, config).await
-    }
-
-    pub async fn build_launch_command<A, L, VL>(
-        &self,
-        authorizer: A,
-        prepared_version: &PreparedVersionJsonInstance<F::RemoteResolver, L, VL>,
-        config: &VersionJsonLaunchConfig,
-    ) -> Result<(Distribution, LaunchCommand)>
-    where
-        A: Authorizer,
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
-        build_version_json_launch_command(authorizer, prepared_version, config).await
+        ResolvedVersionJsonInstance::load(self.remote_resolver(), instance.clone())?
+            .into_prepared()
+            .await
     }
 
     fn remote_resolver(&self) -> F::RemoteResolver {
@@ -147,24 +115,10 @@ where
             }
         }
 
-        self.resolve_version(instance, game_version, loader_version)
+        self.resolve_metadata(game_version, loader_version)
+            .await?
+            .persist(instance)
             .await
-    }
-
-    async fn resolve_version<L, VL>(
-        &self,
-        instance: &Storage<VL, Storage<L>>,
-        game_version: MinecraftVersionId,
-        loader_version: LoaderVersionId,
-    ) -> Result<ResolvedVersionJsonInstance<F::RemoteResolver, L, VL>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
-        persist_version_json(instance, || {
-            self.resolve_metadata(game_version, loader_version)
-        })
-        .await
     }
 
     async fn resolve_metadata(

@@ -1,7 +1,5 @@
 use crate::{
-    drivers::quilt::source::QuiltEndpoints,
-    families::version_json::{PreparedVersionJsonInstance, VanillaFallbackRemoteResolver},
+    drivers::quilt::source::QuiltEndpoints, families::version_json::VanillaFallbackRemoteResolver,
 };
 
 pub type QuiltRemoteResolver = VanillaFallbackRemoteResolver<QuiltEndpoints>;
-pub type PreparedQuiltVersion<L, VL> = PreparedVersionJsonInstance<QuiltRemoteResolver, L, VL>;

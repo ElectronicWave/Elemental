@@ -5,8 +5,7 @@ use crate::{
     descriptors::FORGE_DRIVER,
     error::Result,
     families::installer::{
-        InstallerFamily, InstallerFamilyDriver, InstallerFamilyDriverSpec, InstallerMavenSource,
-        MavenEndpoints, MavenSpec, PreparedInstallerFamilyVersion,
+        InstallerFamily, InstallerFamilyDriver, InstallerMavenSource, MavenEndpoints, MavenSpec,
     },
     inspect::{LibraryPrefixSet, ProfileIdPattern, ProfiledDriverIdentity},
     loader_version::LoaderVersionId,
@@ -64,12 +63,12 @@ impl InstallerFamily for ForgeFamily {
     type Source = ForgeSource;
     type Endpoints = ForgeEndpoints;
 
+    const IDENTITY: ProfiledDriverIdentity = FORGE_IDENTITY;
     const FAMILY_NAME: &'static str = "forge";
     const LOADER_VERSION_PREFIX: &'static str = "forge-";
 }
 
 pub type ForgeDriver = InstallerFamilyDriver<ForgeFamily>;
-pub type PreparedForgeVersion<L, VL> = PreparedInstallerFamilyVersion<ForgeFamily, L, VL>;
 
 const FORGE_LIBRARIES: LibraryPrefixSet = LibraryPrefixSet::new(&["net.minecraftforge:fmlloader:"]);
 const FORGE_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(
@@ -78,9 +77,5 @@ const FORGE_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(
     FORGE_LIBRARIES,
     ProfileIdPattern::new("-forge-"),
 );
-
-impl InstallerFamilyDriverSpec for ForgeFamily {
-    const IDENTITY: ProfiledDriverIdentity = FORGE_IDENTITY;
-}
 
 pub type ForgeCatalog = MavenCatalog<ForgeEndpoints>;

@@ -28,11 +28,12 @@ use elemental_driver::{
         vanilla::{driver::VanillaDriver, source::VanillaSource},
     },
     families::{
-        installer::{InstallerFamilyDriver, InstallerFamilyDriverSpec},
+        installer::{InstallerFamily, InstallerFamilyDriver},
         version_json::{
             BaseInstanceLayout, BaseRootLayout, ProfiledVersionJsonDriver,
             ProfiledVersionJsonFamily, ProfiledVersionJsonFamilyExt, VersionJsonGameStorageExt,
-            VersionJsonInstanceLayout, VersionJsonRootLayout, inspect_instances,
+            VersionJsonInstanceLayout, VersionJsonRootLayout, build_version_json_launch_command,
+            inspect_instances,
         },
     },
     inspect::InstalledInstance,
@@ -47,25 +48,11 @@ use crate::{
     result::{
         Instance, LaunchCommandResult, LaunchedInstance, PreparedInstance, PreparedInstanceKind,
     },
-    spec::DriverSpec,
+    spec::{DriverFlow, DriverSpec},
 };
 
 type LauncherGameStorage<L> = Storage<L>;
 type LauncherInstanceStorage<L, VL> = Storage<VL, LauncherGameStorage<L>>;
-
-struct InspectDrivers {
-    vanilla: VanillaDriver,
-    fabric: ProfiledVersionJsonDriver<FabricDriverFamily>,
-    legacy_fabric: ProfiledVersionJsonDriver<FabricDriverFamily>,
-    babric: ProfiledVersionJsonDriver<FabricDriverFamily>,
-    quilt: ProfiledVersionJsonDriver<QuiltDriverFamily>,
-    liteloader: ProfiledVersionJsonDriver<LiteLoaderDriverFamily>,
-    rift: ProfiledVersionJsonDriver<RiftDriverFamily>,
-    forge: InstallerFamilyDriver<ForgeFamily>,
-    cleanroom: InstallerFamilyDriver<CleanroomDriverSpec>,
-    outlands: InstallerFamilyDriver<OutlandsDriverSpec>,
-    neoforge: InstallerFamilyDriver<NeoForgeFamily>,
-}
 
 enum ResolvedLauncherDriver {
     Vanilla(VanillaDriver),
@@ -124,9 +111,9 @@ where
 
     pub async fn inspect_instances(&self) -> Result<Vec<Instance>> {
         let storage = self.game_storage();
-        let inspect_drivers = InspectDrivers::new(self)?;
-        let drivers = inspect_drivers.as_array::<L, VL>();
-        let mut summaries = inspect_instances(&storage, self.instance_layout.clone(), &drivers)
+        let drivers = self.inspect_drivers()?;
+        let driver_refs = driver_refs(&drivers);
+        let mut summaries = inspect_instances(&storage, self.instance_layout.clone(), &driver_refs)
             .await?
             .into_iter()
             .map(summarize_installed_instance)
@@ -137,10 +124,10 @@ where
 
     pub async fn inspect_instance(&self, instance_name: String) -> Result<Option<Instance>> {
         let instance = self.instance(instance_name)?;
-        let inspect_drivers = InspectDrivers::new(self)?;
-        let drivers = inspect_drivers.as_array::<L, VL>();
+        let drivers = self.inspect_drivers()?;
+        let driver_refs = driver_refs(&drivers);
 
-        Ok(InstalledInstance::detect(instance, &drivers)
+        Ok(InstalledInstance::detect(instance, &driver_refs)
             .await?
             .map(summarize_installed_instance))
     }
@@ -196,9 +183,16 @@ where
     where
         A: Authorizer,
     {
-        self.resolve_driver(prepared.driver)?
-            .build_launch_command(prepared, authorizer, options)
-            .await
+        let (runtime, command) = match &prepared.inner {
+            PreparedInstanceKind::VersionJson(version) => {
+                build_version_json_launch_command(authorizer, version, options).await?
+            }
+            PreparedInstanceKind::Installer(version) => {
+                build_version_json_launch_command(authorizer, &version.launch_version, options)
+                    .await?
+            }
+        };
+        Ok(LaunchCommandResult { runtime, command })
     }
 
     pub async fn launch_prepared_instance<A>(
@@ -257,7 +251,7 @@ where
 
     fn installer_driver<F>(&self) -> InstallerFamilyDriver<F>
     where
-        F: InstallerFamilyDriverSpec,
+        F: InstallerFamily,
         F::Source: Default,
     {
         InstallerFamilyDriver::new(F::Source::default(), VanillaSource::default())
@@ -316,34 +310,20 @@ impl ResolvedLauncherDriver {
         L: VersionJsonRootLayout + Clone,
         VL: VersionJsonInstanceLayout + Clone,
     {
-        match (self, spec) {
-            (Self::Vanilla(driver), DriverSpec::Vanilla(vanilla_spec)) => {
+        match (self, spec.flow()) {
+            (Self::Vanilla(driver), DriverFlow::Vanilla) => {
                 let prepared = driver
-                    .prepare(session, instance, vanilla_spec.game_version.clone())
+                    .prepare(session, instance, spec.game_version().clone())
                     .await?;
-                Ok(PreparedInstanceKind::Vanilla(Box::new(prepared)))
+                Ok(PreparedInstanceKind::VersionJson(Box::new(prepared)))
             }
-            (
-                Self::Profiled(driver),
-                spec @ (DriverSpec::Fabric(_)
-                | DriverSpec::LegacyFabric(_)
-                | DriverSpec::Babric(_)
-                | DriverSpec::Quilt(_)
-                | DriverSpec::LiteLoader(_)
-                | DriverSpec::Rift(_)),
-            ) => {
+            (Self::Profiled(driver), DriverFlow::Profiled) => {
                 let prepared = driver
                     .prepare(session, instance, loader_request(spec)?)
                     .await?;
-                Ok(PreparedInstanceKind::Profiled(Box::new(prepared)))
+                Ok(PreparedInstanceKind::VersionJson(Box::new(prepared)))
             }
-            (
-                Self::Installer(driver),
-                spec @ (DriverSpec::Forge(_)
-                | DriverSpec::Cleanroom(_)
-                | DriverSpec::Outlands(_)
-                | DriverSpec::NeoForge(_)),
-            ) => {
+            (Self::Installer(driver), DriverFlow::Installer) => {
                 let prepared = driver
                     .prepare(session, instance, loader_request(spec)?)
                     .await?;
@@ -364,68 +344,16 @@ impl ResolvedLauncherDriver {
         VL: VersionJsonInstanceLayout + Clone,
     {
         match self {
-            Self::Vanilla(driver) => Ok(PreparedInstanceKind::Vanilla(Box::new(
+            Self::Vanilla(driver) => Ok(PreparedInstanceKind::VersionJson(Box::new(
                 driver.load_prepared(instance).await?,
             ))),
-            Self::Profiled(driver) => Ok(PreparedInstanceKind::Profiled(Box::new(
+            Self::Profiled(driver) => Ok(PreparedInstanceKind::VersionJson(Box::new(
                 driver.load_prepared(instance).await?,
             ))),
             Self::Installer(driver) => Ok(PreparedInstanceKind::Installer(Box::new(
                 driver.load_prepared(instance).await?,
             ))),
         }
-    }
-
-    async fn build_launch_command<A, L, VL>(
-        &self,
-        prepared: &PreparedInstance<L, VL>,
-        authorizer: A,
-        launch_options: &LaunchOptions,
-    ) -> Result<LaunchCommandResult>
-    where
-        A: Authorizer,
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
-        match self {
-            Self::Vanilla(driver) => {
-                let PreparedInstanceKind::Vanilla(version) = &prepared.inner else {
-                    return Err(prepared_variant_mismatch(prepared));
-                };
-                let (runtime, command) = driver
-                    .build_launch_command(authorizer, version, launch_options)
-                    .await?;
-                Ok(LaunchCommandResult { runtime, command })
-            }
-            Self::Profiled(driver) => {
-                let PreparedInstanceKind::Profiled(version) = &prepared.inner else {
-                    return Err(prepared_variant_mismatch(prepared));
-                };
-                let (runtime, command) = driver
-                    .build_launch_command(authorizer, version, launch_options)
-                    .await?;
-                Ok(LaunchCommandResult { runtime, command })
-            }
-            Self::Installer(driver) => {
-                let PreparedInstanceKind::Installer(version) = &prepared.inner else {
-                    return Err(prepared_variant_mismatch(prepared));
-                };
-                let (runtime, command) = driver
-                    .build_launch_command(authorizer, version, launch_options)
-                    .await?;
-                Ok(LaunchCommandResult { runtime, command })
-            }
-        }
-    }
-}
-
-fn prepared_variant_mismatch<L, VL>(prepared: &PreparedInstance<L, VL>) -> Error
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
-    Error::PreparedVariantMismatch {
-        driver: prepared.driver.id.to_owned(),
     }
 }
 
@@ -439,54 +367,40 @@ fn loader_version(spec: &DriverSpec) -> Result<LoaderVersionId> {
 
 fn loader_request(spec: &DriverSpec) -> Result<LoaderRequest> {
     Ok(LoaderRequest {
-        descriptor: spec.descriptor(),
         game_version: spec.game_version().clone(),
         loader_version: loader_version(spec)?,
     })
 }
 
-impl InspectDrivers {
-    fn new<L, VL>(launcher: &Launcher<L, VL>) -> Result<Self>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone + Send,
-    {
-        Ok(Self {
-            vanilla: launcher.vanilla_driver(),
-            fabric: launcher.profiled_driver(FabricDriverFamily::new(FabricFlavor::Fabric))?,
-            legacy_fabric: launcher
-                .profiled_driver(FabricDriverFamily::new(FabricFlavor::LegacyFabric))?,
-            babric: launcher.profiled_driver(FabricDriverFamily::new(FabricFlavor::Babric))?,
-            quilt: launcher.profiled_driver(QuiltDriverFamily)?,
-            liteloader: launcher.profiled_driver(LiteLoaderDriverFamily)?,
-            rift: launcher.profiled_driver(RiftDriverFamily)?,
-            forge: launcher.installer_driver::<ForgeFamily>(),
-            cleanroom: launcher.installer_driver::<CleanroomDriverSpec>(),
-            outlands: launcher.installer_driver::<OutlandsDriverSpec>(),
-            neoforge: launcher.installer_driver::<NeoForgeFamily>(),
-        })
+impl<L, VL> Launcher<L, VL>
+where
+    L: VersionJsonRootLayout + Clone,
+    VL: VersionJsonInstanceLayout + Clone + Send,
+{
+    fn inspect_drivers(&self) -> Result<Vec<Box<dyn Driver<L, VL>>>> {
+        Ok(vec![
+            Box::new(self.profiled_driver(FabricDriverFamily::new(FabricFlavor::Fabric))?),
+            Box::new(self.profiled_driver(FabricDriverFamily::new(FabricFlavor::LegacyFabric))?),
+            Box::new(self.profiled_driver(FabricDriverFamily::new(FabricFlavor::Babric))?),
+            Box::new(self.profiled_driver(QuiltDriverFamily)?),
+            Box::new(self.profiled_driver(LiteLoaderDriverFamily)?),
+            Box::new(self.profiled_driver(RiftDriverFamily)?),
+            Box::new(self.installer_driver::<ForgeFamily>()),
+            Box::new(self.installer_driver::<CleanroomDriverSpec>()),
+            Box::new(self.installer_driver::<OutlandsDriverSpec>()),
+            Box::new(self.installer_driver::<NeoForgeFamily>()),
+            // Vanilla is last so more specific drivers take precedence.
+            Box::new(self.vanilla_driver()),
+        ])
     }
+}
 
-    fn as_array<L, VL>(&self) -> [&dyn Driver<L, VL>; 11]
-    where
-        L: elemental_core::storage::layout::Layout,
-        VL: elemental_core::storage::layout::Layout,
-    {
-        [
-            &self.fabric,
-            &self.legacy_fabric,
-            &self.babric,
-            &self.quilt,
-            &self.liteloader,
-            &self.rift,
-            &self.forge,
-            &self.cleanroom,
-            &self.outlands,
-            &self.neoforge,
-            // Every instance could be a vanilla instance, so the vanilla driver should be last to allow other drivers to take precedence when applicable
-            &self.vanilla,
-        ]
-    }
+fn driver_refs<L, VL>(drivers: &[Box<dyn Driver<L, VL>>]) -> Vec<&dyn Driver<L, VL>>
+where
+    L: elemental_core::storage::layout::Layout,
+    VL: elemental_core::storage::layout::Layout,
+{
+    drivers.iter().map(Box::as_ref).collect()
 }
 
 fn summarize_installed_instance<L, VL>(instance: InstalledInstance<L, VL>) -> Instance

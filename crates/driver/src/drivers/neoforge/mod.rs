@@ -4,8 +4,7 @@ use crate::{
     catalog::{LoaderRelease, MavenCatalog},
     descriptors::NEOFORGE_DRIVER,
     families::installer::{
-        InstallerFamily, InstallerFamilyDriver, InstallerFamilyDriverSpec, InstallerMavenSource,
-        MavenEndpoints, MavenSpec, PreparedInstallerFamilyVersion,
+        InstallerFamily, InstallerFamilyDriver, InstallerMavenSource, MavenEndpoints, MavenSpec,
     },
     inspect::{LibraryPrefixSet, ProfileIdPattern, ProfiledDriverIdentity},
     loader_version::LoaderVersionId,
@@ -64,12 +63,12 @@ impl InstallerFamily for NeoForgeFamily {
     type Source = NeoForgeSource;
     type Endpoints = NeoForgeEndpoints;
 
+    const IDENTITY: ProfiledDriverIdentity = NEOFORGE_IDENTITY;
     const FAMILY_NAME: &'static str = "neoforge";
     const LOADER_VERSION_PREFIX: &'static str = "neoforge-";
 }
 
 pub type NeoForgeDriver = InstallerFamilyDriver<NeoForgeFamily>;
-pub type PreparedNeoForgeVersion<L, VL> = PreparedInstallerFamilyVersion<NeoForgeFamily, L, VL>;
 
 const NEOFORGE_MARKERS: LibraryPrefixSet = LibraryPrefixSet::new(&[
     "net.neoforged:neoforge:",
@@ -83,9 +82,5 @@ const NEOFORGE_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(
     NEOFORGE_MARKERS,
     ProfileIdPattern::loader_prefixed("neoforge-"),
 );
-
-impl InstallerFamilyDriverSpec for NeoForgeFamily {
-    const IDENTITY: ProfiledDriverIdentity = NEOFORGE_IDENTITY;
-}
 
 pub type NeoForgeCatalog = MavenCatalog<NeoForgeEndpoints>;

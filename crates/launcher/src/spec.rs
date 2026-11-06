@@ -32,7 +32,29 @@ pub enum DriverSpec {
     NeoForge(LoaderSpec),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DriverFlow {
+    Vanilla,
+    Profiled,
+    Installer,
+}
+
 impl DriverSpec {
+    pub(crate) fn flow(&self) -> DriverFlow {
+        match self {
+            Self::Vanilla(_) => DriverFlow::Vanilla,
+            Self::Fabric(_)
+            | Self::LegacyFabric(_)
+            | Self::Babric(_)
+            | Self::Quilt(_)
+            | Self::LiteLoader(_)
+            | Self::Rift(_) => DriverFlow::Profiled,
+            Self::Forge(_) | Self::Cleanroom(_) | Self::Outlands(_) | Self::NeoForge(_) => {
+                DriverFlow::Installer
+            }
+        }
+    }
+
     pub fn descriptor(&self) -> DriverDescriptor {
         match self {
             Self::Vanilla(_) => VANILLA_DRIVER,

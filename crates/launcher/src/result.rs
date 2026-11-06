@@ -3,12 +3,12 @@ use std::path::{Path, PathBuf};
 use elemental_core::{launcher::command::LaunchCommand, runtime::distribution::Distribution};
 use elemental_driver::{
     driver::{DriverDescriptor, InstalledDriver},
-    drivers::{
-        dispatch::{InstallerPrepared, ProfiledPrepared},
-        vanilla::prepared::PreparedVanillaVersion,
-    },
-    families::version_json::{
-        BaseInstanceLayout, BaseRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
+    families::{
+        installer::PreparedInstallerVersion,
+        version_json::{
+            BaseInstanceLayout, BaseRootLayout, PreparedVersionJsonInstance,
+            VersionJsonInstanceLayout, VersionJsonRootLayout,
+        },
     },
 };
 
@@ -43,9 +43,8 @@ where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    Vanilla(Box<PreparedVanillaVersion<L, VL>>),
-    Profiled(Box<ProfiledPrepared<L, VL>>),
-    Installer(Box<InstallerPrepared<L, VL>>),
+    VersionJson(Box<PreparedVersionJsonInstance<L, VL>>),
+    Installer(Box<PreparedInstallerVersion<L, VL>>),
 }
 
 impl<L, VL> PreparedInstance<L, VL>
@@ -63,10 +62,7 @@ where
 
     pub fn instance_root(&self) -> &Path {
         match &self.inner {
-            PreparedInstanceKind::Vanilla(prepared) => {
-                prepared.resolved_version.version.path.as_path()
-            }
-            PreparedInstanceKind::Profiled(prepared) => prepared.instance_root(),
+            PreparedInstanceKind::VersionJson(prepared) => prepared.instance_root(),
             PreparedInstanceKind::Installer(prepared) => prepared.instance_root(),
         }
     }

@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use elemental_core::{launcher::command::LaunchCommand, runtime::distribution::Distribution};
+use elemental_driver::drivers::outlands::driver::PreparedOutlandsVersion;
 use elemental_driver::{
     driver::{DriverDescriptor, InstalledDriver},
     drivers::{
@@ -13,7 +14,6 @@ use elemental_driver::{
         BaseInstanceLayout, BaseRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
     },
 };
-use elemental_driver::drivers::outlands::driver::PreparedOutlandsVersion;
 
 pub struct LaunchCommandResult {
     pub runtime: Distribution,

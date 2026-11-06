@@ -1,7 +1,22 @@
 //! Shared filesystem discovery for Java runtime homes.
 
 use std::env::consts::EXE_SUFFIX;
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
+
+use tokio::fs::{DirEntry, ReadDir};
+
+enum EntryAction {
+    RuntimeHome(PathBuf),
+    Descend(PathBuf),
+    Skip,
+}
+
+enum DirectoryAction {
+    Inspect,
+    RuntimeHome,
+    Skip,
+}
 
 pub(crate) async fn path_exists(path: &Path) -> bool {
     match tokio::fs::try_exists(path).await {
@@ -52,78 +67,110 @@ async fn find_runtime_homes_inner(
     let mut pending = vec![(root.to_path_buf(), 0usize)];
 
     while let Some((directory, depth)) = pending.pop() {
-        if !path_exists(&directory).await {
-            continue;
-        }
-        if is_runtime_home(&directory).await {
-            homes.push(directory);
-            continue;
-        }
-        if depth >= max_depth {
-            continue;
-        }
-
-        let mut entries = match tokio::fs::read_dir(&directory).await {
-            Ok(entries) => entries,
-            Err(error) => {
-                tracing::warn!(
-                    path = %directory.display(),
-                    %error,
-                    "read Java search directory failed"
-                );
-                continue;
-            }
-        };
-
-        loop {
-            let entry = match entries.next_entry().await {
-                Ok(Some(entry)) => entry,
-                Ok(None) => break,
-                Err(error) => {
-                    tracing::warn!(
-                        path = %directory.display(),
-                        %error,
-                        "read Java search directory entry failed"
-                    );
-                    break;
-                }
-            };
-
-            let file_type = match entry.file_type().await {
-                Ok(file_type) => file_type,
-                Err(error) => {
-                    tracing::warn!(
-                        path = %entry.path().display(),
-                        %error,
-                        "read Java search entry type failed"
-                    );
+        match classify_directory(&directory, depth, max_depth).await {
+            DirectoryAction::RuntimeHome => homes.push(directory),
+            DirectoryAction::Skip => {}
+            DirectoryAction::Inspect => {
+                let Some(mut entries) = read_entries(&directory).await else {
                     continue;
-                }
-            };
-            if file_type.is_symlink() {
-                let path = entry.path();
-                if is_runtime_home(&path).await {
-                    homes.push(path);
-                }
-                continue;
-            }
-            if !file_type.is_dir() {
-                continue;
-            }
+                };
 
-            if depth == 0
-                && let Some(prefixes) = prefixes
-            {
-                let file_name = entry.file_name();
-                let file_name = file_name.to_string_lossy();
-                if !prefixes.iter().any(|prefix| file_name.starts_with(prefix)) {
-                    continue;
+                while let Some(entry) = next_entry(&mut entries, &directory).await {
+                    match classify_entry(entry, depth, prefixes).await {
+                        EntryAction::RuntimeHome(path) => homes.push(path),
+                        EntryAction::Descend(path) => pending.push((path, depth + 1)),
+                        EntryAction::Skip => {}
+                    }
                 }
             }
-
-            pending.push((entry.path(), depth + 1));
         }
     }
 
     homes
+}
+
+async fn classify_directory(directory: &Path, depth: usize, max_depth: usize) -> DirectoryAction {
+    if !path_exists(directory).await {
+        return DirectoryAction::Skip;
+    }
+    if is_runtime_home(directory).await {
+        return DirectoryAction::RuntimeHome;
+    }
+    if depth >= max_depth {
+        return DirectoryAction::Skip;
+    }
+
+    DirectoryAction::Inspect
+}
+
+async fn read_entries(directory: &Path) -> Option<ReadDir> {
+    match tokio::fs::read_dir(directory).await {
+        Ok(entries) => Some(entries),
+        Err(error) => {
+            tracing::warn!(
+                path = %directory.display(),
+                %error,
+                "read Java search directory failed"
+            );
+            None
+        }
+    }
+}
+
+async fn next_entry(entries: &mut ReadDir, directory: &Path) -> Option<DirEntry> {
+    match entries.next_entry().await {
+        Ok(Some(entry)) => Some(entry),
+        Ok(None) => None,
+        Err(error) => {
+            tracing::warn!(
+                path = %directory.display(),
+                %error,
+                "read Java search directory entry failed"
+            );
+            None
+        }
+    }
+}
+
+async fn classify_entry(entry: DirEntry, depth: usize, prefixes: Option<&[&str]>) -> EntryAction {
+    let path = entry.path();
+    let file_type = match entry.file_type().await {
+        Ok(file_type) => file_type,
+        Err(error) => {
+            tracing::warn!(
+                path = %path.display(),
+                %error,
+                "read Java search entry type failed"
+            );
+            return EntryAction::Skip;
+        }
+    };
+
+    if file_type.is_symlink() {
+        return if is_runtime_home(&path).await {
+            EntryAction::RuntimeHome(path)
+        } else {
+            EntryAction::Skip
+        };
+    }
+    if !file_type.is_dir() {
+        return EntryAction::Skip;
+    }
+    if !descend_allowed(depth, prefixes, &entry.file_name()) {
+        return EntryAction::Skip;
+    }
+
+    EntryAction::Descend(path)
+}
+
+fn descend_allowed(depth: usize, prefixes: Option<&[&str]>, file_name: &OsStr) -> bool {
+    if depth != 0 {
+        return true;
+    }
+    let Some(prefixes) = prefixes else {
+        return true;
+    };
+
+    let file_name = file_name.to_string_lossy();
+    prefixes.iter().any(|prefix| file_name.starts_with(prefix))
 }

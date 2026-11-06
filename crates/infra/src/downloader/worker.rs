@@ -2,14 +2,43 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use tokio::sync::{Mutex as AsyncMutex, mpsc};
+use tokio::sync::{Mutex as AsyncMutex, OwnedSemaphorePermit, mpsc};
 use tokio_util::sync::CancellationToken;
 
 use super::core::ElementalDownloader;
+use super::policy::RetryPolicy;
 use super::report::{DownloadFailure, DownloadPhase};
 use super::session::SessionHandler;
 use super::task::{DownloadTask, TaskId};
 use super::transfer::{AttemptError, download_attempt};
+
+enum ReuseOutcome {
+    Reused,
+    Missing,
+    Cancelled,
+    Failed(String),
+}
+
+enum AttemptOutcome {
+    Downloaded { bytes: u64, elapsed: Duration },
+    Cancelled,
+    Failed(DownloadFailure),
+}
+
+enum PermitOutcome {
+    Acquired(OwnedSemaphorePermit),
+    Cancelled,
+    Failed(String),
+}
+
+struct RetryContext<'a> {
+    handler: &'a SessionHandler,
+    task_id: &'a TaskId,
+    task: &'a DownloadTask,
+    group: Option<&'a String>,
+    token: &'a CancellationToken,
+    retry_policy: RetryPolicy,
+}
 
 pub(super) struct QueuedDownloadTask {
     pub(super) task_id: TaskId,
@@ -59,23 +88,18 @@ async fn execute_queued_task(
         return;
     }
 
-    let resolved = tokio::select! {
-        biased;
-        () = token.cancelled() => {
-            handler.finish_cancelled(&task_id);
-            return;
-        }
-        resolved = downloader.materializer.try_reuse(&task) => resolved,
-    };
-
-    match resolved {
-        Ok(true) => {
+    match reuse_existing_task(downloader.as_ref(), &task, &token).await {
+        ReuseOutcome::Reused => {
             handler.mark_skipped(&task_id, task.expected_size().unwrap_or(0));
             handler.finish_task();
             return;
         }
-        Ok(false) => {}
-        Err(error) => {
+        ReuseOutcome::Missing => {}
+        ReuseOutcome::Cancelled => {
+            handler.finish_cancelled(&task_id);
+            return;
+        }
+        ReuseOutcome::Failed(message) => {
             handler.finish_failed(DownloadFailure::new(
                 &task_id,
                 &task,
@@ -83,95 +107,159 @@ async fn execute_queued_task(
                 DownloadPhase::Prepare,
                 None,
                 false,
-                error.to_string(),
+                message,
             ));
             return;
         }
     }
 
+    match run_attempts(
+        downloader.as_ref(),
+        handler.as_ref(),
+        &task_id,
+        &task,
+        &record_task,
+        group,
+        &token,
+    )
+    .await
+    {
+        AttemptOutcome::Downloaded { bytes, elapsed } => {
+            handler.mark_downloaded(&task_id, bytes, elapsed);
+            handler.finish_task();
+        }
+        AttemptOutcome::Cancelled => {
+            handler.finish_cancelled(&task_id);
+        }
+        AttemptOutcome::Failed(failure) => {
+            handler.finish_failed(failure);
+        }
+    }
+}
+
+async fn reuse_existing_task(
+    downloader: &ElementalDownloader,
+    task: &DownloadTask,
+    token: &CancellationToken,
+) -> ReuseOutcome {
+    let resolved = tokio::select! {
+        biased;
+        () = token.cancelled() => return ReuseOutcome::Cancelled,
+        resolved = downloader.materializer.try_reuse(task) => resolved,
+    };
+
+    match resolved {
+        Ok(true) => ReuseOutcome::Reused,
+        Ok(false) => ReuseOutcome::Missing,
+        Err(error) => ReuseOutcome::Failed(error.to_string()),
+    }
+}
+
+async fn run_attempts(
+    downloader: &ElementalDownloader,
+    handler: &SessionHandler,
+    task_id: &TaskId,
+    task: &DownloadTask,
+    record_task: &DownloadTask,
+    group: Option<String>,
+    token: &CancellationToken,
+) -> AttemptOutcome {
     let started_at = Instant::now();
     let retry_policy = handler.retry_policy();
     let mut attempt = 0usize;
     let mut start_emitted = false;
+    let retry_context = RetryContext {
+        handler,
+        task_id,
+        task: record_task,
+        group: group.as_ref(),
+        token,
+        retry_policy,
+    };
 
     loop {
         attempt += 1;
 
-        let permit = tokio::select! {
-            biased;
-            () = token.cancelled() => {
-                handler.finish_cancelled(&task_id);
-                return;
-            }
-            permit = downloader.concurrency.acquire_owned() => permit,
-        };
-
-        let permit = match permit {
-            Ok(permit) => permit,
-            Err(error) => {
-                handler.finish_failed(DownloadFailure::new(
-                    &task_id,
-                    &record_task,
-                    group,
+        let permit = match acquire_permit(downloader, token).await {
+            PermitOutcome::Acquired(permit) => permit,
+            PermitOutcome::Cancelled => return AttemptOutcome::Cancelled,
+            PermitOutcome::Failed(message) => {
+                return AttemptOutcome::Failed(DownloadFailure::new(
+                    task_id,
+                    record_task,
+                    group.clone(),
                     DownloadPhase::Prepare,
                     None,
                     false,
-                    error.to_string(),
+                    message,
                 ));
-                return;
             }
         };
 
         if token.is_cancelled() || handler.is_draining() {
             drop(permit);
-            handler.finish_cancelled(&task_id);
-            return;
+            return AttemptOutcome::Cancelled;
         }
 
         if !start_emitted {
-            handler.mark_active(&task_id);
+            handler.mark_active(task_id);
             start_emitted = true;
         }
-        let result = download_attempt(
-            downloader.as_ref(),
-            handler.as_ref(),
-            &task_id,
-            &task,
-            &token,
-        )
-        .await;
+        let result = download_attempt(downloader, handler, task_id, task, token).await;
         drop(permit);
 
         match result {
             Ok(bytes) => {
-                handler.mark_downloaded(&task_id, bytes, started_at.elapsed());
-                break;
+                return AttemptOutcome::Downloaded {
+                    bytes,
+                    elapsed: started_at.elapsed(),
+                };
             }
-            Err(AttemptError::Cancelled) => {
-                handler.finish_cancelled(&task_id);
-                return;
-            }
+            Err(AttemptError::Cancelled) => return AttemptOutcome::Cancelled,
             Err(error) => {
-                let retryable = error.is_retryable();
-                if retryable && attempt < retry_policy.max_attempts {
-                    let delay = retry_policy.backoff(attempt);
-                    handler.mark_retrying(&task_id, attempt, delay, error.to_string());
-                    if wait_for_retry(&token, delay).await {
-                        continue;
-                    }
-
-                    handler.finish_cancelled(&task_id);
-                    return;
+                if let Some(outcome) = retry_after_error(&retry_context, attempt, error).await {
+                    return outcome;
                 }
-
-                let failure = error.into_failure(&task_id, &record_task, group);
-                handler.finish_failed(failure);
-                return;
             }
         }
     }
+}
 
-    handler.finish_task();
+async fn acquire_permit(
+    downloader: &ElementalDownloader,
+    token: &CancellationToken,
+) -> PermitOutcome {
+    let permit = tokio::select! {
+        biased;
+        () = token.cancelled() => return PermitOutcome::Cancelled,
+        permit = downloader.concurrency.acquire_owned() => permit,
+    };
+
+    match permit {
+        Ok(permit) => PermitOutcome::Acquired(permit),
+        Err(error) => PermitOutcome::Failed(error.to_string()),
+    }
+}
+
+async fn retry_after_error(
+    context: &RetryContext<'_>,
+    attempt: usize,
+    error: AttemptError,
+) -> Option<AttemptOutcome> {
+    if !error.is_retryable() || attempt >= context.retry_policy.max_attempts {
+        let failure = error.into_failure(context.task_id, context.task, context.group.cloned());
+        return Some(AttemptOutcome::Failed(failure));
+    }
+
+    let delay = context.retry_policy.backoff(attempt);
+    context
+        .handler
+        .mark_retrying(context.task_id, attempt, delay, error.to_string());
+    if wait_for_retry(context.token, delay).await {
+        return None;
+    }
+
+    Some(AttemptOutcome::Cancelled)
 }
 
 async fn wait_for_retry(token: &CancellationToken, delay: Duration) -> bool {

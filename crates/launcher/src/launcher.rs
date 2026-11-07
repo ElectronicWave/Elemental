@@ -27,15 +27,14 @@ use elemental_driver::{
         outlands::OutlandsDriverSpec,
         quilt::driver::QuiltDriverFamily,
         rift::driver::RiftDriverFamily,
-        vanilla::{driver::VanillaDriver, source::VanillaSource},
+        vanilla::driver::VanillaDriver,
     },
     families::{
-        installer::{InstallerFamily, InstallerFamilyDriver},
+        installer::InstallerFamilyDriver,
         version_json::{
             BaseInstanceLayout, BaseRootLayout, ProfiledVersionJsonDriver,
-            ProfiledVersionJsonFamily, ProfiledVersionJsonFamilyExt, VersionJsonGameStorageExt,
-            VersionJsonInstanceLayout, VersionJsonRootLayout, build_version_json_launch_command,
-            inspect_instances,
+            ProfiledVersionJsonFamilyExt, VersionJsonGameStorageExt, VersionJsonInstanceLayout,
+            VersionJsonRootLayout, build_version_json_launch_command, inspect_instances,
         },
     },
     inspect::InstalledInstance,
@@ -46,6 +45,7 @@ use elemental_infra::downloader::{DownloadSession, ElementalDownloader};
 use crate::{
     builder::LauncherBuilder,
     error::{Error, Result},
+    origin::{DriverOrigins, InstallerFamilySource, ProfiledFamilySource},
     request::LaunchOptions,
     result::{
         Instance, LaunchedInstance, LoggedLaunchedInstance, PreparedInstance, PreparedInstanceKind,
@@ -72,6 +72,7 @@ where
     downloader: Arc<ElementalDownloader>,
     root_layout: L,
     instance_layout: VL,
+    origins: DriverOrigins,
 }
 
 impl Launcher<BaseRootLayout, BaseInstanceLayout> {
@@ -95,11 +96,28 @@ where
         root_layout: L,
         instance_layout: VL,
     ) -> Self {
+        Self::with_layouts_and_origins(
+            storage_root,
+            downloader,
+            root_layout,
+            instance_layout,
+            DriverOrigins::default(),
+        )
+    }
+
+    pub fn with_layouts_and_origins(
+        storage_root: PathBuf,
+        downloader: Arc<ElementalDownloader>,
+        root_layout: L,
+        instance_layout: VL,
+        origins: DriverOrigins,
+    ) -> Self {
         Self {
             storage_root,
             downloader,
             root_layout,
             instance_layout,
+            origins,
         }
     }
 
@@ -277,23 +295,25 @@ where
     }
 
     fn vanilla_driver(&self) -> VanillaDriver {
-        VanillaDriver::new(VanillaSource::default())
+        VanillaDriver::new(self.origins.vanilla_source())
     }
 
     fn profiled_driver<F>(&self, family: F) -> Result<ProfiledVersionJsonDriver<F>>
     where
-        F: ProfiledVersionJsonFamily,
-        F::Source: Default,
+        F: ProfiledFamilySource,
     {
-        Ok(family.clone().build_driver(family.default_source()?))
+        Ok(family
+            .clone()
+            .build_driver(family.source_with_origins(&self.origins)?))
     }
 
-    fn installer_driver<F>(&self) -> InstallerFamilyDriver<F>
+    fn installer_driver<F>(&self) -> Result<InstallerFamilyDriver<F>>
     where
-        F: InstallerFamily,
-        F::Source: Default,
+        F: InstallerFamilySource,
     {
-        InstallerFamilyDriver::new(F::Source::default())
+        Ok(InstallerFamilyDriver::new(F::source_with_origins(
+            &self.origins,
+        )?))
     }
 
     fn resolve_driver(&self, desc: DriverDescriptor) -> Result<ResolvedLauncherDriver> {
@@ -318,16 +338,16 @@ where
                 self.profiled_driver(RiftDriverFamily)?,
             )),
             FORGE_DRIVER => {
-                ResolvedLauncherDriver::Installer(InstallerDriver::Forge(self.installer_driver()))
+                ResolvedLauncherDriver::Installer(InstallerDriver::Forge(self.installer_driver()?))
             }
             CLEANROOM_DRIVER => ResolvedLauncherDriver::Installer(InstallerDriver::Cleanroom(
-                self.installer_driver(),
+                self.installer_driver()?,
             )),
             OUTLANDS_DRIVER => ResolvedLauncherDriver::Installer(InstallerDriver::Outlands(
-                self.installer_driver(),
+                self.installer_driver()?,
             )),
             NEOFORGE_DRIVER => ResolvedLauncherDriver::Installer(InstallerDriver::NeoForge(
-                self.installer_driver(),
+                self.installer_driver()?,
             )),
             _ => {
                 return Err(Error::UnsupportedDriver {
@@ -424,10 +444,10 @@ where
             Box::new(self.profiled_driver(QuiltDriverFamily)?),
             Box::new(self.profiled_driver(LiteLoaderDriverFamily)?),
             Box::new(self.profiled_driver(RiftDriverFamily)?),
-            Box::new(self.installer_driver::<ForgeFamily>()),
-            Box::new(self.installer_driver::<CleanroomDriverSpec>()),
-            Box::new(self.installer_driver::<OutlandsDriverSpec>()),
-            Box::new(self.installer_driver::<NeoForgeFamily>()),
+            Box::new(self.installer_driver::<ForgeFamily>()?),
+            Box::new(self.installer_driver::<CleanroomDriverSpec>()?),
+            Box::new(self.installer_driver::<OutlandsDriverSpec>()?),
+            Box::new(self.installer_driver::<NeoForgeFamily>()?),
             // Vanilla is last so more specific drivers take precedence.
             Box::new(self.vanilla_driver()),
         ])

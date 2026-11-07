@@ -29,12 +29,29 @@ impl<O: Origin> OriginPolicy<O> {
     }
 
     pub fn with_override(mut self, origin: O, raw_url: String) -> Result<Self> {
+        self.override_origin(origin, raw_url)?;
+        Ok(self)
+    }
+
+    pub fn override_origin(&mut self, origin: O, raw_url: String) -> Result<()> {
         let url = Url::parse(&raw_url).map_err(move |source| {
             Error::invalid_url("parse origin override failed", raw_url, source)
         })?;
         ensure_http_url(&url, "origin override")?;
         self.overrides.insert(origin, url);
-        Ok(self)
+        Ok(())
+    }
+
+    /// Layers `overrides` on top of the current policy.
+    pub fn merged_with(&self, overrides: &Self) -> Self {
+        let mut merged = self.clone();
+        merged.overrides.extend(
+            overrides
+                .overrides
+                .iter()
+                .map(|(origin, url)| (*origin, url.clone())),
+        );
+        merged
     }
 
     pub fn base_url(&self, origin: O) -> Result<Url> {

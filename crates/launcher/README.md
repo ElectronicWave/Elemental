@@ -222,6 +222,35 @@ Use `root_layout()` and `instance_layout()` for custom layouts, or
 `with_layouts()` to replace both at once. `Launcher::new(storage_root,
 downloader)` is the shorthand when the base layouts are sufficient.
 
+### Origin Overrides
+
+`origin_overrides()` receives one configuration block per driver, so each
+driver keeps its own typed origin enum instead of collapsing them into a
+launcher-wide list. Overrides replace the base URL while preserving the
+upstream path suffix:
+
+```rust
+use elemental_driver::drivers::{
+    fabric::source::FabricOrigin,
+    vanilla::source::VanillaOrigin,
+};
+use elemental_launcher::Launcher;
+
+let launcher = Launcher::builder()
+    .origin_overrides(|origins| {
+        origins.vanilla().override_origin(
+            VanillaOrigin::Resources,
+            "https://mirror.example/assets".to_owned(),
+        )?;
+        origins.fabric().override_origin(
+            FabricOrigin::Maven,
+            "https://mirror.example/fabric-maven".to_owned(),
+        )?;
+        Ok(())
+    })?
+    .build();
+```
+
 > [!WARNING]
 > Preparing an instance may download metadata, libraries, assets, and loader
 > installers. Launching it requires a compatible local Java runtime unless an

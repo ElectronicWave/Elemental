@@ -5,7 +5,7 @@ use elemental_driver::families::version_json::{
 };
 use elemental_infra::downloader::ElementalDownloader;
 
-use crate::launcher::Launcher;
+use crate::{error::Result, launcher::Launcher, origin::DriverOrigins};
 
 #[derive(Debug)]
 pub struct LauncherBuilder<L = BaseRootLayout, VL = BaseInstanceLayout>
@@ -17,6 +17,7 @@ where
     downloader: Arc<ElementalDownloader>,
     root_layout: L,
     instance_layout: VL,
+    origins: DriverOrigins,
 }
 
 impl Default for LauncherBuilder<BaseRootLayout, BaseInstanceLayout> {
@@ -26,6 +27,7 @@ impl Default for LauncherBuilder<BaseRootLayout, BaseInstanceLayout> {
             downloader: ElementalDownloader::new(),
             root_layout: BaseRootLayout,
             instance_layout: BaseInstanceLayout,
+            origins: DriverOrigins::default(),
         }
     }
 }
@@ -55,6 +57,7 @@ where
             downloader: self.downloader,
             root_layout,
             instance_layout,
+            origins: self.origins,
         }
     }
 
@@ -68,6 +71,14 @@ where
         self
     }
 
+    pub fn origin_overrides<F>(mut self, configure: F) -> Result<Self>
+    where
+        F: FnOnce(&mut DriverOrigins) -> Result<()>,
+    {
+        configure(&mut self.origins)?;
+        Ok(self)
+    }
+
     pub fn root_layout<NL>(self, root_layout: NL) -> LauncherBuilder<NL, VL>
     where
         NL: VersionJsonRootLayout + Clone,
@@ -77,6 +88,7 @@ where
             downloader: self.downloader,
             root_layout,
             instance_layout: self.instance_layout,
+            origins: self.origins,
         }
     }
 
@@ -89,15 +101,17 @@ where
             downloader: self.downloader,
             root_layout: self.root_layout,
             instance_layout,
+            origins: self.origins,
         }
     }
 
     pub fn build(self) -> Launcher<L, VL> {
-        Launcher::with_layouts(
+        Launcher::with_layouts_and_origins(
             self.storage_root,
             self.downloader,
             self.root_layout,
             self.instance_layout,
+            self.origins,
         )
     }
 }

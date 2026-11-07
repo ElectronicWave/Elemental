@@ -12,13 +12,12 @@ use super::VersionJsonLaunchBuilder;
 pub(crate) use classpath::build_classpath;
 pub(crate) use modules::collect_module_path_entries;
 
-pub(super) fn build_jvm_arguments<A, L, VL>(
-    builder: &VersionJsonLaunchBuilder<A, L, VL>,
+pub(super) fn build_jvm_arguments<L, VL>(
+    builder: &VersionJsonLaunchBuilder<L, VL>,
     metadata: &PistonMetaData,
     raw_jvm_arguments: Vec<String>,
 ) -> Result<Vec<String>>
 where
-    A: elemental_core::auth::authorizer::Authorizer,
     L: VersionJsonRootLayout,
     VL: crate::families::version_json::VersionJsonInstanceLayout,
 {

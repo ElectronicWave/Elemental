@@ -72,11 +72,13 @@ available, the default command prepares and launches Fabric 1.20.1:
 cargo run -p demo
 ```
 
-Other drivers accept the same storage, runtime, and local-only options:
+Other drivers accept the same storage, runtime, and local-only options. The
+driver id is parsed directly:
 
 ```bash
 cargo run -p demo -- forge 1.20.1 47.3.1
-cargo run -p demo -- --local-only fabric 1.20.1 0.16.10 MyFabric-1.20.1
+cargo run -p demo -- --local-only fabric 1.20.1 0.16.10 --instance-name MyFabric-1.20.1
+cargo run -p demo -- vanilla 1.20.1 --instance-name MyVanilla-1.20.1
 ```
 
 The demo defaults live in
@@ -96,8 +98,8 @@ Prepare and launch a vanilla instance:
 ```rust
 use anyhow::Result;
 use elemental::{
-    core::auth::authorizers::offline::OfflineAuthorizer,
-    launcher::{DriverSpec, LaunchOptions, Launcher, PrepareInstanceRequest, VanillaSpec},
+    core::auth::{authorizer::Authorizer, authorizers::offline::OfflineAuthorizer},
+    launcher::{DriverSpec, LaunchOptions, Launcher},
 };
 
 #[tokio::main(flavor = "multi_thread")]
@@ -105,35 +107,24 @@ async fn main() -> Result<()> {
     let launcher = Launcher::builder()
         .storage_root(".minecraft")
         .build();
-    let session = launcher
-        .downloader()
-        .session("prepare Vanilla-1.20.1")
-        .open()
-        .await?;
 
     let prepared = launcher
-        .prepare_instance(
-            &session,
-            PrepareInstanceRequest {
-                instance_name: "Vanilla-1.20.1".to_owned(),
-                driver: DriverSpec::Vanilla(VanillaSpec {
-                    game_version: "1.20.1".into(),
-                }),
-            },
+        .prepare(
+            "Vanilla-1.20.1".to_owned(),
+            DriverSpec::vanilla("1.20.1".into()),
         )
         .await?;
-    let report = session.finish().await?;
-    report.success()?;
 
-    let mut game = launcher
-        .launch_prepared_instance(
-            &prepared,
-            OfflineAuthorizer {
-                username: "Player".to_owned(),
-            },
-            &LaunchOptions::default(),
-        )
+    let credential = OfflineAuthorizer {
+        username: "Player".to_owned(),
+    }
+    .authorize()
+    .await?;
+
+    let command = launcher
+        .build_launch_command(&prepared, &credential, &LaunchOptions::default())
         .await?;
+    let mut game = launcher.launch(command)?;
 
     let status = game.child.wait().await?;
     println!("Minecraft exited with {status}");
@@ -142,8 +133,10 @@ async fn main() -> Result<()> {
 ```
 
 Offline authentication keeps local development simple. Use a production
-`Authorizer` for real player accounts. When the host application owns process
-creation, call `build_launch_command` instead of `launch_prepared_instance`.
+`Authorizer` for real player accounts. Authentication and launch are separate:
+obtain a `UserCredential`, build a `LaunchCommand`, optionally customize its
+arguments, then spawn it. Use `prepare_with_session()` when the host owns the
+download session lifecycle.
 
 Inspect and reopen an existing instance without preparing it again:
 

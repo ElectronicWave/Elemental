@@ -54,3 +54,21 @@ pub const NEOFORGE_DRIVER: DriverDescriptor = DriverDescriptor {
     id: "neoforge",
     name: "NeoForge",
 };
+
+/// Resolves a known driver descriptor by its stable id.
+pub fn from_id(id: &str) -> Option<DriverDescriptor> {
+    Some(match id {
+        "vanilla" => VANILLA_DRIVER,
+        "fabric" => FABRIC_DRIVER,
+        "legacyfabric" => LEGACY_FABRIC_DRIVER,
+        "babric" => BABRIC_DRIVER,
+        "quilt" => QUILT_DRIVER,
+        "liteloader" => LITELOADER_DRIVER,
+        "rift" => RIFT_DRIVER,
+        "forge" => FORGE_DRIVER,
+        "cleanroom" => CLEANROOM_DRIVER,
+        "outlands" => OUTLANDS_DRIVER,
+        "neoforge" => NEOFORGE_DRIVER,
+        _ => return None,
+    })
+}

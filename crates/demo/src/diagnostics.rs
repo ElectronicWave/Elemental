@@ -94,6 +94,8 @@ pub async fn run_logged_process(command: LaunchCommand) -> Result<ExitStatus> {
 }
 
 pub fn print_launch_diagnostics(diagnostics_input: &LaunchDiagnostics<'_>) {
+    let command_arguments = diagnostics_input.command.arguments();
+
     println!("instance: {}", diagnostics_input.instance_name);
     println!("driver: {}", diagnostics_input.driver_name);
     println!("game version: {}", diagnostics_input.game_version);
@@ -119,7 +121,7 @@ pub fn print_launch_diagnostics(diagnostics_input: &LaunchDiagnostics<'_>) {
     );
     println!(
         "command executable: {}",
-        diagnostics_input.command.program.display()
+        diagnostics_input.command.program().display()
     );
     println!(
         "command cwd: {}",
@@ -129,10 +131,7 @@ pub fn print_launch_diagnostics(diagnostics_input: &LaunchDiagnostics<'_>) {
             .as_ref()
             .map_or_else(|| "<none>".to_owned(), |cwd| cwd.display().to_string())
     );
-    println!(
-        "command args count: {}",
-        diagnostics_input.command.args.len()
-    );
+    println!("command args count: {}", command_arguments.len());
     println!(
         "version root: {}",
         diagnostics_input.diagnostics.version_root.display()
@@ -193,12 +192,12 @@ pub fn print_launch_diagnostics(diagnostics_input: &LaunchDiagnostics<'_>) {
         "-Djna.tmpdir=",
         "-Dio.netty.native.workdir=",
     ] {
-        if let Some(argument) = find_argument_with_prefix(&diagnostics_input.command.args, prefix) {
+        if let Some(argument) = find_argument_with_prefix(&command_arguments, prefix) {
             println!("launch arg {}{}", prefix, argument);
         }
     }
 
-    if let Some(classpath_entries) = classpath_entries(&diagnostics_input.command.args) {
+    if let Some(classpath_entries) = classpath_entries(&command_arguments) {
         println!("classpath entries: {}", classpath_entries.len());
         println!(
             "classpath preview: {}",

@@ -11,13 +11,12 @@ use crate::{
 
 use super::{VersionJsonLaunchBuilder, paths::LaunchPaths};
 
-impl<A, L, VL> VersionJsonLaunchBuilder<A, L, VL>
+impl<L, VL> VersionJsonLaunchBuilder<L, VL>
 where
-    A: elemental_core::auth::authorizer::Authorizer,
     L: crate::families::version_json::layout::VersionJsonRootLayout,
     VL: crate::families::version_json::layout::VersionJsonInstanceLayout,
 {
-    pub async fn build_command(mut self) -> Result<LaunchCommand> {
+    pub fn build_command(mut self) -> Result<LaunchCommand> {
         let metadata = self
             .version
             .metadata()
@@ -25,11 +24,6 @@ where
                 source: Box::new(source),
             })?;
         let rule_context = VersionJsonRuleContext::current();
-        let credential = self
-            .authorizer
-            .authorize()
-            .await
-            .map_err(|source| Error::Authorize { source })?;
         let version_name = self
             .version
             .name()
@@ -39,26 +33,30 @@ where
         let paths = LaunchPaths::resolve(&self.version)?;
         paths.ensure_version_jar_exists()?;
 
-        self.apply_default_variables(&metadata, credential, version_name, &paths);
+        let credential = self.credential.clone();
+        self.apply_default_variables(&metadata, &credential, version_name, &paths);
 
         let raw_jvm_arguments = metadata.jvm_arguments(&rule_context);
         let module_path_entries = self.collect_module_path_entries(raw_jvm_arguments.as_slice())?;
         self.inner.classpath =
             self.build_classpath(&metadata, &rule_context, &paths, &module_path_entries)?;
 
-        let command_arguments =
-            self.build_command_arguments(&metadata, &rule_context, raw_jvm_arguments)?;
+        let jvm_arguments = self.build_jvm_arguments(&metadata, raw_jvm_arguments)?;
+        let game_arguments = self.build_game_arguments(&metadata, &rule_context)?;
 
-        Ok(
-            LaunchCommand::new(self.runtime.executable(), command_arguments)
-                .with_cwd(paths.version_root),
+        Ok(LaunchCommand::new(
+            self.runtime,
+            jvm_arguments,
+            metadata.main_class.clone(),
+            game_arguments,
         )
+        .with_cwd(paths.version_root))
     }
 
     fn apply_default_variables(
         &mut self,
         metadata: &PistonMetaData,
-        credential: UserCredential,
+        credential: &UserCredential,
         version_name: String,
         paths: &LaunchPaths,
     ) {
@@ -70,8 +68,8 @@ where
         self.inner.game_directory = paths.version_root.to_string_lossy().to_string();
         self.inner.assets_root = paths.assets_root.to_string_lossy().to_string();
         self.inner.assets_index_name = metadata.assets.clone();
-        self.inner.auth_uuid = credential.uuid;
-        self.inner.auth_access_token = credential.access_token;
+        self.inner.auth_uuid = credential.uuid.clone();
+        self.inner.auth_access_token = credential.access_token.clone();
         self.inner.user_type = if self.inner.auth_access_token.is_empty() {
             UserType::Legacy
         } else {

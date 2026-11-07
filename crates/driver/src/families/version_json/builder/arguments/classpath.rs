@@ -14,15 +14,14 @@ use crate::{
 use super::super::{VersionJsonLaunchBuilder, paths::LaunchPaths};
 use super::common::{normalize_path_string, resolve_root_resource};
 
-pub(crate) fn build_classpath<A, L, VL>(
-    builder: &VersionJsonLaunchBuilder<A, L, VL>,
+pub(crate) fn build_classpath<L, VL>(
+    builder: &VersionJsonLaunchBuilder<L, VL>,
     metadata: &PistonMetaData,
     rule_context: &crate::families::version_json::VersionJsonRuleContext,
     paths: &LaunchPaths,
     module_path_entries: &HashSet<String>,
 ) -> Result<String>
 where
-    A: elemental_core::auth::authorizer::Authorizer,
     L: VersionJsonRootLayout,
     VL: crate::families::version_json::VersionJsonInstanceLayout,
 {

@@ -156,10 +156,9 @@ let driver = FabricDriverFamily::new(FabricFlavor::Fabric)
     })?;
 ```
 
-`build_driver(source, vanilla_source)` is the lower-level constructor when the
-loader source and Vanilla source must be configured together. For a complete
-Vanilla mirror, use `VanillaEndpoints::mirror(...)` and pass it through
-`VanillaSource::new(...)`.
+`build_driver(source)` constructs the driver with the official Vanilla source.
+For a complete Vanilla mirror, use `VanillaEndpoints::mirror(...)`, wrap it in
+`VanillaSource::new(...)`, then call `.with_vanilla_source(...)`.
 
 ### Add a profiled loader
 
@@ -253,7 +252,7 @@ let driver = MyFamily.build_driver_with_defaults()?;
 
 `MyEndpoints` must implement `LoaderMetaEndpoints` and `UpstreamUrlRewriter`.
 `build_driver_with_defaults()` also requires `Default`; otherwise construct the
-source explicitly and call `build_driver(source, vanilla_source)`. Use
+source explicitly and call `build_driver(source).with_vanilla_source(...)`. Use
 `ProfileIdPattern::loader_prefixed(...)` when the installed profile id is
 `<loader-prefix><version>` instead of `<game>-<loader>-<version>`.
 
@@ -268,7 +267,7 @@ aliases are:
 type MyEndpoints = MavenEndpoints<MySpec>;
 type MySource = InstallerMavenSource<MyEndpoints>;
 type MyDriver = InstallerFamilyDriver<MyFamily>;
-type MyCatalog = MavenCatalog<MyEndpoints>;
+type MyCatalog = InstallerMavenCatalog<MyEndpoints>;
 ```
 
 For a loader that replaces the runtime of an old Minecraft version, implement
@@ -333,7 +332,7 @@ mapping.
 
 | Module | Contents |
 | --- | --- |
-| `catalog` | `GameVersionCatalog`, `LoaderVersionCatalog`, `GameVersion`, `LoaderRelease`, `MavenCatalog`, and `LoaderMetaCatalog` |
+| `catalog` | `GameVersionCatalog`, `LoaderVersionCatalog`, `GameVersion`, `LoaderRelease`, `InstallerMavenCatalog`, and `LoaderMetaCatalog` |
 | `descriptors` | Stable driver identifiers and display names |
 | `driver` | `DriverDescriptor`, `InstalledDriver`, and the `Driver` trait |
 | `drivers` | Per-loader catalogs, sources, drivers, configs, prepared state, and typed dispatch |
@@ -352,8 +351,9 @@ loader releases for one game version. `LoaderRelease` carries the typed game and
 loader versions plus optional upstream metadata such as stability, stream, and
 publication time.
 
-`LoaderMetaCatalog` handles Fabric-style metadata APIs. `MavenCatalog` handles
-Maven metadata and uses each endpoint's `release()` parser.
+`LoaderMetaCatalog` handles Fabric-style metadata APIs.
+`InstallerMavenCatalog` handles installer-driven Maven metadata and uses each
+endpoint's `release()` parser.
 
 > [!NOTE]
 > NeoForge game versions are inferred from the loader version naming. The

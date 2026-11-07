@@ -37,10 +37,11 @@ impl FabricDriverFamily {
         &self,
         overrides: FabricEndpointOverrides,
     ) -> Result<FabricDriver> {
-        Ok(self.clone().build_driver(
-            FabricSource::new(FabricEndpoints::with_endpoint_overrides(overrides)?),
-            VanillaSource::default(),
-        ))
+        Ok(self
+            .clone()
+            .build_driver(FabricSource::new(FabricEndpoints::with_endpoint_overrides(
+                overrides,
+            )?)))
     }
 }
 

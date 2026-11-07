@@ -73,12 +73,8 @@ pub trait ProfiledVersionJsonFamily: Clone + Debug + Send + Sync + 'static {
 }
 
 pub trait ProfiledVersionJsonFamilyExt: ProfiledVersionJsonFamily + Sized {
-    fn build_driver(
-        self,
-        source: Self::Source,
-        vanilla_source: VanillaSource,
-    ) -> ProfiledVersionJsonDriver<Self> {
-        ProfiledVersionJsonDriver::new(self, source, vanilla_source)
+    fn build_driver(self, source: Self::Source) -> ProfiledVersionJsonDriver<Self> {
+        ProfiledVersionJsonDriver::new(self, source)
     }
 
     fn build_driver_with_defaults(self) -> Result<ProfiledVersionJsonDriver<Self>>

@@ -5,14 +5,15 @@ use elemental_schema::{
     mojang::piston::{PistonMetaArguments, PistonMetaGenericArgument},
 };
 
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    maven::{MavenArtifactDownload, MavenNotation, MavenRepository},
+};
 
 use super::{
-    manifest::{LiteLoaderManifestLibrary, LiteLoaderSelectedBuild},
-    maven::{
-        ResolvedArtifactDownload, ensure_trailing_slash, is_snapshot_version,
-        is_snapshot_version_from_notation, join_artifact_url, parse_maven_notation,
-        resolve_snapshot_artifact,
+    manifest::{
+        LiteLoaderLibraryResolution, LiteLoaderManifestLibrary, LiteLoaderRepositoryStream,
+        LiteLoaderSelectedBuild,
     },
     source::LiteLoaderEndpoints,
 };
@@ -84,39 +85,53 @@ async fn build_loader_library(
     selected: &LiteLoaderSelectedBuild,
 ) -> Result<ProfileLibrary> {
     let notation = format!("com.mumfrey:liteloader:{}", selected.build.version);
-    let parsed = parse_maven_notation(notation.as_str(), "liteloader library")?;
-    let repository_base_url = ensure_trailing_slash(
-        endpoints
-            .rewrite_upstream(selected.repository.url.as_str())?
-            .as_str(),
-    );
-    let artifact = if is_snapshot_version(selected.build.version.as_str()) {
-        resolve_snapshot_artifact(client, repository_base_url.as_str(), &parsed).await?
+    let parsed = MavenNotation::parse(notation.as_str(), "liteloader library")?;
+    let repository = rewritten_repository(
+        endpoints,
+        selected.repository.url.as_str(),
+        "liteloader repository",
+    )?;
+    let artifact = if selected.repository.stream == LiteLoaderRepositoryStream::Snapshot {
+        repository
+            .resolve_snapshot_artifact(client, &parsed)
+            .await?
     } else {
-        let path = format!(
+        repository.artifact_download(format!(
             "{}/{}",
             parsed.version_directory_path(),
             selected.build.file.as_str()
-        );
-        let url = join_artifact_url(repository_base_url.as_str(), path.as_str())?;
-        ResolvedArtifactDownload { path, url }
+        ))?
     };
 
-    Ok(ProfileLibrary {
-        name: notation,
-        url: repository_base_url.clone(),
-        downloads: Some(ProfileLibraryDownloads {
-            artifact: Some(ProfileLibraryArtifact {
-                path: artifact.path,
-                url: artifact.url,
-                size: None,
-                sha1: None,
-            }),
-            classifiers: None,
+    Ok(profile_library_with_repository(
+        notation,
+        &repository,
+        Some(artifact),
+    ))
+}
+
+fn profile_library_with_repository(
+    name: String,
+    repository: &MavenRepository,
+    artifact: Option<MavenArtifactDownload>,
+) -> ProfileLibrary {
+    let downloads = artifact.map(|artifact| ProfileLibraryDownloads {
+        artifact: Some(ProfileLibraryArtifact {
+            path: artifact.path,
+            url: artifact.url,
+            size: None,
+            sha1: None,
         }),
+        classifiers: None,
+    });
+
+    ProfileLibrary {
+        name,
+        url: repository.base_url().to_owned(),
+        downloads,
         natives: None,
         extract: None,
-    })
+    }
 }
 
 async fn normalize_manifest_library(
@@ -124,75 +139,86 @@ async fn normalize_manifest_library(
     endpoints: &LiteLoaderEndpoints,
     library: LiteLoaderManifestLibrary,
 ) -> Result<ProfileLibrary> {
-    if library.name.starts_with("net.minecraft:") {
-        return Ok(ProfileLibrary {
-            name: library.name,
-            url: ensure_trailing_slash(endpoints.mojang_libraries_url()?.as_str()),
-            downloads: None,
-            natives: None,
-            extract: None,
-        });
+    let notation = MavenNotation::parse(library.name.as_str(), "liteloader library")?;
+    if let Some(repository) = fixed_library_repository(endpoints, notation.group())? {
+        return Ok(profile_library_with_repository(
+            library.name,
+            &repository,
+            None,
+        ));
     }
 
-    if library.name.starts_with("org.ow2.asm:") {
-        return Ok(ProfileLibrary {
-            name: library.name,
-            url: ensure_trailing_slash(endpoints.maven_central_url()?.as_str()),
-            downloads: None,
-            natives: None,
-            extract: None,
-        });
+    let repository = match (library.resolution, library.url.is_empty()) {
+        (LiteLoaderLibraryResolution::Snapshot, true) => {
+            default_snapshot_repository(endpoints, &notation, library.name.as_str())?
+        }
+        (_, false) => {
+            rewritten_repository(endpoints, library.url.as_str(), "liteloader repository")?
+        }
+        (LiteLoaderLibraryResolution::Release, true) => {
+            return Err(Error::LiteLoaderLibraryRepositoryMissing {
+                library: library.name,
+            });
+        }
+    };
+    let artifact = if library.resolution == LiteLoaderLibraryResolution::Snapshot {
+        Some(
+            repository
+                .resolve_snapshot_artifact(client, &notation)
+                .await?,
+        )
+    } else {
+        None
+    };
+
+    Ok(profile_library_with_repository(
+        library.name,
+        &repository,
+        artifact,
+    ))
+}
+
+fn fixed_library_repository(
+    endpoints: &LiteLoaderEndpoints,
+    group: &str,
+) -> Result<Option<MavenRepository>> {
+    if group == "net.minecraft" {
+        return MavenRepository::parse(
+            endpoints.mojang_libraries_url()?.as_str(),
+            "Mojang libraries repository",
+        )
+        .map(Some);
     }
 
-    if is_snapshot_version_from_notation(library.name.as_str()) {
-        let repository_url = if library.url.is_empty() {
-            default_snapshot_repository(endpoints, library.name.as_str())?
-        } else {
-            ensure_trailing_slash(endpoints.rewrite_upstream(library.url.as_str())?.as_str())
-        };
-        let parsed = parse_maven_notation(library.name.as_str(), "liteloader snapshot library")?;
-        let artifact = resolve_snapshot_artifact(client, repository_url.as_str(), &parsed).await?;
-
-        return Ok(ProfileLibrary {
-            name: library.name,
-            url: repository_url,
-            downloads: Some(ProfileLibraryDownloads {
-                artifact: Some(ProfileLibraryArtifact {
-                    path: artifact.path,
-                    url: artifact.url,
-                    size: None,
-                    sha1: None,
-                }),
-                classifiers: None,
-            }),
-            natives: None,
-            extract: None,
-        });
+    if group == "org.ow2.asm" {
+        return MavenRepository::parse(
+            endpoints.maven_central_url()?.as_str(),
+            "Maven Central repository",
+        )
+        .map(Some);
     }
 
-    if !library.url.is_empty() {
-        return Ok(ProfileLibrary {
-            name: library.name,
-            url: ensure_trailing_slash(endpoints.rewrite_upstream(library.url.as_str())?.as_str()),
-            downloads: None,
-            natives: None,
-            extract: None,
-        });
-    }
+    Ok(None)
+}
 
-    Err(Error::LiteLoaderLibraryRepositoryMissing {
-        library: library.name,
-    })
+fn rewritten_repository(
+    endpoints: &LiteLoaderEndpoints,
+    raw_url: &str,
+    label: &str,
+) -> Result<MavenRepository> {
+    MavenRepository::parse(endpoints.rewrite_upstream(raw_url)?.as_str(), label)
 }
 
 fn default_snapshot_repository(
     endpoints: &LiteLoaderEndpoints,
+    notation: &MavenNotation,
     library_name: &str,
-) -> Result<String> {
-    if library_name.starts_with("org.spongepowered:") {
-        return endpoints
-            .sponge_maven_url()
-            .map(|url| ensure_trailing_slash(url.as_str()));
+) -> Result<MavenRepository> {
+    if notation.group() == "org.spongepowered" {
+        return MavenRepository::parse(
+            endpoints.sponge_maven_url()?.as_str(),
+            "Sponge Maven repository",
+        );
     }
 
     Err(Error::LiteLoaderSnapshotRepositoryMissing {

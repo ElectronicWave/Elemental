@@ -1,15 +1,14 @@
 use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::{
-    catalog::{LoaderRelease, MavenCatalog},
+    catalog::{InstallerMavenCatalog, LoaderRelease},
     descriptors::FORGE_DRIVER,
-    error::Result,
     families::installer::{
         InstallerFamily, InstallerFamilyDriver, InstallerMavenSource, MavenEndpoints, MavenSpec,
     },
     inspect::{LibraryPrefixSet, ProfileIdPattern, ProfiledDriverIdentity},
     loader_version::LoaderVersionId,
-    url::{Origin, OriginEndpoints},
+    url::Origin,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -47,10 +46,6 @@ impl MavenSpec for ForgeSpec {
             LoaderRelease::new(game_version, LoaderVersionId::from(loader_version)),
         ))
     }
-
-    fn rewrite_upstream(endpoints: &OriginEndpoints<ForgeOrigin>, raw_url: &str) -> Result<String> {
-        endpoints.rewrite_upstream(raw_url)
-    }
 }
 
 pub type ForgeEndpoints = MavenEndpoints<ForgeSpec>;
@@ -78,4 +73,4 @@ const FORGE_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(
     ProfileIdPattern::new("-forge-"),
 );
 
-pub type ForgeCatalog = MavenCatalog<ForgeEndpoints>;
+pub type ForgeCatalog = InstallerMavenCatalog<ForgeEndpoints>;

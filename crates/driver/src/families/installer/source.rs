@@ -2,7 +2,7 @@ use std::{fmt::Debug, marker::PhantomData, path::PathBuf};
 
 use crate::error::Result;
 use elemental_core::{minecraft::MinecraftVersionId, storage::Storage};
-use elemental_schema::forge::MavenMetadataBody;
+use elemental_schema::maven::MavenMetadataBody;
 
 use crate::{
     catalog::LoaderRelease,

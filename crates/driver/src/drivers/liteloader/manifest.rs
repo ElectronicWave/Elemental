@@ -11,6 +11,13 @@ pub struct LiteLoaderRelease {
     pub stream: String,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(super) enum LiteLoaderLibraryResolution {
+    #[default]
+    Release,
+    Snapshot,
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct LiteLoaderSelectedBuild {
     pub(super) game_version: String,
@@ -34,13 +41,20 @@ pub(super) struct LiteLoaderManifestGameVersion {
 
 #[derive(Debug, Clone, Deserialize)]
 pub(super) struct LiteLoaderManifestRepository {
-    #[serde(rename = "stream")]
-    _stream: String,
+    pub(super) stream: LiteLoaderRepositoryStream,
     #[serde(rename = "type")]
     _repository_type: String,
     pub(super) url: String,
     #[serde(rename = "classifier")]
     _classifier: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+pub(super) enum LiteLoaderRepositoryStream {
+    #[serde(rename = "RELEASE")]
+    Release,
+    #[serde(rename = "SNAPSHOT")]
+    Snapshot,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -74,6 +88,15 @@ pub(super) struct LiteLoaderManifestLibrary {
     pub(super) name: String,
     #[serde(default)]
     pub(super) url: String,
+    #[serde(skip)]
+    pub(super) resolution: LiteLoaderLibraryResolution,
+}
+
+impl LiteLoaderManifestLibrary {
+    fn with_resolution(mut self, resolution: LiteLoaderLibraryResolution) -> Self {
+        self.resolution = resolution;
+        self
+    }
 }
 
 pub(super) fn collect_releases(manifest: LiteLoaderManifest) -> Vec<LiteLoaderRelease> {
@@ -131,6 +154,7 @@ fn collect_builds_for_game(
         game_version,
         &game_entry.repo,
         Vec::new(),
+        LiteLoaderLibraryResolution::Release,
         &game_entry.artefacts,
     );
 
@@ -141,6 +165,7 @@ fn collect_builds_for_game(
             game_version,
             &game_entry.repo,
             snapshots.libraries.clone(),
+            LiteLoaderLibraryResolution::Snapshot,
             &snapshots.packages,
         );
     }
@@ -156,6 +181,7 @@ fn collect_package_builds(
     game_version: &str,
     repository: &LiteLoaderManifestRepository,
     common_libraries: Vec<LiteLoaderManifestLibrary>,
+    resolution: LiteLoaderLibraryResolution,
     packages: &HashMap<String, HashMap<String, LiteLoaderManifestBuild>>,
 ) {
     for (coordinates, entries) in packages {
@@ -163,12 +189,16 @@ fn collect_package_builds(
             continue;
         }
 
-        for build in materialize_build_entries(entries) {
+        for build in materialize_build_entries(entries, resolution) {
             if !build.version.is_empty() && seen_versions.insert(build.version.clone()) {
                 builds.push(LiteLoaderSelectedBuild {
                     game_version: game_version.to_owned(),
                     repository: repository.clone(),
-                    common_libraries: common_libraries.clone(),
+                    common_libraries: common_libraries
+                        .iter()
+                        .cloned()
+                        .map(|library| library.with_resolution(resolution))
+                        .collect(),
                     build,
                 });
             }
@@ -178,18 +208,28 @@ fn collect_package_builds(
 
 fn materialize_build_entries(
     entries: &HashMap<String, LiteLoaderManifestBuild>,
+    resolution: LiteLoaderLibraryResolution,
 ) -> Vec<LiteLoaderManifestBuild> {
     let mut builds = entries
         .iter()
         .filter(|(key, _)| key.as_str() != "latest")
-        .map(|(_, build)| build.clone())
+        .map(|(_, build)| build.clone().with_library_resolution(resolution))
         .collect::<Vec<LiteLoaderManifestBuild>>();
 
     if builds.is_empty()
         && let Some(latest) = entries.get("latest")
     {
-        builds.push(latest.clone());
+        builds.push(latest.clone().with_library_resolution(resolution));
     }
 
     builds
+}
+
+impl LiteLoaderManifestBuild {
+    fn with_library_resolution(mut self, resolution: LiteLoaderLibraryResolution) -> Self {
+        for library in &mut self.libraries {
+            library.resolution = resolution;
+        }
+        self
+    }
 }

@@ -1,14 +1,13 @@
 use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::{
-    catalog::{LoaderRelease, MavenCatalog},
+    catalog::{InstallerMavenCatalog, LoaderRelease},
     descriptors::NEOFORGE_DRIVER,
     families::installer::{
         InstallerFamily, InstallerFamilyDriver, InstallerMavenSource, MavenEndpoints, MavenSpec,
     },
     inspect::{LibraryPrefixSet, ProfileIdPattern, ProfiledDriverIdentity},
     loader_version::LoaderVersionId,
-    maven::infer_neoforge_game_version,
     url::Origin,
 };
 
@@ -83,4 +82,23 @@ const NEOFORGE_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(
     ProfileIdPattern::loader_prefixed("neoforge-"),
 );
 
-pub type NeoForgeCatalog = MavenCatalog<NeoForgeEndpoints>;
+pub type NeoForgeCatalog = InstallerMavenCatalog<NeoForgeEndpoints>;
+
+fn infer_neoforge_game_version(loader_version: &str) -> Option<MinecraftVersionId> {
+    let core_version = loader_version.split('-').next().unwrap_or(loader_version);
+    let parts = core_version.split('.').collect::<Vec<&str>>();
+    let [major, minor, ..] = parts.as_slice() else {
+        return None;
+    };
+
+    let major_number = major.parse::<u32>().ok()?;
+    if major_number >= 26 {
+        let game_version = match parts.get(2).copied() {
+            Some("0") | None => format!("{major}.{minor}"),
+            Some(hotfix) => format!("{major}.{minor}.{hotfix}"),
+        };
+        return Some(MinecraftVersionId::from(game_version));
+    }
+
+    Some(MinecraftVersionId::from(format!("1.{major}.{minor}")))
+}

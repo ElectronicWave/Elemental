@@ -1,7 +1,5 @@
 use std::collections::{HashMap, HashSet};
 
-use reqwest::Url;
-
 use elemental_schema::fabric::{
     ProfileJson, ProfileLibrary, ProfileLibraryArtifact, ProfileLibraryDownloads,
     ProfileLibraryExtract, ProfileLogging,
@@ -13,9 +11,7 @@ use elemental_schema::mojang::piston::{
 };
 
 use crate::error::{Error, Result};
-use crate::maven::{
-    artifact_path as maven_artifact_path, classifier_notation as maven_classifier_notation,
-};
+use crate::maven::{MavenNotation, MavenRepository};
 
 use super::launch::parse_argument_string;
 
@@ -203,8 +199,9 @@ fn profile_library_to_piston(profile_library: &ProfileLibrary) -> Result<PistonM
 fn profile_library_downloads_from_maven(
     profile_library: &ProfileLibrary,
 ) -> Result<PistonMetaLibrariesDownloads> {
-    let artifact_path = maven_artifact_path(profile_library.name.as_str(), "maven artifact")?;
-    let artifact_url = maven_artifact_url(profile_library.url.as_str(), artifact_path.as_str())?;
+    let notation = MavenNotation::parse(profile_library.name.as_str(), "maven artifact")?;
+    let repository = MavenRepository::parse(profile_library.url.as_str(), "maven repository")?;
+    let artifact = repository.artifact_download(notation.artifact_path())?;
     let classifiers = profile_library
         .natives
         .as_ref()
@@ -215,20 +212,17 @@ fn profile_library_downloads_from_maven(
                 .collect::<HashSet<String>>()
                 .into_iter()
                 .map(|classifier| {
-                    let classifier_notation = maven_classifier_notation(
-                        profile_library.name.as_str(),
-                        classifier.as_str(),
-                    );
-                    let path = maven_artifact_path(classifier_notation.as_str(), "maven artifact")?;
-                    let url = maven_artifact_url(profile_library.url.as_str(), path.as_str())?;
+                    let classifier_notation = notation.with_classifier(classifier.as_str());
+                    let artifact =
+                        repository.artifact_download(classifier_notation.artifact_path())?;
 
                     Ok((
                         classifier,
                         PistonMetaLibrariesDownloadsArtifact {
                             sha1: None,
                             size: None,
-                            url,
-                            path,
+                            url: artifact.url,
+                            path: artifact.path,
                         },
                     ))
                 })
@@ -240,8 +234,8 @@ fn profile_library_downloads_from_maven(
         artifact: Some(PistonMetaLibrariesDownloadsArtifact {
             sha1: None,
             size: None,
-            url: artifact_url,
-            path: artifact_path,
+            url: artifact.url,
+            path: artifact.path,
         }),
         classifiers,
     })
@@ -281,27 +275,6 @@ fn profile_library_extract_to_piston(
     PistonMetaLibrariesExtract {
         exclude: extract.exclude.clone(),
     }
-}
-
-fn maven_artifact_url(base_url: &str, artifact_path: &str) -> Result<String> {
-    let normalized_base_url = if base_url.ends_with('/') {
-        base_url.to_owned()
-    } else {
-        format!("{base_url}/")
-    };
-    let base = Url::parse(normalized_base_url.as_str())
-        .map_err(|source| Error::invalid_url("parse library base url failed", base_url, source))?;
-
-    base.join(artifact_path)
-        .map_err(|source| {
-            Error::join_url(
-                "join library artifact url failed",
-                base_url,
-                artifact_path,
-                source,
-            )
-        })
-        .map(|url| url.to_string())
 }
 
 fn profile_logging_to_piston(logging: &ProfileLogging) -> PistonMetaLogging {

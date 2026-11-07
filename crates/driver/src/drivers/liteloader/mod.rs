@@ -1,5 +1,4 @@
 mod manifest;
-mod maven;
 mod profile;
 
 pub mod catalog;

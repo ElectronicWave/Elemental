@@ -99,54 +99,40 @@ impl LiteLoaderEndpoints {
     }
 
     pub fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
-        if let Some(rewritten) = rewrite_legacy_origin(
-            &self.origin_policy,
-            raw_url,
-            "http://dl.liteloader.com/versions",
-            LiteLoaderOrigin::Downloads,
-        )? {
-            return Ok(rewritten);
-        }
-
-        if let Some(rewritten) = rewrite_legacy_origin(
-            &self.origin_policy,
-            raw_url,
-            "http://repo.mumfrey.com/content/repositories/snapshots",
-            LiteLoaderOrigin::Snapshots,
-        )? {
-            return Ok(rewritten);
-        }
-
-        if let Some(rewritten) = rewrite_legacy_origin(
-            &self.origin_policy,
-            raw_url,
-            "http://repo.spongepowered.org/maven",
-            LiteLoaderOrigin::SpongeMaven,
-        )? {
-            return Ok(rewritten);
-        }
-
-        if let Some(rewritten) = rewrite_legacy_origin(
-            &self.origin_policy,
-            raw_url,
-            "http://repo.maven.apache.org/maven2",
-            LiteLoaderOrigin::MavenCentral,
-        )? {
-            return Ok(rewritten);
-        }
-
-        if let Some(rewritten) = rewrite_legacy_origin(
-            &self.origin_policy,
-            raw_url,
-            "http://repo1.maven.org/maven2",
-            LiteLoaderOrigin::MavenCentral,
-        )? {
-            return Ok(rewritten);
+        for (legacy_base, origin) in LEGACY_ORIGINS {
+            if let Some(rewritten) =
+                rewrite_legacy_origin(&self.origin_policy, raw_url, legacy_base, *origin)?
+            {
+                return Ok(rewritten);
+            }
         }
 
         self.origin_policy.rewrite_known_origin_url_or_keep(raw_url)
     }
 }
+
+const LEGACY_ORIGINS: &[(&str, LiteLoaderOrigin)] = &[
+    (
+        "http://dl.liteloader.com/versions",
+        LiteLoaderOrigin::Downloads,
+    ),
+    (
+        "http://repo.mumfrey.com/content/repositories/snapshots",
+        LiteLoaderOrigin::Snapshots,
+    ),
+    (
+        "http://repo.spongepowered.org/maven",
+        LiteLoaderOrigin::SpongeMaven,
+    ),
+    (
+        "http://repo.maven.apache.org/maven2",
+        LiteLoaderOrigin::MavenCentral,
+    ),
+    (
+        "http://repo1.maven.org/maven2",
+        LiteLoaderOrigin::MavenCentral,
+    ),
+];
 
 impl Default for LiteLoaderSource {
     fn default() -> Self {

@@ -244,9 +244,7 @@ where
         F: ProfiledVersionJsonFamily,
         F::Source: Default,
     {
-        Ok(family
-            .clone()
-            .build_driver(family.default_source()?, VanillaSource::default()))
+        Ok(family.clone().build_driver(family.default_source()?))
     }
 
     fn installer_driver<F>(&self) -> InstallerFamilyDriver<F>
@@ -254,7 +252,7 @@ where
         F: InstallerFamily,
         F::Source: Default,
     {
-        InstallerFamilyDriver::new(F::Source::default(), VanillaSource::default())
+        InstallerFamilyDriver::new(F::Source::default())
     }
 
     fn resolve_driver(&self, desc: DriverDescriptor) -> Result<ResolvedLauncherDriver> {

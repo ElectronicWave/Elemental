@@ -4,7 +4,7 @@ use elemental_core::minecraft::MinecraftVersionId;
 use elemental_schema::mojang::piston::PistonMetaLibraries;
 
 use crate::{
-    catalog::{LoaderRelease, MavenCatalog},
+    catalog::{InstallerMavenCatalog, LoaderRelease},
     families::installer::{
         InstallerFamily, InstallerFamilyDriver, InstallerMavenSource, MavenEndpoints, MavenSpec,
         merge_retro_futura_libraries,
@@ -62,7 +62,7 @@ where
 
 pub type RetroFuturaEndpoints<C> = MavenEndpoints<RetroFuturaMaven<C>>;
 pub type RetroFuturaSource<C> = InstallerMavenSource<RetroFuturaEndpoints<C>>;
-pub type RetroFuturaReleaseCatalog<C> = MavenCatalog<RetroFuturaEndpoints<C>>;
+pub type RetroFuturaReleaseCatalog<C> = InstallerMavenCatalog<RetroFuturaEndpoints<C>>;
 
 #[derive(Debug, Clone, Copy)]
 pub struct RetroFuturaFamily<C>(PhantomData<C>);

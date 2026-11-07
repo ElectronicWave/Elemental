@@ -6,7 +6,7 @@ use elemental_infra::downloader::DownloadTask;
 use crate::{
     error::{Error, Result},
     families::version_json::{VersionJsonRootLayout, VersionJsonRootResource},
-    maven::artifact_path,
+    maven::MavenNotation,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,10 +32,9 @@ impl InstallerArtifact {
 }
 
 pub fn installer_coordinate_path(notation: &str) -> Result<PathBuf> {
-    Ok(PathBuf::from(artifact_path(
-        notation,
-        "installer artifact",
-    )?))
+    Ok(PathBuf::from(
+        MavenNotation::parse(notation, "installer artifact")?.artifact_path(),
+    ))
 }
 
 pub fn installer_coordinate_file_name(notation: &str) -> Result<String> {

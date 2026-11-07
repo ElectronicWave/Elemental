@@ -32,23 +32,24 @@ impl<F> ProfiledVersionJsonDriver<F>
 where
     F: ProfiledVersionJsonFamily,
 {
-    pub fn new(family: F, source: F::Source, vanilla_source: VanillaSource) -> Self {
+    pub fn new(family: F, source: F::Source) -> Self {
         Self {
             family,
             source,
-            vanilla_source,
+            vanilla_source: VanillaSource::default(),
         }
+    }
+
+    pub fn with_vanilla_source(mut self, vanilla_source: VanillaSource) -> Self {
+        self.vanilla_source = vanilla_source;
+        self
     }
 
     pub fn with_defaults(family: F) -> Result<Self>
     where
         F::Source: Default,
     {
-        Ok(Self::new(
-            family.clone(),
-            family.default_source()?,
-            VanillaSource::default(),
-        ))
+        Ok(Self::new(family.clone(), family.default_source()?))
     }
 
     pub fn descriptor(&self) -> DriverDescriptor {

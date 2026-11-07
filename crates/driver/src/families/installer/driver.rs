@@ -36,12 +36,17 @@ impl<F> InstallerFamilyDriver<F>
 where
     F: InstallerFamily,
 {
-    pub fn new(source: F::Source, vanilla_source: VanillaSource) -> Self {
+    pub fn new(source: F::Source) -> Self {
         Self {
             source,
-            vanilla_source,
+            vanilla_source: VanillaSource::default(),
             family: PhantomData,
         }
+    }
+
+    pub fn with_vanilla_source(mut self, vanilla_source: VanillaSource) -> Self {
+        self.vanilla_source = vanilla_source;
+        self
     }
 
     pub fn descriptor(&self) -> DriverDescriptor {
@@ -127,7 +132,7 @@ where
     F::Source: Default,
 {
     pub fn with_defaults() -> Result<Self> {
-        Ok(Self::new(F::Source::default(), VanillaSource::default()))
+        Ok(Self::new(F::Source::default()))
     }
 }
 

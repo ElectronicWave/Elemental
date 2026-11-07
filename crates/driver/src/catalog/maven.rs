@@ -10,14 +10,14 @@ use crate::{
 
 use super::{GameVersion, GameVersionCatalog, LoaderRelease, LoaderVersionCatalog};
 
-pub struct MavenCatalog<E>
+pub struct InstallerMavenCatalog<E>
 where
     E: InstallerMavenEndpoints,
 {
     source: InstallerMavenSource<E>,
 }
 
-impl<E> MavenCatalog<E>
+impl<E> InstallerMavenCatalog<E>
 where
     E: InstallerMavenEndpoints + Default,
 {
@@ -35,7 +35,7 @@ where
 }
 
 #[async_trait]
-impl<E> GameVersionCatalog for MavenCatalog<E>
+impl<E> GameVersionCatalog for InstallerMavenCatalog<E>
 where
     E: InstallerMavenEndpoints,
 {
@@ -60,7 +60,7 @@ where
 }
 
 #[async_trait]
-impl<E> LoaderVersionCatalog for MavenCatalog<E>
+impl<E> LoaderVersionCatalog for InstallerMavenCatalog<E>
 where
     E: InstallerMavenEndpoints,
 {

@@ -8,7 +8,7 @@ use elemental_core::minecraft::MinecraftVersionId;
 use crate::error::Result;
 
 pub use loader_meta::LoaderMetaCatalog;
-pub use maven::MavenCatalog;
+pub use maven::InstallerMavenCatalog;
 pub use release::{GameVersion, LoaderRelease};
 
 #[async_trait]

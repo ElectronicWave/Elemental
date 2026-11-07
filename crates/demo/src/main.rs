@@ -16,7 +16,7 @@ use crate::config::DemoCommand;
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
-    let command = Cli::parse().into_demo_command();
+    let command = Cli::parse().into_demo_command()?;
     if let DemoCommand::Launch(config) = &command
         && !config.runtime_paths.is_empty()
     {

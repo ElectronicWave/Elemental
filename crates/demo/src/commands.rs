@@ -8,13 +8,14 @@ use elemental::{
         runtime::distribution::Distribution,
         storage::Storage,
     },
+    driver::descriptors::VANILLA_DRIVER,
     driver::families::version_json::{
         BaseInstanceLayout, BaseRootLayout, VersionJsonGameStorageExt,
     },
     launcher::{DriverSpec, LaunchOptions, Launcher},
 };
 
-use crate::config::{DemoCommand, DemoConfig, DemoDriver};
+use crate::config::{DemoCommand, DemoConfig};
 use crate::diagnostics::{
     LaunchDiagnostics, LaunchSummary, collect_version_diagnostics, print_launch_diagnostics,
     print_summary, run_logged_process,
@@ -100,24 +101,24 @@ async fn run_list_instances(storage_root: std::path::PathBuf) -> Result<()> {
 }
 
 fn to_driver_spec(config: &DemoConfig) -> Result<DriverSpec> {
-    match config.driver {
-        DemoDriver::Vanilla => Ok(DriverSpec::vanilla(config.game_version.clone())),
-        driver => Ok(DriverSpec::any(
-            driver.descriptor(),
-            config.game_version.clone(),
-            require_loader_version(config, driver.as_str())?,
-        )?),
+    if config.driver == VANILLA_DRIVER {
+        return Ok(DriverSpec::vanilla(config.game_version.clone()));
     }
+
+    Ok(DriverSpec::any(
+        config.driver,
+        config.game_version.clone(),
+        require_loader_version(config)?,
+    )?)
 }
 
 fn require_loader_version(
     config: &DemoConfig,
-    driver_label: &str,
 ) -> Result<elemental::driver::loader_version::LoaderVersionId> {
     config
         .loader_version
         .clone()
-        .with_context(|| format!("{driver_label} demo requires a loader version"))
+        .with_context(|| format!("{} demo requires a loader version", config.driver.name))
 }
 
 pub(super) fn build_launch_config(config: &DemoConfig) -> LaunchOptions {
@@ -167,7 +168,7 @@ pub(super) async fn finalize_launch(
     };
 
     print_launch_diagnostics(&LaunchDiagnostics {
-        driver_name: config.driver.as_str(),
+        driver_name: config.driver.name,
         loader_version,
         instance_name: &config.instance_name,
         game_version: config.game_version.as_str(),
@@ -180,7 +181,7 @@ pub(super) async fn finalize_launch(
 
     let exit_status = run_logged_process(command).await?;
     print_summary(&LaunchSummary {
-        driver_name: config.driver.as_str(),
+        driver_name: config.driver.name,
         game_version: config.game_version.as_str(),
         loader_version,
         runtime_executable: runtime_executable.as_path(),

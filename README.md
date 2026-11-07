@@ -72,11 +72,13 @@ available, the default command prepares and launches Fabric 1.20.1:
 cargo run -p demo
 ```
 
-Other drivers accept the same storage, runtime, and local-only options:
+Other drivers accept the same storage, runtime, and local-only options. The
+driver id is parsed directly:
 
 ```bash
 cargo run -p demo -- forge 1.20.1 47.3.1
-cargo run -p demo -- --local-only fabric 1.20.1 0.16.10 MyFabric-1.20.1
+cargo run -p demo -- --local-only fabric 1.20.1 0.16.10 --instance-name MyFabric-1.20.1
+cargo run -p demo -- vanilla 1.20.1 --instance-name MyVanilla-1.20.1
 ```
 
 The demo defaults live in

@@ -3,15 +3,15 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use elemental::{
     core::{
-        auth::authorizers::offline::OfflineAuthorizer, launcher::command::LaunchCommand,
-        runtime::distribution::Distribution, storage::Storage,
+        auth::{authorizer::Authorizer, authorizers::offline::OfflineAuthorizer},
+        launcher::command::LaunchCommand,
+        runtime::distribution::Distribution,
+        storage::Storage,
     },
     driver::families::version_json::{
         BaseInstanceLayout, BaseRootLayout, VersionJsonGameStorageExt,
     },
-    launcher::{
-        DriverSpec, LaunchOptions, Launcher, LoaderSpec, PrepareInstanceRequest, VanillaSpec,
-    },
+    launcher::{DriverSpec, LaunchOptions, Launcher},
 };
 
 use crate::config::{DemoCommand, DemoConfig, DemoDriver};
@@ -55,13 +55,7 @@ async fn run_launch(config: DemoConfig) -> Result<()> {
             .await?;
         let started_at = std::time::Instant::now();
         let result = launcher
-            .prepare_instance(
-                &session,
-                PrepareInstanceRequest {
-                    instance_name: request_instance_name,
-                    driver: request_driver,
-                },
-            )
+            .prepare_with_session(&session, request_instance_name, request_driver)
             .await;
         let report = session.finish().await?;
         let prepared = result?;
@@ -69,15 +63,16 @@ async fn run_launch(config: DemoConfig) -> Result<()> {
         (prepared, started_at.elapsed())
     };
 
-    let command_result = launcher
-        .build_launch_command(&prepared, offline_authorizer(), &launch_options)
+    let credential = offline_authorizer().authorize().await?;
+    let command = launcher
+        .build_launch_command(&prepared, &credential, &launch_options)
         .await?;
 
     finalize_launch(
         &config,
         prepare_elapsed.as_millis(),
-        command_result.runtime,
-        command_result.command,
+        command.runtime.clone(),
+        command,
     )
     .await
 }
@@ -105,51 +100,14 @@ async fn run_list_instances(storage_root: std::path::PathBuf) -> Result<()> {
 }
 
 fn to_driver_spec(config: &DemoConfig) -> Result<DriverSpec> {
-    let game_version = config.game_version.clone();
-
-    Ok(match config.driver {
-        DemoDriver::Vanilla => DriverSpec::Vanilla(VanillaSpec { game_version }),
-        DemoDriver::Fabric => DriverSpec::Fabric(LoaderSpec {
-            game_version,
-            loader_version: require_loader_version(config, "fabric")?,
-        }),
-        DemoDriver::LegacyFabric => DriverSpec::LegacyFabric(LoaderSpec {
-            game_version,
-            loader_version: require_loader_version(config, "legacyfabric")?,
-        }),
-        DemoDriver::Babric => DriverSpec::Babric(LoaderSpec {
-            game_version,
-            loader_version: require_loader_version(config, "babric")?,
-        }),
-        DemoDriver::Quilt => DriverSpec::Quilt(LoaderSpec {
-            game_version,
-            loader_version: require_loader_version(config, "quilt")?,
-        }),
-        DemoDriver::LiteLoader => DriverSpec::LiteLoader(LoaderSpec {
-            game_version,
-            loader_version: require_loader_version(config, "liteloader")?,
-        }),
-        DemoDriver::Rift => DriverSpec::Rift(LoaderSpec {
-            game_version,
-            loader_version: require_loader_version(config, "rift")?,
-        }),
-        DemoDriver::Forge => DriverSpec::Forge(LoaderSpec {
-            game_version,
-            loader_version: require_loader_version(config, "forge")?,
-        }),
-        DemoDriver::Cleanroom => DriverSpec::Cleanroom(LoaderSpec {
-            game_version,
-            loader_version: require_loader_version(config, "cleanroom")?,
-        }),
-        DemoDriver::Outlands => DriverSpec::Outlands(LoaderSpec {
-            game_version,
-            loader_version: require_loader_version(config, "outlands")?,
-        }),
-        DemoDriver::NeoForge => DriverSpec::NeoForge(LoaderSpec {
-            game_version,
-            loader_version: require_loader_version(config, "neoforge")?,
-        }),
-    })
+    match config.driver {
+        DemoDriver::Vanilla => Ok(DriverSpec::vanilla(config.game_version.clone())),
+        driver => Ok(DriverSpec::any(
+            driver.descriptor(),
+            config.game_version.clone(),
+            require_loader_version(config, driver.as_str())?,
+        )?),
+    }
 }
 
 fn require_loader_version(

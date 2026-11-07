@@ -8,12 +8,11 @@ use crate::{
 use super::super::VersionJsonLaunchBuilder;
 use super::common::normalize_path_string;
 
-pub(crate) fn collect_module_path_entries<A, L, VL>(
-    builder: &VersionJsonLaunchBuilder<A, L, VL>,
+pub(crate) fn collect_module_path_entries<L, VL>(
+    builder: &VersionJsonLaunchBuilder<L, VL>,
     jvm_arguments: &[String],
 ) -> Result<HashSet<String>>
 where
-    A: elemental_core::auth::authorizer::Authorizer,
     L: VersionJsonRootLayout,
     VL: crate::families::version_json::VersionJsonInstanceLayout,
 {
@@ -43,12 +42,11 @@ where
     Ok(entries)
 }
 
-fn resolve_module_path_entries<A, L, VL>(
-    builder: &VersionJsonLaunchBuilder<A, L, VL>,
+fn resolve_module_path_entries<L, VL>(
+    builder: &VersionJsonLaunchBuilder<L, VL>,
     raw_value: &str,
 ) -> Result<Vec<String>>
 where
-    A: elemental_core::auth::authorizer::Authorizer,
     L: VersionJsonRootLayout,
     VL: crate::families::version_json::VersionJsonInstanceLayout,
 {

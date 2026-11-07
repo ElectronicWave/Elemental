@@ -3,10 +3,10 @@
 High-level instance lifecycle for prepared Minecraft installations.
 
 `elemental-launcher` coordinates catalogs, drivers, storage layouts, the
-downloader, runtime selection, authentication, and process launch. It supports
-the full range of Elemental drivers while keeping the caller-facing flow small:
-inspect an instance, prepare or reload it, then build a command or start the
-game.
+downloader, runtime selection, and process launch. Authentication is completed
+by the caller before launch. It supports the full range of Elemental drivers
+while keeping the caller-facing flow small: inspect an instance, prepare or
+reload it, build a mutable launch command, then start the game.
 
 ## Features
 
@@ -39,62 +39,96 @@ Prepare a Vanilla instance and build its launch command:
 
 ```rust
 use anyhow::Result;
-use elemental_core::auth::authorizers::offline::OfflineAuthorizer;
-use elemental_launcher::{
-    DriverSpec, LaunchOptions, Launcher, PrepareInstanceRequest, VanillaSpec,
-};
+use elemental_core::auth::{authorizer::Authorizer, authorizers::offline::OfflineAuthorizer};
+use elemental_launcher::{DriverSpec, LaunchOptions, Launcher};
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
     let launcher = Launcher::builder()
         .storage_root(".minecraft")
         .build();
-    let session = launcher
-        .downloader()
-        .session("prepare Vanilla-1.20.1")
-        .open()
-        .await?;
 
     let prepared = launcher
-        .prepare_instance(
-            &session,
-            PrepareInstanceRequest {
-                instance_name: "Vanilla-1.20.1".to_owned(),
-                driver: DriverSpec::Vanilla(VanillaSpec {
-                    game_version: "1.20.1".into(),
-                }),
-            },
+        .prepare(
+            "Vanilla-1.20.1".to_owned(),
+            DriverSpec::vanilla("1.20.1".into()),
         )
         .await?;
-    let report = session.finish().await?;
-    report.success()?;
 
-    let command = launcher
+    let credential = OfflineAuthorizer {
+        username: "Player".to_owned(),
+    }
+    .authorize()
+    .await?;
+
+    let mut command = launcher
         .build_launch_command(
             &prepared,
-            OfflineAuthorizer {
-                username: "Player".to_owned(),
-            },
+            &credential,
             &LaunchOptions::default(),
         )
         .await?;
+    command.add_jvm_argument("-Xmx4G".to_owned());
 
     println!(
         "{} with {}",
         prepared.driver().id,
-        command.runtime.executable().display()
+        command.program().display()
     );
     Ok(())
 }
 ```
 
-`prepare_instance()` downloads and writes missing artifacts. To start the game,
-pass the prepared instance and command to `launch_prepared_instance()`, or use
-the returned `LaunchCommand` yourself.
+`prepare()` downloads and writes missing artifacts with a default download
+session. To start the game, pass the command to `launch()` or
+`launch_logged()`.
 
-The caller owns the download session. Choose its name and configure retry,
-failure, parallelism, and rate-limit settings before `open()`. Pass the opened
-session to `prepare_instance()`, then call `finish()` or `cancel()` yourself.
+Authentication is independent from launch. An `Authorizer` returns a
+`UserCredential`; `build_launch_command()` injects that credential into the
+game arguments and returns a mutable `LaunchCommand`. Authentication-specific
+JVM arguments can be appended after that without changing the credential type.
+
+### Custom download sessions
+
+Use `prepare_with_session()` when the host needs progress events, custom retry
+or rate-limit settings, cancellation, or a download report. The caller owns the
+session lifecycle:
+
+```rust
+let session = launcher
+    .downloader()
+    .session("prepare Vanilla-1.20.1")
+    .parallelism(8)
+    .open()
+    .await?;
+
+let prepared = launcher
+    .prepare_with_session(
+        &session,
+        "Vanilla-1.20.1".to_owned(),
+        DriverSpec::vanilla("1.20.1".into()),
+    )
+    .await?;
+
+let report = session.finish().await?;
+report.success()?;
+```
+
+The session exposes `progress_receiver()`, `subscribe()`, and `snapshot()` for
+UI progress reporting.
+
+### Auth-specific JVM arguments
+
+```rust
+let mut command = launcher
+    .build_launch_command(&prepared, &credential, &LaunchOptions::default())
+    .await?;
+command.add_jvm_argument(format!(
+    "-javaagent:{}",
+    authlib_injector.display()
+));
+let game = launcher.launch(command)?;
+```
 
 ## Instance Lifecycle
 
@@ -102,10 +136,13 @@ session to `prepare_instance()`, then call `finish()` or `cancel()` yourself.
 | --- | --- |
 | Discover local instances | `inspect_instances()` |
 | Detect one instance and its driver | `inspect_instance(name)` |
-| Install or refresh an instance | `prepare_instance(session, request)` |
+| Install or refresh an instance | `prepare(name, driver)` |
+| Install with a custom session | `prepare_with_session(session, name, driver)` |
 | Reload an existing installation | `load_instance(instance)` |
 | Build a command without spawning | `build_launch_command(...)` |
-| Spawn the configured Java process | `launch_prepared_instance(...)` |
+| Spawn a customized command | `launch(command)` / `launch_logged(command)` |
+| Build and spawn in one call | `launch_prepared_instance(...)` |
+| Launch an installed instance by name | `launch_instance(...)` |
 | Run a catalog directly | `catalog(catalog)` |
 
 Reopen an instance without preparing it again:
@@ -135,13 +172,23 @@ if let Some(instance) = launcher
 
 | Variant | Loader version |
 | --- | --- |
-| `Vanilla` | Game version only |
-| `Fabric`, `LegacyFabric`, `Babric`, `Quilt` | Game and loader version |
-| `LiteLoader`, `Rift` | Game and loader version |
-| `Forge`, `NeoForge`, `Cleanroom` | Game and loader version |
+| `DriverSpec::vanilla(game_version)` | Game version only |
+| `FABRIC_DRIVER`, `LEGACY_FABRIC_DRIVER`, `BABRIC_DRIVER`, `QUILT_DRIVER` | Game and loader version |
+| `LITELOADER_DRIVER`, `RIFT_DRIVER` | Game and loader version |
+| `FORGE_DRIVER`, `NEOFORGE_DRIVER`, `CLEANROOM_DRIVER`, `OUTLANDS_DRIVER` | Game and loader version |
 
-Loader variants use `LoaderSpec { game_version, loader_version }`. Both version
-fields accept strings through `Into`.
+Vanilla has no loader version and uses its own constructor. `DriverSpec::any()`
+is for loader-driven distributions and requires all three values:
+
+```rust
+use elemental_driver::descriptors::FABRIC_DRIVER;
+
+let driver = DriverSpec::any(
+    FABRIC_DRIVER,
+    "1.20.1".into(),
+    "0.16.0".into(),
+)?;
+```
 
 ## Launch Options
 

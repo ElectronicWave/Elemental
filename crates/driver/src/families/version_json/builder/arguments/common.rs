@@ -19,12 +19,11 @@ pub(super) fn legacy_jvm_arguments() -> Vec<String> {
     ]
 }
 
-pub(super) fn resolve_root_resource<A, L, VL>(
-    builder: &VersionJsonLaunchBuilder<A, L, VL>,
+pub(super) fn resolve_root_resource<L, VL>(
+    builder: &VersionJsonLaunchBuilder<L, VL>,
     resource: VersionJsonRootResource,
 ) -> Result<PathBuf>
 where
-    A: elemental_core::auth::authorizer::Authorizer,
     L: VersionJsonRootLayout,
     VL: crate::families::version_json::VersionJsonInstanceLayout,
 {

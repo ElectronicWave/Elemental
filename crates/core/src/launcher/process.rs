@@ -29,12 +29,13 @@ pub struct LoggedChild {
 }
 
 pub fn spawn_command(command: LaunchCommand) -> Result<Child> {
-    if command.program.as_os_str().is_empty() {
+    let program = command.program();
+    if program.as_os_str().is_empty() {
         return Err(Error::EmptyExecutable);
     }
 
-    let mut child = Command::new(&command.program);
-    child.args(&command.args);
+    let mut child = Command::new(&program);
+    child.args(command.arguments());
 
     if let Some(cwd) = &command.cwd {
         child.current_dir(cwd);
@@ -44,19 +45,19 @@ pub fn spawn_command(command: LaunchCommand) -> Result<Child> {
         child.env(key, value);
     }
 
-    child.spawn().map_err(|source| Error::Spawn {
-        program: command.program,
-        source,
-    })
+    child
+        .spawn()
+        .map_err(|source| Error::Spawn { program, source })
 }
 
 pub fn spawn_command_logged(command: LaunchCommand) -> Result<LoggedChild> {
-    if command.program.as_os_str().is_empty() {
+    let program = command.program();
+    if program.as_os_str().is_empty() {
         return Err(Error::EmptyExecutable);
     }
 
-    let mut child = Command::new(&command.program);
-    child.args(&command.args);
+    let mut child = Command::new(&program);
+    child.args(command.arguments());
 
     if let Some(cwd) = &command.cwd {
         child.current_dir(cwd);
@@ -70,10 +71,7 @@ pub fn spawn_command_logged(command: LaunchCommand) -> Result<LoggedChild> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|source| Error::Spawn {
-            program: command.program,
-            source,
-        })?;
+        .map_err(|source| Error::Spawn { program, source })?;
     let (sender, receiver) = unbounded_channel();
 
     if let Some(stdout) = child.stdout.take() {

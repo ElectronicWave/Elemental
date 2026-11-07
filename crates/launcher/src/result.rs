@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use elemental_core::{launcher::command::LaunchCommand, runtime::distribution::Distribution};
+use elemental_core::{launcher::process::ProcessLogLine, runtime::distribution::Distribution};
 use elemental_driver::{
     driver::{DriverDescriptor, InstalledDriver},
     families::{
@@ -12,14 +12,15 @@ use elemental_driver::{
     },
 };
 
-pub struct LaunchCommandResult {
-    pub runtime: Distribution,
-    pub command: LaunchCommand,
-}
-
 pub struct LaunchedInstance {
     pub runtime: Distribution,
     pub child: tokio::process::Child,
+}
+
+pub struct LoggedLaunchedInstance {
+    pub runtime: Distribution,
+    pub child: tokio::process::Child,
+    pub lines: tokio::sync::mpsc::UnboundedReceiver<ProcessLogLine>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

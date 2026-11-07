@@ -1,7 +1,15 @@
 use std::path::PathBuf;
 
 use elemental::core::{minecraft::MinecraftVersionId, runtime::RuntimeValidationMode};
-use elemental::driver::loader_version::LoaderVersionId;
+use elemental::driver::{
+    descriptors::{
+        BABRIC_DRIVER, CLEANROOM_DRIVER, FABRIC_DRIVER, FORGE_DRIVER, LEGACY_FABRIC_DRIVER,
+        LITELOADER_DRIVER, NEOFORGE_DRIVER, OUTLANDS_DRIVER, QUILT_DRIVER, RIFT_DRIVER,
+        VANILLA_DRIVER,
+    },
+    driver::DriverDescriptor,
+    loader_version::LoaderVersionId,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DemoDriver {
@@ -39,6 +47,22 @@ pub enum DemoCommand {
 }
 
 impl DemoDriver {
+    pub fn descriptor(self) -> DriverDescriptor {
+        match self {
+            Self::Vanilla => VANILLA_DRIVER,
+            Self::Fabric => FABRIC_DRIVER,
+            Self::LegacyFabric => LEGACY_FABRIC_DRIVER,
+            Self::Babric => BABRIC_DRIVER,
+            Self::Quilt => QUILT_DRIVER,
+            Self::LiteLoader => LITELOADER_DRIVER,
+            Self::Rift => RIFT_DRIVER,
+            Self::Forge => FORGE_DRIVER,
+            Self::Cleanroom => CLEANROOM_DRIVER,
+            Self::Outlands => OUTLANDS_DRIVER,
+            Self::NeoForge => NEOFORGE_DRIVER,
+        }
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Vanilla => "Vanilla",

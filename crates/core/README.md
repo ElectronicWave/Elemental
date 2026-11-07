@@ -198,8 +198,10 @@ token. `MicrosoftAuthorizer` runs the Microsoft device-code flow and accepts a
 verification callback so the host application can present the user code with
 its own UI.
 
-A `LaunchCommand` contains the executable, arguments, environment variables,
-and optional working directory. `spawn_command()` launches it directly, while
+A `LaunchCommand` contains the runtime, structured JVM and game arguments, the
+main class, environment variables, and optional working directory. It remains
+mutable before launch, so callers can append authentication-specific JVM
+arguments or other overrides. `spawn_command()` launches it directly, while
 `spawn_command_logged()` captures stdout and stderr as `LoggedChild` lines.
 
 ## Related Crates

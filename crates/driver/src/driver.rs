@@ -1,14 +1,41 @@
-use crate::error::Result;
+use std::str::FromStr;
+
 use async_trait::async_trait;
 use elemental_core::{minecraft::MinecraftVersionId, storage::layout::Layout};
 use elemental_schema::mojang::piston::PistonMetaData;
 
+use crate::descriptors::from_id;
+use crate::error::{Error, Result};
 use crate::inspect::InstanceProbe;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DriverDescriptor {
     pub id: &'static str,
     pub name: &'static str,
+}
+
+impl TryFrom<&str> for DriverDescriptor {
+    type Error = Error;
+
+    fn try_from(id: &str) -> Result<Self> {
+        from_id(id).ok_or_else(|| Error::UnsupportedDriver { id: id.to_owned() })
+    }
+}
+
+impl TryFrom<String> for DriverDescriptor {
+    type Error = Error;
+
+    fn try_from(id: String) -> Result<Self> {
+        Self::try_from(id.as_str())
+    }
+}
+
+impl FromStr for DriverDescriptor {
+    type Err = Error;
+
+    fn from_str(id: &str) -> Result<Self> {
+        Self::try_from(id)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

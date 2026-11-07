@@ -18,6 +18,9 @@ pub enum Error {
     #[error("{message}")]
     HttpClientBuild { message: String },
 
+    #[error("unsupported driver id: '{id}'")]
+    UnsupportedDriver { id: String },
+
     #[error(transparent)]
     Regex(#[from] regex::Error),
 
@@ -107,12 +110,6 @@ pub enum Error {
     ReadVersionMetadata {
         #[source]
         source: Box<Error>,
-    },
-
-    #[error("authorize failed")]
-    Authorize {
-        #[source]
-        source: elemental_core::auth::Error,
     },
 
     #[error("get version name failed for '{}'", path.display())]

@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::error::Result;
 use elemental_core::{
-    auth::authorizer::Authorizer,
+    auth::credential::UserCredential,
     launcher::command::LaunchCommand,
     runtime::{RuntimeValidationMode, distribution::Distribution, resolve_runtime},
 };
@@ -40,19 +40,21 @@ where
     .await?)
 }
 
-pub fn build_version_json_launch_builder<A, L, VL>(
-    authorizer: A,
+pub fn build_version_json_launch_builder<L, VL>(
+    credential: &UserCredential,
     runtime: Distribution,
     prepared_version: &PreparedVersionJsonInstance<L, VL>,
     config: &VersionJsonLaunchConfig,
-) -> Result<VersionJsonLaunchBuilder<A, L, VL>>
+) -> Result<VersionJsonLaunchBuilder<L, VL>>
 where
-    A: Authorizer,
     L: VersionJsonRootLayout + Clone,
     VL: VersionJsonInstanceLayout + Clone,
 {
-    let mut builder =
-        VersionJsonLaunchBuilder::new(authorizer, runtime, prepared_version.version.clone());
+    let mut builder = VersionJsonLaunchBuilder::new(
+        credential.clone(),
+        runtime,
+        prepared_version.version.clone(),
+    );
 
     if let Some(client_id) = &config.client_id {
         builder = builder.set_client_id(client_id.clone());
@@ -86,13 +88,12 @@ where
     Ok(builder)
 }
 
-pub async fn build_version_json_launch_command<A, L, VL>(
-    authorizer: A,
+pub async fn build_version_json_launch_command<L, VL>(
+    credential: &UserCredential,
     prepared_version: &PreparedVersionJsonInstance<L, VL>,
     config: &VersionJsonLaunchConfig,
-) -> Result<(Distribution, LaunchCommand)>
+) -> Result<LaunchCommand>
 where
-    A: Authorizer,
     L: VersionJsonRootLayout + Clone,
     VL: VersionJsonInstanceLayout + Clone,
 {
@@ -103,10 +104,6 @@ where
         config.runtime_validation,
     )
     .await?;
-    let command =
-        build_version_json_launch_builder(authorizer, runtime.clone(), prepared_version, config)?
-            .build_command()
-            .await?;
-
-    Ok((runtime, command))
+    build_version_json_launch_builder(credential, runtime, prepared_version, config)?
+        .build_command()
 }

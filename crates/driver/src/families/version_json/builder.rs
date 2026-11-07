@@ -3,7 +3,7 @@ mod command;
 mod paths;
 
 use elemental_core::{
-    auth::authorizer::Authorizer, runtime::distribution::Distribution, storage::Storage,
+    auth::credential::UserCredential, runtime::distribution::Distribution, storage::Storage,
 };
 use elemental_schema::mojang::piston::PistonMetaData;
 
@@ -18,12 +18,8 @@ use super::{
 
 use paths::LaunchPaths;
 
-pub struct VersionJsonLaunchBuilder<
-    A: Authorizer,
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-> {
-    pub authorizer: A,
+pub struct VersionJsonLaunchBuilder<L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> {
+    pub credential: UserCredential,
     pub runtime: Distribution,
     pub version: Storage<VL, Storage<L>>,
     inner: LauncherVariables,
@@ -31,12 +27,14 @@ pub struct VersionJsonLaunchBuilder<
     extra_game_arguments: Vec<String>,
 }
 
-impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
-    VersionJsonLaunchBuilder<A, L, VL>
-{
-    pub fn new(authorizer: A, runtime: Distribution, version: Storage<VL, Storage<L>>) -> Self {
+impl<L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> VersionJsonLaunchBuilder<L, VL> {
+    pub fn new(
+        credential: UserCredential,
+        runtime: Distribution,
+        version: Storage<VL, Storage<L>>,
+    ) -> Self {
         Self {
-            authorizer,
+            credential,
             runtime,
             version,
             inner: LauncherVariables::default(),
@@ -95,25 +93,22 @@ impl<A: Authorizer, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout>
         self.inner
     }
 
-    pub(super) fn build_command_arguments(
-        &self,
-        metadata: &PistonMetaData,
-        rule_context: &VersionJsonRuleContext,
-        raw_jvm_arguments: Vec<String>,
-    ) -> Result<Vec<String>> {
-        let mut arguments = self.build_jvm_arguments(metadata, raw_jvm_arguments)?;
-        arguments.push(metadata.main_class.clone());
-        arguments.extend(self.inner.apply(metadata.game_arguments(rule_context))?);
-        arguments.extend(self.inner.apply(self.extra_game_arguments.clone())?);
-        Ok(arguments)
-    }
-
-    fn build_jvm_arguments(
+    pub(super) fn build_jvm_arguments(
         &self,
         metadata: &PistonMetaData,
         raw_jvm_arguments: Vec<String>,
     ) -> Result<Vec<String>> {
         arguments::build_jvm_arguments(self, metadata, raw_jvm_arguments)
+    }
+
+    pub(super) fn build_game_arguments(
+        &self,
+        metadata: &PistonMetaData,
+        rule_context: &VersionJsonRuleContext,
+    ) -> Result<Vec<String>> {
+        let mut arguments = self.inner.apply(metadata.game_arguments(rule_context))?;
+        arguments.extend(self.inner.apply(self.extra_game_arguments.clone())?);
+        Ok(arguments)
     }
 
     fn build_classpath(

@@ -11,12 +11,11 @@ use crate::{
 use super::super::VersionJsonLaunchBuilder;
 use super::common::resolve_root_resource;
 
-pub(super) fn logging_arguments<A, L, VL>(
-    builder: &VersionJsonLaunchBuilder<A, L, VL>,
+pub(super) fn logging_arguments<L, VL>(
+    builder: &VersionJsonLaunchBuilder<L, VL>,
     metadata: &PistonMetaData,
 ) -> Result<Option<Vec<String>>>
 where
-    A: elemental_core::auth::authorizer::Authorizer,
     L: VersionJsonRootLayout,
     VL: crate::families::version_json::VersionJsonInstanceLayout,
 {

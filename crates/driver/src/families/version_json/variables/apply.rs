@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use regex::Regex;
-use serde_json::Value;
 
 use crate::error::Result;
 
@@ -9,22 +8,8 @@ use super::LauncherVariables;
 
 impl LauncherVariables {
     pub fn apply_mut(&self, args: &mut [String]) -> Result<()> {
-        let data = self.map()?;
-        let regex = Regex::new(r#"\$\{(.*?)\}"#)?;
-
-        for value in args.iter_mut() {
-            let original = value.clone();
-            let mut copied = original.clone();
-            for variable in regex.captures_iter(&original) {
-                if let Some(key) = variable.get(1).map(|item| item.as_str())
-                    && let Some(Value::String(replacement)) = data.get(key)
-                {
-                    copied = copied.replace(&format!("${{{key}}}"), replacement);
-                }
-            }
-            *value = copied;
-        }
-
+        let applied = self.apply(args.to_vec())?;
+        args.clone_from_slice(&applied);
         Ok(())
     }
 
@@ -42,18 +27,23 @@ impl LauncherVariables {
         data.extend(extra_variables.clone());
         let regex = Regex::new(r#"\$\{(.*?)\}"#)?;
 
-        for value in &args {
-            let mut copied = value.clone();
-            for variable in regex.captures_iter(value) {
-                if let Some(key) = variable.get(1).map(|item| item.as_str())
-                    && let Some(replacement) = data.get(key)
-                {
-                    copied = copied.replace(&format!("${{{key}}}"), replacement);
-                }
-            }
-            result.push(copied);
-        }
+        result.extend(
+            args.iter()
+                .map(|value| replace_variables(value, &regex, &data)),
+        );
 
         Ok(result)
     }
+}
+
+fn replace_variables(value: &str, regex: &Regex, data: &HashMap<String, String>) -> String {
+    let mut replaced = value.to_owned();
+    for variable in regex.captures_iter(value) {
+        if let Some(key) = variable.get(1).map(|item| item.as_str())
+            && let Some(replacement) = data.get(key)
+        {
+            replaced = replaced.replace(&format!("${{{key}}}"), replacement);
+        }
+    }
+    replaced
 }

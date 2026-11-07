@@ -26,10 +26,10 @@ impl Layout for BaseInstanceLayout {
             VersionJsonInstanceResource::ResourcePacks => Some(root.join("resourcepacks")),
             VersionJsonInstanceResource::Saves => Some(root.join("saves")),
             VersionJsonInstanceResource::Mods => Some(root.join("mods")),
-            VersionJsonInstanceResource::Elemental(path) => match path {
-                Some(path) => Some(root.join(".elemental").join(path.as_path())),
-                None => Some(root.join(".elemental")),
-            },
+            VersionJsonInstanceResource::Elemental(Some(path)) => {
+                Some(root.join(".elemental").join(path.as_path()))
+            }
+            VersionJsonInstanceResource::Elemental(None) => Some(root.join(".elemental")),
         }
     }
 

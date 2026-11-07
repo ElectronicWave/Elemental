@@ -29,12 +29,9 @@ impl<L: Layout, VL: VersionJsonInstanceLayout> InstanceProbe<L, VL> {
     }
 
     fn detect_metadata_path(storage: &Storage<VL, Storage<L>>) -> Result<Option<PathBuf>> {
-        let preferred = storage
-            .try_get_resource(VersionJsonInstanceResource::Metadata)
-            .ok()
-            .filter(|path| path.exists());
-        if preferred.is_some() {
-            return Ok(preferred);
+        let preferred = storage.try_get_resource(VersionJsonInstanceResource::Metadata)?;
+        if preferred.exists() {
+            return Ok(Some(preferred));
         }
 
         let mut json_files = Vec::new();

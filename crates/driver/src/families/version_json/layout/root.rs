@@ -19,29 +19,27 @@ impl Layout for BaseRootLayout {
 
         match resource {
             VersionJsonRootResource::Assets => Some(assets_root),
-            VersionJsonRootResource::AssetIndexes(id) => match id {
-                Some(id) => Some(asset_indexes_root.join(format!("{}.json", id.as_str()))),
-                None => Some(asset_indexes_root),
-            },
-            VersionJsonRootResource::AssetObjects(hash) => match hash {
-                Some(hash) => {
-                    let prefix = hash.as_str().get(0..2)?;
-                    Some(asset_objects_root.join(prefix).join(hash.as_path()))
-                }
-                None => Some(asset_objects_root),
-            },
-            VersionJsonRootResource::AssetLogConfigs(id) => match id {
-                Some(id) => Some(asset_log_configs_root.join(id.as_path())),
-                None => Some(asset_log_configs_root),
-            },
-            VersionJsonRootResource::Versions(name) => match name {
-                Some(name) => Some(versions_root.join(name.as_path())),
-                None => Some(versions_root),
-            },
-            VersionJsonRootResource::Libraries(path) => match path {
-                Some(path) => Some(libraries_root.join(path.as_path())),
-                None => Some(libraries_root),
-            },
+            VersionJsonRootResource::AssetIndexes(Some(id)) => {
+                Some(asset_indexes_root.join(format!("{}.json", id.as_str())))
+            }
+            VersionJsonRootResource::AssetIndexes(None) => Some(asset_indexes_root),
+            VersionJsonRootResource::AssetObjects(Some(hash)) => {
+                let prefix = hash.as_str().get(0..2)?;
+                Some(asset_objects_root.join(prefix).join(hash.as_path()))
+            }
+            VersionJsonRootResource::AssetObjects(None) => Some(asset_objects_root),
+            VersionJsonRootResource::AssetLogConfigs(Some(id)) => {
+                Some(asset_log_configs_root.join(id.as_path()))
+            }
+            VersionJsonRootResource::AssetLogConfigs(None) => Some(asset_log_configs_root),
+            VersionJsonRootResource::Versions(Some(name)) => {
+                Some(versions_root.join(name.as_path()))
+            }
+            VersionJsonRootResource::Versions(None) => Some(versions_root),
+            VersionJsonRootResource::Libraries(Some(path)) => {
+                Some(libraries_root.join(path.as_path()))
+            }
+            VersionJsonRootResource::Libraries(None) => Some(libraries_root),
         }
     }
 

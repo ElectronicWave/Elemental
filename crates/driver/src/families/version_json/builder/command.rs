@@ -65,18 +65,6 @@ where
         if self.inner.auth_player_name.is_empty() {
             self.inner.auth_player_name = credential.username.clone();
         }
-        if self.inner.resolution_width.is_empty() {
-            self.inner.resolution_width = "854".to_owned();
-        }
-        if self.inner.resolution_height.is_empty() {
-            self.inner.resolution_height = "480".to_owned();
-        }
-        if self.inner.launcher_name.is_empty() {
-            self.inner.launcher_name = "Elemental".to_owned();
-        }
-        if self.inner.launcher_version.is_empty() {
-            self.inner.launcher_version = env!("CARGO_PKG_VERSION").to_owned();
-        }
 
         self.inner.version_name = version_name;
         self.inner.game_directory = paths.version_root.to_string_lossy().to_string();

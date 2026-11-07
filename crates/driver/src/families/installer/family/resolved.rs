@@ -8,7 +8,7 @@ use elemental_schema::forge::ForgeInstallerProfile;
 
 use crate::{
     drivers::vanilla::source::VanillaSource,
-    error::{Error, Result},
+    error::Result,
     families::{
         installer::{
             InstallerArtifact, InstallerLaunchVersionRequest, InstallerStatePaths,
@@ -95,49 +95,45 @@ where
         runtime_validation: RuntimeValidationMode,
     ) -> Result<PreparedInstallerVersion<L, VL>> {
         let state_paths = InstallerStatePaths::new(&self.instance.path, F::FAMILY_NAME)?;
-        let (installer_state, launch_version) = async {
-            let libraries_root = self
-                .instance
-                .parent
-                .try_get_resource(VersionJsonRootResource::Libraries(None))?;
-            let installer_state = prepare_installer_state(
-                session,
-                &self.installer_artifact,
-                &self.instance.path,
-                &libraries_root,
-                F::FAMILY_NAME,
-                |install_profile| self.validate_profile_identity(install_profile),
-            )
-            .await?;
-
-            let endpoints = F::source_endpoints(&self.source);
-            let launch_version = persist_installer_launch_version(InstallerLaunchVersionRequest {
-                instance: &self.instance,
-                game_version: &self.game_version,
-                remote_resolver,
-                vanilla_source,
-                embedded_version: installer_state.embedded_version.as_ref(),
-                normalize_libraries: |libraries| F::normalize_libraries(endpoints, libraries),
-                merge_libraries: F::merge_libraries,
-                family_name: F::FAMILY_NAME,
-            })
-            .await?;
-
-            launch_version.submit_install_batches(session).await?;
-
-            submit_installer_profile_libraries(
-                session,
-                &self.instance,
-                &installer_state.install_profile,
-                F::FAMILY_NAME,
-                |raw_url, artifact_path| remote_resolver.artifact_url(raw_url, artifact_path),
-            )
-            .await?;
-
-            session.wait_idle().await?;
-            Ok::<_, Error>((installer_state, launch_version))
-        }
+        let libraries_root = self
+            .instance
+            .parent
+            .try_get_resource(VersionJsonRootResource::Libraries(None))?;
+        let installer_state = prepare_installer_state(
+            session,
+            &self.installer_artifact,
+            &self.instance.path,
+            &libraries_root,
+            F::FAMILY_NAME,
+            |install_profile| self.validate_profile_identity(install_profile),
+        )
         .await?;
+
+        let endpoints = F::source_endpoints(&self.source);
+        let launch_version = persist_installer_launch_version(InstallerLaunchVersionRequest {
+            instance: &self.instance,
+            game_version: &self.game_version,
+            remote_resolver,
+            vanilla_source,
+            embedded_version: installer_state.embedded_version.as_ref(),
+            normalize_libraries: |libraries| F::normalize_libraries(endpoints, libraries),
+            merge_libraries: F::merge_libraries,
+            family_name: F::FAMILY_NAME,
+        })
+        .await?;
+
+        launch_version.submit_install_batches(session).await?;
+
+        submit_installer_profile_libraries(
+            session,
+            &self.instance,
+            &installer_state.install_profile,
+            F::FAMILY_NAME,
+            |raw_url, artifact_path| remote_resolver.artifact_url(raw_url, artifact_path),
+        )
+        .await?;
+
+        session.wait_idle().await?;
         session.success().await?;
 
         let launch_version: PreparedVersionJsonInstance<L, VL> =

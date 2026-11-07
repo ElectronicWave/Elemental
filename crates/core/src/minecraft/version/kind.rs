@@ -87,75 +87,75 @@ enum VersionEra {
 }
 
 impl MinecraftVersionKey {
-    pub(super) fn alpha_beta(stage: VersionStage, major: u32, minor: u32, patch: u32) -> Self {
-        let era = match stage {
+    fn alpha_beta(version: AlphaBetaVersion) -> Self {
+        let era = match version.stage {
             VersionStage::Alpha => VersionEra::Alpha,
             _ => VersionEra::Beta,
         };
 
         Self {
             era,
-            major,
-            minor,
-            patch,
-            stage,
+            major: version.major,
+            minor: version.minor,
+            patch: version.patch,
+            stage: version.stage,
             stage_number: 0,
         }
     }
 
-    pub(super) fn legacy_snapshot(year: u32, week: u32, suffix: Option<char>) -> Self {
+    fn legacy_snapshot(version: LegacySnapshotVersion) -> Self {
         Self {
             era: VersionEra::Legacy,
-            major: year,
-            minor: week,
+            major: version.year,
+            minor: version.week,
             patch: 0,
             stage: VersionStage::Snapshot,
-            stage_number: snapshot_suffix_rank(suffix),
+            stage_number: snapshot_suffix_rank(version.suffix),
         }
     }
 
-    pub(super) fn legacy_release(
-        major: u32,
-        minor: u32,
-        patch: u32,
-        stage: VersionStage,
-        stage_number: u32,
-    ) -> Self {
+    fn legacy_release(version: LegacyReleaseVersion) -> Self {
         Self {
             era: VersionEra::Legacy,
-            major,
-            minor,
-            patch,
-            stage,
-            stage_number,
+            major: version.major,
+            minor: version.minor,
+            patch: version.patch,
+            stage: version.stage,
+            stage_number: version.stage_number,
         }
     }
 
-    pub(super) fn year_snapshot(year: u32, release: u32, patch: u32, snapshot: u32) -> Self {
+    fn year_snapshot(version: YearSnapshotVersion) -> Self {
         Self {
             era: VersionEra::Year,
-            major: year,
-            minor: release,
-            patch,
+            major: version.year,
+            minor: version.release,
+            patch: version.patch,
             stage: VersionStage::Snapshot,
-            stage_number: snapshot,
+            stage_number: version.snapshot,
         }
     }
 
-    pub(super) fn year_release(
-        year: u32,
-        release: u32,
-        patch: u32,
-        stage: VersionStage,
-        stage_number: u32,
-    ) -> Self {
+    fn year_release(version: YearReleaseVersion) -> Self {
         Self {
             era: VersionEra::Year,
-            major: year,
-            minor: release,
-            patch,
-            stage,
-            stage_number,
+            major: version.year,
+            minor: version.release,
+            patch: version.patch,
+            stage: version.stage,
+            stage_number: version.stage_number,
+        }
+    }
+}
+
+impl From<MinecraftVersionKind> for MinecraftVersionKey {
+    fn from(kind: MinecraftVersionKind) -> Self {
+        match kind {
+            MinecraftVersionKind::AlphaBeta(version) => Self::alpha_beta(version),
+            MinecraftVersionKind::LegacySnapshot(version) => Self::legacy_snapshot(version),
+            MinecraftVersionKind::LegacyRelease(version) => Self::legacy_release(version),
+            MinecraftVersionKind::YearSnapshot(version) => Self::year_snapshot(version),
+            MinecraftVersionKind::YearRelease(version) => Self::year_release(version),
         }
     }
 }

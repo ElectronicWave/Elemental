@@ -49,10 +49,7 @@ impl MinecraftVersion {
             stage: VersionStage::Release,
             stage_number: 0,
         });
-        let key =
-            MinecraftVersionKey::legacy_release(major, minor, patch, VersionStage::Release, 0);
-
-        Self::from_parts(&raw, kind, key)
+        Self::from_kind(&raw, kind)
     }
 
     pub fn year_release(year: u32, release: u32, patch: u32) -> Self {
@@ -65,10 +62,7 @@ impl MinecraftVersion {
             stage: VersionStage::Release,
             stage_number: 0,
         });
-        let key =
-            MinecraftVersionKey::year_release(full_year, release, patch, VersionStage::Release, 0);
-
-        Self::from_parts(&raw, kind, key)
+        Self::from_kind(&raw, kind)
     }
 
     pub fn id(&self) -> &MinecraftVersionId {
@@ -91,11 +85,11 @@ impl MinecraftVersion {
         self.key
     }
 
-    fn from_parts(raw: &str, kind: MinecraftVersionKind, key: MinecraftVersionKey) -> Self {
+    fn from_kind(raw: &str, kind: MinecraftVersionKind) -> Self {
         Self {
             id: MinecraftVersionId::from(raw),
+            key: kind.into(),
             kind,
-            key,
         }
     }
 }

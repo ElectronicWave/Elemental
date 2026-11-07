@@ -3,10 +3,16 @@ use super::{
     stage::parse_stage,
 };
 use crate::minecraft::version::kind::{
-    LegacyReleaseVersion, MinecraftVersionKey, MinecraftVersionKind, VersionStage,
-    YearReleaseVersion, YearSnapshotVersion,
+    LegacyReleaseVersion, MinecraftVersionKind, VersionStage, YearReleaseVersion,
+    YearSnapshotVersion,
 };
 use crate::minecraft::version::{MinecraftVersion, MinecraftVersionParseError};
+
+struct YearComponents {
+    year: u32,
+    release: u32,
+    patch: u32,
+}
 
 pub(crate) fn parse_release(raw: &str) -> Result<MinecraftVersion, MinecraftVersionParseError> {
     let (numbers, stage, stage_number) = release_components(raw)?;
@@ -63,12 +69,7 @@ fn legacy_release(
     stage: VersionStage,
     stage_number: u32,
 ) -> Result<MinecraftVersion, MinecraftVersionParseError> {
-    if stage == VersionStage::Snapshot {
-        return Err(MinecraftVersionParseError::InvalidFormat {
-            raw: raw.to_owned(),
-            reason: "legacy releases cannot use a snapshot stage",
-        });
-    }
+    ensure_legacy_stage(raw, stage)?;
 
     let version = LegacyReleaseVersion {
         major: 1,
@@ -77,19 +78,22 @@ fn legacy_release(
         stage,
         stage_number,
     };
-    let key = MinecraftVersionKey::legacy_release(
-        version.major,
-        version.minor,
-        version.patch,
-        version.stage,
-        version.stage_number,
-    );
 
-    Ok(MinecraftVersion::from_parts(
+    Ok(MinecraftVersion::from_kind(
         raw,
         MinecraftVersionKind::LegacyRelease(version),
-        key,
     ))
+}
+
+fn ensure_legacy_stage(raw: &str, stage: VersionStage) -> Result<(), MinecraftVersionParseError> {
+    if stage == VersionStage::Snapshot {
+        return Err(MinecraftVersionParseError::InvalidFormat {
+            raw: raw.to_owned(),
+            reason: "legacy releases cannot use a snapshot stage",
+        });
+    }
+
+    Ok(())
 }
 
 fn year_version(
@@ -98,54 +102,55 @@ fn year_version(
     stage: VersionStage,
     stage_number: u32,
 ) -> Result<MinecraftVersion, MinecraftVersionParseError> {
+    let components = year_components(raw, numbers)?;
+    if stage == VersionStage::Snapshot {
+        return Ok(year_snapshot(raw, components, stage_number));
+    }
+
+    Ok(year_release(raw, components, stage, stage_number))
+}
+
+fn year_components(
+    raw: &str,
+    numbers: &[u32],
+) -> Result<YearComponents, MinecraftVersionParseError> {
     let year =
         full_year(numbers[0]).ok_or_else(|| MinecraftVersionParseError::UnsupportedYear {
             raw: raw.to_owned(),
             year: numbers[0],
         })?;
-    let release = numbers[1];
-    let patch = numbers.get(2).copied().unwrap_or(0);
 
-    if stage == VersionStage::Snapshot {
-        let version = YearSnapshotVersion {
-            year,
-            release,
-            patch,
-            snapshot: stage_number,
-        };
-        return Ok(year_snapshot(raw, version));
-    }
-
-    let version = YearReleaseVersion {
+    Ok(YearComponents {
         year,
-        release,
-        patch,
+        release: numbers[1],
+        patch: numbers.get(2).copied().unwrap_or(0),
+    })
+}
+
+fn year_snapshot(raw: &str, components: YearComponents, snapshot: u32) -> MinecraftVersion {
+    let version = YearSnapshotVersion {
+        year: components.year,
+        release: components.release,
+        patch: components.patch,
+        snapshot,
+    };
+
+    MinecraftVersion::from_kind(raw, MinecraftVersionKind::YearSnapshot(version))
+}
+
+fn year_release(
+    raw: &str,
+    components: YearComponents,
+    stage: VersionStage,
+    stage_number: u32,
+) -> MinecraftVersion {
+    let version = YearReleaseVersion {
+        year: components.year,
+        release: components.release,
+        patch: components.patch,
         stage,
         stage_number,
     };
 
-    Ok(year_release(raw, version))
-}
-
-fn year_snapshot(raw: &str, version: YearSnapshotVersion) -> MinecraftVersion {
-    let key = MinecraftVersionKey::year_snapshot(
-        version.year,
-        version.release,
-        version.patch,
-        version.snapshot,
-    );
-
-    MinecraftVersion::from_parts(raw, MinecraftVersionKind::YearSnapshot(version), key)
-}
-
-fn year_release(raw: &str, version: YearReleaseVersion) -> MinecraftVersion {
-    let key = MinecraftVersionKey::year_release(
-        version.year,
-        version.release,
-        version.patch,
-        version.stage,
-        version.stage_number,
-    );
-
-    MinecraftVersion::from_parts(raw, MinecraftVersionKind::YearRelease(version), key)
+    MinecraftVersion::from_kind(raw, MinecraftVersionKind::YearRelease(version))
 }

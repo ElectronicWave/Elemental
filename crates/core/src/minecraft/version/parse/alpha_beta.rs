@@ -1,7 +1,5 @@
 use super::common::parse_numeric_components;
-use crate::minecraft::version::kind::{
-    AlphaBetaVersion, MinecraftVersionKey, MinecraftVersionKind, VersionStage,
-};
+use crate::minecraft::version::kind::{AlphaBetaVersion, MinecraftVersionKind, VersionStage};
 use crate::minecraft::version::{MinecraftVersion, MinecraftVersionParseError};
 
 pub(crate) fn parse_alpha_beta(
@@ -17,16 +15,10 @@ pub(crate) fn parse_alpha_beta(
     }
 
     let numbers = parse_numeric_components(raw, numeric)?;
-    let (major, minor, patch) = alpha_beta_components(raw, &numbers)?;
-    let kind = MinecraftVersionKind::AlphaBeta(AlphaBetaVersion {
-        stage,
-        major,
-        minor,
-        patch,
-    });
-    let key = MinecraftVersionKey::alpha_beta(stage, major, minor, patch);
+    let version = alpha_beta_components(raw, stage, &numbers)?;
+    let kind = MinecraftVersionKind::AlphaBeta(version);
 
-    Ok(Some(MinecraftVersion::from_parts(raw, kind, key)))
+    Ok(Some(MinecraftVersion::from_kind(raw, kind)))
 }
 
 fn alpha_beta_stage(raw: &str) -> Option<VersionStage> {
@@ -39,14 +31,26 @@ fn alpha_beta_stage(raw: &str) -> Option<VersionStage> {
 
 fn alpha_beta_components(
     raw: &str,
+    stage: VersionStage,
     numbers: &[u32],
-) -> Result<(u32, u32, u32), MinecraftVersionParseError> {
-    match numbers {
-        [major, minor] => Ok((*major, *minor, 0)),
-        [major, minor, patch] => Ok((*major, *minor, *patch)),
-        _ => Err(MinecraftVersionParseError::InvalidFormat {
-            raw: raw.to_owned(),
-            reason: "alpha/beta version must have two or three numeric components",
-        }),
+) -> Result<AlphaBetaVersion, MinecraftVersionParseError> {
+    let (major, minor, patch) = match numbers {
+        [major, minor] => (*major, *minor, 0),
+        [major, minor, patch] => (*major, *minor, *patch),
+        _ => return Err(invalid_format(raw)),
+    };
+
+    Ok(AlphaBetaVersion {
+        stage,
+        major,
+        minor,
+        patch,
+    })
+}
+
+fn invalid_format(raw: &str) -> MinecraftVersionParseError {
+    MinecraftVersionParseError::InvalidFormat {
+        raw: raw.to_owned(),
+        reason: "alpha/beta version must have two or three numeric components",
     }
 }

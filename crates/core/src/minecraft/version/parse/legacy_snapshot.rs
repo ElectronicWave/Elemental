@@ -1,7 +1,5 @@
 use super::common::parse_component;
-use crate::minecraft::version::kind::{
-    LegacySnapshotVersion, MinecraftVersionKey, MinecraftVersionKind,
-};
+use crate::minecraft::version::kind::{LegacySnapshotVersion, MinecraftVersionKind};
 use crate::minecraft::version::{MinecraftVersion, MinecraftVersionParseError};
 
 pub(crate) fn parse_legacy_snapshot(
@@ -19,9 +17,7 @@ pub(crate) fn parse_legacy_snapshot(
         .next()
         .map(|character| character.to_ascii_lowercase());
     let kind = MinecraftVersionKind::LegacySnapshot(LegacySnapshotVersion { year, week, suffix });
-    let key = MinecraftVersionKey::legacy_snapshot(year, week, suffix);
-
-    Ok(Some(MinecraftVersion::from_parts(raw, kind, key)))
+    Ok(Some(MinecraftVersion::from_kind(raw, kind)))
 }
 
 fn split_legacy_snapshot(raw: &str) -> Option<(&str, &str, &str)> {

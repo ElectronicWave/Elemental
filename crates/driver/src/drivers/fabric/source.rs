@@ -1,11 +1,14 @@
-use crate::error::Result;
-use elemental_schema::fabric::{GameVersion, LoaderGameVersion, LoaderProfile, ProfileJson};
+use elemental_core::minecraft::MinecraftVersionId;
+use elemental_schema::fabric::{GameVersion, LoaderProfile, LoaderVersion, ProfileJson};
+use serde::Deserialize;
 
 use crate::{
+    error::Result,
     families::version_json::{
         LoaderMetaEndpoints, LoaderMetaSource, LoaderProfileEndpoints, UpstreamUrlRewriter,
     },
-    url::{Origin, OriginPolicy},
+    loader_version::LoaderVersionId,
+    url::{Origin, OriginEndpoints},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -28,19 +31,6 @@ pub enum FabricOrigin {
     Maven,
 }
 
-#[derive(Debug, Clone)]
-pub struct FabricEndpoints {
-    origin_policy: OriginPolicy<FabricOrigin>,
-}
-
-pub type FabricSource = LoaderMetaSource<FabricEndpoints>;
-
-impl Default for FabricEndpoints {
-    fn default() -> Self {
-        Self::official()
-    }
-}
-
 impl Origin for FabricOrigin {
     fn canonical(self) -> &'static str {
         match self {
@@ -55,32 +45,28 @@ impl Origin for FabricOrigin {
     }
 }
 
+pub type FabricEndpoints = OriginEndpoints<FabricOrigin>;
+pub type FabricSource = LoaderMetaSource<FabricEndpoints>;
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct FabricLoaderListEntry {
+    pub loader: LoaderVersion,
+}
+
 impl FabricEndpoints {
-    pub fn new(origin_policy: OriginPolicy<FabricOrigin>) -> Self {
-        Self { origin_policy }
-    }
-
-    pub fn official() -> Self {
-        Self::new(OriginPolicy::default())
-    }
-
     pub fn for_flavor(flavor: FabricFlavor) -> Result<Self> {
         let spec = super::flavors::flavor_spec(&flavor);
-        let policy = OriginPolicy::default()
-            .with_override(FabricOrigin::Meta, spec.meta_origin().to_owned())?
-            .with_override(FabricOrigin::Maven, spec.maven_origin().to_owned())?;
-        Ok(Self::new(policy))
+        OriginEndpoints::with_overrides([
+            (FabricOrigin::Meta, spec.meta_origin().to_owned()),
+            (FabricOrigin::Maven, spec.maven_origin().to_owned()),
+        ])
     }
 
-    pub fn with_overrides(overrides: FabricEndpointOverrides) -> Result<Self> {
-        let policy = OriginPolicy::default()
-            .with_override(FabricOrigin::Meta, overrides.meta_origin)?
-            .with_override(FabricOrigin::Maven, overrides.maven_origin)?;
-        Ok(Self::new(policy))
-    }
-
-    pub fn origin_policy(&self) -> &OriginPolicy<FabricOrigin> {
-        &self.origin_policy
+    pub fn with_endpoint_overrides(overrides: FabricEndpointOverrides) -> Result<Self> {
+        OriginEndpoints::with_overrides([
+            (FabricOrigin::Meta, overrides.meta_origin),
+            (FabricOrigin::Maven, overrides.maven_origin),
+        ])
     }
 
     pub fn game_versions_url(&self) -> Result<String> {
@@ -107,19 +93,14 @@ impl FabricEndpoints {
         ])
     }
 
-    pub fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
-        Ok(raw_url.to_owned())
-    }
-
     fn resolve_meta_segments<const N: usize>(&self, segments: [&str; N]) -> Result<String> {
-        self.origin_policy
-            .resolve_segments(FabricOrigin::Meta, segments)
+        self.resolve_segments(FabricOrigin::Meta, segments)
     }
 }
 
 impl LoaderMetaEndpoints for FabricEndpoints {
     type GameVersion = GameVersion;
-    type LoaderGameVersion = LoaderGameVersion;
+    type LoaderGameVersion = FabricLoaderListEntry;
     type ProfileJson = ProfileJson;
 
     const SOURCE_NAME: &'static str = "fabric source";
@@ -135,6 +116,32 @@ impl LoaderMetaEndpoints for FabricEndpoints {
     fn profile_json_url(&self, game_version: &str, loader_version: &str) -> Result<String> {
         FabricEndpoints::profile_json_url(self, game_version, loader_version)
     }
+
+    fn game_version(version: Self::GameVersion) -> crate::catalog::GameVersion {
+        crate::catalog::GameVersion {
+            id: MinecraftVersionId::from(version.version),
+            description: None,
+            stream: Some(if version.stable { "stable" } else { "snapshot" }.to_owned()),
+        }
+    }
+
+    fn release(
+        game_version: MinecraftVersionId,
+        version: Self::LoaderGameVersion,
+    ) -> crate::catalog::LoaderRelease {
+        crate::catalog::LoaderRelease::new(
+            game_version,
+            LoaderVersionId::from(version.loader.version),
+        )
+        .with_description(Some(
+            if version.loader.stable {
+                "Stable"
+            } else {
+                "Unstable"
+            }
+            .to_owned(),
+        ))
+    }
 }
 
 impl LoaderProfileEndpoints for FabricEndpoints {
@@ -147,6 +154,6 @@ impl LoaderProfileEndpoints for FabricEndpoints {
 
 impl UpstreamUrlRewriter for FabricEndpoints {
     fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
-        FabricEndpoints::rewrite_upstream(self, raw_url)
+        Ok(raw_url.to_owned())
     }
 }

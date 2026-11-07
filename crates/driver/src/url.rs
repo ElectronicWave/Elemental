@@ -1,8 +1,16 @@
-use std::{collections::HashMap, fmt::Debug, hash::Hash};
+use std::{fmt::Debug, hash::Hash};
 
-use reqwest::Url;
+use crate::error::Result;
 
-use crate::error::{Error, Result};
+mod known;
+mod policy;
+mod rewrite;
+#[cfg(test)]
+mod tests;
+mod util;
+
+pub use policy::OriginPolicy;
+pub(crate) use util::ensure_directory_url;
 
 pub trait Origin: Copy + Debug + Eq + Hash + Send + Sync + 'static {
     fn canonical(self) -> &'static str;
@@ -10,57 +18,39 @@ pub trait Origin: Copy + Debug + Eq + Hash + Send + Sync + 'static {
 }
 
 #[derive(Debug, Clone)]
-pub struct OriginPolicy<O: Origin> {
-    overrides: HashMap<O, Url>,
+pub struct OriginEndpoints<O: Origin> {
+    origin_policy: OriginPolicy<O>,
 }
 
-impl<O: Origin> Default for OriginPolicy<O> {
+impl<O: Origin> Default for OriginEndpoints<O> {
     fn default() -> Self {
-        Self {
-            overrides: HashMap::new(),
-        }
+        Self::official()
     }
 }
 
-impl<O: Origin> OriginPolicy<O> {
-    pub fn new(overrides: HashMap<O, Url>) -> Self {
-        Self { overrides }
+impl<O: Origin> OriginEndpoints<O> {
+    pub fn new(origin_policy: OriginPolicy<O>) -> Self {
+        Self { origin_policy }
     }
 
-    pub fn with_override(mut self, origin: O, raw_url: String) -> Result<Self> {
-        let url = Url::parse(&raw_url).map_err(move |source| {
-            Error::invalid_url("parse origin override failed", raw_url, source)
-        })?;
-        self.overrides.insert(origin, url);
-        Ok(self)
+    pub fn official() -> Self {
+        Self::new(OriginPolicy::default())
     }
 
-    pub fn base_url(&self, origin: O) -> Result<Url> {
-        if let Some(url) = self.overrides.get(&origin) {
-            return Ok(url.clone());
+    pub fn with_overrides<const N: usize>(overrides: [(O, String); N]) -> Result<Self> {
+        let mut policy = OriginPolicy::default();
+        for (origin, raw_url) in overrides {
+            policy = policy.with_override(origin, raw_url)?;
         }
+        Ok(Self::new(policy))
+    }
 
-        Url::parse(origin.canonical()).map_err(|source| {
-            Error::invalid_url("parse canonical origin failed", origin.canonical(), source)
-        })
+    pub fn origin_policy(&self) -> &OriginPolicy<O> {
+        &self.origin_policy
     }
 
     pub fn resolve(&self, origin: O, path: &str) -> Result<String> {
-        let base = self.base_url(origin)?;
-        let suffix = path.trim_start_matches('/');
-        if suffix.is_empty() {
-            return Ok(trim_trailing_slash(base.as_str()).to_owned());
-        }
-
-        Url::parse(&format!(
-            "{}/{}",
-            trim_trailing_slash(base.as_str()),
-            suffix
-        ))
-        .map_err(|source| {
-            Error::join_url("resolve origin path failed", base.as_str(), path, source)
-        })
-        .map(|url| url.to_string())
+        self.origin_policy.resolve(origin, path)
     }
 
     pub fn resolve_segments<const N: usize>(
@@ -68,113 +58,14 @@ impl<O: Origin> OriginPolicy<O> {
         origin: O,
         segments: [&str; N],
     ) -> Result<String> {
-        let mut url = self.base_url(origin)?;
-        let raw_url = url.to_string();
-        {
-            let mut path_segments = url
-                .path_segments_mut()
-                .map_err(|()| Error::UrlNotPathBase { url: raw_url })?;
-            for segment in segments {
-                path_segments.push(segment);
-            }
-        }
-
-        Ok(url.to_string())
+        self.origin_policy.resolve_segments(origin, segments)
     }
 
-    pub fn rewrite_origin_url(&self, raw_url: &str) -> Result<String> {
-        let Some(rewritten) = self.try_rewrite_origin_url(raw_url)? else {
-            return Err(Error::UnknownOrigin {
-                raw_url: raw_url.to_owned(),
-            });
-        };
-
-        Ok(rewritten)
+    pub fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
+        self.origin_policy.rewrite_origin_url(raw_url)
     }
 
-    pub fn try_rewrite_origin_url(&self, raw_url: &str) -> Result<Option<String>> {
-        let parsed = Url::parse(raw_url)
-            .map_err(|source| Error::invalid_url("parse url failed", raw_url, source))?;
-
-        for origin in O::all() {
-            let canonical = Url::parse(origin.canonical()).map_err(|source| {
-                Error::invalid_url("parse canonical origin failed", origin.canonical(), source)
-            })?;
-            if let Some(suffix) = origin_suffix(&parsed, &canonical) {
-                return self.resolve(*origin, &suffix).map(Some);
-            }
-
-            if let Some(override_base) = self.overrides.get(origin)
-                && let Some(suffix) = origin_suffix(&parsed, override_base)
-            {
-                return self.resolve(*origin, &suffix).map(Some);
-            }
-        }
-
-        Ok(None)
+    pub fn rewrite_known_or_keep(&self, raw_url: &str) -> Result<String> {
+        self.origin_policy.rewrite_known_origin_url_or_keep(raw_url)
     }
-
-    pub fn rewrite_known_origin_url(&self, raw_url: &str) -> Result<Option<String>> {
-        let parsed = Url::parse(raw_url)
-            .map_err(|source| Error::invalid_url("parse url failed", raw_url, source))?;
-        let mut matched_known_origin = false;
-
-        for origin in O::all() {
-            let canonical = Url::parse(origin.canonical()).map_err(|source| {
-                Error::invalid_url("parse canonical origin failed", origin.canonical(), source)
-            })?;
-
-            if same_origin(&parsed, &canonical) {
-                matched_known_origin = true;
-                if let Some(suffix) = origin_suffix(&parsed, &canonical) {
-                    return self.resolve(*origin, &suffix).map(Some);
-                }
-            }
-
-            if let Some(override_base) = self.overrides.get(origin)
-                && same_origin(&parsed, override_base)
-            {
-                matched_known_origin = true;
-                if let Some(suffix) = origin_suffix(&parsed, override_base) {
-                    return self.resolve(*origin, &suffix).map(Some);
-                }
-            }
-        }
-
-        if matched_known_origin {
-            return Err(Error::OriginBasePathMismatch {
-                raw_url: raw_url.to_owned(),
-            });
-        }
-
-        Ok(None)
-    }
-
-    pub fn rewrite_known_origin_url_or_keep(&self, raw_url: &str) -> Result<String> {
-        if let Some(rewritten) = self.rewrite_known_origin_url(raw_url)? {
-            return Ok(rewritten);
-        }
-
-        Ok(raw_url.to_owned())
-    }
-}
-
-fn trim_trailing_slash(raw_url: &str) -> &str {
-    raw_url.trim_end_matches('/')
-}
-
-fn origin_suffix(raw_url: &Url, base_url: &Url) -> Option<String> {
-    if !same_origin(raw_url, base_url) {
-        return None;
-    }
-
-    let raw = raw_url.as_str();
-    let base = trim_trailing_slash(base_url.as_str());
-    raw.strip_prefix(base).map(ToOwned::to_owned)
-}
-
-fn same_origin(raw_url: &Url, base_url: &Url) -> bool {
-    raw_url.scheme() == base_url.scheme()
-        && raw_url.host_str() == base_url.host_str()
-        && raw_url.port_or_known_default() == base_url.port_or_known_default()
 }

@@ -1,13 +1,12 @@
 use crate::error::Result;
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
-use elemental_schema::{fabric::ProfileJson, mojang::piston::PistonMetaData};
+use elemental_schema::fabric::ProfileJson;
 
 use crate::{
     descriptors::LITELOADER_DRIVER,
-    driver::{DriverDescriptor, InstalledDriver},
+    driver::DriverDescriptor,
     drivers::{liteloader::source::LiteLoaderSource, vanilla::source::VanillaSource},
-    families::version_json::direct_profiled::DirectProfiledVersionJsonDefaults,
     families::version_json::{ProfiledVersionJsonDriver, ProfiledVersionJsonFamily},
     inspect::{LibraryPrefixSet, ProfileIdPattern, ProfiledDriverIdentity},
     loader_version::LoaderVersionId,
@@ -21,24 +20,20 @@ const LITELOADER_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(
     LITELOADER_LIBRARIES,
     LITELOADER_PROFILE_ID,
 );
-const LITELOADER_DEFAULTS: DirectProfiledVersionJsonDefaults =
-    DirectProfiledVersionJsonDefaults::new(LITELOADER_DRIVER, "liteloader", LITELOADER_IDENTITY);
-
 #[derive(Debug, Clone, Copy, Default)]
 pub struct LiteLoaderDriverFamily;
 
 #[async_trait(?Send)]
 impl ProfiledVersionJsonFamily for LiteLoaderDriverFamily {
     type Source = LiteLoaderSource;
-    type Profile = ProfileJson;
     type RemoteResolver = super::prepared::LiteLoaderRemoteResolver;
 
     fn descriptor(&self) -> DriverDescriptor {
-        LITELOADER_DEFAULTS.descriptor()
+        LITELOADER_DRIVER
     }
 
-    fn default_source(&self) -> Result<Self::Source> {
-        LITELOADER_DEFAULTS.default_source()
+    fn identity(&self) -> Option<ProfiledDriverIdentity> {
+        Some(LITELOADER_IDENTITY)
     }
 
     fn remote_resolver(
@@ -46,7 +41,11 @@ impl ProfiledVersionJsonFamily for LiteLoaderDriverFamily {
         vanilla_source: &VanillaSource,
         source: &Self::Source,
     ) -> Self::RemoteResolver {
-        LITELOADER_DEFAULTS.remote_resolver(vanilla_source, source.endpoints())
+        crate::families::version_json::VanillaFallbackRemoteResolver::new(
+            "liteloader",
+            vanilla_source.endpoints().clone(),
+            source.endpoints().clone(),
+        )
     }
 
     async fn profile(
@@ -54,31 +53,10 @@ impl ProfiledVersionJsonFamily for LiteLoaderDriverFamily {
         source: &Self::Source,
         game_version: &MinecraftVersionId,
         loader_version: &LoaderVersionId,
-    ) -> Result<Self::Profile> {
+    ) -> Result<ProfileJson> {
         source
             .profile_json(game_version.as_str(), loader_version.as_str())
             .await
-    }
-
-    fn merge_profile(
-        &self,
-        base_metadata: PistonMetaData,
-        profile: Self::Profile,
-    ) -> Result<PistonMetaData> {
-        LITELOADER_DEFAULTS.merge_profile(base_metadata, profile)
-    }
-
-    fn local_metadata_needs_refresh(
-        &self,
-        metadata: &PistonMetaData,
-        game_version: &MinecraftVersionId,
-        loader_version: &LoaderVersionId,
-    ) -> bool {
-        LITELOADER_DEFAULTS.local_metadata_needs_refresh(metadata, game_version, loader_version)
-    }
-
-    fn inspect_installed(&self, metadata: &PistonMetaData) -> Option<InstalledDriver> {
-        LITELOADER_DEFAULTS.inspect_installed(metadata)
     }
 }
 

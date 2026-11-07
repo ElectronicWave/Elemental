@@ -1,21 +1,14 @@
-use std::collections::HashMap;
-
-use crate::error::Result;
 use async_trait::async_trait;
-use elemental_core::minecraft::MinecraftVersionId;
 
-use crate::catalog::{Catalog, push_single_game_release};
+use crate::{
+    catalog::{GameVersion, GameVersionCatalog},
+    error::Result,
+};
 
 use super::source::VanillaSource;
 
 pub struct VanillaCatalog {
     source: VanillaSource,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct VanillaRelease {
-    pub version_id: String,
-    pub description: Option<String>,
 }
 
 impl VanillaCatalog {
@@ -29,25 +22,17 @@ impl VanillaCatalog {
 }
 
 #[async_trait]
-impl Catalog for VanillaCatalog {
-    type Release = VanillaRelease;
-
-    async fn releases(&self) -> Result<HashMap<MinecraftVersionId, Vec<Self::Release>>> {
-        let mut releases = HashMap::new();
+impl GameVersionCatalog for VanillaCatalog {
+    async fn game_versions(&self) -> Result<Vec<GameVersion>> {
         let manifest = self.source.launch_meta().await?;
-
-        for version in manifest.versions {
-            let version_id = version.id;
-            push_single_game_release(
-                &mut releases,
-                MinecraftVersionId::from(version_id.clone()),
-                VanillaRelease {
-                    version_id,
-                    description: Some(version.release_type),
-                },
-            );
-        }
-
-        Ok(releases)
+        Ok(manifest
+            .versions
+            .into_iter()
+            .map(|version| GameVersion {
+                id: version.id.into(),
+                description: None,
+                stream: Some(version.release_type),
+            })
+            .collect())
     }
 }

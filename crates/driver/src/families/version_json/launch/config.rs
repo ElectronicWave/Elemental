@@ -1,9 +1,6 @@
 use std::path::PathBuf;
 
-use crate::error::Result;
 use elemental_core::runtime::RuntimeValidationMode;
-
-use super::parse_argument_string;
 
 #[derive(Clone)]
 pub struct LaunchResolution {
@@ -89,22 +86,6 @@ impl VersionJsonLaunchConfig {
     pub fn set_extra_game_arguments(mut self, extra_game_arguments: Vec<String>) -> Self {
         self.extra_game_arguments = extra_game_arguments;
         self
-    }
-
-    pub fn try_set_extra_jvm_argument_string(
-        mut self,
-        extra_jvm_argument_string: String,
-    ) -> Result<Self> {
-        self.extra_jvm_arguments = parse_argument_string(extra_jvm_argument_string.as_str())?;
-        Ok(self)
-    }
-
-    pub fn try_set_extra_game_argument_string(
-        mut self,
-        extra_game_argument_string: String,
-    ) -> Result<Self> {
-        self.extra_game_arguments = parse_argument_string(extra_game_argument_string.as_str())?;
-        Ok(self)
     }
 }
 

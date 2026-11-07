@@ -1,13 +1,12 @@
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
-use elemental_schema::{fabric::ProfileJson, mojang::piston::PistonMetaData};
+use elemental_schema::fabric::ProfileJson;
 
 use crate::{
     descriptors::RIFT_DRIVER,
-    driver::{DriverDescriptor, InstalledDriver},
+    driver::DriverDescriptor,
     drivers::{rift::source::RiftSource, vanilla::source::VanillaSource},
     error::{Error, Result},
-    families::version_json::direct_profiled::DirectProfiledVersionJsonDefaults,
     families::version_json::{ProfiledVersionJsonDriver, ProfiledVersionJsonFamily},
     inspect::{LibraryPrefixSet, ProfileIdPattern, ProfiledDriverIdentity},
     loader_version::LoaderVersionId,
@@ -25,24 +24,20 @@ const RIFT_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(
     RIFT_PROFILE_ID,
 )
 .with_stale_markers(RIFT_STALE_MARKERS);
-const RIFT_DEFAULTS: DirectProfiledVersionJsonDefaults =
-    DirectProfiledVersionJsonDefaults::new(RIFT_DRIVER, "rift", RIFT_IDENTITY);
-
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RiftDriverFamily;
 
 #[async_trait(?Send)]
 impl ProfiledVersionJsonFamily for RiftDriverFamily {
     type Source = RiftSource;
-    type Profile = ProfileJson;
     type RemoteResolver = super::prepared::RiftRemoteResolver;
 
     fn descriptor(&self) -> DriverDescriptor {
-        RIFT_DEFAULTS.descriptor()
+        RIFT_DRIVER
     }
 
-    fn default_source(&self) -> Result<Self::Source> {
-        RIFT_DEFAULTS.default_source()
+    fn identity(&self) -> Option<ProfiledDriverIdentity> {
+        Some(RIFT_IDENTITY)
     }
 
     fn remote_resolver(
@@ -50,7 +45,11 @@ impl ProfiledVersionJsonFamily for RiftDriverFamily {
         vanilla_source: &VanillaSource,
         source: &Self::Source,
     ) -> Self::RemoteResolver {
-        RIFT_DEFAULTS.remote_resolver(vanilla_source, source.endpoints())
+        crate::families::version_json::VanillaFallbackRemoteResolver::new(
+            "rift",
+            vanilla_source.endpoints().clone(),
+            source.endpoints().clone(),
+        )
     }
 
     async fn profile(
@@ -58,31 +57,10 @@ impl ProfiledVersionJsonFamily for RiftDriverFamily {
         source: &Self::Source,
         game_version: &MinecraftVersionId,
         loader_version: &LoaderVersionId,
-    ) -> Result<Self::Profile> {
+    ) -> Result<ProfileJson> {
         let profile = source.profile_json(loader_version.as_str()).await?;
         validate_requested_game_version(&profile, game_version, loader_version)?;
         Ok(profile)
-    }
-
-    fn merge_profile(
-        &self,
-        base_metadata: PistonMetaData,
-        profile: Self::Profile,
-    ) -> Result<PistonMetaData> {
-        RIFT_DEFAULTS.merge_profile(base_metadata, profile)
-    }
-
-    fn local_metadata_needs_refresh(
-        &self,
-        metadata: &PistonMetaData,
-        game_version: &MinecraftVersionId,
-        loader_version: &LoaderVersionId,
-    ) -> bool {
-        RIFT_DEFAULTS.local_metadata_needs_refresh(metadata, game_version, loader_version)
-    }
-
-    fn inspect_installed(&self, metadata: &PistonMetaData) -> Option<InstalledDriver> {
-        RIFT_DEFAULTS.inspect_installed(metadata)
     }
 }
 

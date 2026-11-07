@@ -1,23 +1,18 @@
-use std::collections::HashMap;
+use std::collections::HashSet;
 
-use crate::error::Result;
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 
-use crate::catalog::{Catalog, push_single_game_release};
-use crate::loader_version::LoaderVersionId;
+use crate::{
+    catalog::{GameVersion, GameVersionCatalog, LoaderRelease, LoaderVersionCatalog},
+    error::Result,
+    loader_version::LoaderVersionId,
+};
 
 use super::source::RiftSource;
 
 pub struct RiftCatalog {
     source: RiftSource,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct RiftCatalogRelease {
-    pub game_version: MinecraftVersionId,
-    pub loader_version: LoaderVersionId,
-    pub published_at: Option<String>,
 }
 
 impl RiftCatalog {
@@ -31,26 +26,51 @@ impl RiftCatalog {
 }
 
 #[async_trait]
-impl Catalog for RiftCatalog {
-    type Release = RiftCatalogRelease;
-
-    async fn releases(&self) -> Result<HashMap<MinecraftVersionId, Vec<Self::Release>>> {
-        let mut releases = HashMap::new();
-
+impl GameVersionCatalog for RiftCatalog {
+    async fn game_versions(&self) -> Result<Vec<GameVersion>> {
+        let mut seen = HashSet::new();
+        let mut game_versions = Vec::new();
         for release in self.source.releases().await? {
-            let profile = self.source.profile_json_for_release(&release).await?;
-            let game_version = MinecraftVersionId::from(profile.inherits_from);
-            push_single_game_release(
-                &mut releases,
-                game_version.clone(),
-                RiftCatalogRelease {
-                    game_version,
-                    loader_version: LoaderVersionId::from(release.loader_version),
-                    published_at: release.published_at,
-                },
+            let id = rift_game_version(release.loader_version.as_str());
+            if seen.insert(id.clone()) {
+                game_versions.push(GameVersion {
+                    id,
+                    description: None,
+                    stream: None,
+                });
+            }
+        }
+        Ok(game_versions)
+    }
+}
+
+#[async_trait]
+impl LoaderVersionCatalog for RiftCatalog {
+    async fn loader_versions(
+        &self,
+        game_version: &MinecraftVersionId,
+    ) -> Result<Vec<LoaderRelease>> {
+        let mut releases = Vec::new();
+        for release in self.source.releases().await? {
+            if &rift_game_version(release.loader_version.as_str()) != game_version {
+                continue;
+            }
+            releases.push(
+                LoaderRelease::new(
+                    game_version.clone(),
+                    LoaderVersionId::from(release.loader_version),
+                )
+                .with_published_at(release.published_at)
+                .with_prerelease(Some(release.prerelease)),
             );
         }
-
         Ok(releases)
+    }
+}
+
+fn rift_game_version(loader_version: &str) -> MinecraftVersionId {
+    match loader_version {
+        "1.0.4-106" => MinecraftVersionId::from("1.13.2"),
+        _ => MinecraftVersionId::from("1.13"),
     }
 }

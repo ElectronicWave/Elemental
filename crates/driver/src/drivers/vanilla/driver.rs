@@ -1,10 +1,7 @@
 use crate::error::Result;
 use async_trait::async_trait;
 use elemental_core::{
-    auth::authorizer::Authorizer,
-    launcher::command::LaunchCommand,
     minecraft::MinecraftVersionId,
-    runtime::distribution::Distribution,
     storage::{Storage, layout::Layout},
 };
 use elemental_infra::downloader::DownloadSession;
@@ -14,17 +11,11 @@ use crate::{
     descriptors::VANILLA_DRIVER,
     driver::{Driver, DriverDescriptor, InstalledDriver},
     drivers::vanilla::{
-        config::VanillaLaunchConfig,
-        prepared::{
-            LaunchedVanillaVersion, PreparedVanillaVersion, ResolvedVanillaMetadata,
-            ResolvedVanillaVersion,
-        },
+        prepared::ResolvedVanillaVersion,
         source::{VanillaSource, resolve_vanilla_metadata},
     },
     families::version_json::{
-        VersionJsonInstanceLayout, VersionJsonRootLayout, build_version_json_launch_command,
-        launch_version_json_instance, load_prepared_version_json, persist_version_json,
-        prepare_version_json,
+        PreparedVersionJsonInstance, VersionJsonInstanceLayout, VersionJsonRootLayout,
     },
     inspect::{InstanceProbe, LibraryPrefixSet},
 };
@@ -45,8 +36,8 @@ impl VanillaDriver {
         Self { source }
     }
 
-    pub fn with_defaults() -> Result<Self> {
-        Ok(Self::new(VanillaSource::default()))
+    pub fn with_defaults() -> Self {
+        Self::new(VanillaSource::default())
     }
 
     pub async fn prepare<
@@ -57,8 +48,11 @@ impl VanillaDriver {
         session: &DownloadSession,
         instance: &Storage<VL, Storage<L>>,
         version_id: MinecraftVersionId,
-    ) -> Result<PreparedVanillaVersion<L, VL>> {
-        prepare_version_json(session, || self.resolve_or_load(instance, version_id)).await
+    ) -> Result<PreparedVersionJsonInstance<L, VL>> {
+        self.resolve_or_load(instance, version_id)
+            .await?
+            .prepare(session)
+            .await
     }
 
     pub async fn load_prepared<
@@ -67,40 +61,10 @@ impl VanillaDriver {
     >(
         &self,
         instance: &Storage<VL, Storage<L>>,
-    ) -> Result<PreparedVanillaVersion<L, VL>> {
-        load_prepared_version_json(self.source.endpoints().clone(), instance).await
-    }
-
-    pub async fn launch<
-        A,
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    >(
-        &self,
-        prepared_version: PreparedVanillaVersion<L, VL>,
-        config: &VanillaLaunchConfig,
-        authorizer: A,
-    ) -> Result<LaunchedVanillaVersion<L, VL>>
-    where
-        A: Authorizer,
-    {
-        launch_version_json_instance(authorizer, prepared_version, config).await
-    }
-
-    pub async fn build_launch_command<
-        A,
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    >(
-        &self,
-        authorizer: A,
-        prepared_version: &PreparedVanillaVersion<L, VL>,
-        config: &VanillaLaunchConfig,
-    ) -> Result<(Distribution, LaunchCommand)>
-    where
-        A: Authorizer,
-    {
-        build_version_json_launch_command(authorizer, prepared_version, config).await
+    ) -> Result<PreparedVersionJsonInstance<L, VL>> {
+        ResolvedVanillaVersion::load(self.source.endpoints().clone(), instance.clone())?
+            .into_prepared()
+            .await
     }
 
     async fn resolve_or_load<
@@ -117,25 +81,10 @@ impl VanillaDriver {
             return Ok(resolved);
         }
 
-        self.resolve_version(instance, version_id).await
-    }
-
-    async fn resolve_version<
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    >(
-        &self,
-        instance: &Storage<VL, Storage<L>>,
-        version_id: MinecraftVersionId,
-    ) -> Result<ResolvedVanillaVersion<L, VL>> {
-        persist_version_json(instance, || self.resolve_metadata(version_id)).await
-    }
-
-    async fn resolve_metadata(
-        &self,
-        version_id: MinecraftVersionId,
-    ) -> Result<ResolvedVanillaMetadata> {
-        resolve_vanilla_metadata(&self.source, version_id.as_str()).await
+        resolve_vanilla_metadata(&self.source, version_id.as_str())
+            .await?
+            .persist(instance)
+            .await
     }
 }
 

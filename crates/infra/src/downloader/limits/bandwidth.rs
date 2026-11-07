@@ -90,13 +90,9 @@ impl BandwidthLimiter {
     }
 
     fn decode_rate_limit(bytes_per_second: usize) -> DownloadRateLimit {
-        if bytes_per_second == 0 {
-            return DownloadRateLimit::Unlimited;
+        match std::num::NonZeroUsize::new(bytes_per_second) {
+            Some(value) => DownloadRateLimit::Limited(ByteRate::bytes_per_sec(value)),
+            None => DownloadRateLimit::Unlimited,
         }
-
-        DownloadRateLimit::Limited(ByteRate::bytes_per_sec(
-            std::num::NonZeroUsize::new(bytes_per_second)
-                .expect("stored downloader rate limit must be non-zero"),
-        ))
     }
 }

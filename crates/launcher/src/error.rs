@@ -7,9 +7,6 @@ pub enum Error {
     #[error("resolved launcher driver does not support '{id}' prepare flow")]
     UnsupportedDriverFlow { id: String },
 
-    #[error("prepared instance variant does not match driver '{driver}'")]
-    PreparedVariantMismatch { driver: String },
-
     #[error(transparent)]
     Driver(#[from] elemental_driver::error::Error),
 

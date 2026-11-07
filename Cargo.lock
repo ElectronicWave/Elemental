@@ -539,6 +539,7 @@ dependencies = [
  "elemental-infra",
  "elemental-schema",
  "elemental-shared",
+ "futures",
  "quick-xml",
  "regex",
  "reqwest",

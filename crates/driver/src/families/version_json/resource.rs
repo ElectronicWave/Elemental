@@ -1,13 +1,13 @@
-use std::path::PathBuf;
+use elemental_infra::SafeRelativePath;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum VersionJsonRootResource {
     Assets,
-    AssetIndexes(Option<String>),
-    AssetObjects(Option<String>),
-    AssetLogConfigs(Option<String>),
-    Versions(Option<String>),
-    Libraries(Option<PathBuf>),
+    AssetIndexes(Option<SafeRelativePath>),
+    AssetObjects(Option<SafeRelativePath>),
+    AssetLogConfigs(Option<SafeRelativePath>),
+    Versions(Option<SafeRelativePath>),
+    Libraries(Option<SafeRelativePath>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -21,5 +21,5 @@ pub enum VersionJsonInstanceResource {
     ResourcePacks,
     Saves,
     Mods,
-    Elemental(Option<PathBuf>),
+    Elemental(Option<SafeRelativePath>),
 }

@@ -7,32 +7,28 @@ pub fn parse_argument_string(argument_string: &str) -> Result<Vec<String>> {
     let mut active_quote: Option<char> = None;
 
     while let Some(character) = chars.next() {
-        match active_quote {
-            Some(quote) => match character {
-                '\\' => {
-                    let escaped = chars.next().ok_or(Error::TrailingArgumentEscape)?;
-                    current.push(escaped);
+        if character == '\\' {
+            current.push(chars.next().ok_or(Error::TrailingArgumentEscape)?);
+            continue;
+        }
+
+        if let Some(quote) = active_quote {
+            if character == quote {
+                active_quote = None;
+            } else {
+                current.push(character);
+            }
+            continue;
+        }
+
+        match character {
+            '"' | '\'' => active_quote = Some(character),
+            value if value.is_whitespace() => {
+                if !current.is_empty() {
+                    arguments.push(std::mem::take(&mut current));
                 }
-                value if value == quote => {
-                    active_quote = None;
-                }
-                _ => current.push(character),
-            },
-            None => match character {
-                '"' | '\'' => {
-                    active_quote = Some(character);
-                }
-                '\\' => {
-                    let escaped = chars.next().ok_or(Error::TrailingArgumentEscape)?;
-                    current.push(escaped);
-                }
-                value if value.is_whitespace() => {
-                    if !current.is_empty() {
-                        arguments.push(std::mem::take(&mut current));
-                    }
-                }
-                _ => current.push(character),
-            },
+            }
+            _ => current.push(character),
         }
     }
 

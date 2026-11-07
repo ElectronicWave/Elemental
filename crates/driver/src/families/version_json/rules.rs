@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
-use elemental_schema::mojang::piston::{OperatingSystem, PistonMetaRuleArgumentRules};
+use elemental_schema::mojang::piston::PistonMetaRuleArgumentRules;
 
 use super::VersionJsonPlatform;
+
+mod argument;
 
 #[derive(Debug, Clone)]
 pub struct VersionJsonRuleContext {
@@ -32,46 +34,8 @@ pub trait OperatingSystemExt {
     fn matches_platform(&self, platform: &VersionJsonPlatform) -> bool;
 }
 
-impl OperatingSystemExt for OperatingSystem {
-    fn matches_platform(&self, platform: &VersionJsonPlatform) -> bool {
-        if let Some(name) = &self.name
-            && !matches_os_name(name, platform.os())
-        {
-            return false;
-        }
-
-        if let Some(arch) = &self.arch
-            && arch != platform.arch()
-        {
-            return false;
-        }
-
-        true
-    }
-}
-
 pub trait PistonMetaRuleExt {
     fn is_allowed(&self, context: &VersionJsonRuleContext) -> bool;
-}
-
-impl PistonMetaRuleExt for PistonMetaRuleArgumentRules {
-    fn is_allowed(&self, context: &VersionJsonRuleContext) -> bool {
-        let mut action = self.action == "allow";
-
-        if let Some(os) = &self.os
-            && !os.matches_platform(context.platform())
-        {
-            action = !action;
-        }
-
-        if let Some(features) = &self.features
-            && !features_are_satisfied(features, context)
-        {
-            action = !action;
-        }
-
-        action
-    }
 }
 
 pub trait PistonMetaRulesExt {
@@ -82,21 +46,4 @@ impl PistonMetaRulesExt for [PistonMetaRuleArgumentRules] {
     fn are_allowed(&self, context: &VersionJsonRuleContext) -> bool {
         self.iter().all(|rule| rule.is_allowed(context))
     }
-}
-
-fn matches_os_name(rule_name: &str, platform_name: &str) -> bool {
-    if platform_name == "macos" {
-        return rule_name == "macos" || rule_name == "macosx" || rule_name == "osx";
-    }
-
-    rule_name == platform_name
-}
-
-fn features_are_satisfied(
-    features: &HashMap<String, bool>,
-    context: &VersionJsonRuleContext,
-) -> bool {
-    features
-        .iter()
-        .all(|(key, expected)| context.feature_enabled(key) == *expected)
 }

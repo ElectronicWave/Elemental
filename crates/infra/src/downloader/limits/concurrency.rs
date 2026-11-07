@@ -47,13 +47,15 @@ impl ConcurrencyController {
         }
 
         if max_concurrent_downloads > current {
-            let mut held_permits = self.held_permits.lock().await;
             let delta = max_concurrent_downloads - current;
-            let released = delta.min(held_permits.len());
-
-            for _ in 0..released {
-                held_permits.pop();
-            }
+            let released = {
+                let mut held_permits = self.held_permits.lock().await;
+                let released = delta.min(held_permits.len());
+                for _ in 0..released {
+                    held_permits.pop();
+                }
+                released
+            };
 
             let remaining = delta - released;
             if remaining > 0 {
@@ -66,7 +68,7 @@ impl ConcurrencyController {
         }
 
         let delta = current - max_concurrent_downloads;
-        let mut held_permits = self.held_permits.lock().await;
+        let mut acquired = Vec::with_capacity(delta);
         for _ in 0..delta {
             let permit = self
                 .semaphore
@@ -74,8 +76,9 @@ impl ConcurrencyController {
                 .acquire_owned()
                 .await
                 .map_err(Error::ConcurrencyShrink)?;
-            held_permits.push(permit);
+            acquired.push(permit);
         }
+        self.held_permits.lock().await.extend(acquired);
 
         self.target
             .store(max_concurrent_downloads, Ordering::Release);

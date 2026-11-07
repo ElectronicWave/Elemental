@@ -1,21 +1,23 @@
+mod library;
+mod loader;
+mod manifest;
+
 use std::collections::HashSet;
 
 use elemental_schema::{
-    fabric::{ProfileJson, ProfileLibrary, ProfileLibraryArtifact, ProfileLibraryDownloads},
+    fabric::ProfileJson,
     mojang::piston::{PistonMetaArguments, PistonMetaGenericArgument},
 };
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 
 use super::{
     manifest::{LiteLoaderManifestLibrary, LiteLoaderSelectedBuild},
-    maven::{
-        ResolvedArtifactDownload, ensure_trailing_slash, is_snapshot_version,
-        is_snapshot_version_from_notation, join_artifact_url, parse_maven_notation,
-        resolve_snapshot_artifact,
-    },
     source::LiteLoaderEndpoints,
 };
+
+use self::loader::build_loader_library;
+use self::manifest::normalize_manifest_library;
 
 pub(super) async fn build_profile_json(
     client: &reqwest::Client,
@@ -76,126 +78,4 @@ fn collect_manifest_libraries(
     }
 
     libraries
-}
-
-async fn build_loader_library(
-    client: &reqwest::Client,
-    endpoints: &LiteLoaderEndpoints,
-    selected: &LiteLoaderSelectedBuild,
-) -> Result<ProfileLibrary> {
-    let notation = format!("com.mumfrey:liteloader:{}", selected.build.version);
-    let parsed = parse_maven_notation(notation.as_str(), "liteloader library")?;
-    let repository_base_url = ensure_trailing_slash(
-        endpoints
-            .rewrite_upstream(selected.repository.url.as_str())?
-            .as_str(),
-    );
-    let artifact = if is_snapshot_version(selected.build.version.as_str()) {
-        resolve_snapshot_artifact(client, repository_base_url.as_str(), &parsed).await?
-    } else {
-        let path = format!(
-            "{}/{}",
-            parsed.version_directory_path(),
-            selected.build.file.as_str()
-        );
-        let url = join_artifact_url(repository_base_url.as_str(), path.as_str())?;
-        ResolvedArtifactDownload { path, url }
-    };
-
-    Ok(ProfileLibrary {
-        name: notation,
-        url: repository_base_url.clone(),
-        downloads: Some(ProfileLibraryDownloads {
-            artifact: Some(ProfileLibraryArtifact {
-                path: artifact.path,
-                url: artifact.url,
-                size: None,
-                sha1: None,
-            }),
-            classifiers: None,
-        }),
-        natives: None,
-        extract: None,
-    })
-}
-
-async fn normalize_manifest_library(
-    client: &reqwest::Client,
-    endpoints: &LiteLoaderEndpoints,
-    library: LiteLoaderManifestLibrary,
-) -> Result<ProfileLibrary> {
-    if library.name.starts_with("net.minecraft:") {
-        return Ok(ProfileLibrary {
-            name: library.name,
-            url: ensure_trailing_slash(endpoints.mojang_libraries_url()?.as_str()),
-            downloads: None,
-            natives: None,
-            extract: None,
-        });
-    }
-
-    if library.name.starts_with("org.ow2.asm:") {
-        return Ok(ProfileLibrary {
-            name: library.name,
-            url: ensure_trailing_slash(endpoints.maven_central_url()?.as_str()),
-            downloads: None,
-            natives: None,
-            extract: None,
-        });
-    }
-
-    if is_snapshot_version_from_notation(library.name.as_str()) {
-        let repository_url = if library.url.is_empty() {
-            default_snapshot_repository(endpoints, library.name.as_str())?
-        } else {
-            ensure_trailing_slash(endpoints.rewrite_upstream(library.url.as_str())?.as_str())
-        };
-        let parsed = parse_maven_notation(library.name.as_str(), "liteloader snapshot library")?;
-        let artifact = resolve_snapshot_artifact(client, repository_url.as_str(), &parsed).await?;
-
-        return Ok(ProfileLibrary {
-            name: library.name,
-            url: repository_url,
-            downloads: Some(ProfileLibraryDownloads {
-                artifact: Some(ProfileLibraryArtifact {
-                    path: artifact.path,
-                    url: artifact.url,
-                    size: None,
-                    sha1: None,
-                }),
-                classifiers: None,
-            }),
-            natives: None,
-            extract: None,
-        });
-    }
-
-    if !library.url.is_empty() {
-        return Ok(ProfileLibrary {
-            name: library.name,
-            url: ensure_trailing_slash(endpoints.rewrite_upstream(library.url.as_str())?.as_str()),
-            downloads: None,
-            natives: None,
-            extract: None,
-        });
-    }
-
-    Err(Error::LiteLoaderLibraryRepositoryMissing {
-        library: library.name,
-    })
-}
-
-fn default_snapshot_repository(
-    endpoints: &LiteLoaderEndpoints,
-    library_name: &str,
-) -> Result<String> {
-    if library_name.starts_with("org.spongepowered:") {
-        return endpoints
-            .sponge_maven_url()
-            .map(|url| ensure_trailing_slash(url.as_str()));
-    }
-
-    Err(Error::LiteLoaderSnapshotRepositoryMissing {
-        library: library_name.to_owned(),
-    })
 }

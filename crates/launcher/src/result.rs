@@ -1,17 +1,14 @@
 use std::path::{Path, PathBuf};
 
 use elemental_core::{launcher::command::LaunchCommand, runtime::distribution::Distribution};
-use elemental_driver::drivers::outlands::driver::PreparedOutlandsVersion;
 use elemental_driver::{
     driver::{DriverDescriptor, InstalledDriver},
-    drivers::{
-        cleanroom::driver::PreparedCleanroomVersion, fabric::prepared::PreparedFabricVersion,
-        forge::prepared::PreparedForgeVersion, liteloader::prepared::PreparedLiteLoaderVersion,
-        neoforge::prepared::PreparedNeoForgeVersion, quilt::prepared::PreparedQuiltVersion,
-        rift::prepared::PreparedRiftVersion, vanilla::prepared::PreparedVanillaVersion,
-    },
-    families::version_json::{
-        BaseInstanceLayout, BaseRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
+    families::{
+        installer::PreparedInstallerVersion,
+        version_json::{
+            BaseInstanceLayout, BaseRootLayout, PreparedVersionJsonInstance,
+            VersionJsonInstanceLayout, VersionJsonRootLayout,
+        },
     },
 };
 
@@ -46,15 +43,8 @@ where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    Vanilla(PreparedVanillaVersion<L, VL>),
-    FabricLike(PreparedFabricVersion<L, VL>),
-    Quilt(PreparedQuiltVersion<L, VL>),
-    LiteLoader(PreparedLiteLoaderVersion<L, VL>),
-    Rift(PreparedRiftVersion<L, VL>),
-    Forge(PreparedForgeVersion<L, VL>),
-    Cleanroom(PreparedCleanroomVersion<L, VL>),
-    Outlands(PreparedOutlandsVersion<L, VL>),
-    NeoForge(PreparedNeoForgeVersion<L, VL>),
+    VersionJson(Box<PreparedVersionJsonInstance<L, VL>>),
+    Installer(Box<PreparedInstallerVersion<L, VL>>),
 }
 
 impl<L, VL> PreparedInstance<L, VL>
@@ -72,33 +62,8 @@ where
 
     pub fn instance_root(&self) -> &Path {
         match &self.inner {
-            PreparedInstanceKind::Vanilla(prepared) => {
-                prepared.resolved_version.version.path.as_path()
-            }
-            PreparedInstanceKind::FabricLike(prepared) => {
-                prepared.resolved_version.version.path.as_path()
-            }
-            PreparedInstanceKind::Quilt(prepared) => {
-                prepared.resolved_version.version.path.as_path()
-            }
-            PreparedInstanceKind::LiteLoader(prepared) => {
-                prepared.resolved_version.version.path.as_path()
-            }
-            PreparedInstanceKind::Rift(prepared) => {
-                prepared.resolved_version.version.path.as_path()
-            }
-            PreparedInstanceKind::Forge(prepared) => {
-                prepared.resolved_version.instance.path.as_path()
-            }
-            PreparedInstanceKind::Cleanroom(prepared) => {
-                prepared.resolved_version.instance.path.as_path()
-            }
-            PreparedInstanceKind::Outlands(prepared) => {
-                prepared.resolved_version.instance.path.as_path()
-            }
-            PreparedInstanceKind::NeoForge(prepared) => {
-                prepared.resolved_version.instance.path.as_path()
-            }
+            PreparedInstanceKind::VersionJson(prepared) => prepared.instance_root(),
+            PreparedInstanceKind::Installer(prepared) => prepared.instance_root(),
         }
     }
 }

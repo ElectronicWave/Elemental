@@ -73,10 +73,10 @@ implements `Authorizer` for real accounts.
 | `consts` | Platform-dependent constants shared by launcher code |
 | `hash` | Synchronous and asynchronous SHA-1 helpers |
 | `launcher` | `LaunchCommand` plus process spawning and log streaming |
-| `minecraft` | Minecraft version tags and identifiers |
+| `minecraft` | Minecraft version identifiers, parsing, and semantic ordering |
 | `runtime` | Java runtime providers, distributions, and validation |
 | `storage` | Generic `Storage` and `Layout` resource resolution |
-| `version` | The tagged `Version<Tag>` wrapper |
+| `version` | The tagged `Version<Tag>` identifier wrapper |
 
 ## Core Concepts
 
@@ -84,19 +84,24 @@ implements `Authorizer` for real accounts.
 
 `Version<Tag>` wraps a string and carries a domain tag at the type level.
 `MinecraftVersionId` uses `MinecraftVersionTag`; other crates define additional
-tags such as loader versions.
+tags such as loader versions. The wrapper is an opaque identifier and does not
+define semantic ordering.
 
 ```rust
-use elemental_core::minecraft::MinecraftVersionId;
+use elemental_core::minecraft::{MinecraftVersion, MinecraftVersionId};
 
 let version = MinecraftVersionId::from("1.20.1");
 assert_eq!(version.as_str(), "1.20.1");
 assert_eq!(version.to_string(), "1.20.1");
+
+let parsed = MinecraftVersion::parse("26.1").unwrap();
+assert!(MinecraftVersion::parse("1.21.4").unwrap().key() < parsed.key());
 ```
 
-The wrapper does not parse semantic versions or infer ordering rules beyond
-string comparison. Its purpose is to keep identifiers from different domains
-from being mixed accidentally.
+`MinecraftVersion` parses legacy releases, year-based releases, snapshots, and
+pre-release stages. Use `MinecraftVersion::key()` for sorting and range queries;
+the key normalizes missing components such as the patch number in `26.1`, while
+the original identifier is preserved unchanged.
 
 ### Storage and layouts
 

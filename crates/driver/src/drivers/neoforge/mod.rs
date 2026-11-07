@@ -1,4 +1,4 @@
-use elemental_core::minecraft::MinecraftVersionId;
+use elemental_core::minecraft::{MinecraftVersion, MinecraftVersionId};
 
 use crate::{
     catalog::{InstallerMavenCatalog, LoaderRelease},
@@ -92,13 +92,17 @@ fn infer_neoforge_game_version(loader_version: &str) -> Option<MinecraftVersionI
     };
 
     let major_number = major.parse::<u32>().ok()?;
+    let minor_number = minor.parse::<u32>().ok()?;
     if major_number >= 26 {
-        let game_version = match parts.get(2).copied() {
-            Some("0") | None => format!("{major}.{minor}"),
-            Some(hotfix) => format!("{major}.{minor}.{hotfix}"),
+        let patch_number = match parts.get(2) {
+            Some(patch) => patch.parse::<u32>().ok()?,
+            None => 0,
         };
-        return Some(MinecraftVersionId::from(game_version));
+
+        return Some(
+            MinecraftVersion::year_release(major_number, minor_number, patch_number).into_id(),
+        );
     }
 
-    Some(MinecraftVersionId::from(format!("1.{major}.{minor}")))
+    Some(MinecraftVersion::legacy_release(1, major_number, minor_number).into_id())
 }

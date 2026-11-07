@@ -1,3 +1,6 @@
+use elemental_core::minecraft::{
+    LegacyReleaseVersion, LegacySnapshotVersion, MinecraftVersion, MinecraftVersionKind,
+};
 use elemental_schema::mojang::piston::PistonMetaData;
 
 pub(super) fn metadata_has_babric_markers(metadata: &PistonMetaData) -> bool {
@@ -16,57 +19,61 @@ pub(super) fn metadata_has_babric_markers(metadata: &PistonMetaData) -> bool {
 }
 
 pub(super) fn is_modern_fabric_game_version(game_version: &str) -> bool {
-    parse_release_minor(game_version).is_some_and(|minor| minor >= 14)
-        || parse_snapshot_version(game_version).is_some_and(is_modern_fabric_snapshot)
+    classify_fabric_game_version(game_version) == Some(FabricGameVersionClass::Modern)
 }
 
 pub(super) fn is_legacy_fabric_game_version(game_version: &str) -> bool {
-    parse_release_minor(game_version).is_some_and(|minor| minor < 14)
-        || parse_snapshot_version(game_version)
-            .is_some_and(|snapshot| !is_modern_fabric_snapshot(snapshot))
+    classify_fabric_game_version(game_version) == Some(FabricGameVersionClass::Legacy)
 }
 
-fn parse_release_minor(game_version: &str) -> Option<u32> {
-    let mut segments = game_version.split('.');
-    let major = segments.next()?;
-    if major != "1" {
-        return None;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FabricGameVersionClass {
+    Modern,
+    Legacy,
+}
+
+fn classify_fabric_game_version(game_version: &str) -> Option<FabricGameVersionClass> {
+    let version = MinecraftVersion::parse(game_version).ok()?;
+
+    match version.kind() {
+        MinecraftVersionKind::LegacyRelease(release) => Some(classify_legacy_release(release)),
+        MinecraftVersionKind::LegacySnapshot(snapshot) => Some(classify_legacy_snapshot(snapshot)),
+        MinecraftVersionKind::YearRelease(_) | MinecraftVersionKind::YearSnapshot(_) => {
+            Some(FabricGameVersionClass::Modern)
+        }
+        MinecraftVersionKind::AlphaBeta(_) => None,
     }
-
-    segments.next()?.parse::<u32>().ok()
 }
 
-fn parse_snapshot_version(game_version: &str) -> Option<(u32, u32, Option<char>)> {
-    let (year, rest) = game_version.split_once('w')?;
-    let year = year.parse::<u32>().ok()?;
-    let digit_count = rest
-        .chars()
-        .take_while(|character| character.is_ascii_digit())
-        .count();
-    if digit_count == 0 {
-        return None;
+fn classify_legacy_release(release: &LegacyReleaseVersion) -> FabricGameVersionClass {
+    if release.minor >= 14 {
+        FabricGameVersionClass::Modern
+    } else {
+        FabricGameVersionClass::Legacy
     }
-
-    let week = rest[..digit_count].parse::<u32>().ok()?;
-    let suffix = rest[digit_count..].chars().next();
-
-    Some((year, week, suffix))
 }
 
-fn is_modern_fabric_snapshot(snapshot: (u32, u32, Option<char>)) -> bool {
-    let (year, week, suffix) = snapshot;
-    if year > 18 {
+fn classify_legacy_snapshot(snapshot: &LegacySnapshotVersion) -> FabricGameVersionClass {
+    if is_modern_fabric_snapshot(snapshot) {
+        FabricGameVersionClass::Modern
+    } else {
+        FabricGameVersionClass::Legacy
+    }
+}
+
+fn is_modern_fabric_snapshot(snapshot: &LegacySnapshotVersion) -> bool {
+    if snapshot.year > 2018 {
         return true;
     }
-    if year < 18 {
+    if snapshot.year < 2018 {
         return false;
     }
-    if week > 43 {
+    if snapshot.week > 43 {
         return true;
     }
-    if week < 43 {
+    if snapshot.week < 43 {
         return false;
     }
 
-    suffix.is_none_or(|letter| letter >= 'b')
+    snapshot.suffix.is_none_or(|letter| letter >= 'b')
 }

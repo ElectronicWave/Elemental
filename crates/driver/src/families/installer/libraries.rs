@@ -1,104 +1,12 @@
-use std::collections::HashSet;
+mod merge;
+mod retrofutura;
+mod urls;
 
-use crate::error::Result;
 use elemental_schema::mojang::piston::{PistonMetaLibraries, PistonMetaLibrariesDownloadsArtifact};
 
-pub fn normalize_library_urls<F>(
-    libraries: Vec<PistonMetaLibraries>,
-    artifact_url: F,
-) -> Result<Vec<PistonMetaLibraries>>
-where
-    F: Fn(&str) -> Result<String>,
-{
-    let mut normalized = Vec::with_capacity(libraries.len());
-
-    for mut library in libraries {
-        if let Some(artifact) = &mut library.downloads.artifact
-            && artifact.url.trim().is_empty()
-        {
-            artifact.url = artifact_url(artifact.path.as_str())?;
-        }
-
-        if let Some(classifiers) = &mut library.downloads.classifiers {
-            for artifact in classifiers.values_mut() {
-                if artifact.url.trim().is_empty() {
-                    artifact.url = artifact_url(artifact.path.as_str())?;
-                }
-            }
-        }
-
-        normalized.push(library);
-    }
-
-    Ok(normalized)
-}
-
-pub fn is_retro_futura_runtime_library(library: &PistonMetaLibraries) -> bool {
-    let name = library.name.as_str();
-    name.starts_with("org.lwjgl.lwjgl:lwjgl:")
-        || name.starts_with("org.lwjgl.lwjgl:lwjgl_util:")
-        || name.starts_with("org.lwjgl.lwjgl:lwjgl-platform:")
-        || name.starts_with("net.java.jinput:jinput:")
-        || name.starts_with("net.java.jinput:jinput-platform:")
-        || name.starts_with("net.java.jutils:jutils:")
-        || name.starts_with("net.java.dev.jna:platform:")
-        || name.starts_with("oshi-project:oshi-core:")
-        || name.starts_with("com.ibm.icu:icu4j-core-mojang:")
-}
-
-/// Replaces runtime libraries that Cleanroom and Outlands rewrite for legacy
-/// Minecraft versions with the embedded versions from their installers.
-pub fn merge_retro_futura_libraries(
-    base_libraries: Vec<PistonMetaLibraries>,
-    embedded_libraries: Vec<PistonMetaLibraries>,
-) -> Vec<PistonMetaLibraries> {
-    let filtered_base_libraries = base_libraries
-        .into_iter()
-        .filter(|library| !is_retro_futura_runtime_library(library))
-        .collect();
-    merge_libraries_prefer_embedded(filtered_base_libraries, embedded_libraries)
-}
-
-pub fn merge_libraries_prefer_embedded(
-    base_libraries: Vec<PistonMetaLibraries>,
-    embedded_libraries: Vec<PistonMetaLibraries>,
-) -> Vec<PistonMetaLibraries> {
-    let embedded_keys = embedded_libraries
-        .iter()
-        .map(library_identity_key)
-        .collect::<HashSet<String>>();
-    let mut merged = base_libraries
-        .into_iter()
-        .filter(|library| !embedded_keys.contains(&library_identity_key(library)))
-        .collect::<Vec<PistonMetaLibraries>>();
-    let mut seen = merged
-        .iter()
-        .map(library_identity_key)
-        .collect::<HashSet<String>>();
-
-    for library in embedded_libraries {
-        let identity = library_identity_key(&library);
-        if seen.insert(identity) {
-            merged.push(library);
-        }
-    }
-
-    merged
-}
-
-fn library_identity_key(library: &PistonMetaLibraries) -> String {
-    let notation = library.name.as_str();
-    let (coordinates, extension) = notation.split_once('@').unwrap_or((notation, "jar"));
-    let segments = coordinates.split(':').collect::<Vec<&str>>();
-
-    match segments.as_slice() {
-        [group, artifact, _version] => format!("{group}:{artifact}@{extension}"),
-        [group, artifact, _version, classifier] => {
-            format!("{group}:{artifact}:{classifier}@{extension}")
-        }
-        _ => notation.to_owned(),
-    }
-}
+pub use merge::merge_libraries_prefer_embedded;
+pub use retrofutura::{is_retro_futura_runtime_library, merge_retro_futura_libraries};
+pub use urls::normalize_library_urls;
 
 pub(crate) fn installer_library_artifacts(
     library: &PistonMetaLibraries,

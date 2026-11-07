@@ -1,19 +1,18 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
-use elemental_schema::fabric::{
-    ProfileJson, ProfileLibrary, ProfileLibraryArtifact, ProfileLibraryDownloads,
-    ProfileLibraryExtract, ProfileLogging,
-};
+use elemental_schema::fabric::ProfileJson;
 use elemental_schema::mojang::piston::{
-    PistonMetaArguments, PistonMetaData, PistonMetaGenericArgument, PistonMetaLibraries,
-    PistonMetaLibrariesDownloads, PistonMetaLibrariesDownloadsArtifact, PistonMetaLibrariesExtract,
-    PistonMetaLogging, PistonMetaLoggingSide, PistonMetaLoggingSideFile,
+    PistonMetaArguments, PistonMetaData, PistonMetaGenericArgument,
 };
 
 use crate::error::{Error, Result};
-use crate::maven::{MavenNotation, MavenRepository};
 
 use super::launch::parse_argument_string;
+
+mod library;
+mod maven;
+
+use library::{merge_libraries, profile_logging_to_piston};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LibraryReplacementFamily {
@@ -130,164 +129,5 @@ pub fn merge_piston_meta_arguments(
             base_arguments.jvm.extend(overlay_arguments.jvm);
             Ok(Some(base_arguments))
         }
-    }
-}
-
-fn merge_libraries(
-    base_libraries: Vec<PistonMetaLibraries>,
-    profile_libraries: &[ProfileLibrary],
-    behavior: &dyn ProfileMergeBehavior,
-) -> Result<Vec<PistonMetaLibraries>> {
-    let replacement_families = profile_libraries
-        .iter()
-        .filter_map(|library| behavior.profile_replacement_family(library.name.as_str()))
-        .collect::<HashSet<LibraryReplacementFamily>>();
-    let filtered_base_libraries = base_libraries
-        .into_iter()
-        .filter(|library| {
-            let Some(family) = behavior.replaced_base_family(library.name.as_str()) else {
-                return true;
-            };
-
-            !replacement_families.contains(&family)
-        })
-        .collect::<Vec<PistonMetaLibraries>>();
-    let mut seen = filtered_base_libraries
-        .iter()
-        .map(|library| library.name.clone())
-        .collect::<HashSet<String>>();
-    let mut merged = filtered_base_libraries;
-
-    for profile_library in profile_libraries {
-        let library = profile_library_to_piston(profile_library)?;
-        if seen.insert(library.name.clone()) {
-            merged.push(library);
-        }
-    }
-
-    Ok(merged)
-}
-
-fn profile_library_to_piston(profile_library: &ProfileLibrary) -> Result<PistonMetaLibraries> {
-    if let Some(downloads) = &profile_library.downloads {
-        return Ok(PistonMetaLibraries {
-            downloads: profile_library_downloads_to_piston(downloads),
-            name: profile_library.name.clone(),
-            natives: profile_library.natives.clone(),
-            rules: None,
-            extract: profile_library
-                .extract
-                .as_ref()
-                .map(profile_library_extract_to_piston),
-        });
-    }
-
-    let downloads = profile_library_downloads_from_maven(profile_library)?;
-
-    Ok(PistonMetaLibraries {
-        downloads,
-        name: profile_library.name.clone(),
-        natives: profile_library.natives.clone(),
-        rules: None,
-        extract: profile_library
-            .extract
-            .as_ref()
-            .map(profile_library_extract_to_piston),
-    })
-}
-
-fn profile_library_downloads_from_maven(
-    profile_library: &ProfileLibrary,
-) -> Result<PistonMetaLibrariesDownloads> {
-    let notation = MavenNotation::parse(profile_library.name.as_str(), "maven artifact")?;
-    let repository = MavenRepository::parse(profile_library.url.as_str(), "maven repository")?;
-    let artifact = repository.artifact_download(notation.artifact_path()?)?;
-    let classifiers = profile_library
-        .natives
-        .as_ref()
-        .map(|natives| {
-            natives
-                .values()
-                .cloned()
-                .collect::<HashSet<String>>()
-                .into_iter()
-                .map(|classifier| {
-                    let classifier_notation = notation.with_classifier(classifier.as_str())?;
-                    let artifact =
-                        repository.artifact_download(classifier_notation.artifact_path()?)?;
-
-                    Ok((
-                        classifier,
-                        PistonMetaLibrariesDownloadsArtifact {
-                            sha1: None,
-                            size: None,
-                            url: artifact.url,
-                            path: artifact.path.as_str().to_owned(),
-                        },
-                    ))
-                })
-                .collect::<Result<HashMap<String, PistonMetaLibrariesDownloadsArtifact>>>()
-        })
-        .transpose()?;
-
-    Ok(PistonMetaLibrariesDownloads {
-        artifact: Some(PistonMetaLibrariesDownloadsArtifact {
-            sha1: None,
-            size: None,
-            url: artifact.url,
-            path: artifact.path.as_str().to_owned(),
-        }),
-        classifiers,
-    })
-}
-
-fn profile_library_downloads_to_piston(
-    downloads: &ProfileLibraryDownloads,
-) -> PistonMetaLibrariesDownloads {
-    PistonMetaLibrariesDownloads {
-        artifact: downloads
-            .artifact
-            .as_ref()
-            .map(profile_library_artifact_to_piston),
-        classifiers: downloads.classifiers.as_ref().map(|classifiers| {
-            classifiers
-                .iter()
-                .map(|(key, artifact)| (key.clone(), profile_library_artifact_to_piston(artifact)))
-                .collect::<HashMap<String, PistonMetaLibrariesDownloadsArtifact>>()
-        }),
-    }
-}
-
-fn profile_library_artifact_to_piston(
-    artifact: &ProfileLibraryArtifact,
-) -> PistonMetaLibrariesDownloadsArtifact {
-    PistonMetaLibrariesDownloadsArtifact {
-        sha1: artifact.sha1.clone(),
-        size: artifact.size,
-        url: artifact.url.clone(),
-        path: artifact.path.clone(),
-    }
-}
-
-fn profile_library_extract_to_piston(
-    extract: &ProfileLibraryExtract,
-) -> PistonMetaLibrariesExtract {
-    PistonMetaLibrariesExtract {
-        exclude: extract.exclude.clone(),
-    }
-}
-
-fn profile_logging_to_piston(logging: &ProfileLogging) -> PistonMetaLogging {
-    PistonMetaLogging {
-        client: Some(PistonMetaLoggingSide {
-            argument: logging.client.argument.clone(),
-            file: PistonMetaLoggingSideFile {
-                id: logging.client.file.id.clone(),
-                sha1: logging.client.file.sha1.clone(),
-                size: logging.client.file.size,
-                url: logging.client.file.url.clone(),
-            },
-            logging_type: logging.client.logging_type.clone(),
-        }),
     }
 }

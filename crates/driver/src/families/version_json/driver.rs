@@ -8,15 +8,17 @@ use elemental_infra::downloader::DownloadSession;
 
 use crate::{
     driver::{Driver, DriverDescriptor, InstalledDriver},
-    drivers::vanilla::source::{VanillaSource, resolve_vanilla_metadata},
+    drivers::vanilla::source::VanillaSource,
     inspect::InstanceProbe,
     loader_version::LoaderVersionId,
 };
 
 use super::{
-    PreparedVersionJsonInstance, ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata,
-    VersionJsonInstanceLayout, VersionJsonRootLayout, family::ProfiledVersionJsonFamily,
+    PreparedVersionJsonInstance, ResolvedVersionJsonInstance, VersionJsonInstanceLayout,
+    VersionJsonRootLayout, family::ProfiledVersionJsonFamily,
 };
+
+mod resolve;
 
 #[derive(Debug, Clone)]
 pub struct ProfiledVersionJsonDriver<F>
@@ -90,57 +92,6 @@ where
     fn remote_resolver(&self) -> F::RemoteResolver {
         self.family
             .remote_resolver(&self.vanilla_source, &self.source)
-    }
-
-    async fn resolve_or_load<L, VL>(
-        &self,
-        instance: &Storage<VL, Storage<L>>,
-        game_version: MinecraftVersionId,
-        loader_version: LoaderVersionId,
-    ) -> Result<ResolvedVersionJsonInstance<F::RemoteResolver, L, VL>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
-        if let Ok(resolved) =
-            ResolvedVersionJsonInstance::load(self.remote_resolver(), instance.clone())
-        {
-            let status = resolved.status().await?;
-            if status.is_downloaded()
-                && !self.family.local_metadata_needs_refresh(
-                    &resolved.metadata,
-                    &game_version,
-                    &loader_version,
-                )
-            {
-                return Ok(resolved);
-            }
-        }
-
-        self.resolve_metadata(game_version, loader_version)
-            .await?
-            .persist(instance)
-            .await
-    }
-
-    async fn resolve_metadata(
-        &self,
-        game_version: MinecraftVersionId,
-        loader_version: LoaderVersionId,
-    ) -> Result<ResolvedVersionJsonMetadata<F::RemoteResolver>> {
-        let base_metadata =
-            resolve_vanilla_metadata(&self.vanilla_source, game_version.as_str()).await?;
-        let profile = self
-            .family
-            .profile(&self.source, &game_version, &loader_version)
-            .await?;
-        let metadata = self.family.merge_profile(base_metadata.metadata, profile)?;
-
-        Ok(ResolvedVersionJsonMetadata::new(
-            self.remote_resolver(),
-            metadata,
-            base_metadata.asset_index_objects,
-        ))
     }
 }
 

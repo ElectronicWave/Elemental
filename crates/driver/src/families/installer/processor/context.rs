@@ -1,19 +1,11 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use elemental_core::storage::{Storage, layout::Layoutable};
-use elemental_infra::SafeRelativePath;
 use elemental_schema::forge::{ForgeInstallerProcessor, ForgeInstallerProfile};
 use tokio::fs::create_dir_all;
 
 use crate::{
-    error::{Error, Result},
-    families::{
-        installer::{InstallerArchive, InstallerArtifact, installer_coordinate_path},
-        version_json::{
-            VersionJsonInstanceLayout, VersionJsonInstanceResource, VersionJsonRootLayout,
-            VersionJsonRootResource,
-        },
-    },
+    error::Result,
+    families::installer::{InstallerArchive, InstallerArtifact, installer_coordinate_path},
 };
 
 pub(super) const CLIENT_PROCESSOR_DATA_KEYS: &[&str] = &[
@@ -37,40 +29,9 @@ pub(super) struct InstallerProcessorContext<'a> {
     pub(super) family_name: &'a str,
 }
 
-impl<'a> InstallerProcessorContext<'a> {
-    pub(super) fn new<L, VL>(
-        instance: &Storage<VL, Storage<L>>,
-        installer_artifact: &'a InstallerArtifact,
-        install_profile: &'a ForgeInstallerProfile,
-        archive: InstallerArchive<PathBuf>,
-        family_name: &'a str,
-    ) -> Result<Self>
-    where
-        L: VersionJsonRootLayout,
-        VL: VersionJsonInstanceLayout,
-    {
-        Ok(Self {
-            installer_artifact,
-            install_profile,
-            archive,
-            root_directory: absolute_path(&instance.parent.path)?,
-            libraries_directory: absolute_path(
-                &instance
-                    .parent
-                    .try_get_resource(VersionJsonRootResource::Libraries(None))?,
-            )?,
-            state_directory: absolute_path(&instance.try_get_resource(
-                VersionJsonInstanceResource::Elemental(Some(SafeRelativePath::parse(format!(
-                    "{family_name}/installer"
-                ))?)),
-            )?)?,
-            minecraft_jar_path: absolute_path(
-                &instance.try_get_resource(VersionJsonInstanceResource::Jar)?,
-            )?,
-            family_name,
-        })
-    }
+mod create;
 
+impl<'a> InstallerProcessorContext<'a> {
     pub(super) async fn ensure_client_directories(&self) -> Result<()> {
         for path in self.required_client_output_paths()? {
             if let Some(parent) = path.parent() {
@@ -123,16 +84,4 @@ impl<'a> InstallerProcessorContext<'a> {
             .collect::<Result<Vec<Option<String>>>>()
             .map(|values| values.into_iter().flatten().map(PathBuf::from).collect())
     }
-}
-
-fn absolute_path(path: &Path) -> Result<PathBuf> {
-    if path.is_absolute() {
-        return Ok(path.to_path_buf());
-    }
-
-    let current_directory = std::env::current_dir().map_err(|source| Error::CurrentDirectory {
-        path: path.to_path_buf(),
-        source,
-    })?;
-    Ok(current_directory.join(path))
 }

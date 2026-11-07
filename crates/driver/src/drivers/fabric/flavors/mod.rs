@@ -1,6 +1,7 @@
 mod babric;
 mod common;
 mod passthrough;
+mod version;
 
 use crate::error::Result;
 use elemental_core::minecraft::MinecraftVersionId;
@@ -16,6 +17,9 @@ use crate::{
 };
 
 use self::common::FlavorBehavior;
+use self::version::{
+    is_legacy_fabric_game_version, is_modern_fabric_game_version, metadata_has_babric_markers,
+};
 
 const FABRIC_META_ORIGIN: &str = "https://meta.fabricmc.net";
 const FABRIC_MAVEN_ORIGIN: &str = "https://maven.fabricmc.net";
@@ -146,75 +150,4 @@ pub(crate) fn flavor_spec(flavor: &FabricFlavor) -> &'static FabricFlavorSpec {
         FabricFlavor::LegacyFabric => &LEGACY_FABRIC_SPEC,
         FabricFlavor::Babric => &BABRIC_SPEC,
     }
-}
-
-fn metadata_has_babric_markers(metadata: &PistonMetaData) -> bool {
-    metadata.libraries.iter().any(|library| {
-        library.name.starts_with("babric:")
-            || library
-                .name
-                .starts_with("org.lwjgl.lwjgl:lwjgl:2.9.4-babric.")
-            || library
-                .name
-                .starts_with("org.lwjgl.lwjgl:lwjgl_util:2.9.4-babric.")
-            || library
-                .name
-                .starts_with("org.lwjgl.lwjgl:lwjgl-platform:2.9.4-babric.")
-    })
-}
-
-fn is_modern_fabric_game_version(game_version: &str) -> bool {
-    parse_release_minor(game_version).is_some_and(|minor| minor >= 14)
-        || parse_snapshot_version(game_version).is_some_and(is_modern_fabric_snapshot)
-}
-
-fn is_legacy_fabric_game_version(game_version: &str) -> bool {
-    parse_release_minor(game_version).is_some_and(|minor| minor < 14)
-        || parse_snapshot_version(game_version)
-            .is_some_and(|snapshot| !is_modern_fabric_snapshot(snapshot))
-}
-
-fn parse_release_minor(game_version: &str) -> Option<u32> {
-    let mut segments = game_version.split('.');
-    let major = segments.next()?;
-    if major != "1" {
-        return None;
-    }
-
-    segments.next()?.parse::<u32>().ok()
-}
-
-fn parse_snapshot_version(game_version: &str) -> Option<(u32, u32, Option<char>)> {
-    let (year, rest) = game_version.split_once('w')?;
-    let year = year.parse::<u32>().ok()?;
-    let digit_count = rest
-        .chars()
-        .take_while(|character| character.is_ascii_digit())
-        .count();
-    if digit_count == 0 {
-        return None;
-    }
-
-    let week = rest[..digit_count].parse::<u32>().ok()?;
-    let suffix = rest[digit_count..].chars().next();
-
-    Some((year, week, suffix))
-}
-
-fn is_modern_fabric_snapshot(snapshot: (u32, u32, Option<char>)) -> bool {
-    let (year, week, suffix) = snapshot;
-    if year > 18 {
-        return true;
-    }
-    if year < 18 {
-        return false;
-    }
-    if week > 43 {
-        return true;
-    }
-    if week < 43 {
-        return false;
-    }
-
-    suffix.is_none_or(|letter| letter >= 'b')
 }

@@ -70,18 +70,99 @@ pub enum VersionStage {
 /// naming schemes are approximate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MinecraftVersionKey {
-    pub(super) era: VersionEra,
-    pub(super) major: u32,
-    pub(super) minor: u32,
-    pub(super) patch: u32,
-    pub(super) stage: VersionStage,
-    pub(super) stage_number: u32,
+    era: VersionEra,
+    major: u32,
+    minor: u32,
+    patch: u32,
+    stage: VersionStage,
+    stage_number: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(super) enum VersionEra {
+enum VersionEra {
     Alpha,
     Beta,
     Legacy,
     Year,
+}
+
+impl MinecraftVersionKey {
+    pub(super) fn alpha_beta(stage: VersionStage, major: u32, minor: u32, patch: u32) -> Self {
+        let era = match stage {
+            VersionStage::Alpha => VersionEra::Alpha,
+            _ => VersionEra::Beta,
+        };
+
+        Self {
+            era,
+            major,
+            minor,
+            patch,
+            stage,
+            stage_number: 0,
+        }
+    }
+
+    pub(super) fn legacy_snapshot(year: u32, week: u32, suffix: Option<char>) -> Self {
+        Self {
+            era: VersionEra::Legacy,
+            major: year,
+            minor: week,
+            patch: 0,
+            stage: VersionStage::Snapshot,
+            stage_number: snapshot_suffix_rank(suffix),
+        }
+    }
+
+    pub(super) fn legacy_release(
+        major: u32,
+        minor: u32,
+        patch: u32,
+        stage: VersionStage,
+        stage_number: u32,
+    ) -> Self {
+        Self {
+            era: VersionEra::Legacy,
+            major,
+            minor,
+            patch,
+            stage,
+            stage_number,
+        }
+    }
+
+    pub(super) fn year_snapshot(year: u32, release: u32, patch: u32, snapshot: u32) -> Self {
+        Self {
+            era: VersionEra::Year,
+            major: year,
+            minor: release,
+            patch,
+            stage: VersionStage::Snapshot,
+            stage_number: snapshot,
+        }
+    }
+
+    pub(super) fn year_release(
+        year: u32,
+        release: u32,
+        patch: u32,
+        stage: VersionStage,
+        stage_number: u32,
+    ) -> Self {
+        Self {
+            era: VersionEra::Year,
+            major: year,
+            minor: release,
+            patch,
+            stage,
+            stage_number,
+        }
+    }
+}
+
+fn snapshot_suffix_rank(suffix: Option<char>) -> u32 {
+    match suffix {
+        Some(character) => u32::from(character) - u32::from('a') + 1,
+        None => 0,
+    }
 }

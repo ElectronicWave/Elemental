@@ -1,4 +1,6 @@
-use elemental_core::minecraft::{LegacySnapshotVersion, MinecraftVersion, MinecraftVersionKind};
+use elemental_core::minecraft::{
+    LegacyReleaseVersion, LegacySnapshotVersion, MinecraftVersion, MinecraftVersionKind,
+};
 use elemental_schema::mojang::piston::PistonMetaData;
 
 pub(super) fn metadata_has_babric_markers(metadata: &PistonMetaData) -> bool {
@@ -34,22 +36,28 @@ fn classify_fabric_game_version(game_version: &str) -> Option<FabricGameVersionC
     let version = MinecraftVersion::parse(game_version).ok()?;
 
     match version.kind() {
-        MinecraftVersionKind::LegacyRelease(release) => Some(if release.minor >= 14 {
-            FabricGameVersionClass::Modern
-        } else {
-            FabricGameVersionClass::Legacy
-        }),
-        MinecraftVersionKind::LegacySnapshot(snapshot) => {
-            Some(if is_modern_fabric_snapshot(snapshot) {
-                FabricGameVersionClass::Modern
-            } else {
-                FabricGameVersionClass::Legacy
-            })
-        }
+        MinecraftVersionKind::LegacyRelease(release) => Some(classify_legacy_release(release)),
+        MinecraftVersionKind::LegacySnapshot(snapshot) => Some(classify_legacy_snapshot(snapshot)),
         MinecraftVersionKind::YearRelease(_) | MinecraftVersionKind::YearSnapshot(_) => {
             Some(FabricGameVersionClass::Modern)
         }
         MinecraftVersionKind::AlphaBeta(_) => None,
+    }
+}
+
+fn classify_legacy_release(release: &LegacyReleaseVersion) -> FabricGameVersionClass {
+    if release.minor >= 14 {
+        FabricGameVersionClass::Modern
+    } else {
+        FabricGameVersionClass::Legacy
+    }
+}
+
+fn classify_legacy_snapshot(snapshot: &LegacySnapshotVersion) -> FabricGameVersionClass {
+    if is_modern_fabric_snapshot(snapshot) {
+        FabricGameVersionClass::Modern
+    } else {
+        FabricGameVersionClass::Legacy
     }
 }
 

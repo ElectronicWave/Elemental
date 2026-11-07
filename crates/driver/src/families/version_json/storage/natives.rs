@@ -4,6 +4,7 @@ use std::{
 };
 
 use elemental_core::storage::{Storage, layout::Layoutable};
+use elemental_infra::SafeRelativePath;
 use elemental_infra::jar::JarFile;
 use elemental_schema::mojang::piston::{PistonMetaData, PistonMetaLibrariesDownloadsArtifact};
 
@@ -77,9 +78,9 @@ where
         for artifact in native_source_artifacts(metadata, rule_context) {
             let source = storage
                 .parent
-                .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
-                    artifact.path.as_str(),
-                ))))?;
+                .try_get_resource(VersionJsonRootResource::Libraries(Some(
+                    SafeRelativePath::parse(artifact.path.as_str())?,
+                )))?;
             JarFile::new(source).extract_blocking(destination)?;
         }
         NativesDirectory::new(destination).flatten_binaries()

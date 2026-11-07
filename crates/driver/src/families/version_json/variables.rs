@@ -1,9 +1,7 @@
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashMap, path::Path};
 
 use elemental_core::storage::layout::Layout;
+use elemental_infra::SafeRelativePath;
 use elemental_schema::mojang::piston::PistonMetaData;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -121,26 +119,26 @@ impl LauncherVariables {
             .libraries
             .iter()
             .filter(|library| library.is_allowed(&rule_context))
-            .filter_map(|library| -> Option<Result<String>> {
-                let artifact = library.downloads.artifact.as_ref()?;
+            .map(|library| -> Result<Option<String>> {
+                let Some(artifact) = library.downloads.artifact.as_ref() else {
+                    return Ok(None);
+                };
                 if artifact.path.contains("natives") {
-                    return None;
+                    return Ok(None);
                 }
 
-                Some(
-                    root_layout
-                        .try_get_extended_resource(
-                            game_root,
-                            VersionJsonRootResource::Libraries(Some(PathBuf::from(
-                                artifact.path.as_str(),
-                            ))),
-                        )
-                        .map(|path| path.to_string_lossy().to_string())
-                        .map_err(Error::from),
-                )
+                let relative_path = SafeRelativePath::parse(artifact.path.as_str())?;
+                root_layout
+                    .try_get_extended_resource(
+                        game_root,
+                        VersionJsonRootResource::Libraries(Some(relative_path)),
+                    )
+                    .map(|path| Some(path.to_string_lossy().to_string()))
+                    .map_err(Error::from)
             })
-            .collect::<Result<Vec<String>>>()?
+            .collect::<Result<Vec<Option<String>>>>()?
             .into_iter()
+            .flatten()
             .chain(std::iter::once(version_jar.to_string_lossy().to_string()))
             .collect::<Vec<String>>();
         let classpath = join_classpath(classpath);

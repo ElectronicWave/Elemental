@@ -2,6 +2,7 @@ use std::path::Path;
 
 use async_trait::async_trait;
 use elemental_core::storage::{Storage, layout::Layoutable};
+use elemental_infra::SafeRelativePath;
 use tokio::fs::create_dir_all;
 
 use crate::{
@@ -65,7 +66,9 @@ where
         Self::Layout: Clone,
         VL: VersionJsonInstanceLayout + Send,
     {
-        let root = self.try_get_resource(VersionJsonRootResource::Versions(Some(name)))?;
+        let root = self.try_get_resource(VersionJsonRootResource::Versions(Some(
+            SafeRelativePath::parse(name)?,
+        )))?;
         create_dir_all(&root).await?;
         Ok(Storage::with_parent(root, self.clone(), version_layout))
     }
@@ -75,7 +78,7 @@ where
         VL: VersionJsonInstanceLayout,
     {
         let root = self.try_get_resource(VersionJsonRootResource::Versions(Some(
-            name.as_ref().to_owned(),
+            SafeRelativePath::parse(name.as_ref())?,
         )))?;
         instance_ready(&root, version_layout)
     }
@@ -90,7 +93,9 @@ where
         VL: VersionJsonInstanceLayout,
     {
         let name = name.into();
-        let root = self.try_get_resource(VersionJsonRootResource::Versions(Some(name.clone())))?;
+        let root = self.try_get_resource(VersionJsonRootResource::Versions(Some(
+            SafeRelativePath::parse(name.clone())?,
+        )))?;
         if !instance_ready(&root, &version_layout)? {
             return Err(Error::InstanceNotFound { name });
         }

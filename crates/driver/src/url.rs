@@ -1,5 +1,6 @@
 use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
+use elemental_infra::SafeRelativePath;
 use reqwest::Url;
 
 use crate::error::{Error, Result};
@@ -76,26 +77,31 @@ impl<O: Origin> Default for OriginPolicy<O> {
 }
 
 impl<O: Origin> OriginPolicy<O> {
-    pub fn new(overrides: HashMap<O, Url>) -> Self {
-        Self { overrides }
+    pub fn new(overrides: HashMap<O, Url>) -> Result<Self> {
+        for url in overrides.values() {
+            ensure_http_url(url, "origin override")?;
+        }
+        Ok(Self { overrides })
     }
 
     pub fn with_override(mut self, origin: O, raw_url: String) -> Result<Self> {
         let url = Url::parse(&raw_url).map_err(move |source| {
             Error::invalid_url("parse origin override failed", raw_url, source)
         })?;
+        ensure_http_url(&url, "origin override")?;
         self.overrides.insert(origin, url);
         Ok(self)
     }
 
     pub fn base_url(&self, origin: O) -> Result<Url> {
-        if let Some(url) = self.overrides.get(&origin) {
-            return Ok(url.clone());
-        }
+        let url = match self.overrides.get(&origin) {
+            Some(url) => url.clone(),
+            None => Url::parse(origin.canonical()).map_err(|source| {
+                Error::invalid_url("parse canonical origin failed", origin.canonical(), source)
+            })?,
+        };
 
-        Url::parse(origin.canonical()).map_err(|source| {
-            Error::invalid_url("parse canonical origin failed", origin.canonical(), source)
-        })
+        ensure_directory_url(url)
     }
 
     pub fn resolve(&self, origin: O, path: &str) -> Result<String> {
@@ -104,16 +110,13 @@ impl<O: Origin> OriginPolicy<O> {
         if suffix.is_empty() {
             return Ok(trim_trailing_slash(base.as_str()).to_owned());
         }
+        let suffix = SafeRelativePath::parse(suffix)?;
 
-        Url::parse(&format!(
-            "{}/{}",
-            trim_trailing_slash(base.as_str()),
-            suffix
-        ))
-        .map_err(|source| {
-            Error::join_url("resolve origin path failed", base.as_str(), path, source)
-        })
-        .map(|url| url.to_string())
+        base.join(suffix.as_str())
+            .map_err(|source| {
+                Error::join_url("resolve origin path failed", base.as_str(), path, source)
+            })
+            .map(|url| url.to_string())
     }
 
     pub fn resolve_segments<const N: usize>(
@@ -212,6 +215,28 @@ impl<O: Origin> OriginPolicy<O> {
     }
 }
 
+fn ensure_http_url(url: &Url, context: &str) -> Result<()> {
+    if matches!(url.scheme(), "http" | "https") {
+        return Ok(());
+    }
+
+    Err(Error::UnsupportedUrlScheme {
+        context: context.to_owned(),
+        url: url.to_string(),
+    })
+}
+
+pub(crate) fn ensure_directory_url(mut url: Url) -> Result<Url> {
+    if !url.path().ends_with('/') {
+        let raw_url = url.to_string();
+        url.path_segments_mut()
+            .map_err(|()| Error::UrlNotPathBase { url: raw_url })?
+            .push("");
+    }
+
+    Ok(url)
+}
+
 fn trim_trailing_slash(raw_url: &str) -> &str {
     raw_url.trim_end_matches('/')
 }
@@ -223,11 +248,55 @@ fn origin_suffix(raw_url: &Url, base_url: &Url) -> Option<String> {
 
     let raw = raw_url.as_str();
     let base = trim_trailing_slash(base_url.as_str());
-    raw.strip_prefix(base).map(ToOwned::to_owned)
+    let suffix = raw.strip_prefix(base)?;
+    if base_url.path().ends_with('/') || suffix.is_empty() || suffix.starts_with('/') {
+        return Some(suffix.to_owned());
+    }
+
+    None
 }
 
 fn same_origin(raw_url: &Url, base_url: &Url) -> bool {
     raw_url.scheme() == base_url.scheme()
         && raw_url.host_str() == base_url.host_str()
         && raw_url.port_or_known_default() == base_url.port_or_known_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Origin, OriginPolicy};
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    enum TestOrigin {
+        Base,
+    }
+
+    impl Origin for TestOrigin {
+        fn canonical(self) -> &'static str {
+            "https://example.com/releases"
+        }
+
+        fn all() -> &'static [Self] {
+            &[Self::Base]
+        }
+    }
+
+    #[test]
+    fn resolve_preserves_base_path_without_trailing_slash() {
+        let resolved = OriginPolicy::default()
+            .resolve(TestOrigin::Base, "org/example/a.jar")
+            .expect("base path should resolve");
+
+        assert_eq!(resolved, "https://example.com/releases/org/example/a.jar");
+    }
+
+    #[test]
+    fn origin_suffix_requires_a_path_boundary() {
+        let policy: OriginPolicy<TestOrigin> = OriginPolicy::default();
+        let rewritten = policy
+            .try_rewrite_origin_url("https://example.com/releases-v2/a.jar")
+            .expect("url should parse");
+
+        assert!(rewritten.is_none());
+    }
 }

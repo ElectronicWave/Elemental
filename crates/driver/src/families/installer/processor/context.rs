@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use elemental_core::storage::{Storage, layout::Layoutable};
+use elemental_infra::SafeRelativePath;
 use elemental_schema::forge::{ForgeInstallerProcessor, ForgeInstallerProfile};
 use tokio::fs::create_dir_all;
 
@@ -59,9 +60,9 @@ impl<'a> InstallerProcessorContext<'a> {
                     .try_get_resource(VersionJsonRootResource::Libraries(None))?,
             )?,
             state_directory: absolute_path(&instance.try_get_resource(
-                VersionJsonInstanceResource::Elemental(Some(
-                    PathBuf::from(family_name).join("installer"),
-                )),
+                VersionJsonInstanceResource::Elemental(Some(SafeRelativePath::parse(format!(
+                    "{family_name}/installer"
+                ))?)),
             )?)?,
             minecraft_jar_path: absolute_path(
                 &instance.try_get_resource(VersionJsonInstanceResource::Jar)?,
@@ -95,7 +96,7 @@ impl<'a> InstallerProcessorContext<'a> {
     ) -> Result<PathBuf> {
         Ok(self
             .libraries_directory
-            .join(installer_coordinate_path(processor.jar.as_str())?))
+            .join(installer_coordinate_path(processor.jar.as_str())?.as_path()))
     }
 
     pub(super) fn processor_classpath(
@@ -108,7 +109,7 @@ impl<'a> InstallerProcessorContext<'a> {
         for coordinate in &processor.classpath {
             entries.push(
                 self.libraries_directory
-                    .join(installer_coordinate_path(coordinate)?),
+                    .join(installer_coordinate_path(coordinate)?.as_path()),
             );
         }
 

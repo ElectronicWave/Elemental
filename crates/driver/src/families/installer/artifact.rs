@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use elemental_core::storage::{Storage, layout::Layoutable};
+use elemental_infra::SafeRelativePath;
 use elemental_infra::downloader::DownloadTask;
 
 use crate::{
@@ -31,17 +32,16 @@ impl InstallerArtifact {
     }
 }
 
-pub fn installer_coordinate_path(notation: &str) -> Result<PathBuf> {
-    Ok(PathBuf::from(
-        MavenNotation::parse(notation, "installer artifact")?.artifact_path(),
-    ))
+pub fn installer_coordinate_path(notation: &str) -> Result<SafeRelativePath> {
+    MavenNotation::parse(notation, "installer artifact")?.artifact_path()
 }
 
 pub fn installer_coordinate_file_name(notation: &str) -> Result<String> {
     let path = installer_coordinate_path(notation)?;
     let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
+        .as_str()
+        .rsplit('/')
+        .next()
         .map(ToOwned::to_owned)
         .ok_or_else(|| Error::InstallerCoordinateFileNameMissing {
             notation: notation.to_owned(),
@@ -53,7 +53,7 @@ pub fn build_installer_artifact<L>(
     game_storage: &Storage<L>,
     coordinate: String,
     url: String,
-    library_relative_path: PathBuf,
+    library_relative_path: SafeRelativePath,
 ) -> Result<InstallerArtifact>
 where
     L: VersionJsonRootLayout,

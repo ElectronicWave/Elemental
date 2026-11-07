@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use elemental_infra::SafeRelativePath;
 use elemental_schema::{
     fabric::{ProfileJson, ProfileLibrary, ProfileLibraryArtifact, ProfileLibraryDownloads},
     mojang::piston::{PistonMetaArguments, PistonMetaGenericArgument},
@@ -96,11 +97,11 @@ async fn build_loader_library(
             .resolve_snapshot_artifact(client, &parsed)
             .await?
     } else {
-        repository.artifact_download(format!(
+        repository.artifact_download(SafeRelativePath::parse(format!(
             "{}/{}",
-            parsed.version_directory_path(),
+            parsed.version_directory_path()?.as_str(),
             selected.build.file.as_str()
-        ))?
+        ))?)?
     };
 
     Ok(profile_library_with_repository(
@@ -117,7 +118,7 @@ fn profile_library_with_repository(
 ) -> ProfileLibrary {
     let downloads = artifact.map(|artifact| ProfileLibraryDownloads {
         artifact: Some(ProfileLibraryArtifact {
-            path: artifact.path,
+            path: artifact.path.as_str().to_owned(),
             url: artifact.url,
             size: None,
             sha1: None,

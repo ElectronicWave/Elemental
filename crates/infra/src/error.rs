@@ -32,11 +32,17 @@ pub enum Error {
     #[error("downloader read_timeout must be greater than zero")]
     InvalidReadTimeout,
 
+    #[error("downloader {unit} rate limit is too large")]
+    ByteRateOverflow { unit: &'static str },
+
     #[error("download task URL '{url}' is invalid: {reason}")]
     InvalidTaskUrl { url: String, reason: String },
 
     #[error("download task path '{}' is invalid: {reason}", path.display())]
     InvalidTaskPath { path: PathBuf, reason: &'static str },
+
+    #[error("path '{path}' is not a safe relative path: {reason}")]
+    UnsafeRelativePath { path: String, reason: &'static str },
 
     #[error("download task sha1 '{sha1}' must be 40 hexadecimal characters")]
     InvalidSha1 { sha1: String },

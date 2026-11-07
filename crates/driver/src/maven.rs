@@ -1,3 +1,4 @@
+use elemental_infra::SafeRelativePath;
 use elemental_schema::maven::MavenMetadataBody;
 use quick_xml::de::from_str;
 use reqwest::Url;
@@ -5,6 +6,7 @@ use serde::Deserialize;
 
 use crate::error::{Error, Result};
 use crate::http::fetch_text;
+use crate::url::ensure_directory_url;
 
 /// Maven coordinate in launcher notation:
 /// `group:artifact:version[:classifier][@extension]`.
@@ -19,13 +21,13 @@ pub struct MavenNotation {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MavenArtifactDownload {
-    pub path: String,
+    pub path: SafeRelativePath,
     pub url: String,
 }
 
 #[derive(Debug, Clone)]
 pub struct MavenRepository {
-    base_url: String,
+    base_url: Url,
 }
 
 #[derive(Debug, Deserialize)]
@@ -74,6 +76,14 @@ impl MavenNotation {
             }
         };
 
+        validate_component(group, invalid_label, notation)?;
+        validate_component(artifact, invalid_label, notation)?;
+        validate_component(version, invalid_label, notation)?;
+        validate_component(extension, invalid_label, notation)?;
+        if let Some(classifier) = classifier {
+            validate_component(classifier, invalid_label, notation)?;
+        }
+
         Ok(Self {
             group: group.to_owned(),
             artifact: artifact.to_owned(),
@@ -91,33 +101,44 @@ impl MavenNotation {
         self.version.as_str()
     }
 
-    pub fn with_classifier(&self, classifier: &str) -> Self {
-        Self {
+    pub fn with_classifier(&self, classifier: &str) -> Result<Self> {
+        if classifier.is_empty() {
+            return Err(Error::InvalidNotation {
+                label: "maven classifier".to_owned(),
+                notation: classifier.to_owned(),
+            });
+        }
+        validate_component(classifier, "maven classifier", classifier)?;
+
+        Ok(Self {
             group: self.group.clone(),
             artifact: self.artifact.clone(),
             version: self.version.clone(),
             classifier: Some(classifier.to_owned()),
             extension: self.extension.clone(),
-        }
+        })
     }
 
-    pub fn version_directory_path(&self) -> String {
-        format!(
+    pub fn version_directory_path(&self) -> Result<SafeRelativePath> {
+        SafeRelativePath::parse(format!(
             "{}/{}/{}",
             self.group.replace('.', "/"),
             self.artifact,
             self.version
-        )
+        ))
+        .map_err(Error::from)
     }
 
-    fn file_name_for_version(&self, resolved_version: &str) -> String {
-        match self.classifier.as_deref() {
+    fn file_name_for_version(&self, resolved_version: &str) -> Result<String> {
+        validate_component(resolved_version, "maven snapshot version", resolved_version)?;
+
+        Ok(match self.classifier.as_deref() {
             Some(classifier) => format!(
                 "{}-{resolved_version}-{classifier}.{}",
                 self.artifact, self.extension
             ),
             None => format!("{}-{resolved_version}.{}", self.artifact, self.extension),
-        }
+        })
     }
 
     fn matches_snapshot_artifact(&self, artifact: &SnapshotArtifactVersion) -> bool {
@@ -125,37 +146,40 @@ impl MavenNotation {
             && artifact.classifier.as_deref() == self.classifier.as_deref()
     }
 
-    pub fn artifact_path(&self) -> String {
-        format!(
+    pub fn artifact_path(&self) -> Result<SafeRelativePath> {
+        SafeRelativePath::parse(format!(
             "{}/{}",
-            self.version_directory_path(),
-            self.file_name_for_version(self.version())
-        )
+            self.version_directory_path()?.as_str(),
+            self.file_name_for_version(self.version())?
+        ))
+        .map_err(Error::from)
     }
 }
 
 impl MavenRepository {
     pub fn parse(base_url: &str, invalid_label: &str) -> Result<Self> {
-        let normalized_base_url = ensure_trailing_slash(base_url);
-        Url::parse(normalized_base_url.as_str()).map_err(|source| {
+        let parsed = Url::parse(base_url).map_err(|source| {
             Error::invalid_url(
                 format!("parse {invalid_label} url failed"),
                 base_url,
                 source,
             )
         })?;
+        ensure_http_scheme(&parsed, format!("{invalid_label} url"))?;
+        let base_url = ensure_directory_url(parsed)?;
 
-        Ok(Self {
-            base_url: normalized_base_url,
-        })
+        Ok(Self { base_url })
     }
 
     pub fn base_url(&self) -> &str {
         self.base_url.as_str()
     }
 
-    pub fn artifact_download(&self, artifact_path: String) -> Result<MavenArtifactDownload> {
-        let url = artifact_url(self.base_url(), artifact_path.as_str())?;
+    pub fn artifact_download(
+        &self,
+        artifact_path: SafeRelativePath,
+    ) -> Result<MavenArtifactDownload> {
+        let url = artifact_url(&self.base_url, &artifact_path)?;
         Ok(MavenArtifactDownload {
             path: artifact_path,
             url,
@@ -167,11 +191,10 @@ impl MavenRepository {
         client: &reqwest::Client,
         notation: &MavenNotation,
     ) -> Result<MavenArtifactDownload> {
-        let metadata_url = format!(
-            "{}/{}/maven-metadata.xml",
-            self.base_url.trim_end_matches('/'),
-            notation.version_directory_path()
-        );
+        let version_directory = notation.version_directory_path()?;
+        let metadata_path =
+            SafeRelativePath::parse(format!("{}/maven-metadata.xml", version_directory.as_str()))?;
+        let metadata_url = artifact_url(&self.base_url, &metadata_path)?;
         let raw_metadata =
             fetch_text(client, metadata_url.as_str(), "maven snapshot metadata").await?;
         let metadata: SnapshotMavenMetadata =
@@ -180,10 +203,11 @@ impl MavenRepository {
                 url: metadata_url,
                 source,
             })?;
-        let resolved_version = resolve_snapshot_version(notation, &metadata);
-        let file_name = notation.file_name_for_version(resolved_version.as_str());
-        let path = format!("{}/{}", notation.version_directory_path(), file_name);
-        let url = artifact_url(self.base_url(), path.as_str())?;
+        let resolved_version = resolve_snapshot_version(notation, &metadata)?;
+        let file_name = notation.file_name_for_version(resolved_version.as_str())?;
+        let path =
+            SafeRelativePath::parse(format!("{}/{}", version_directory.as_str(), file_name))?;
+        let url = artifact_url(&self.base_url, &path)?;
 
         Ok(MavenArtifactDownload { path, url })
     }
@@ -202,50 +226,84 @@ pub async fn fetch_maven_metadata(
     })
 }
 
-fn artifact_url(base_url: &str, artifact_path: &str) -> Result<String> {
-    let normalized_base_url = ensure_trailing_slash(base_url);
-    let base = Url::parse(normalized_base_url.as_str()).map_err(|source| {
-        Error::invalid_url("parse maven repository url failed", base_url, source)
-    })?;
-
-    base.join(artifact_path)
+fn artifact_url(base_url: &Url, artifact_path: &SafeRelativePath) -> Result<String> {
+    base_url
+        .join(artifact_path.as_str())
         .map_err(|source| {
             Error::join_url(
                 "join maven artifact url failed",
-                base_url,
-                artifact_path,
+                base_url.as_str(),
+                artifact_path.as_str(),
                 source,
             )
         })
         .map(|url| url.to_string())
 }
 
-fn ensure_trailing_slash(url: &str) -> String {
-    if url.ends_with('/') {
-        return url.to_owned();
+fn ensure_http_scheme(url: &Url, context: impl Into<String>) -> Result<()> {
+    if matches!(url.scheme(), "http" | "https") {
+        return Ok(());
     }
 
-    format!("{url}/")
+    Err(Error::UnsupportedUrlScheme {
+        context: context.into(),
+        url: url.to_string(),
+    })
 }
 
-fn resolve_snapshot_version(notation: &MavenNotation, metadata: &SnapshotMavenMetadata) -> String {
+fn validate_component(value: &str, label: &str, notation: &str) -> Result<()> {
+    let rejected = value.is_empty()
+        || value == "."
+        || value == ".."
+        || value.contains(['/', '\\', ':', '?', '#'])
+        || value.chars().any(char::is_control);
+
+    if rejected {
+        return Err(Error::InvalidNotation {
+            label: label.to_owned(),
+            notation: notation.to_owned(),
+        });
+    }
+
+    Ok(())
+}
+
+fn resolve_snapshot_version(
+    notation: &MavenNotation,
+    metadata: &SnapshotMavenMetadata,
+) -> Result<String> {
     if let Some(artifact) = metadata
         .versioning
         .snapshot_versions
         .iter()
         .find(|artifact| notation.matches_snapshot_artifact(artifact))
     {
-        return artifact.value.clone();
+        validate_component(
+            artifact.value.as_str(),
+            "maven snapshot version",
+            artifact.value.as_str(),
+        )?;
+        return Ok(artifact.value.clone());
     }
 
     if let Some(snapshot) = &metadata.versioning.snapshot
         && !metadata.version.is_empty()
     {
-        return format!(
+        validate_component(
+            metadata.version.as_str(),
+            "maven snapshot version",
+            metadata.version.as_str(),
+        )?;
+        validate_component(
+            snapshot.timestamp.as_str(),
+            "maven snapshot timestamp",
+            snapshot.timestamp.as_str(),
+        )?;
+        return Ok(format!(
             "{}-{}-{}",
             metadata.version, snapshot.timestamp, snapshot.build_number
-        );
+        ));
     }
 
-    notation.version().to_owned()
+    Ok(notation.version().to_owned())
 }

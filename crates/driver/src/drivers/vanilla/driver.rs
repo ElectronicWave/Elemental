@@ -36,8 +36,8 @@ impl VanillaDriver {
         Self { source }
     }
 
-    pub fn with_defaults() -> Result<Self> {
-        Ok(Self::new(VanillaSource::default()))
+    pub fn with_defaults() -> Self {
+        Self::new(VanillaSource::default())
     }
 
     pub async fn prepare<

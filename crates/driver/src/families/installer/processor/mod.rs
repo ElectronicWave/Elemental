@@ -2,12 +2,13 @@ mod context;
 mod runner;
 mod variables;
 
-use std::{collections::HashSet, path::PathBuf};
+use std::collections::HashSet;
 
 use elemental_core::{
     runtime::distribution::Distribution,
     storage::{Storage, layout::Layoutable},
 };
+use elemental_infra::SafeRelativePath;
 use elemental_infra::downloader::{DownloadBatch, DownloadSession, DownloadTask};
 use elemental_schema::forge::{ForgeInstallerProcessor, ForgeInstallerProfile};
 
@@ -154,11 +155,10 @@ where
         .iter()
         .flat_map(installer_library_artifacts)
     {
+        let relative_path = SafeRelativePath::parse(artifact.path.as_str())?;
         let path = instance
             .parent
-            .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
-                artifact.path.as_str(),
-            ))))?;
+            .try_get_resource(VersionJsonRootResource::Libraries(Some(relative_path)))?;
 
         if !seen.insert(path.clone()) {
             continue;

@@ -131,8 +131,8 @@ where
     F: InstallerFamily,
     F::Source: Default,
 {
-    pub fn with_defaults() -> Result<Self> {
-        Ok(Self::new(F::Source::default()))
+    pub fn with_defaults() -> Self {
+        Self::new(F::Source::default())
     }
 }
 

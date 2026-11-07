@@ -1,3 +1,6 @@
+use std::sync::LazyLock;
+
+use elemental_infra::SafeRelativePath;
 use regex::Regex;
 
 use crate::{
@@ -7,12 +10,14 @@ use crate::{
 
 use super::context::InstallerProcessorContext;
 
+static VARIABLE_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\{([^}]+)\}").expect("processor variable regex is valid"));
+
 impl InstallerProcessorContext<'_> {
     pub(super) fn resolve_argument(&self, value: &str) -> Result<String> {
-        let regex = Regex::new(r"\{([^}]+)\}")?;
         let mut resolved = value.to_owned();
 
-        for capture in regex.captures_iter(value) {
+        for capture in VARIABLE_PATTERN.captures_iter(value) {
             let Some(key) = capture.get(1).map(|group| group.as_str()) else {
                 continue;
             };
@@ -55,7 +60,7 @@ impl InstallerProcessorContext<'_> {
         {
             return Ok(self
                 .libraries_directory
-                .join(installer_coordinate_path(notation)?)
+                .join(installer_coordinate_path(notation)?.as_path())
                 .to_string_lossy()
                 .to_string());
         }
@@ -75,12 +80,16 @@ impl InstallerProcessorContext<'_> {
     }
 
     fn materialize_archive_path(&self, relative_path: &str) -> Result<String> {
-        let output_path = self.state_directory.join(relative_path);
+        let relative_path = SafeRelativePath::parse(relative_path)?;
+        let output_path = relative_path.join_to(&self.state_directory);
         if !output_path.exists() {
             if let Some(parent) = output_path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            std::fs::write(&output_path, self.archive.read_bytes(relative_path)?)?;
+            std::fs::write(
+                &output_path,
+                self.archive.read_bytes(relative_path.as_str())?,
+            )?;
         }
 
         Ok(output_path.to_string_lossy().to_string())

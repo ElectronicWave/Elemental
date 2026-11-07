@@ -58,17 +58,6 @@ fn load(path: &Path, strict: bool, cache: bool) -> Config
 * Encode invariants in types whenever possible.
 * Avoid "magic strings" and loosely-typed parameters.
 
-### Backward Compatibility
-
-* Public APIs are treated as stable contracts.
-* Breaking changes must be:
-
-  * Explicit
-  * Justified
-  * Documented
-
-If backward compatibility is not possible, provide a migration path.
-
 ---
 
 ## Error Handling

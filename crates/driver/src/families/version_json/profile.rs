@@ -201,7 +201,7 @@ fn profile_library_downloads_from_maven(
 ) -> Result<PistonMetaLibrariesDownloads> {
     let notation = MavenNotation::parse(profile_library.name.as_str(), "maven artifact")?;
     let repository = MavenRepository::parse(profile_library.url.as_str(), "maven repository")?;
-    let artifact = repository.artifact_download(notation.artifact_path())?;
+    let artifact = repository.artifact_download(notation.artifact_path()?)?;
     let classifiers = profile_library
         .natives
         .as_ref()
@@ -212,9 +212,9 @@ fn profile_library_downloads_from_maven(
                 .collect::<HashSet<String>>()
                 .into_iter()
                 .map(|classifier| {
-                    let classifier_notation = notation.with_classifier(classifier.as_str());
+                    let classifier_notation = notation.with_classifier(classifier.as_str())?;
                     let artifact =
-                        repository.artifact_download(classifier_notation.artifact_path())?;
+                        repository.artifact_download(classifier_notation.artifact_path()?)?;
 
                     Ok((
                         classifier,
@@ -222,7 +222,7 @@ fn profile_library_downloads_from_maven(
                             sha1: None,
                             size: None,
                             url: artifact.url,
-                            path: artifact.path,
+                            path: artifact.path.as_str().to_owned(),
                         },
                     ))
                 })
@@ -235,7 +235,7 @@ fn profile_library_downloads_from_maven(
             sha1: None,
             size: None,
             url: artifact.url,
-            path: artifact.path,
+            path: artifact.path.as_str().to_owned(),
         }),
         classifiers,
     })

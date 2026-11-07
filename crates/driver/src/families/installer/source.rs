@@ -1,7 +1,8 @@
-use std::{fmt::Debug, marker::PhantomData, path::PathBuf};
+use std::{fmt::Debug, marker::PhantomData};
 
 use crate::error::Result;
 use elemental_core::{minecraft::MinecraftVersionId, storage::Storage};
+use elemental_infra::SafeRelativePath;
 use elemental_schema::maven::MavenMetadataBody;
 
 use crate::{
@@ -23,7 +24,7 @@ use crate::{
 pub struct InstallerMavenArtifactSpec {
     pub coordinate: String,
     pub download_url: String,
-    pub relative_path: PathBuf,
+    pub relative_path: SafeRelativePath,
 }
 
 pub trait InstallerMavenEndpoints:
@@ -86,7 +87,7 @@ pub trait MavenSpec: Clone + Debug + Send + Sync + 'static {
                 Self::ARTIFACT
             ),
             download_url: endpoints.resolve(Self::MAVEN_ORIGIN, &artifact_path)?,
-            relative_path: PathBuf::from(artifact_path.trim_start_matches('/')),
+            relative_path: SafeRelativePath::parse(artifact_path.trim_start_matches('/'))?,
         })
     }
 
@@ -217,7 +218,7 @@ where
 
     pub async fn maven_metadata(&self) -> Result<MavenMetadataBody> {
         let url = self.endpoints().maven_metadata_url()?;
-        fetch_maven_metadata(self.inner.client(), url, E::SOURCE_NAME).await
+        fetch_maven_metadata(self.inner.client()?, url, E::SOURCE_NAME).await
     }
 
     pub fn installer_artifact<L>(

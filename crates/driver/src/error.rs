@@ -15,6 +15,9 @@ pub enum Error {
     #[error(transparent)]
     Http(#[from] reqwest::Error),
 
+    #[error("{message}")]
+    HttpClientBuild { message: String },
+
     #[error(transparent)]
     Regex(#[from] regex::Error),
 
@@ -88,6 +91,9 @@ pub enum Error {
 
     #[error("invalid {label} notation: {notation}")]
     InvalidNotation { label: String, notation: String },
+
+    #[error("{context} must use http or https: {url}")]
+    UnsupportedUrlScheme { context: String, url: String },
 
     #[error("decode {source_label} maven metadata failed: {url}")]
     DecodeMavenMetadata {

@@ -41,12 +41,12 @@ impl VanillaSource {
 
     pub async fn launch_meta(&self) -> Result<LaunchMetaData> {
         let url = self.endpoints().version_manifest_url()?;
-        fetch_json(self.inner.client(), url.as_str(), "vanilla source").await
+        fetch_json(self.inner.client()?, url.as_str(), "vanilla source").await
     }
 
     pub async fn piston_meta(&self, url: impl AsRef<str>) -> Result<PistonMetaData> {
         let url = self.endpoints().rewrite_upstream(url.as_ref())?;
-        fetch_json(self.inner.client(), url.as_str(), "vanilla source").await
+        fetch_json(self.inner.client()?, url.as_str(), "vanilla source").await
     }
 
     pub async fn asset_index_objects(
@@ -54,7 +54,7 @@ impl VanillaSource {
         url: impl AsRef<str>,
     ) -> Result<PistonMetaAssetIndexObjects> {
         let url = self.endpoints().rewrite_upstream(url.as_ref())?;
-        fetch_json(self.inner.client(), url.as_str(), "vanilla source").await
+        fetch_json(self.inner.client()?, url.as_str(), "vanilla source").await
     }
 }
 

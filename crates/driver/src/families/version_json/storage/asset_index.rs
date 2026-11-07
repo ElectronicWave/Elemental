@@ -2,6 +2,7 @@ use std::fs::File;
 
 use async_trait::async_trait;
 use elemental_core::storage::{Storage, layout::Layoutable};
+use elemental_infra::SafeRelativePath;
 use elemental_schema::mojang::piston::PistonMetaAssetIndexObjects;
 use tokio::fs::create_dir_all;
 
@@ -30,7 +31,9 @@ where
         id: String,
         objects: &PistonMetaAssetIndexObjects,
     ) -> Result<()> {
-        let path = self.try_get_resource(VersionJsonRootResource::AssetIndexes(Some(id)))?;
+        let path = self.try_get_resource(VersionJsonRootResource::AssetIndexes(Some(
+            SafeRelativePath::parse(id)?,
+        )))?;
         let parent = path.parent().ok_or_else(|| Error::MissingParentDirectory {
             context: "asset index path has no parent directory".to_owned(),
             path: path.clone(),
@@ -42,7 +45,7 @@ where
 
     fn asset_index_objects(&self, id: impl AsRef<str>) -> Result<PistonMetaAssetIndexObjects> {
         let path = self.try_get_resource(VersionJsonRootResource::AssetIndexes(Some(
-            id.as_ref().to_owned(),
+            SafeRelativePath::parse(id.as_ref())?,
         )))?;
         Ok(serde_json::from_reader(File::open(path)?)?)
     }

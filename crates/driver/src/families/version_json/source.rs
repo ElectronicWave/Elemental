@@ -70,12 +70,12 @@ where
 
     pub async fn game_versions(&self) -> Result<Vec<E::GameVersion>> {
         let url = self.endpoints().game_versions_url()?;
-        fetch_json(self.inner.client(), url.as_str(), E::SOURCE_NAME).await
+        fetch_json(self.inner.client()?, url.as_str(), E::SOURCE_NAME).await
     }
 
     pub async fn loader_versions(&self, game_version: &str) -> Result<Vec<E::LoaderGameVersion>> {
         let url = self.endpoints().loader_versions_url(game_version)?;
-        fetch_json(self.inner.client(), url.as_str(), E::SOURCE_NAME).await
+        fetch_json(self.inner.client()?, url.as_str(), E::SOURCE_NAME).await
     }
 
     pub async fn profile_json(
@@ -86,7 +86,7 @@ where
         let url = self
             .endpoints()
             .profile_json_url(game_version, loader_version)?;
-        fetch_json(self.inner.client(), url.as_str(), E::SOURCE_NAME).await
+        fetch_json(self.inner.client()?, url.as_str(), E::SOURCE_NAME).await
     }
 }
 
@@ -102,6 +102,6 @@ where
         let url = self
             .endpoints()
             .loader_profile_url(game_version, loader_version)?;
-        fetch_json(self.inner.client(), url.as_str(), E::SOURCE_NAME).await
+        fetch_json(self.inner.client()?, url.as_str(), E::SOURCE_NAME).await
     }
 }

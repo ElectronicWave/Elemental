@@ -277,7 +277,7 @@ where
         runtime_executable_path: Option<&Path>,
         runtime_validation: RuntimeValidationMode,
     ) -> Result<PreparedInstallerVersion<L, VL>> {
-        let state_paths = InstallerStatePaths::new(&self.instance.path, F::FAMILY_NAME);
+        let state_paths = InstallerStatePaths::new(&self.instance.path, F::FAMILY_NAME)?;
         let (installer_state, launch_version) = async {
             let libraries_root = self
                 .instance
@@ -369,7 +369,7 @@ where
         remote_resolver: InstallerFamilyRemoteResolver<F>,
         instance: Storage<VL, Storage<L>>,
     ) -> Result<PreparedInstallerVersion<L, VL>> {
-        let state_paths = InstallerStatePaths::new(&instance.path, F::FAMILY_NAME);
+        let state_paths = InstallerStatePaths::new(&instance.path, F::FAMILY_NAME)?;
         let installer_state = load_persisted_installer_state(&instance.path, F::FAMILY_NAME)?;
 
         let (game_version, loader_version) = F::profile_identity(&installer_state.install_profile)?;

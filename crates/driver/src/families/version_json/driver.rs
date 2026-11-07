@@ -49,7 +49,8 @@ where
     where
         F::Source: Default,
     {
-        Ok(Self::new(family.clone(), family.default_source()?))
+        let source = family.default_source()?;
+        Ok(Self::new(family, source))
     }
 
     pub fn descriptor(&self) -> DriverDescriptor {

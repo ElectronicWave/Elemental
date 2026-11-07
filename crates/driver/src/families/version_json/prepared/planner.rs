@@ -1,6 +1,5 @@
-use std::path::PathBuf;
-
 use elemental_core::storage::layout::Layoutable;
+use elemental_infra::SafeRelativePath;
 use elemental_infra::downloader::{DownloadBatch, DownloadTask};
 use elemental_schema::mojang::piston::{
     PistonMetaAssetIndexObjects, PistonMetaData, PistonMetaLibraries,
@@ -106,7 +105,7 @@ where
                 self.version
                     .parent
                     .try_get_resource(VersionJsonRootResource::AssetLogConfigs(Some(
-                        client.file.id.clone(),
+                        SafeRelativePath::parse(client.file.id.as_str())?,
                     )))?,
             )
             .size(client.file.size as u64)
@@ -135,9 +134,9 @@ where
                 .rewrite_upstream(artifact.url.as_str())?,
             self.version
                 .parent
-                .try_get_resource(VersionJsonRootResource::Libraries(Some(PathBuf::from(
-                    artifact.path.as_str(),
-                ))))?,
+                .try_get_resource(VersionJsonRootResource::Libraries(Some(
+                    SafeRelativePath::parse(artifact.path.as_str())?,
+                )))?,
         );
         if let Some(size) = artifact.size {
             task = task.size(size as u64);
@@ -149,21 +148,23 @@ where
     }
 
     fn batch_assets(&self) -> Result<DownloadBatch> {
-        let tasks =
-            self.asset_index_objects
-                .objects
-                .values()
-                .map(|object| {
-                    Ok(DownloadTask::new(
-                        self.remote_resolver.object_url(object.hash.as_str())?,
-                        self.version.parent.try_get_resource(
-                            VersionJsonRootResource::AssetObjects(Some(object.hash.clone())),
-                        )?,
-                    )
-                    .size(object.size as u64)
-                    .sha1(object.hash.clone()))
-                })
-                .collect::<Result<Vec<DownloadTask>>>()?;
+        let tasks = self
+            .asset_index_objects
+            .objects
+            .values()
+            .map(|object| {
+                Ok(DownloadTask::new(
+                    self.remote_resolver.object_url(object.hash.as_str())?,
+                    self.version
+                        .parent
+                        .try_get_resource(VersionJsonRootResource::AssetObjects(Some(
+                            SafeRelativePath::parse(object.hash.as_str())?,
+                        )))?,
+                )
+                .size(object.size as u64)
+                .sha1(object.hash.clone()))
+            })
+            .collect::<Result<Vec<DownloadTask>>>()?;
         Ok(DownloadBatch::new(tasks).group("assets"))
     }
 }

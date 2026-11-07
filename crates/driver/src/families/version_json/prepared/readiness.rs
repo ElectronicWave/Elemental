@@ -1,6 +1,5 @@
-use std::path::PathBuf;
-
 use elemental_core::storage::layout::Layoutable;
+use elemental_infra::SafeRelativePath;
 
 use crate::{
     error::Result,
@@ -31,7 +30,7 @@ where
                 .version
                 .parent
                 .try_get_resource(VersionJsonRootResource::AssetIndexes(Some(
-                    self.metadata.asset_index.id.clone(),
+                    SafeRelativePath::parse(self.metadata.asset_index.id.as_str())?,
                 )))?
                 .exists(),
             version_artifacts_ready: self.version_artifacts_ready(&rule_context)?,
@@ -62,7 +61,8 @@ where
             .filter(|library| library.is_allowed(rule_context))
             .flat_map(|library| library.version_artifacts(rule_context.platform()))
             .flatten()
-            .map(|artifact| PathBuf::from(artifact.path.as_str()));
+            .map(|artifact| SafeRelativePath::parse(artifact.path.as_str()))
+            .collect::<std::result::Result<Vec<SafeRelativePath>, _>>()?;
         library_artifacts_present(&self.version.parent, artifact_paths)
     }
 
@@ -79,7 +79,7 @@ where
             .version
             .parent
             .try_get_resource(VersionJsonRootResource::AssetLogConfigs(Some(
-                client.file.id.clone(),
+                SafeRelativePath::parse(client.file.id.as_str())?,
             )))?
             .exists())
     }
@@ -90,7 +90,7 @@ where
                 .version
                 .parent
                 .try_get_resource(VersionJsonRootResource::AssetObjects(Some(
-                    object.hash.clone(),
+                    SafeRelativePath::parse(object.hash.as_str())?,
                 )))?
                 .exists()
             {

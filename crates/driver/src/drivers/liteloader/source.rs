@@ -169,12 +169,12 @@ impl LiteLoaderSource {
     ) -> Result<ProfileJson> {
         let manifest = self.manifest().await?;
         let selected = select_build(&manifest, game_version, loader_version)?;
-        build_profile_json(self.inner.client(), self.endpoints(), &selected).await
+        build_profile_json(self.inner.client()?, self.endpoints(), &selected).await
     }
 
     async fn manifest(&self) -> Result<LiteLoaderManifest> {
         let url = self.endpoints().versions_manifest_url()?;
-        fetch_json(self.inner.client(), url.as_str(), "liteloader source").await
+        fetch_json(self.inner.client()?, url.as_str(), "liteloader source").await
     }
 }
 

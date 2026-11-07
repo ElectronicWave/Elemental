@@ -189,7 +189,7 @@ impl RiftSource {
     pub async fn releases(&self) -> Result<Vec<RiftRelease>> {
         let url = self.endpoints().releases_url()?;
         let releases: Vec<GitHubRelease> =
-            fetch_json(self.inner.client(), url.as_str(), "rift source").await?;
+            fetch_json(self.inner.client()?, url.as_str(), "rift source").await?;
 
         releases
             .into_iter()
@@ -207,7 +207,7 @@ impl RiftSource {
         let url = self
             .endpoints()
             .release_asset_url(release.tag_name.as_str(), release.asset_name.as_str())?;
-        let jar_bytes = fetch_bytes(self.inner.client(), url.as_str(), "rift source").await?;
+        let jar_bytes = fetch_bytes(self.inner.client()?, url.as_str(), "rift source").await?;
         let raw_profile = read_release_profile_json(release, jar_bytes).await?;
         let profile = parse_profile_json(raw_profile.as_str())?;
 
@@ -315,7 +315,7 @@ fn normalize_profile_json(
         .libraries
         .into_iter()
         .map(|library| normalize_profile_library(library, endpoints))
-        .collect();
+        .collect::<Result<Vec<ProfileLibrary>>>()?;
     let asset_url =
         endpoints.release_asset_url(release.tag_name.as_str(), release.asset_name.as_str())?;
     let normalized_loader_library = build_loader_library(release, asset_url);
@@ -337,29 +337,31 @@ fn normalize_profile_json(
     Ok(profile)
 }
 
-fn normalize_profile_library(library: ProfileLibrary, endpoints: &RiftEndpoints) -> ProfileLibrary {
+fn normalize_profile_library(
+    library: ProfileLibrary,
+    endpoints: &RiftEndpoints,
+) -> Result<ProfileLibrary> {
     if library.name == "org.dimdev:mixin:0.7.11-SNAPSHOT" {
         // The historical DimDev Maven endpoint is no longer a reliable source for this snapshot.
         return build_rift_mixin_library(endpoints);
     }
 
-    if library.url == "http://repo1.maven.org/maven2/"
-        && let Ok(maven_central_url) = endpoints.maven_central_url()
-    {
-        return ProfileLibrary {
+    if library.url == "http://repo1.maven.org/maven2/" {
+        let maven_central_url = endpoints.maven_central_url()?;
+        return Ok(ProfileLibrary {
             url: ensure_trailing_slash(maven_central_url.as_str()),
             ..library
-        };
+        });
     }
 
     if library.url.is_empty() && library.name.starts_with("net.minecraft:") {
-        return ProfileLibrary {
+        return Ok(ProfileLibrary {
             url: "https://libraries.minecraft.net/".to_owned(),
             ..library
-        };
+        });
     }
 
-    library
+    Ok(library)
 }
 
 fn build_loader_library(release: &RiftRelease, asset_url: String) -> ProfileLibrary {
@@ -386,17 +388,15 @@ fn build_loader_library(release: &RiftRelease, asset_url: String) -> ProfileLibr
     }
 }
 
-fn build_rift_mixin_library(endpoints: &RiftEndpoints) -> ProfileLibrary {
+fn build_rift_mixin_library(endpoints: &RiftEndpoints) -> Result<ProfileLibrary> {
     let artifact_path = format!(
         "org/spongepowered/mixin/0.7.11-SNAPSHOT/mixin-{}.jar",
         "0.7.11-20180703.121122-1"
     );
-    let sponge_maven_url = endpoints
-        .sponge_maven_url()
-        .unwrap_or_else(|_| "https://repo.spongepowered.org/maven".to_owned());
+    let sponge_maven_url = endpoints.sponge_maven_url()?;
     let artifact_url = format!("{}/{artifact_path}", sponge_maven_url.trim_end_matches('/'));
 
-    ProfileLibrary {
+    Ok(ProfileLibrary {
         name: "org.spongepowered:mixin:0.7.11-SNAPSHOT".to_owned(),
         url: ensure_trailing_slash(sponge_maven_url.as_str()),
         downloads: Some(ProfileLibraryDownloads {
@@ -410,7 +410,7 @@ fn build_rift_mixin_library(endpoints: &RiftEndpoints) -> ProfileLibrary {
         }),
         natives: None,
         extract: None,
-    }
+    })
 }
 
 fn is_rift_loader_library(library_name: &str) -> bool {

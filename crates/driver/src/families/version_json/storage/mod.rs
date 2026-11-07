@@ -3,9 +3,8 @@ mod game;
 mod natives;
 mod version;
 
-use std::path::PathBuf;
-
 use elemental_core::storage::{Storage, layout::Layoutable};
+use elemental_infra::SafeRelativePath;
 
 use crate::{
     error::Result,
@@ -22,7 +21,7 @@ pub(crate) fn library_artifacts_present<L, I>(
 ) -> Result<bool>
 where
     L: VersionJsonRootLayout,
-    I: IntoIterator<Item = PathBuf>,
+    I: IntoIterator<Item = SafeRelativePath>,
 {
     for path in artifact_paths {
         if !game_storage

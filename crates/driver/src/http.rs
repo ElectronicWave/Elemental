@@ -6,21 +6,31 @@ use crate::error::{Error, Result};
 
 #[derive(Debug, Clone)]
 pub struct HttpSource<E> {
-    client: reqwest::Client,
+    client: std::result::Result<reqwest::Client, String>,
     endpoints: E,
 }
 
 impl<E> HttpSource<E> {
     pub fn new(endpoints: E, source_name: &str) -> Self {
-        Self::with_client(endpoints, build_default_client(source_name))
+        Self {
+            client: build_default_client(source_name),
+            endpoints,
+        }
     }
 
     pub fn with_client(endpoints: E, client: reqwest::Client) -> Self {
-        Self { client, endpoints }
+        Self {
+            client: Ok(client),
+            endpoints,
+        }
     }
 
-    pub fn client(&self) -> &reqwest::Client {
-        &self.client
+    pub fn client(&self) -> Result<&reqwest::Client> {
+        self.client
+            .as_ref()
+            .map_err(|message| Error::HttpClientBuild {
+                message: message.clone(),
+            })
     }
 
     pub fn endpoints(&self) -> &E {
@@ -28,12 +38,12 @@ impl<E> HttpSource<E> {
     }
 }
 
-pub fn build_default_client(source_name: &str) -> reqwest::Client {
+pub fn build_default_client(source_name: &str) -> std::result::Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .user_agent(format!("Elemental/{}", env!("CARGO_PKG_VERSION")))
         .build()
-        .unwrap_or_else(|error| panic!("build {source_name} client failed: {error}"))
+        .map_err(|error| format!("build {source_name} client failed: {error}"))
 }
 
 pub async fn fetch_json<T>(client: &reqwest::Client, url: &str, source_name: &str) -> Result<T>

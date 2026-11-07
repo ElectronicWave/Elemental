@@ -8,6 +8,7 @@ use elemental_core::{
     runtime::{RuntimeValidationMode, resolve_runtime},
     storage::Storage,
 };
+use elemental_infra::SafeRelativePath;
 use elemental_infra::downloader::{DownloadBatch, DownloadSession};
 use elemental_schema::{forge::ForgeInstallerProfile, mojang::piston::PistonMetaLibraries};
 
@@ -140,6 +141,13 @@ where
             family_name: family_name.to_owned(),
             source,
         })?;
+    session
+        .success()
+        .await
+        .map_err(|source| Error::DownloadInstaller {
+            family_name: family_name.to_owned(),
+            source,
+        })?;
 
     read_installer_state(
         installer_artifact,
@@ -162,7 +170,7 @@ where
     V: Fn(&ForgeInstallerProfile) -> Result<()>,
 {
     let archive = InstallerArchive::new(installer_artifact.path.clone());
-    let state_paths = InstallerStatePaths::new(instance_root, family_name);
+    let state_paths = InstallerStatePaths::new(instance_root, family_name)?;
     let install_profile = archive
         .read_json::<ForgeInstallerProfile>("install_profile.json")
         .map_err(|source| Error::ReadInstallerProfile {
@@ -247,7 +255,7 @@ pub fn load_persisted_installer_state(
     instance_root: &Path,
     family_name: &str,
 ) -> Result<InstallerPersistedState> {
-    InstallerStatePaths::new(instance_root, family_name).load()
+    InstallerStatePaths::new(instance_root, family_name)?.load()
 }
 
 pub(crate) fn profile_game_and_raw_loader_version(
@@ -286,7 +294,8 @@ where
         .libraries
         .iter()
         .flat_map(installer_library_artifacts)
-        .map(|artifact| artifact.path.as_str().into());
+        .map(|artifact| SafeRelativePath::parse(artifact.path.as_str()))
+        .collect::<std::result::Result<Vec<SafeRelativePath>, _>>()?;
     library_artifacts_present(&instance.parent, artifact_paths)
 }
 
@@ -320,7 +329,7 @@ where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    let state_paths = InstallerStatePaths::new(&instance.path, family_name);
+    let state_paths = InstallerStatePaths::new(&instance.path, family_name)?;
 
     Ok(InstallerInstallStatus {
         installer_downloaded: installer_artifact.path.exists(),

@@ -4,6 +4,7 @@ use std::{
 };
 
 use elemental_core::storage::layout::Layoutable;
+use elemental_infra::SafeRelativePath;
 use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::{
@@ -74,7 +75,9 @@ where
 
             let path = resolve_root_resource(
                 builder,
-                VersionJsonRootResource::Libraries(Some(PathBuf::from(artifact.path.as_str()))),
+                VersionJsonRootResource::Libraries(Some(SafeRelativePath::parse(
+                    artifact.path.as_str(),
+                )?)),
             )?
             .to_string_lossy()
             .to_string();
@@ -147,7 +150,9 @@ where
 
     let log_config_path = resolve_root_resource(
         builder,
-        VersionJsonRootResource::AssetLogConfigs(Some(client.file.id.clone())),
+        VersionJsonRootResource::AssetLogConfigs(Some(SafeRelativePath::parse(
+            client.file.id.as_str(),
+        )?)),
     )?;
     if !log_config_path.exists() {
         return Err(Error::LoggingConfigMissing {

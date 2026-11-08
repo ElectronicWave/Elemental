@@ -167,16 +167,6 @@ bundled runtimes. Candidate roots are canonicalized, deduplicated, and sorted
 by Java version. Runtimes without a `release` file are probed with a bounded
 timeout and a cleaned Java environment.
 
-```rust
-use elemental_core::runtime::{
-    RuntimeValidationMode, distribution::Distribution, resolve_runtime,
-};
-
-let runtime = resolve_runtime(21, None, RuntimeValidationMode::Strict, "launch").await?;
-assert!(runtime.executable().is_file());
-# Ok::<_, anyhow::Error>(())
-```
-
 Use `RuntimeResolver` to own discovery and caching. `distributions()` returns
 every discovered runtime, `find_by_java_major()` selects one by Java major
 version, and `resolve()` applies an explicit executable or the configured
@@ -202,11 +192,9 @@ Custom runtime providers can reuse the public scanning helpers in
 `find_runtime_homes_with_prefixes()`, and `is_runtime_home()`, instead of
 reimplementing Java runtime layout checks.
 
-> [!IMPORTANT]
-> `with_runtime_providers()` and `Distribution::cached()` remain for
-> compatibility with code that relies on the process-wide provider list. The
-> launcher path uses `RuntimeResolver` instead; prefer it for new code, because
-> the global cache is not refreshed when providers change.
+Provider lists and their cache belong to a `RuntimeResolver`. There is no
+process-wide provider override, so independent resolvers can use different
+providers without sharing state.
 
 ### Authentication and launch processes
 

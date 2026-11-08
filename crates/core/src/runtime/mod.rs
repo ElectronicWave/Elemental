@@ -18,22 +18,6 @@ pub enum RuntimeValidationMode {
     Disabled,
 }
 
-pub async fn resolve_runtime(
-    required_major_version: usize,
-    runtime_executable_path: Option<&Path>,
-    validation_mode: RuntimeValidationMode,
-    usage: &str,
-) -> Result<Distribution> {
-    resolve_runtime_with(
-        required_major_version,
-        runtime_executable_path,
-        validation_mode,
-        usage,
-        Distribution::find_cached_by_java_major(required_major_version),
-    )
-    .await
-}
-
 pub(crate) async fn resolve_runtime_with<F>(
     required_major_version: usize,
     runtime_executable_path: Option<&Path>,

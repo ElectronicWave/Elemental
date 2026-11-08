@@ -1,10 +1,5 @@
 use async_trait::async_trait;
-use std::{
-    path::PathBuf,
-    sync::{Arc, OnceLock, RwLock},
-};
-
-use crate::runtime::error::{Error, Result};
+use std::{path::PathBuf, sync::Arc};
 
 #[async_trait]
 pub trait RuntimeProvider: Send + Sync {
@@ -30,10 +25,6 @@ use super::providers::{
 };
 
 pub type RuntimeProviderList = Vec<Arc<dyn RuntimeProvider>>;
-type RuntimeProviderOverride = Option<RuntimeProviderList>;
-type RuntimeProviderOverrideLock = RwLock<RuntimeProviderOverride>;
-
-static RUNTIME_PROVIDER_OVERRIDE: OnceLock<RuntimeProviderOverrideLock> = OnceLock::new();
 
 pub fn default_providers() -> RuntimeProviderList {
     vec![
@@ -42,20 +33,4 @@ pub fn default_providers() -> RuntimeProviderList {
         PackageManagerProvider::arc_default(),
         EnvJavaHomeProvider::arc_default(),
     ]
-}
-
-pub fn runtime_providers() -> RuntimeProviderList {
-    let storage = RUNTIME_PROVIDER_OVERRIDE.get_or_init(|| RwLock::new(None));
-    let Ok(guard) = storage.read() else {
-        return default_providers();
-    };
-
-    guard.clone().unwrap_or_else(default_providers)
-}
-
-pub fn with_runtime_providers(providers: RuntimeProviderList) -> Result<()> {
-    let storage = RUNTIME_PROVIDER_OVERRIDE.get_or_init(|| RwLock::new(None));
-    let mut guard = storage.write().map_err(|_| Error::ProviderLockPoisoned)?;
-    *guard = Some(providers);
-    Ok(())
 }

@@ -129,9 +129,6 @@ pub enum Error {
         path: PathBuf,
     },
 
-    #[error("lock runtime provider override for writing failed")]
-    ProviderLockPoisoned,
-
     #[error("custom runtime path is not a directory: {}", path.display())]
     CustomRuntimeNotDirectory { path: PathBuf },
 

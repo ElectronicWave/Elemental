@@ -7,14 +7,12 @@ use futures::future::join_all;
 use futures::stream::{self, StreamExt};
 use tokio::fs;
 use tokio::process::Command;
-use tokio::sync::OnceCell;
 
 use crate::runtime::{
     error::{Error, Result},
-    provider::{RuntimeProvider, runtime_providers},
+    provider::RuntimeProvider,
 };
 
-static DISTRIBUTION_CACHE: OnceCell<Vec<Distribution>> = OnceCell::const_new();
 const JAVA_INFO_PROBE_TIMEOUT: Duration = Duration::from_secs(15);
 const JAVA_INFO_PROBE_CONCURRENCY: usize = 8;
 const JAVA_PROBE_ENV_VARIABLES: &[&str] = &[
@@ -335,15 +333,6 @@ impl Distribution {
         unique_distributions.into_iter().collect()
     }
 
-    pub async fn cached() -> Vec<Self> {
-        DISTRIBUTION_CACHE
-            .get_or_init(|| async {
-                Distribution::from_providers::<Vec<_>>(runtime_providers()).await
-            })
-            .await
-            .clone()
-    }
-
     pub fn matches_java_major_version(&self, major_version: usize) -> bool {
         self.release
             .as_ref()
@@ -354,13 +343,6 @@ impl Distribution {
         self.release
             .as_ref()
             .and_then(DistributionReleaseData::java_major_version)
-    }
-
-    pub async fn find_cached_by_java_major(major_version: usize) -> Option<Self> {
-        Self::cached()
-            .await
-            .into_iter()
-            .find(|distribution| distribution.matches_java_major_version(major_version))
     }
 
     pub fn executable(&self) -> PathBuf {

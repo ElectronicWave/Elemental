@@ -1,11 +1,8 @@
-use std::{collections::HashMap, sync::Arc};
-
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
-use tokio::sync::{Mutex, OnceCell};
 
 use crate::{
-    error::{Error, Result},
+    error::Result,
     families::version_json::{LoaderMetaEndpoints, LoaderMetaSource},
 };
 
@@ -16,8 +13,6 @@ where
     E: LoaderMetaEndpoints,
 {
     source: LoaderMetaSource<E>,
-    game_versions: OnceCell<Vec<GameVersion>>,
-    loader_versions: Mutex<HashMap<MinecraftVersionId, Arc<OnceCell<Vec<LoaderRelease>>>>>,
 }
 
 impl<E> LoaderMetaCatalog<E>
@@ -25,11 +20,7 @@ where
     E: LoaderMetaEndpoints,
 {
     pub fn new(source: LoaderMetaSource<E>) -> Self {
-        Self {
-            source,
-            game_versions: OnceCell::new(),
-            loader_versions: Mutex::new(HashMap::new()),
-        }
+        Self { source }
     }
 
     pub fn with_defaults() -> Self
@@ -51,19 +42,12 @@ where
 {
     async fn game_versions(&self) -> Result<Vec<GameVersion>> {
         Ok(self
-            .game_versions
-            .get_or_try_init(|| async {
-                Ok::<Vec<GameVersion>, Error>(
-                    self.source
-                        .game_versions()
-                        .await?
-                        .into_iter()
-                        .map(E::game_version)
-                        .collect(),
-                )
-            })
+            .source
+            .game_versions()
             .await?
-            .clone())
+            .into_iter()
+            .map(E::game_version)
+            .collect())
     }
 }
 
@@ -76,25 +60,12 @@ where
         &self,
         game_version: &MinecraftVersionId,
     ) -> Result<Vec<LoaderRelease>> {
-        let cell = self
-            .loader_versions
-            .lock()
-            .await
-            .entry(game_version.clone())
-            .or_default()
-            .clone();
-
-        cell.get_or_try_init(|| async {
-            Ok::<Vec<LoaderRelease>, Error>(
-                self.source
-                    .loader_versions(game_version.as_str())
-                    .await?
-                    .into_iter()
-                    .map(|loader| E::release(game_version.clone(), loader))
-                    .collect(),
-            )
-        })
-        .await
-        .cloned()
+        Ok(self
+            .source
+            .loader_versions(game_version.as_str())
+            .await?
+            .into_iter()
+            .map(|loader| E::release(game_version.clone(), loader))
+            .collect())
     }
 }

@@ -32,34 +32,37 @@ impl Display for LaunchpadAction {
     }
 }
 
+impl LaunchpadAction {
+    fn prompt(local_only: bool) -> Result<Option<Self>> {
+        prompt_or_back(
+            Select::new("What would you like to do?", action_choices(local_only))
+                .with_help_message("Arrow keys move, Enter confirms, Esc exits")
+                .prompt(),
+        )
+    }
+
+    async fn execute(self, storage_root: PathBuf) -> Result<Option<LaunchpadCommand>> {
+        match self {
+            Self::NewInstance => Ok(new_instance::prompt(storage_root)
+                .await?
+                .map(LaunchpadCommand::Launch)),
+            Self::InstalledInstance => installed::prompt(storage_root).await,
+            Self::ListInstances => Ok(Some(LaunchpadCommand::ListInstances { storage_root })),
+        }
+    }
+}
+
 pub async fn prompt_command(storage_root: PathBuf, local_only: bool) -> Result<LaunchpadCommand> {
     println!("Elemental launchpad interactive setup");
     println!("Storage root: {}", storage_root.display());
 
     loop {
-        let action = prompt_or_back(
-            Select::new("What would you like to do?", action_choices(local_only))
-                .with_help_message("Arrow keys move, Enter confirms, Esc exits")
-                .prompt(),
-        )?;
-        let Some(action) = action else {
+        let Some(action) = LaunchpadAction::prompt(local_only)? else {
             return Ok(LaunchpadCommand::Exit);
         };
 
-        match action {
-            LaunchpadAction::NewInstance => {
-                if let Some(config) = new_instance::prompt(storage_root.clone()).await? {
-                    return Ok(LaunchpadCommand::Launch(config));
-                }
-            }
-            LaunchpadAction::InstalledInstance => {
-                if let Some(command) = installed::prompt(storage_root.clone()).await? {
-                    return Ok(command);
-                }
-            }
-            LaunchpadAction::ListInstances => {
-                return Ok(LaunchpadCommand::ListInstances { storage_root });
-            }
+        if let Some(command) = action.execute(storage_root.clone()).await? {
+            return Ok(command);
         }
     }
 }

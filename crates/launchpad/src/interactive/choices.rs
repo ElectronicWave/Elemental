@@ -11,11 +11,9 @@ use elemental::{
         descriptors::FABRIC_DRIVER,
         driver::DriverDescriptor,
     },
-    launcher::Instance,
+    launcher::{DriverCatalog, Instance},
 };
 use inquire::InquireError;
-
-use crate::defaults::SUPPORTED_DRIVERS;
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct DriverChoice {
@@ -125,24 +123,19 @@ pub(super) fn prompt_or_back<T>(result: std::result::Result<T, InquireError>) ->
 }
 
 pub(super) fn driver_choices() -> Vec<DriverChoice> {
-    SUPPORTED_DRIVERS
-        .iter()
-        .map(|descriptor| DriverChoice {
-            descriptor: *descriptor,
-        })
+    DriverCatalog::supported_drivers()
+        .map(|descriptor| DriverChoice { descriptor })
         .collect()
 }
 
 pub(super) fn fabric_starting_cursor() -> usize {
-    SUPPORTED_DRIVERS
-        .iter()
-        .position(|descriptor| *descriptor == FABRIC_DRIVER)
+    DriverCatalog::supported_drivers()
+        .position(|descriptor| descriptor == FABRIC_DRIVER)
         .unwrap_or(0)
 }
 
 pub(super) fn driver_starting_cursor(driver: DriverDescriptor) -> usize {
-    SUPPORTED_DRIVERS
-        .iter()
-        .position(|descriptor| *descriptor == driver)
+    DriverCatalog::supported_drivers()
+        .position(|descriptor| descriptor == driver)
         .unwrap_or_else(fabric_starting_cursor)
 }

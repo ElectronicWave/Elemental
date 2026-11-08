@@ -18,6 +18,44 @@ use super::{
     runtime::{self, RuntimeSelection},
 };
 
+struct InstalledSelection {
+    instance: Instance,
+    defaults: DriverDefaults,
+    runtime: RuntimeSelection,
+}
+
+impl InstalledSelection {
+    fn into_config(self, storage_root: PathBuf) -> Result<LaunchpadConfig> {
+        let game_version = self
+            .instance
+            .driver
+            .game_version
+            .unwrap_or_else(|| MinecraftVersionId::from(self.defaults.game_version));
+        let loader_version = self
+            .instance
+            .driver
+            .driver_version
+            .as_deref()
+            .map(LoaderVersionId::from)
+            .or_else(|| self.defaults.loader_version.map(LoaderVersionId::from));
+        let spec = build_spec(self.instance.driver.driver, game_version, loader_version)?;
+        let options = LaunchOptions {
+            runtime_major_version: self.runtime.major_version,
+            runtime_validation: self.runtime.validation,
+            ..LaunchOptions::default()
+        };
+
+        Ok(LaunchpadConfig {
+            spec,
+            options,
+            runtime_paths: Vec::new(),
+            storage_root,
+            instance_name: self.instance.instance_name,
+            local_only: true,
+        })
+    }
+}
+
 pub(super) async fn prompt(storage_root: PathBuf) -> Result<Option<LaunchpadCommand>> {
     let launcher = Launcher::builder()
         .storage_root(storage_root.clone())
@@ -30,31 +68,35 @@ pub(super) async fn prompt(storage_root: PathBuf) -> Result<Option<LaunchpadComm
         );
     }
 
-    let Some(mut selected_instance) = prompt_instance(&instances, None)? else {
+    let Some(selection) = select_instance(&instances).await? else {
+        return Ok(None);
+    };
+    let config = selection.into_config(storage_root)?;
+
+    Ok(Some(LaunchpadCommand::Launch(Box::new(config))))
+}
+
+async fn select_instance(instances: &[Instance]) -> Result<Option<InstalledSelection>> {
+    let Some(mut instance) = prompt_instance(instances, None)? else {
         return Ok(None);
     };
     let mut runtime_choice = None;
 
     loop {
-        let defaults = instance_defaults(&selected_instance)?;
-        let (game_version, loader_version) = instance_versions(&selected_instance, defaults);
-        let Some(runtime) =
-            runtime::prompt(defaults.runtime_major_version, &mut runtime_choice).await?
-        else {
-            let Some(next_instance) = prompt_instance(&instances, Some(&selected_instance))? else {
-                return Ok(None);
-            };
-            selected_instance = next_instance;
-            continue;
-        };
+        let defaults = instance_defaults(&instance)?;
+        let runtime = runtime::prompt(defaults.runtime_major_version, &mut runtime_choice).await?;
+        if let Some(runtime) = runtime {
+            return Ok(Some(InstalledSelection {
+                instance,
+                defaults,
+                runtime,
+            }));
+        }
 
-        return Ok(Some(LaunchpadCommand::Launch(Box::new(launch_config(
-            storage_root,
-            &selected_instance,
-            game_version,
-            loader_version,
-            runtime,
-        )?))));
+        let Some(next_instance) = prompt_instance(instances, Some(&instance))? else {
+            return Ok(None);
+        };
+        instance = next_instance;
     }
 }
 
@@ -64,49 +106,6 @@ fn instance_defaults(instance: &Instance) -> Result<DriverDefaults> {
             "{} launchpad defaults are missing",
             instance.driver.driver.name
         )
-    })
-}
-
-fn instance_versions(
-    instance: &Instance,
-    defaults: DriverDefaults,
-) -> (MinecraftVersionId, Option<LoaderVersionId>) {
-    let game_version = instance
-        .driver
-        .game_version
-        .as_ref()
-        .cloned()
-        .unwrap_or_else(|| MinecraftVersionId::from(defaults.game_version));
-    let loader_version = instance
-        .driver
-        .driver_version
-        .as_deref()
-        .map(LoaderVersionId::from)
-        .or_else(|| defaults.loader_version.map(LoaderVersionId::from));
-
-    (game_version, loader_version)
-}
-
-fn launch_config(
-    storage_root: PathBuf,
-    instance: &Instance,
-    game_version: MinecraftVersionId,
-    loader_version: Option<LoaderVersionId>,
-    runtime: RuntimeSelection,
-) -> Result<LaunchpadConfig> {
-    let spec = build_spec(instance.driver.driver, game_version, loader_version)?;
-    let options = LaunchOptions {
-        runtime_major_version: runtime.major_version,
-        runtime_validation: runtime.validation,
-        ..LaunchOptions::default()
-    };
-    Ok(LaunchpadConfig {
-        spec,
-        options,
-        runtime_paths: Vec::new(),
-        storage_root,
-        instance_name: instance.instance_name.clone(),
-        local_only: true,
     })
 }
 

@@ -5,6 +5,7 @@ use elemental::{
     core::minecraft::MinecraftVersionId,
     driver::{
         catalog::{GameVersion, LoaderRelease},
+        driver::DriverDescriptor,
         loader_version::LoaderVersionId,
     },
     launcher::{DriverCatalog, LaunchOptions},
@@ -31,20 +32,73 @@ enum NewInstanceStep {
     GameVersion,
     LoaderVersion,
     InstanceName,
+    Runtime,
 }
 
-enum StepResult {
-    Next(NewInstanceStep),
-    Back(NewInstanceStep),
+enum StepOutcome {
+    Step(NewInstanceStep),
     Finished(Box<LaunchpadConfig>),
     Cancelled,
 }
 
+struct DriverContext {
+    descriptor: DriverDescriptor,
+    defaults: DriverDefaults,
+    catalog: DriverCatalog,
+    game_versions: Vec<GameVersion>,
+}
+
+impl DriverContext {
+    fn new(descriptor: DriverDescriptor) -> Result<Self> {
+        let defaults = driver_defaults(descriptor)
+            .with_context(|| format!("{} launchpad defaults are missing", descriptor.name))?;
+        let catalog = DriverCatalog::for_driver(descriptor)?;
+
+        Ok(Self {
+            descriptor,
+            defaults,
+            catalog,
+            game_versions: Vec::new(),
+        })
+    }
+
+    async fn ensure_game_versions(&mut self) -> Result<()> {
+        if !self.game_versions.is_empty() {
+            return Ok(());
+        }
+
+        let message = format!("Fetching {} Minecraft versions", self.descriptor.name);
+        let game_versions = progress::with_spinner(&message, self.catalog.game_versions()).await?;
+        if game_versions.is_empty() {
+            bail!(
+                "No Minecraft versions are available for {}",
+                self.descriptor.name
+            );
+        }
+
+        self.game_versions = game_versions;
+        Ok(())
+    }
+
+    fn game_version_cursor(&self, selected: Option<&MinecraftVersionId>) -> usize {
+        selected
+            .and_then(|selected| {
+                self.game_versions
+                    .iter()
+                    .position(|version| &version.id == selected)
+            })
+            .or_else(|| {
+                self.game_versions
+                    .iter()
+                    .position(|version| version.id.as_str() == self.defaults.game_version)
+            })
+            .unwrap_or(0)
+    }
+}
+
 struct NewInstanceWizard {
     storage_root: PathBuf,
-    defaults: Option<DriverDefaults>,
-    catalog: Option<DriverCatalog>,
-    game_versions: Vec<GameVersion>,
+    driver: Option<DriverContext>,
     game_version: Option<MinecraftVersionId>,
     loader_version: Option<LoaderVersionId>,
     instance_name: Option<String>,
@@ -55,9 +109,7 @@ impl NewInstanceWizard {
     fn new(storage_root: PathBuf) -> Self {
         Self {
             storage_root,
-            defaults: None,
-            catalog: None,
-            game_versions: Vec::new(),
+            driver: None,
             game_version: None,
             loader_version: None,
             instance_name: None,
@@ -68,61 +120,70 @@ impl NewInstanceWizard {
     async fn run(mut self) -> Result<Option<Box<LaunchpadConfig>>> {
         let mut step = NewInstanceStep::Driver;
         loop {
-            let result = match step {
-                NewInstanceStep::Driver => self.prompt_driver()?,
-                NewInstanceStep::GameVersion => self.prompt_game_version().await?,
-                NewInstanceStep::LoaderVersion => self.prompt_loader_version().await?,
-                NewInstanceStep::InstanceName => self.prompt_instance_name().await?,
-            };
-
-            match result {
-                StepResult::Next(next) => step = next,
-                StepResult::Back(previous) => step = previous,
-                StepResult::Finished(config) => return Ok(Some(config)),
-                StepResult::Cancelled => return Ok(None),
+            match step.prompt(&mut self).await? {
+                StepOutcome::Step(next) => step = next,
+                StepOutcome::Finished(config) => return Ok(Some(config)),
+                StepOutcome::Cancelled => return Ok(None),
             }
         }
     }
 
-    fn prompt_driver(&mut self) -> Result<StepResult> {
+    fn prompt_driver(&mut self) -> Result<StepOutcome> {
         let starting_cursor = self
-            .catalog
+            .driver
             .as_ref()
-            .map_or_else(fabric_starting_cursor, |catalog| {
-                driver_starting_cursor(catalog.driver())
+            .map_or_else(fabric_starting_cursor, |driver| {
+                driver_starting_cursor(driver.descriptor)
             });
         let result = Select::new("Choose a driver", driver_choices())
             .with_starting_cursor(starting_cursor)
             .with_help_message("Esc goes back to the main menu")
             .prompt();
         let Some(driver) = prompt_or_back(result)? else {
-            return Ok(StepResult::Cancelled);
+            return Ok(StepOutcome::Cancelled);
         };
 
         self.select_driver(driver)?;
-        Ok(StepResult::Next(NewInstanceStep::GameVersion))
+        Ok(StepOutcome::Step(NewInstanceStep::GameVersion))
     }
 
-    async fn prompt_game_version(&mut self) -> Result<StepResult> {
-        let defaults = self
-            .defaults
-            .context("driver defaults are missing from the wizard state")?;
-        self.ensure_game_versions().await?;
+    fn select_driver(&mut self, choice: DriverChoice) -> Result<()> {
+        if self
+            .driver
+            .as_ref()
+            .is_some_and(|driver| driver.descriptor == choice.descriptor)
+        {
+            return Ok(());
+        }
 
-        let starting_cursor = self.game_version_cursor(defaults);
-        let result = Select::new(
-            "Minecraft version",
-            self.game_versions
-                .iter()
-                .cloned()
-                .map(|version| GameVersionChoice { version })
-                .collect(),
-        )
-        .with_starting_cursor(starting_cursor)
-        .with_help_message("Type to filter the catalog. Esc goes back")
-        .prompt();
+        self.driver = Some(DriverContext::new(choice.descriptor)?);
+        self.game_version = None;
+        self.loader_version = None;
+        self.instance_name = None;
+        Ok(())
+    }
+
+    async fn prompt_game_version(&mut self) -> Result<StepOutcome> {
+        let driver = self
+            .driver
+            .as_mut()
+            .context("driver is missing from the wizard state")?;
+        driver.ensure_game_versions().await?;
+
+        let defaults = driver.defaults;
+        let starting_cursor = driver.game_version_cursor(self.game_version.as_ref());
+        let choices = driver
+            .game_versions
+            .iter()
+            .cloned()
+            .map(|version| GameVersionChoice { version })
+            .collect();
+        let result = Select::new("Minecraft version", choices)
+            .with_starting_cursor(starting_cursor)
+            .with_help_message("Type to filter the catalog. Esc goes back")
+            .prompt();
         let Some(choice) = prompt_or_back(result)? else {
-            return Ok(StepResult::Back(NewInstanceStep::Driver));
+            return Ok(StepOutcome::Step(NewInstanceStep::Driver));
         };
 
         let game_version_changed = self.game_version.as_ref() != Some(&choice.version.id);
@@ -137,35 +198,32 @@ impl NewInstanceWizard {
         } else {
             NewInstanceStep::InstanceName
         };
-        Ok(StepResult::Next(next))
+        Ok(StepOutcome::Step(next))
     }
 
-    async fn prompt_loader_version(&mut self) -> Result<StepResult> {
-        let defaults = self
-            .defaults
-            .context("driver defaults are missing from the wizard state")?;
+    async fn prompt_loader_version(&mut self) -> Result<StepOutcome> {
+        let driver = self
+            .driver
+            .as_ref()
+            .context("driver is missing from the wizard state")?;
         let game_version = self
             .game_version
-            .clone()
-            .context("Minecraft version is missing from the wizard state")?;
-        let catalog = self
-            .catalog
             .as_ref()
-            .context("driver catalog is missing from the wizard state")?;
-        let default_loader_version = defaults
+            .context("Minecraft version is missing from the wizard state")?;
+        let default_loader_version = driver
+            .defaults
             .loader_version
             .context("loader version default is missing from the wizard state")?;
         let message = format!(
             "Fetching {} loader versions for {}",
-            catalog.driver().name,
-            game_version
+            driver.descriptor.name, game_version
         );
         let loader_releases =
-            progress::with_spinner(&message, catalog.loader_versions(&game_version)).await?;
+            progress::with_spinner(&message, driver.catalog.loader_versions(game_version)).await?;
         if loader_releases.is_empty() {
             bail!(
                 "No {} loader versions are available for Minecraft {}",
-                catalog.driver().name,
+                driver.descriptor.name,
                 game_version
             );
         }
@@ -182,25 +240,22 @@ impl NewInstanceWizard {
         .with_help_message("Type to filter the catalog. Esc goes back")
         .prompt();
         let Some(choice) = prompt_or_back(result)? else {
-            return Ok(StepResult::Back(NewInstanceStep::GameVersion));
+            return Ok(StepOutcome::Step(NewInstanceStep::GameVersion));
         };
 
         self.loader_version = Some(choice.release.loader_version);
-        Ok(StepResult::Next(NewInstanceStep::InstanceName))
+        Ok(StepOutcome::Step(NewInstanceStep::InstanceName))
     }
 
-    async fn prompt_instance_name(&mut self) -> Result<StepResult> {
-        let driver = self
-            .catalog
-            .as_ref()
-            .context("driver catalog is missing from the wizard state")?
-            .driver();
+    async fn prompt_instance_name(&mut self) -> Result<StepOutcome> {
         let defaults = self
-            .defaults
-            .context("driver defaults are missing from the wizard state")?;
+            .driver
+            .as_ref()
+            .context("driver is missing from the wizard state")?
+            .defaults;
         let game_version = self
             .game_version
-            .clone()
+            .as_ref()
             .context("Minecraft version is missing from the wizard state")?;
         let default_name = default_instance_name(defaults, game_version.as_str());
         let prompt = if let Some(name) = self.instance_name.as_deref() {
@@ -213,23 +268,45 @@ impl NewInstanceWizard {
                 .with_help_message("Enter accepts the generated name. Esc goes back")
         };
         let Some(instance_name) = prompt_or_back(prompt.prompt())? else {
-            return Ok(StepResult::Back(previous_step(defaults)));
+            let previous = if defaults.loader_version.is_some() {
+                NewInstanceStep::LoaderVersion
+            } else {
+                NewInstanceStep::GameVersion
+            };
+            return Ok(StepOutcome::Step(previous));
         };
-        self.instance_name = Some(instance_name.clone());
+        self.instance_name = Some(instance_name);
+        Ok(StepOutcome::Step(NewInstanceStep::Runtime))
+    }
 
+    async fn prompt_runtime(&mut self) -> Result<StepOutcome> {
+        let driver = self
+            .driver
+            .as_ref()
+            .context("driver is missing from the wizard state")?;
+        let defaults = driver.defaults;
+        let descriptor = driver.descriptor;
         let Some(runtime) =
             runtime::prompt(defaults.runtime_major_version, &mut self.runtime_choice).await?
         else {
-            return Ok(StepResult::Back(NewInstanceStep::InstanceName));
+            return Ok(StepOutcome::Step(NewInstanceStep::InstanceName));
         };
 
-        let spec = build_spec(driver, game_version, self.loader_version.clone())?;
+        let game_version = self
+            .game_version
+            .take()
+            .context("Minecraft version is missing from the wizard state")?;
+        let spec = build_spec(descriptor, game_version, self.loader_version.take())?;
+        let instance_name = self
+            .instance_name
+            .take()
+            .context("instance name is missing from the wizard state")?;
         let options = LaunchOptions {
             runtime_major_version: runtime.major_version,
             runtime_validation: runtime.validation,
             ..LaunchOptions::default()
         };
-        Ok(StepResult::Finished(Box::new(LaunchpadConfig {
+        Ok(StepOutcome::Finished(Box::new(LaunchpadConfig {
             spec,
             options,
             runtime_paths: Vec::new(),
@@ -237,64 +314,6 @@ impl NewInstanceWizard {
             instance_name,
             local_only: false,
         })))
-    }
-
-    fn select_driver(&mut self, choice: DriverChoice) -> Result<()> {
-        let driver_changed = self
-            .catalog
-            .as_ref()
-            .is_none_or(|catalog| catalog.driver() != choice.descriptor);
-        if driver_changed {
-            let defaults = driver_defaults(choice.descriptor).with_context(|| {
-                format!("{} launchpad defaults are missing", choice.descriptor.name)
-            })?;
-            let catalog = DriverCatalog::for_driver(choice.descriptor)?;
-
-            self.defaults = Some(defaults);
-            self.catalog = Some(catalog);
-            self.game_versions.clear();
-            self.game_version = None;
-            self.loader_version = None;
-            self.instance_name = None;
-        }
-
-        Ok(())
-    }
-
-    async fn ensure_game_versions(&mut self) -> Result<()> {
-        if !self.game_versions.is_empty() {
-            return Ok(());
-        }
-
-        let catalog = self
-            .catalog
-            .as_ref()
-            .context("driver catalog is missing from the wizard state")?;
-        let driver = catalog.driver();
-        let message = format!("Fetching {} Minecraft versions", driver.name);
-        let game_versions = progress::with_spinner(&message, catalog.game_versions()).await?;
-        if game_versions.is_empty() {
-            bail!("No Minecraft versions are available for {}", driver.name);
-        }
-
-        self.game_versions = game_versions;
-        Ok(())
-    }
-
-    fn game_version_cursor(&self, defaults: DriverDefaults) -> usize {
-        self.game_version
-            .as_ref()
-            .and_then(|selected| {
-                self.game_versions
-                    .iter()
-                    .position(|version| &version.id == selected)
-            })
-            .or_else(|| {
-                self.game_versions
-                    .iter()
-                    .position(|version| version.id.as_str() == defaults.game_version)
-            })
-            .unwrap_or(0)
     }
 
     fn loader_version_cursor(
@@ -318,14 +337,18 @@ impl NewInstanceWizard {
     }
 }
 
-pub(super) async fn prompt(storage_root: PathBuf) -> Result<Option<Box<LaunchpadConfig>>> {
-    NewInstanceWizard::new(storage_root).run().await
+impl NewInstanceStep {
+    async fn prompt(self, wizard: &mut NewInstanceWizard) -> Result<StepOutcome> {
+        match self {
+            Self::Driver => wizard.prompt_driver(),
+            Self::GameVersion => wizard.prompt_game_version().await,
+            Self::LoaderVersion => wizard.prompt_loader_version().await,
+            Self::InstanceName => wizard.prompt_instance_name().await,
+            Self::Runtime => wizard.prompt_runtime().await,
+        }
+    }
 }
 
-fn previous_step(defaults: DriverDefaults) -> NewInstanceStep {
-    if defaults.loader_version.is_some() {
-        NewInstanceStep::LoaderVersion
-    } else {
-        NewInstanceStep::GameVersion
-    }
+pub(super) async fn prompt(storage_root: PathBuf) -> Result<Option<Box<LaunchpadConfig>>> {
+    NewInstanceWizard::new(storage_root).run().await
 }

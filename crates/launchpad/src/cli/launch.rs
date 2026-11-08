@@ -1,17 +1,15 @@
 use std::path::PathBuf;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use elemental::{
     core::minecraft::MinecraftVersionId,
-    driver::{
-        descriptors::VANILLA_DRIVER, driver::DriverDescriptor, loader_version::LoaderVersionId,
-    },
-    launcher::{DriverSpec, LaunchOptions},
+    driver::{driver::DriverDescriptor, loader_version::LoaderVersionId},
+    launcher::LaunchOptions,
 };
 
 use crate::{
     config::{LaunchpadConfig, build_spec},
-    defaults::{default_instance_name, driver_defaults},
+    defaults::{DriverDefaults, default_instance_name, driver_defaults},
 };
 
 use super::args::{LaunchArgs, RuntimeValidationArg, default_driver};
@@ -30,21 +28,34 @@ struct LaunchInput {
 }
 
 impl LaunchInput {
-    fn into_config(self, spec: DriverSpec, instance_name: String) -> LaunchpadConfig {
+    fn into_config(self, defaults: DriverDefaults) -> Result<LaunchpadConfig> {
+        let game_version = self
+            .game_version
+            .unwrap_or_else(|| MinecraftVersionId::from(defaults.game_version));
+        let instance_name = self
+            .instance_name
+            .unwrap_or_else(|| default_instance_name(defaults, game_version.as_str()));
+        let loader_version = self
+            .loader_version
+            .or_else(|| defaults.loader_version.map(LoaderVersionId::from));
+        let spec = build_spec(self.driver, game_version, loader_version)?;
         let options = LaunchOptions {
-            runtime_major_version: self.runtime_major_version,
+            runtime_major_version: self
+                .runtime_major_version
+                .or(defaults.runtime_major_version),
             runtime_executable_path: self.runtime_executable_path,
             runtime_validation: self.runtime_validation.into_runtime_validation_mode(),
             ..LaunchOptions::default()
         };
-        LaunchpadConfig {
+
+        Ok(LaunchpadConfig {
             spec,
             options,
             runtime_paths: self.runtime_paths,
             storage_root: self.storage_root,
             instance_name,
             local_only: self.local_only,
-        }
+        })
     }
 }
 
@@ -75,57 +86,8 @@ pub(super) fn build(
         loader_version: loader_version.map(LoaderVersionId::from),
         instance_name,
     };
-
-    if input.driver == VANILLA_DRIVER {
-        return build_vanilla_config(input);
-    }
-
-    build_loader_config(input)
-}
-
-fn build_vanilla_config(input: LaunchInput) -> Result<LaunchpadConfig> {
-    if input.loader_version.is_some() {
-        bail!("vanilla does not accept a loader version");
-    }
-
     let defaults = driver_defaults(input.driver)
         .with_context(|| format!("{} launchpad defaults are missing", input.driver.name))?;
-    let game_version = input
-        .game_version
-        .clone()
-        .unwrap_or_else(|| MinecraftVersionId::from(defaults.game_version));
-    let instance_name = input
-        .instance_name
-        .clone()
-        .unwrap_or_else(|| default_instance_name(defaults, game_version.as_str()));
-    let spec = build_spec(input.driver, game_version, None)?;
 
-    Ok(input.into_config(spec, instance_name))
-}
-
-fn build_loader_config(input: LaunchInput) -> Result<LaunchpadConfig> {
-    let defaults = driver_defaults(input.driver)
-        .with_context(|| format!("{} launchpad defaults are missing", input.driver.name))?;
-    let game_version = input
-        .game_version
-        .clone()
-        .unwrap_or_else(|| MinecraftVersionId::from(defaults.game_version));
-    let default_loader_version = defaults
-        .loader_version
-        .with_context(|| format!("{} launchpad requires a loader version", input.driver.name))?;
-    let loader_version = input
-        .loader_version
-        .clone()
-        .unwrap_or_else(|| LoaderVersionId::from(default_loader_version));
-    let instance_name = input
-        .instance_name
-        .clone()
-        .unwrap_or_else(|| default_instance_name(defaults, game_version.as_str()));
-    let mut input = input;
-    input.runtime_major_version = input
-        .runtime_major_version
-        .or(defaults.runtime_major_version);
-    let spec = build_spec(input.driver, game_version, Some(loader_version))?;
-
-    Ok(input.into_config(spec, instance_name))
+    input.into_config(defaults)
 }

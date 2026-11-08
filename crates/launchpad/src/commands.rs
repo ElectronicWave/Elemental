@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use elemental::{
@@ -29,37 +29,45 @@ async fn run_launch(config: LaunchpadConfig) -> Result<()> {
         .storage_root(config.storage_root.clone())
         .build();
 
-    let request_instance_name = config.instance_name.clone();
+    let (prepared, prepare_elapsed) = prepare_instance(&launcher, &config).await?;
 
-    let (prepared, prepare_elapsed) = if config.local_only {
-        progress::with_spinner(
-            "Loading prepared instance",
-            time_operation(
-                launcher.load_instance(
-                    launcher
-                        .inspect_instance(request_instance_name)
-                        .await?
-                        .context("Can't find instance")?,
-                ),
-            ),
-        )
-        .await?
-    } else {
-        let preparation = launcher
-            .begin_prepare(request_instance_name, config.spec.clone())
-            .await?;
-        let _download_progress = progress::download(preparation.session()).await?;
-        let started_at = std::time::Instant::now();
-        let prepared = preparation.prepare().await?;
-        (prepared, started_at.elapsed())
-    };
-
-    let credential = offline_authorizer().authorize().await?;
+    let credential = OfflineAuthorizer {
+        username: "Player".to_owned(),
+    }
+    .authorize()
+    .await?;
     let command = launcher
         .build_launch_command(&prepared, &credential, &config.options)
         .await?;
 
     finalize_launch(&config, &prepared, prepare_elapsed.as_millis(), command).await
+}
+
+async fn prepare_instance(
+    launcher: &Launcher,
+    config: &LaunchpadConfig,
+) -> Result<(PreparedInstance, Duration)> {
+    if config.local_only {
+        let instance = launcher
+            .inspect_instance(config.instance_name.clone())
+            .await?
+            .context("Can't find instance")?;
+        let started_at = Instant::now();
+        let prepared = progress::with_spinner(
+            "Loading prepared instance",
+            launcher.load_instance(instance),
+        )
+        .await?;
+        Ok((prepared, started_at.elapsed()))
+    } else {
+        let preparation = launcher
+            .begin_prepare(config.instance_name.clone(), config.spec.clone())
+            .await?;
+        let _download_progress = progress::download(preparation.session()).await?;
+        let started_at = Instant::now();
+        let prepared = preparation.prepare().await?;
+        Ok((prepared, started_at.elapsed()))
+    }
 }
 
 async fn run_list_instances(storage_root: std::path::PathBuf) -> Result<()> {
@@ -83,24 +91,6 @@ async fn run_list_instances(storage_root: std::path::PathBuf) -> Result<()> {
 
     Ok(())
 }
-
-pub(super) fn offline_authorizer() -> OfflineAuthorizer {
-    OfflineAuthorizer {
-        username: "Player".to_owned(),
-    }
-}
-
-pub(super) async fn time_operation<T, E, Fut>(operation: Fut) -> Result<(T, Duration)>
-where
-    Fut: Future<Output = std::result::Result<T, E>>,
-    E: Into<anyhow::Error>,
-{
-    let started_at = std::time::Instant::now();
-    let result = operation.await.map_err(Into::into)?;
-    Ok((result, started_at.elapsed()))
-}
-
-use std::future::Future;
 
 pub(super) async fn finalize_launch(
     config: &LaunchpadConfig,

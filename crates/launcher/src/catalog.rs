@@ -31,6 +31,85 @@ trait LoaderCatalog: GameVersionCatalog + LoaderVersionCatalog {}
 
 impl<T> LoaderCatalog for T where T: GameVersionCatalog + LoaderVersionCatalog {}
 
+type CatalogFactory = fn(DriverDescriptor) -> Result<DriverCatalog>;
+
+struct DriverRegistration {
+    descriptor: DriverDescriptor,
+    factory: CatalogFactory,
+}
+
+const DRIVER_REGISTRATIONS: [DriverRegistration; 11] = [
+    DriverRegistration {
+        descriptor: VANILLA_DRIVER,
+        factory: |driver| {
+            Ok(DriverCatalog::game_only(
+                driver,
+                VanillaCatalog::with_defaults(),
+            ))
+        },
+    },
+    DriverRegistration {
+        descriptor: FABRIC_DRIVER,
+        factory: |driver| DriverCatalog::with_loader(driver, FabricFlavor::Fabric),
+    },
+    DriverRegistration {
+        descriptor: LEGACY_FABRIC_DRIVER,
+        factory: |driver| DriverCatalog::with_loader(driver, FabricFlavor::LegacyFabric),
+    },
+    DriverRegistration {
+        descriptor: BABRIC_DRIVER,
+        factory: |driver| DriverCatalog::with_loader(driver, FabricFlavor::Babric),
+    },
+    DriverRegistration {
+        descriptor: QUILT_DRIVER,
+        factory: |driver| Ok(DriverCatalog::loader(driver, QuiltCatalog::with_defaults())),
+    },
+    DriverRegistration {
+        descriptor: LITELOADER_DRIVER,
+        factory: |driver| {
+            Ok(DriverCatalog::loader(
+                driver,
+                LiteLoaderCatalog::with_defaults(),
+            ))
+        },
+    },
+    DriverRegistration {
+        descriptor: RIFT_DRIVER,
+        factory: |driver| Ok(DriverCatalog::loader(driver, RiftCatalog::with_defaults())),
+    },
+    DriverRegistration {
+        descriptor: FORGE_DRIVER,
+        factory: |driver| Ok(DriverCatalog::loader(driver, ForgeCatalog::with_defaults())),
+    },
+    DriverRegistration {
+        descriptor: CLEANROOM_DRIVER,
+        factory: |driver| {
+            Ok(DriverCatalog::loader(
+                driver,
+                CleanroomCatalog::with_defaults(),
+            ))
+        },
+    },
+    DriverRegistration {
+        descriptor: OUTLANDS_DRIVER,
+        factory: |driver| {
+            Ok(DriverCatalog::loader(
+                driver,
+                OutlandsCatalog::with_defaults(),
+            ))
+        },
+    },
+    DriverRegistration {
+        descriptor: NEOFORGE_DRIVER,
+        factory: |driver| {
+            Ok(DriverCatalog::loader(
+                driver,
+                NeoForgeCatalog::with_defaults(),
+            ))
+        },
+    },
+];
+
 pub struct DriverCatalog {
     driver: DriverDescriptor,
     game_versions: Arc<dyn GameVersionCatalog + Send + Sync>,
@@ -38,23 +117,21 @@ pub struct DriverCatalog {
 }
 
 impl DriverCatalog {
+    pub fn supported_drivers() -> impl Iterator<Item = DriverDescriptor> {
+        DRIVER_REGISTRATIONS
+            .iter()
+            .map(|registration| registration.descriptor)
+    }
+
     pub fn for_driver(driver: DriverDescriptor) -> Result<Self> {
-        match driver {
-            VANILLA_DRIVER => Ok(Self::game_only(driver, VanillaCatalog::with_defaults())),
-            FABRIC_DRIVER => Self::with_loader(driver, FabricFlavor::Fabric),
-            LEGACY_FABRIC_DRIVER => Self::with_loader(driver, FabricFlavor::LegacyFabric),
-            BABRIC_DRIVER => Self::with_loader(driver, FabricFlavor::Babric),
-            QUILT_DRIVER => Ok(Self::loader(driver, QuiltCatalog::with_defaults())),
-            LITELOADER_DRIVER => Ok(Self::loader(driver, LiteLoaderCatalog::with_defaults())),
-            RIFT_DRIVER => Ok(Self::loader(driver, RiftCatalog::with_defaults())),
-            FORGE_DRIVER => Ok(Self::loader(driver, ForgeCatalog::with_defaults())),
-            CLEANROOM_DRIVER => Ok(Self::loader(driver, CleanroomCatalog::with_defaults())),
-            OUTLANDS_DRIVER => Ok(Self::loader(driver, OutlandsCatalog::with_defaults())),
-            NEOFORGE_DRIVER => Ok(Self::loader(driver, NeoForgeCatalog::with_defaults())),
-            _ => Err(Error::UnsupportedDriver {
+        let registration = DRIVER_REGISTRATIONS
+            .iter()
+            .find(|registration| registration.descriptor == driver)
+            .ok_or_else(|| Error::UnsupportedDriver {
                 id: driver.id.to_owned(),
-            }),
-        }
+            })?;
+
+        (registration.factory)(driver)
     }
 
     pub async fn game_versions(&self) -> Result<Vec<GameVersion>> {

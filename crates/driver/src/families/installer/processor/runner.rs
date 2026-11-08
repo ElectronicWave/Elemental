@@ -21,13 +21,13 @@ pub(super) async fn run_processor(
     processor: &ForgeInstallerProcessor,
 ) -> Result<()> {
     let processor_jar_path = context.processor_jar_path(processor)?;
-    let main_class = read_jar_main_class(&processor_jar_path)?;
+    let main_class =
+        tokio::task::spawn_blocking(move || read_jar_main_class(&processor_jar_path)).await??;
     let classpath = join_processor_classpath(context, processor)?;
-    let resolved_args = processor
-        .args
-        .iter()
-        .map(|arg| context.resolve_argument(arg.as_str()))
-        .collect::<Result<Vec<String>>>()?;
+    let mut resolved_args = Vec::with_capacity(processor.args.len());
+    for argument in &processor.args {
+        resolved_args.push(context.resolve_argument(argument.as_str()).await?);
+    }
 
     ensure_parent_directories(&resolved_args).await?;
 

@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 
-use elemental_schema::fabric::ProfileLibrary;
 use elemental_schema::mojang::piston::{
     PistonMetaLibrariesDownloads, PistonMetaLibrariesDownloadsArtifact,
 };
@@ -11,14 +10,14 @@ use crate::{
 };
 
 pub(super) fn profile_library_downloads_from_maven(
-    profile_library: &ProfileLibrary,
+    name: &str,
+    url: &str,
+    natives: Option<&HashMap<String, String>>,
 ) -> Result<PistonMetaLibrariesDownloads> {
-    let notation = MavenNotation::parse(profile_library.name.as_str(), "maven artifact")?;
-    let repository = MavenRepository::parse(profile_library.url.as_str(), "maven repository")?;
+    let notation = MavenNotation::parse(name, "maven artifact")?;
+    let repository = MavenRepository::parse(url, "maven repository")?;
     let artifact = repository.artifact_download(notation.artifact_path()?)?;
-    let classifiers = profile_library
-        .natives
-        .as_ref()
+    let classifiers = natives
         .map(|natives| {
             natives
                 .values()

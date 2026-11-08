@@ -16,11 +16,7 @@ impl MavenNotation {
     }
 
     pub(crate) fn file_name_for_version(&self, resolved_version: &str) -> Result<String> {
-        super::validation::validate_component(
-            resolved_version,
-            "maven snapshot version",
-            resolved_version,
-        )?;
+        super::validate_component(resolved_version, "maven snapshot version", resolved_version)?;
 
         Ok(match self.classifier.as_deref() {
             Some(classifier) => format!(

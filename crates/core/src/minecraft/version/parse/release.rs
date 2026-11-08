@@ -27,19 +27,18 @@ pub(crate) fn parse_release(raw: &str) -> Result<MinecraftVersion, MinecraftVers
 fn release_components(
     raw: &str,
 ) -> Result<(Vec<u32>, VersionStage, u32), MinecraftVersionParseError> {
-    let (base, stage_part) = split_stage(raw);
-    let numbers = parse_numeric_components(raw, base)?;
-    ensure_component_count(raw, &numbers)?;
-    let (stage, stage_number) = parse_release_stage(raw, stage_part)?;
-
-    Ok((numbers, stage, stage_number))
-}
-
-fn split_stage(raw: &str) -> (&str, Option<&str>) {
-    match raw.split_once('-') {
+    let (base, stage_part) = match raw.split_once('-') {
         Some((base, stage)) => (base, Some(stage)),
         None => (raw, None),
-    }
+    };
+    let numbers = parse_numeric_components(raw, base)?;
+    ensure_component_count(raw, &numbers)?;
+    let (stage, stage_number) = match stage_part {
+        Some(stage) => parse_stage(raw, stage)?,
+        None => (VersionStage::Release, 0),
+    };
+
+    Ok((numbers, stage, stage_number))
 }
 
 fn ensure_component_count(raw: &str, numbers: &[u32]) -> Result<(), MinecraftVersionParseError> {
@@ -50,16 +49,6 @@ fn ensure_component_count(raw: &str, numbers: &[u32]) -> Result<(), MinecraftVer
             raw: raw.to_owned(),
             reason: "version must have two or three numeric components",
         })
-    }
-}
-
-fn parse_release_stage(
-    raw: &str,
-    stage_part: Option<&str>,
-) -> Result<(VersionStage, u32), MinecraftVersionParseError> {
-    match stage_part {
-        Some(stage) => parse_stage(raw, stage),
-        None => Ok((VersionStage::Release, 0)),
     }
 }
 

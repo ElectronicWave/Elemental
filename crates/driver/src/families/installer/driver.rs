@@ -148,7 +148,7 @@ where
         F::descriptor()
     }
 
-    async fn inspect(&self, probe: &InstanceProbe<L, VL>) -> Result<Option<InstalledDriver>> {
+    async fn inspect(&self, probe: &InstanceProbe) -> Result<Option<InstalledDriver>> {
         let Some(metadata) = &probe.metadata else {
             return Ok(None);
         };

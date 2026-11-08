@@ -1,6 +1,7 @@
 mod helpers;
-mod scan;
 mod storage_impl;
+
+use std::path::Path;
 
 use elemental_core::storage::Storage;
 
@@ -56,4 +57,29 @@ where
     VL: VersionJsonInstanceLayout + Clone,
 {
     InstalledInstance::detect_all(storage, version_layout, drivers).await
+}
+
+pub(super) fn instance_names_in<L, VL>(
+    storage: &Storage<L>,
+    root: &Path,
+    version_layout: &VL,
+) -> Result<Vec<String>>
+where
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+{
+    let mut instances = Vec::new();
+    for entry in root.read_dir()? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        instances.extend(
+            storage
+                .instance_exists(&name, version_layout)?
+                .then_some(name),
+        );
+    }
+    Ok(instances)
 }

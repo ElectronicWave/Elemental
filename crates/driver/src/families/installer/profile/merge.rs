@@ -62,9 +62,28 @@ where
             source,
         })?;
     embedded.libraries = normalize_libraries(embedded.libraries)?;
+
+    let PistonMetaData {
+        arguments: base_arguments,
+        minecraft_arguments: base_minecraft_arguments,
+        inherits_from,
+        asset_index,
+        assets,
+        compliance_level,
+        downloads,
+        id,
+        java_version,
+        libraries: base_libraries,
+        logging,
+        main_class,
+        minimum_launcher_version,
+        release_type,
+        time,
+        release_time,
+    } = base_metadata;
     let (arguments, minecraft_arguments) = merge_embedded_arguments(
-        base_metadata.arguments.clone(),
-        base_metadata.minecraft_arguments.clone(),
+        base_arguments,
+        base_minecraft_arguments,
         embedded.arguments,
         embedded.minecraft_arguments,
     )?;
@@ -72,26 +91,22 @@ where
     Ok(PistonMetaData {
         arguments,
         minecraft_arguments,
-        inherits_from: embedded
-            .inherits_from
-            .or(base_metadata.inherits_from.clone()),
-        asset_index: embedded.asset_index.unwrap_or(base_metadata.asset_index),
-        assets: embedded.assets.unwrap_or(base_metadata.assets),
-        compliance_level: embedded
-            .compliance_level
-            .unwrap_or(base_metadata.compliance_level),
-        downloads: embedded.downloads.unwrap_or(base_metadata.downloads),
-        id: embedded.id.unwrap_or(base_metadata.id),
-        java_version: embedded.java_version.unwrap_or(base_metadata.java_version),
-        libraries: merge_libraries(base_metadata.libraries, embedded.libraries),
-        logging: merge_embedded_logging(base_metadata.logging, embedded.logging),
-        main_class: embedded.main_class.unwrap_or(base_metadata.main_class),
+        inherits_from: embedded.inherits_from.or(inherits_from),
+        asset_index: embedded.asset_index.unwrap_or(asset_index),
+        assets: embedded.assets.unwrap_or(assets),
+        compliance_level: embedded.compliance_level.unwrap_or(compliance_level),
+        downloads: embedded.downloads.unwrap_or(downloads),
+        id: embedded.id.unwrap_or(id),
+        java_version: embedded.java_version.unwrap_or(java_version),
+        libraries: merge_libraries(base_libraries, embedded.libraries),
+        logging: merge_embedded_logging(logging, embedded.logging),
+        main_class: embedded.main_class.unwrap_or(main_class),
         minimum_launcher_version: embedded
             .minimum_launcher_version
-            .unwrap_or(base_metadata.minimum_launcher_version),
-        release_type: embedded.release_type.unwrap_or(base_metadata.release_type),
-        time: embedded.time.unwrap_or(base_metadata.time),
-        release_time: embedded.release_time.unwrap_or(base_metadata.release_time),
+            .unwrap_or(minimum_launcher_version),
+        release_type: embedded.release_type.unwrap_or(release_type),
+        time: embedded.time.unwrap_or(time),
+        release_time: embedded.release_time.unwrap_or(release_time),
     })
 }
 

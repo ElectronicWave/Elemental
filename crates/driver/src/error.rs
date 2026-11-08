@@ -36,6 +36,9 @@ pub enum Error {
     #[error(transparent)]
     Runtime(#[from] elemental_core::runtime::Error),
 
+    #[error("blocking task failed: {0}")]
+    BlockingTask(#[from] tokio::task::JoinError),
+
     #[error(transparent)]
     Launcher(#[from] elemental_core::launcher::Error),
 

@@ -34,7 +34,7 @@ where
     }
 
     let context = build_context(instance, installer_artifact, install_profile, family_name)?;
-    if context.client_outputs_ready()? {
+    if context.client_outputs_ready().await? {
         return Ok(());
     }
 
@@ -43,7 +43,7 @@ where
         run_processor(runtime, &context, processor).await?;
     }
 
-    if !context.client_outputs_ready()? {
+    if !context.client_outputs_ready().await? {
         return Err(Error::ProcessorOutputsMissing {
             family_name: family_name.to_owned(),
         });
@@ -52,7 +52,7 @@ where
     Ok(())
 }
 
-pub fn installer_client_processors_ready<L, VL>(
+pub async fn installer_client_processors_ready<L, VL>(
     instance: &Storage<VL, Storage<L>>,
     installer_artifact: &InstallerArtifact,
     install_profile: &ForgeInstallerProfile,
@@ -68,6 +68,7 @@ where
 
     build_context(instance, installer_artifact, install_profile, family_name)?
         .client_outputs_ready()
+        .await
 }
 
 fn build_context<'a, L, VL>(

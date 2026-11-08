@@ -1,4 +1,7 @@
-use std::{fs::File, path::PathBuf};
+use std::{
+    fs::File,
+    path::{Path, PathBuf},
+};
 
 use elemental_core::storage::{
     Storage,
@@ -12,48 +15,49 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub struct InstanceProbe<L: Layout, VL: Layout> {
-    pub storage: Storage<VL, Storage<L>>,
+pub struct InstanceProbe {
     pub metadata: Option<PistonMetaData>,
 }
 
-impl<L: Layout, VL: VersionJsonInstanceLayout> InstanceProbe<L, VL> {
-    pub fn collect(storage: Storage<VL, Storage<L>>) -> Result<Self> {
-        let metadata_path = Self::detect_metadata_path(&storage)?;
-        let metadata: Option<PistonMetaData> = match metadata_path.as_ref() {
-            Some(path) => Some(serde_json::from_reader(File::open(path)?)?),
-            None => None,
+impl InstanceProbe {
+    pub fn collect<L, VL>(storage: &Storage<VL, Storage<L>>) -> Result<Self>
+    where
+        L: Layout,
+        VL: VersionJsonInstanceLayout,
+    {
+        let preferred = storage.try_get_resource(VersionJsonInstanceResource::Metadata)?;
+        let metadata_path = if preferred.exists() {
+            Some(preferred)
+        } else {
+            Self::single_json_metadata(&storage.path)?
         };
+        let metadata = metadata_path
+            .map(|path| -> Result<PistonMetaData> {
+                Ok(serde_json::from_reader(File::open(path)?)?)
+            })
+            .transpose()?;
 
-        Ok(Self { storage, metadata })
+        Ok(Self { metadata })
     }
 
-    fn detect_metadata_path(storage: &Storage<VL, Storage<L>>) -> Result<Option<PathBuf>> {
-        let preferred = storage.try_get_resource(VersionJsonInstanceResource::Metadata)?;
-        if preferred.exists() {
-            return Ok(Some(preferred));
+    fn single_json_metadata(directory: &Path) -> Result<Option<PathBuf>> {
+        if !directory.exists() {
+            return Ok(None);
         }
 
-        let mut json_files = Vec::new();
-        if storage.path.exists() {
-            for entry in storage.path.read_dir()? {
-                let entry = entry?;
-                if entry.file_type()?.is_file()
-                    && entry
-                        .path()
-                        .extension()
-                        .and_then(|extension| extension.to_str())
-                        .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
-                {
-                    json_files.push(entry.path());
-                }
+        let mut candidates = Vec::new();
+        for entry in directory.read_dir()? {
+            let entry = entry?;
+            let path = entry.path();
+            let is_json = path
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("json"));
+            if !entry.file_type()?.is_file() || !is_json {
+                continue;
             }
+            candidates.push(path);
         }
 
-        Ok(if json_files.len() == 1 {
-            json_files.into_iter().next()
-        } else {
-            None
-        })
+        Ok(candidates.pop().filter(|_| candidates.is_empty()))
     }
 }

@@ -54,3 +54,16 @@ impl MyTrait for MyStruct {
     }
 }
 ```
+
+## Refactoring
+
+- Combine loops, iterator chains, and helpers based on the operation; do not
+  apply one control-flow style everywhere.
+- Use loops for stateful traversal, early exits, fallible collection, and
+  mutation of owned state.
+- Use iterator chains for simple transformations and direct composition.
+- Extract a helper only when it names a real behavior or removes duplication.
+- Do not replace readable control flow with long `map`/`flatten`/`collect`
+  chains solely to satisfy a complexity metric.
+- Evaluate refactors by readability, ownership boundaries, and testability,
+  not by CCN alone.

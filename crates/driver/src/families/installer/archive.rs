@@ -31,8 +31,29 @@ impl<P: AsRef<Path>> InstallerArchive<P> {
         Ok(serde_json::from_str(&self.read_string(name)?)?)
     }
 
-    pub fn extract_maven_artifacts(&self, dest: &Path) -> Result<()> {
-        self.jar.extract_prefixed_blocking("maven", dest)?;
+    pub(crate) async fn extract_entry(&self, name: &str, destination: &Path) -> Result<()>
+    where
+        P: Clone + Send + 'static,
+    {
+        let archive = self.clone();
+        let name = name.to_owned();
+        let destination = destination.to_path_buf();
+        tokio::task::spawn_blocking(move || {
+            let bytes = archive.read_bytes(name.as_str())?;
+            if let Some(parent) = destination.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(destination, bytes)?;
+            Ok(())
+        })
+        .await?
+    }
+
+    pub async fn extract_maven_artifacts(&self, dest: &Path) -> Result<()>
+    where
+        P: Clone + Send + 'static,
+    {
+        self.jar.extract_prefixed("maven", dest).await?;
         Ok(())
     }
 }

@@ -6,7 +6,7 @@ use crate::error::{Error, Result};
 use crate::http::fetch_text;
 
 use super::MavenNotation;
-use super::validation::validate_component;
+use super::validate_component;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct SnapshotMavenMetadata {

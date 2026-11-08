@@ -10,7 +10,7 @@ use crate::{
 use super::{
     VersionJsonGameStorageExt,
     helpers::{instance_ready, instance_root, versions_root},
-    scan::instance_names_in,
+    instance_names_in,
 };
 
 #[async_trait(?Send)]

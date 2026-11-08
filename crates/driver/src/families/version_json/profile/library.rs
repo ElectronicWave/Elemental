@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use elemental_schema::fabric::{
-    ProfileLibrary, ProfileLibraryArtifact, ProfileLibraryDownloads, ProfileLibraryExtract,
+    ProfileLibrary, ProfileLibraryArtifact, ProfileLibraryDownloads,
     ProfileLogging,
 };
 use elemental_schema::mojang::piston::{
@@ -18,7 +18,7 @@ use super::maven::profile_library_downloads_from_maven;
 
 pub(super) fn merge_libraries(
     base_libraries: Vec<PistonMetaLibraries>,
-    profile_libraries: &[ProfileLibrary],
+    profile_libraries: Vec<ProfileLibrary>,
     behavior: &dyn ProfileMergeBehavior,
 ) -> Result<Vec<PistonMetaLibraries>> {
     let replacement_families = profile_libraries
@@ -51,81 +51,68 @@ pub(super) fn merge_libraries(
     Ok(merged)
 }
 
-fn profile_library_to_piston(profile_library: &ProfileLibrary) -> Result<PistonMetaLibraries> {
-    if let Some(downloads) = &profile_library.downloads {
-        return Ok(PistonMetaLibraries {
-            downloads: profile_library_downloads_to_piston(downloads),
-            name: profile_library.name.clone(),
-            natives: profile_library.natives.clone(),
-            rules: None,
-            extract: profile_library
-                .extract
-                .as_ref()
-                .map(profile_library_extract_to_piston),
-        });
-    }
-
-    let downloads = profile_library_downloads_from_maven(profile_library)?;
+fn profile_library_to_piston(profile_library: ProfileLibrary) -> Result<PistonMetaLibraries> {
+    let ProfileLibrary {
+        name,
+        url,
+        downloads,
+        natives,
+        extract,
+    } = profile_library;
+    let downloads = match downloads {
+        Some(downloads) => profile_library_downloads_to_piston(downloads),
+        None => {
+            profile_library_downloads_from_maven(name.as_str(), url.as_str(), natives.as_ref())?
+        }
+    };
 
     Ok(PistonMetaLibraries {
         downloads,
-        name: profile_library.name.clone(),
-        natives: profile_library.natives.clone(),
+        name,
+        natives,
         rules: None,
-        extract: profile_library
-            .extract
-            .as_ref()
-            .map(profile_library_extract_to_piston),
+        extract: extract.map(|extract| PistonMetaLibrariesExtract {
+            exclude: extract.exclude,
+        }),
     })
 }
 
 fn profile_library_downloads_to_piston(
-    downloads: &ProfileLibraryDownloads,
+    downloads: ProfileLibraryDownloads,
 ) -> PistonMetaLibrariesDownloads {
     PistonMetaLibrariesDownloads {
-        artifact: downloads
-            .artifact
-            .as_ref()
-            .map(profile_library_artifact_to_piston),
-        classifiers: downloads.classifiers.as_ref().map(|classifiers| {
+        artifact: downloads.artifact.map(profile_library_artifact_to_piston),
+        classifiers: downloads.classifiers.map(|classifiers| {
             classifiers
-                .iter()
-                .map(|(key, artifact)| (key.clone(), profile_library_artifact_to_piston(artifact)))
+                .into_iter()
+                .map(|(key, artifact)| (key, profile_library_artifact_to_piston(artifact)))
                 .collect::<HashMap<String, PistonMetaLibrariesDownloadsArtifact>>()
         }),
     }
 }
 
 fn profile_library_artifact_to_piston(
-    artifact: &ProfileLibraryArtifact,
+    artifact: ProfileLibraryArtifact,
 ) -> PistonMetaLibrariesDownloadsArtifact {
     PistonMetaLibrariesDownloadsArtifact {
-        sha1: artifact.sha1.clone(),
+        sha1: artifact.sha1,
         size: artifact.size,
-        url: artifact.url.clone(),
-        path: artifact.path.clone(),
+        url: artifact.url,
+        path: artifact.path,
     }
 }
 
-fn profile_library_extract_to_piston(
-    extract: &ProfileLibraryExtract,
-) -> PistonMetaLibrariesExtract {
-    PistonMetaLibrariesExtract {
-        exclude: extract.exclude.clone(),
-    }
-}
-
-pub(super) fn profile_logging_to_piston(logging: &ProfileLogging) -> PistonMetaLogging {
+pub(super) fn profile_logging_to_piston(logging: ProfileLogging) -> PistonMetaLogging {
     PistonMetaLogging {
         client: Some(PistonMetaLoggingSide {
-            argument: logging.client.argument.clone(),
+            argument: logging.client.argument,
             file: PistonMetaLoggingSideFile {
-                id: logging.client.file.id.clone(),
-                sha1: logging.client.file.sha1.clone(),
+                id: logging.client.file.id,
+                sha1: logging.client.file.sha1,
                 size: logging.client.file.size,
-                url: logging.client.file.url.clone(),
+                url: logging.client.file.url,
             },
-            logging_type: logging.client.logging_type.clone(),
+            logging_type: logging.client.logging_type,
         }),
     }
 }

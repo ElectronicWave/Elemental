@@ -5,7 +5,7 @@ use crate::{error::Result, families::installer::installer_coordinate_path};
 use super::InstallerProcessorContext;
 
 impl InstallerProcessorContext<'_> {
-    pub(super) fn materialize_data_value(&self, raw: &str) -> Result<String> {
+    pub(super) async fn materialize_data_value(&self, raw: &str) -> Result<String> {
         if let Some(notation) = raw
             .strip_prefix('[')
             .and_then(|value| value.strip_suffix(']'))
@@ -25,23 +25,19 @@ impl InstallerProcessorContext<'_> {
         }
 
         if let Some(relative_path) = raw.strip_prefix('/') {
-            return self.materialize_archive_path(relative_path);
+            return self.materialize_archive_path(relative_path).await;
         }
 
         Ok(raw.to_owned())
     }
 
-    fn materialize_archive_path(&self, relative_path: &str) -> Result<String> {
+    async fn materialize_archive_path(&self, relative_path: &str) -> Result<String> {
         let relative_path = SafeRelativePath::parse(relative_path)?;
         let output_path = relative_path.join_to(&self.state_directory);
-        if !output_path.exists() {
-            if let Some(parent) = output_path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            std::fs::write(
-                &output_path,
-                self.archive.read_bytes(relative_path.as_str())?,
-            )?;
+        if !tokio::fs::try_exists(&output_path).await? {
+            self.archive
+                .extract_entry(relative_path.as_str(), &output_path)
+                .await?;
         }
 
         Ok(output_path.to_string_lossy().to_string())

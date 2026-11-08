@@ -5,6 +5,7 @@ use std::{
 
 use super::SessionHandler;
 use crate::downloader::{
+    batch::DownloadBatch,
     report::DownloadFailure,
     state::{SessionState, SessionTransition},
     task::{DownloadTask, TaskId},
@@ -23,6 +24,10 @@ impl SessionHandler {
 
     pub(crate) fn start_task(&self) {
         self.pending_tasks.fetch_add(1, Ordering::AcqRel);
+    }
+
+    pub(crate) fn mark_batch_accepted(&self, batch: &DownloadBatch) {
+        self.with_state(|state| state.accept_batch(batch, Instant::now()));
     }
 
     pub(crate) fn mark_enqueued(

@@ -6,7 +6,7 @@ use serde::{Serialize, Serializer};
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct DownloadProgress {
-    /// Tasks submitted to the session so far. This can grow while a session is running.
+    /// Tasks accepted by the session so far. Updated once per submitted batch.
     pub tasks_accepted: usize,
     pub tasks_completed: usize,
     pub tasks_failed: usize,

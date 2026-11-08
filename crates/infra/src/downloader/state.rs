@@ -56,14 +56,6 @@ impl SessionState {
 
     fn insert_record(&mut self, record: TaskRecord) {
         let task_id = record.details.task_id.clone();
-        match record.details.expected_bytes {
-            Some(size) => {
-                self.expected_bytes = self.expected_bytes.saturating_add(size);
-            }
-            None => {
-                self.expected_bytes_known = false;
-            }
-        }
         if !self.records.contains_key(&task_id) {
             self.record_order.push(task_id.clone());
         }

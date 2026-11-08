@@ -1,6 +1,7 @@
 use std::time::{Duration, Instant};
 
 use super::SessionState;
+use crate::downloader::batch::DownloadBatch;
 use crate::downloader::event::DownloadEvent;
 use crate::downloader::report::{DownloadFailure, DownloadProgress, TaskStatus};
 use crate::downloader::task::{DownloadTask, TaskId};
@@ -8,6 +9,24 @@ use crate::downloader::task::{DownloadTask, TaskId};
 const TASK_PROGRESS_EVENT_INTERVAL: Duration = Duration::from_millis(100);
 
 impl SessionState {
+    pub(crate) fn accept_batch(
+        &mut self,
+        batch: &DownloadBatch,
+        now: Instant,
+    ) -> SessionTransition {
+        self.accepted = self.accepted.saturating_add(batch.task_count());
+        match batch.expected_bytes() {
+            Some(expected_bytes) => {
+                self.expected_bytes = self.expected_bytes.saturating_add(expected_bytes);
+            }
+            None => {
+                self.expected_bytes_known = false;
+            }
+        }
+
+        self.build_update(now, Vec::new())
+    }
+
     pub(crate) fn enqueue(
         &mut self,
         task_id: TaskId,
@@ -15,7 +34,6 @@ impl SessionState {
         group: Option<String>,
         now: Instant,
     ) -> SessionTransition {
-        self.accepted += 1;
         let record = super::record::TaskRecord::new(task_id, task, group, now);
         let info = record.details.clone();
         self.insert_record(record);

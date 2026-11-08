@@ -45,23 +45,19 @@ impl InstanceProbe {
             return Ok(None);
         }
 
-        let mut metadata_path = None;
+        let mut candidates = Vec::new();
         for entry in directory.read_dir()? {
             let entry = entry?;
             let path = entry.path();
             let is_json = path
                 .extension()
-                .and_then(|extension| extension.to_str())
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("json"));
             if !entry.file_type()?.is_file() || !is_json {
                 continue;
             }
-            if metadata_path.is_some() {
-                return Ok(None);
-            }
-            metadata_path = Some(path);
+            candidates.push(path);
         }
 
-        Ok(metadata_path)
+        Ok(candidates.pop().filter(|_| candidates.is_empty()))
     }
 }

@@ -75,9 +75,11 @@ where
             continue;
         }
         let name = entry.file_name().to_string_lossy().to_string();
-        if storage.instance_exists(&name, version_layout)? {
-            instances.push(name);
-        }
+        instances.extend(
+            storage
+                .instance_exists(&name, version_layout)?
+                .then_some(name),
+        );
     }
     Ok(instances)
 }

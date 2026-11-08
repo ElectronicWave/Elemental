@@ -30,20 +30,17 @@ where
     let mut normalized = Vec::with_capacity(libraries.len());
 
     for mut library in libraries {
-        if let Some(artifact) = &mut library.downloads.artifact
-            && artifact.url.trim().is_empty()
-        {
-            artifact.url = artifact_url(artifact.path.as_str())?;
-        }
-
-        if let Some(classifiers) = &mut library.downloads.classifiers {
-            for artifact in classifiers.values_mut() {
-                if artifact.url.trim().is_empty() {
-                    artifact.url = artifact_url(artifact.path.as_str())?;
-                }
+        let downloads = &mut library.downloads;
+        for artifact in downloads.artifact.iter_mut().chain(
+            downloads
+                .classifiers
+                .iter_mut()
+                .flat_map(|classifiers| classifiers.values_mut()),
+        ) {
+            if artifact.url.trim().is_empty() {
+                artifact.url = artifact_url(artifact.path.as_str())?;
             }
         }
-
         normalized.push(library);
     }
 

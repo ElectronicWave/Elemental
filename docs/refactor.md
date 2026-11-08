@@ -118,6 +118,25 @@ Optimizing directly for a metric often produces fragmented functions, shallow
 wrappers, and abstractions that are harder to understand than the original
 code. Fix the model first; good metrics usually follow.
 
+## Combine Techniques Deliberately
+
+There is no universally superior control-flow style. Choose the form that makes
+the operation easiest to understand and verify:
+
+- use loops for stateful traversal, early exits, fallible collection, and
+  mutation of owned state
+- use iterator chains for simple transformations and direct composition
+- extract a helper only when it names a real concept or removes repeated
+  behavior
+
+Do not replace readable control flow with long `map`/`flatten`/`collect`
+sequences merely to satisfy a complexity metric. A refactor that lowers CCN
+while increasing token count and hiding branches in closures is not an
+improvement.
+
+Evaluate the combined result. The best refactor usually mixes techniques rather
+than applying one style everywhere.
+
 ## Refactoring Checklist
 
 - Are the important domain concepts named by explicit types?
@@ -127,6 +146,8 @@ code. Fix the model first; good metrics usually follow.
 - Does user-visible progress derive from authoritative events?
 - Is each abstraction based on shared behavior rather than visual similarity?
 - Are cancellation, absence, and failure explicit?
+- Does the control-flow style make the operation easier to follow?
+- Did the change avoid trading a metric improvement for extra indirection?
 - Can the change be reviewed and reverted as a coherent unit?
 - Do formatting, linting, and relevant tests pass?
 - Is the result simpler to explain than the code it replaced?

@@ -35,16 +35,9 @@ impl InstallerProcessorContext<'_> {
         let relative_path = SafeRelativePath::parse(relative_path)?;
         let output_path = relative_path.join_to(&self.state_directory);
         if !tokio::fs::try_exists(&output_path).await? {
-            if let Some(parent) = output_path.parent() {
-                tokio::fs::create_dir_all(parent).await?;
-            }
-
-            let archive = self.archive.clone();
-            let entry_name = relative_path.as_str().to_owned();
-            let bytes =
-                tokio::task::spawn_blocking(move || archive.read_bytes(entry_name.as_str()))
-                    .await??;
-            tokio::fs::write(&output_path, bytes).await?;
+            self.archive
+                .extract_entry(relative_path.as_str(), &output_path)
+                .await?;
         }
 
         Ok(output_path.to_string_lossy().to_string())

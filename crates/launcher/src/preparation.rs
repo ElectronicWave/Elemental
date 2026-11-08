@@ -4,11 +4,7 @@ use elemental_driver::families::version_json::{
 use elemental_infra::downloader::DownloadSession;
 
 use crate::{
-    error::Result,
-    launcher::Launcher,
-    reporter::{NoopReporter, ProgressReporter},
-    request::RuntimeOptions,
-    result::PreparedInstance,
+    error::Result, launcher::Launcher, request::RuntimeOptions, result::PreparedInstance,
     spec::DriverSpec,
 };
 
@@ -50,13 +46,6 @@ where
     }
 
     pub async fn prepare(self) -> Result<PreparedInstance<L, VL>> {
-        self.prepare_with_reporter(&NoopReporter).await
-    }
-
-    pub async fn prepare_with_reporter<R>(self, reporter: &R) -> Result<PreparedInstance<L, VL>>
-    where
-        R: ProgressReporter,
-    {
         let Self {
             launcher,
             session,
@@ -65,31 +54,9 @@ where
             runtime_options,
         } = self;
 
-        let mut progress_receiver = session.progress_receiver();
-        let mut progress_open = true;
-        reporter.report(&session.progress());
-
-        let prepared = {
-            let preparation =
-                launcher.prepare_in_session(&session, instance_name, driver, &runtime_options);
-            tokio::pin!(preparation);
-
-            loop {
-                tokio::select! {
-                    result = &mut preparation => break result,
-                    changed = progress_receiver.changed(), if progress_open => {
-                        if changed.is_err() {
-                            progress_open = false;
-                        } else {
-                            let progress = progress_receiver.borrow_and_update().clone();
-                            reporter.report(&progress);
-                        }
-                    }
-                }
-            }
-        };
-
-        reporter.report(&session.progress());
+        let prepared = launcher
+            .prepare_in_session(&session, instance_name, driver, &runtime_options)
+            .await;
         let report = session.finish().await;
         let prepared = prepared?;
         let report = report?;

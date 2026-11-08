@@ -128,30 +128,9 @@ println!("{:?}", progress.borrow().active_tasks);
 The view exposes active tasks, the last-seen group, and task and byte counters.
 Formatting task and group names is left to the UI.
 
-For a simple callback-based reporter, use `prepare_with_reporter()`:
-
-```rust
-use elemental_launcher::CallbackReporter;
-
-let reporter = CallbackReporter::new(|progress| {
-    println!(
-        "{} / {} tasks",
-        progress.tasks_completed, progress.tasks_accepted
-    );
-});
-let prepared = launcher
-    .prepare_with_reporter(
-        "Vanilla-1.20.1".to_owned(),
-        DriverSpec::vanilla("1.20.1".into()),
-        &RuntimeOptions::default(),
-        &reporter,
-    )
-    .await?;
-```
-
-`NoopReporter` is the default used by `prepare()`. `InstancePreparation` also
-exposes `prepare_with_reporter()` so a `begin_prepare()` session can report
-progress while the launcher keeps ownership of the session lifecycle.
+The session is the only progress source. Use `progress_receiver()` for
+snapshots or `subscribe()` for structured download events; the launcher does not
+wrap either stream.
 
 ### Custom download sessions
 

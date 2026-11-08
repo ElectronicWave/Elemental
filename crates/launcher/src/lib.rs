@@ -4,7 +4,6 @@ pub mod error;
 mod launcher;
 mod origin;
 mod preparation;
-mod reporter;
 mod request;
 mod result;
 mod spec;
@@ -17,7 +16,6 @@ pub use elemental_infra::downloader::{DownloadProgress, DownloadSession};
 pub use launcher::Launcher;
 pub use origin::DriverOrigins;
 pub use preparation::InstancePreparation;
-pub use reporter::{CallbackReporter, NoopReporter, ProgressReporter};
 pub use request::{LaunchOptions, LaunchResolution, QuickPlayOptions, RuntimeOptions};
 pub use result::{
     Instance, LaunchedInstance, LoggedLaunchedInstance, PreparedInstance, PreparedInstanceInfo,

@@ -48,7 +48,6 @@ use crate::{
     error::{Error, Result},
     origin::{DriverOrigins, InstallerFamilySource, ProfiledFamilySource},
     preparation::InstancePreparation,
-    reporter::ProgressReporter,
     request::{LaunchOptions, RuntimeOptions},
     result::{Instance, LaunchedInstance, LoggedLaunchedInstance, PreparedInstance},
     spec::{DriverFlow, DriverSpec},
@@ -193,22 +192,6 @@ where
         self.begin_prepare(instance_name, driver, runtime_options)
             .await?
             .prepare()
-            .await
-    }
-
-    pub async fn prepare_with_reporter<R>(
-        &self,
-        instance_name: String,
-        driver: DriverSpec,
-        runtime_options: &RuntimeOptions,
-        reporter: &R,
-    ) -> Result<PreparedInstance<L, VL>>
-    where
-        R: ProgressReporter,
-    {
-        self.begin_prepare(instance_name, driver, runtime_options)
-            .await?
-            .prepare_with_reporter(reporter)
             .await
     }
 

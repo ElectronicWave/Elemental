@@ -41,40 +41,42 @@ pub fn merge_profile_with_behavior(
     base_metadata: PistonMetaData,
     profile: ProfileJson,
 ) -> Result<PistonMetaData> {
-    let profile_logging = profile.logging.as_ref().map(profile_logging_to_piston);
-    let merged_libraries = merge_libraries(
-        base_metadata.libraries.clone(),
-        &profile.libraries,
-        behavior,
-    )?;
+    let PistonMetaData {
+        arguments: base_arguments,
+        minecraft_arguments: base_minecraft_arguments,
+        asset_index,
+        assets: base_assets,
+        compliance_level,
+        downloads,
+        java_version,
+        libraries: base_libraries,
+        logging: base_logging,
+        minimum_launcher_version,
+        ..
+    } = base_metadata;
 
-    let arguments = merge_piston_meta_arguments(
-        base_metadata.arguments.clone(),
-        base_metadata.minecraft_arguments.clone(),
-        profile.arguments,
-    )?;
-    let minecraft_arguments = if arguments.is_some() {
-        None
-    } else {
-        base_metadata.minecraft_arguments.clone()
-    };
+    let profile_logging = profile.logging.map(profile_logging_to_piston);
+    let merged_libraries = merge_libraries(base_libraries, profile.libraries, behavior)?;
+
+    let arguments =
+        merge_piston_meta_arguments(base_arguments, base_minecraft_arguments, profile.arguments)?;
 
     Ok(PistonMetaData {
         arguments,
-        minecraft_arguments,
+        minecraft_arguments: None,
         inherits_from: Some(profile.inherits_from),
-        asset_index: base_metadata.asset_index,
-        assets: profile.assets.unwrap_or(base_metadata.assets),
-        compliance_level: base_metadata.compliance_level,
-        downloads: base_metadata.downloads,
+        asset_index,
+        assets: profile.assets.unwrap_or(base_assets),
+        compliance_level,
+        downloads,
         id: profile.id,
-        java_version: base_metadata.java_version,
+        java_version,
         libraries: merged_libraries,
-        logging: profile_logging.or(base_metadata.logging),
+        logging: profile_logging.or(base_logging),
         main_class: profile.main_class,
         minimum_launcher_version: profile
             .minimum_launcher_version
-            .unwrap_or(base_metadata.minimum_launcher_version),
+            .unwrap_or(minimum_launcher_version),
         release_type: profile.release_type,
         time: profile.time,
         release_time: profile.release_time,

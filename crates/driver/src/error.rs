@@ -36,6 +36,9 @@ pub enum Error {
     #[error(transparent)]
     Runtime(#[from] elemental_core::runtime::Error),
 
+    #[error("blocking task failed: {0}")]
+    BlockingTask(#[from] tokio::task::JoinError),
+
     #[error(transparent)]
     Launcher(#[from] elemental_core::launcher::Error),
 
@@ -138,9 +141,6 @@ pub enum Error {
         #[source]
         source: Box<Error>,
     },
-
-    #[error("launcher variables serialized to a non-object JSON value")]
-    LauncherVariablesNotObject,
 
     #[error("can't find a valid instance named '{name}'")]
     InstanceNotFound { name: String },

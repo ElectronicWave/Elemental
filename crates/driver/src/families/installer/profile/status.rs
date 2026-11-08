@@ -82,7 +82,8 @@ where
             installer_artifact,
             install_profile,
             family_name,
-        )?,
+        )
+        .await?,
         launch_version_ready,
     })
 }

@@ -12,23 +12,30 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub struct InstanceProbe<L: Layout, VL: Layout> {
-    pub storage: Storage<VL, Storage<L>>,
+pub struct InstanceProbe {
     pub metadata: Option<PistonMetaData>,
 }
 
-impl<L: Layout, VL: VersionJsonInstanceLayout> InstanceProbe<L, VL> {
-    pub fn collect(storage: Storage<VL, Storage<L>>) -> Result<Self> {
-        let metadata_path = Self::detect_metadata_path(&storage)?;
+impl InstanceProbe {
+    pub fn collect<L, VL>(storage: &Storage<VL, Storage<L>>) -> Result<Self>
+    where
+        L: Layout,
+        VL: VersionJsonInstanceLayout,
+    {
+        let metadata_path = Self::detect_metadata_path(storage)?;
         let metadata: Option<PistonMetaData> = match metadata_path.as_ref() {
             Some(path) => Some(serde_json::from_reader(File::open(path)?)?),
             None => None,
         };
 
-        Ok(Self { storage, metadata })
+        Ok(Self { metadata })
     }
 
-    fn detect_metadata_path(storage: &Storage<VL, Storage<L>>) -> Result<Option<PathBuf>> {
+    fn detect_metadata_path<L, VL>(storage: &Storage<VL, Storage<L>>) -> Result<Option<PathBuf>>
+    where
+        L: Layout,
+        VL: VersionJsonInstanceLayout,
+    {
         let preferred = storage.try_get_resource(VersionJsonInstanceResource::Metadata)?;
         if preferred.exists() {
             return Ok(Some(preferred));

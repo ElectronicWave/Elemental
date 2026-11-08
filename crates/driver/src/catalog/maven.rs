@@ -2,6 +2,8 @@ use std::collections::HashSet;
 
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
+use elemental_schema::maven::MavenMetadataBody;
+use tokio::sync::OnceCell;
 
 use crate::{
     error::Result,
@@ -15,6 +17,7 @@ where
     E: InstallerMavenEndpoints,
 {
     source: InstallerMavenSource<E>,
+    metadata: OnceCell<MavenMetadataBody>,
 }
 
 impl<E> InstallerMavenCatalog<E>
@@ -22,7 +25,10 @@ where
     E: InstallerMavenEndpoints + Default,
 {
     pub fn new(source: InstallerMavenSource<E>) -> Self {
-        Self { source }
+        Self {
+            source,
+            metadata: OnceCell::new(),
+        }
     }
 
     pub fn with_defaults() -> Self {
@@ -40,11 +46,14 @@ where
     E: InstallerMavenEndpoints,
 {
     async fn game_versions(&self) -> Result<Vec<GameVersion>> {
-        let metadata = self.source.maven_metadata().await?;
+        let metadata = self
+            .metadata
+            .get_or_try_init(|| self.source.maven_metadata())
+            .await?;
         let mut seen = HashSet::new();
         let mut game_versions = Vec::new();
-        for version in metadata.versioning.versions.version {
-            let Some((game_version, release)) = E::release(version) else {
+        for version in &metadata.versioning.versions.version {
+            let Some((game_version, release)) = E::release(version.clone()) else {
                 continue;
             };
             if seen.insert(game_version.clone()) {
@@ -68,13 +77,16 @@ where
         &self,
         game_version: &MinecraftVersionId,
     ) -> Result<Vec<LoaderRelease>> {
-        let metadata = self.source.maven_metadata().await?;
+        let metadata = self
+            .metadata
+            .get_or_try_init(|| self.source.maven_metadata())
+            .await?;
         Ok(metadata
             .versioning
             .versions
             .version
-            .into_iter()
-            .filter_map(E::release)
+            .iter()
+            .filter_map(|version| E::release(version.clone()))
             .filter(|(_, release)| &release.game_version == game_version)
             .map(|(_, release)| release)
             .collect())

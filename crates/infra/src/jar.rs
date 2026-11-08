@@ -65,6 +65,16 @@ impl<P: AsRef<Path>> JarFile<P> {
             Some(stripped.to_path_buf())
         })
     }
+
+    pub async fn extract_prefixed(&self, prefix: &str, dest: &Path) -> Result<Vec<PathBuf>>
+    where
+        P: Clone + Send + 'static,
+    {
+        let jar = self.clone();
+        let prefix = prefix.to_owned();
+        let dest = dest.to_path_buf();
+        tokio::task::spawn_blocking(move || jar.extract_prefixed_blocking(&prefix, &dest)).await?
+    }
 }
 
 impl<'a> JarBytes<'a> {

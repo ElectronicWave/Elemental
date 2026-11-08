@@ -31,8 +31,11 @@ impl<P: AsRef<Path>> InstallerArchive<P> {
         Ok(serde_json::from_str(&self.read_string(name)?)?)
     }
 
-    pub fn extract_maven_artifacts(&self, dest: &Path) -> Result<()> {
-        self.jar.extract_prefixed_blocking("maven", dest)?;
+    pub async fn extract_maven_artifacts(&self, dest: &Path) -> Result<()>
+    where
+        P: Clone + Send + 'static,
+    {
+        self.jar.extract_prefixed("maven", dest).await?;
         Ok(())
     }
 }

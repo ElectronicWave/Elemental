@@ -17,6 +17,9 @@ pub enum Error {
     #[error("HTTP request failed: {0}")]
     Http(#[from] reqwest::Error),
 
+    #[error("blocking task failed: {0}")]
+    BlockingJoin(#[from] tokio::task::JoinError),
+
     #[error("downloader max_concurrent_downloads must be greater than zero")]
     InvalidMaxConcurrentDownloads,
 

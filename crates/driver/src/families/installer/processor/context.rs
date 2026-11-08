@@ -33,7 +33,7 @@ mod create;
 
 impl<'a> InstallerProcessorContext<'a> {
     pub(super) async fn ensure_client_directories(&self) -> Result<()> {
-        for path in self.required_client_output_paths()? {
+        for path in self.required_client_output_paths().await? {
             if let Some(parent) = path.parent() {
                 create_dir_all(parent).await?;
             }
@@ -42,8 +42,8 @@ impl<'a> InstallerProcessorContext<'a> {
         Ok(())
     }
 
-    pub(super) fn client_outputs_ready(&self) -> Result<bool> {
-        let paths = self.required_client_output_paths()?;
+    pub(super) async fn client_outputs_ready(&self) -> Result<bool> {
+        let paths = self.required_client_output_paths().await?;
         if paths.is_empty() {
             return Ok(false);
         }
@@ -77,11 +77,14 @@ impl<'a> InstallerProcessorContext<'a> {
         Ok(entries)
     }
 
-    fn required_client_output_paths(&self) -> Result<Vec<PathBuf>> {
-        CLIENT_PROCESSOR_DATA_KEYS
-            .iter()
-            .map(|key| self.resolve_data_value(key))
-            .collect::<Result<Vec<Option<String>>>>()
-            .map(|values| values.into_iter().flatten().map(PathBuf::from).collect())
+    async fn required_client_output_paths(&self) -> Result<Vec<PathBuf>> {
+        let mut paths = Vec::new();
+        for key in CLIENT_PROCESSOR_DATA_KEYS {
+            if let Some(value) = self.resolve_data_value(key).await? {
+                paths.push(PathBuf::from(value));
+            }
+        }
+
+        Ok(paths)
     }
 }

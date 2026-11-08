@@ -69,5 +69,5 @@ impl InstalledDriver {
 pub trait Driver<L: Layout, VL: Layout> {
     fn descriptor(&self) -> DriverDescriptor;
 
-    async fn inspect(&self, probe: &InstanceProbe<L, VL>) -> Result<Option<InstalledDriver>>;
+    async fn inspect(&self, probe: &InstanceProbe) -> Result<Option<InstalledDriver>>;
 }

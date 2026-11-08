@@ -106,8 +106,8 @@ impl<L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> VersionJsonLaunchB
         metadata: &PistonMetaData,
         rule_context: &VersionJsonRuleContext,
     ) -> Result<Vec<String>> {
-        let mut arguments = self.inner.apply(metadata.game_arguments(rule_context))?;
-        arguments.extend(self.inner.apply(self.extra_game_arguments.clone())?);
+        let mut arguments = self.inner.apply(metadata.game_arguments(rule_context)?);
+        arguments.extend(self.inner.apply(self.extra_game_arguments.clone()));
         Ok(arguments)
     }
 

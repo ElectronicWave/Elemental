@@ -45,5 +45,5 @@ where
             "path".to_owned(),
             log_config_path.to_string_lossy().to_string(),
         )]),
-    )?))
+    )))
 }

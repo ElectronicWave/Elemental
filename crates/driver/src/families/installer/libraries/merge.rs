@@ -32,13 +32,18 @@ pub fn merge_libraries_prefer_embedded(
 fn library_identity_key(library: &PistonMetaLibraries) -> String {
     let notation = library.name.as_str();
     let (coordinates, extension) = notation.split_once('@').unwrap_or((notation, "jar"));
-    let segments = coordinates.split(':').collect::<Vec<&str>>();
+    let mut segments = coordinates.splitn(4, ':');
+    let (Some(group), Some(artifact), Some(_version)) =
+        (segments.next(), segments.next(), segments.next())
+    else {
+        return notation.to_owned();
+    };
 
-    match segments.as_slice() {
-        [group, artifact, _version] => format!("{group}:{artifact}@{extension}"),
-        [group, artifact, _version, classifier] => {
+    match segments.next() {
+        Some(classifier) if !classifier.contains(':') => {
             format!("{group}:{artifact}:{classifier}@{extension}")
         }
-        _ => notation.to_owned(),
+        Some(_) => notation.to_owned(),
+        None => format!("{group}:{artifact}@{extension}"),
     }
 }

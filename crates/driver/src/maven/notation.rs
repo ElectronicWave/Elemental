@@ -16,20 +16,16 @@ pub struct MavenNotation {
 impl MavenNotation {
     pub fn parse(notation: &str, invalid_label: &str) -> Result<Self> {
         let (coordinates, extension) = notation.split_once('@').unwrap_or((notation, "jar"));
-        let segments = coordinates.split(':').collect::<Vec<&str>>();
-
-        let (group, artifact, version, classifier) = match segments.as_slice() {
-            [group, artifact, version] => (*group, *artifact, *version, None),
-            [group, artifact, version, classifier] => {
-                (*group, *artifact, *version, Some(*classifier))
-            }
-            _ => {
-                return Err(Error::InvalidNotation {
-                    label: invalid_label.to_owned(),
-                    notation: notation.to_owned(),
-                });
-            }
+        let mut segments = coordinates.splitn(4, ':');
+        let (Some(group), Some(artifact), Some(version)) =
+            (segments.next(), segments.next(), segments.next())
+        else {
+            return Err(Error::InvalidNotation {
+                label: invalid_label.to_owned(),
+                notation: notation.to_owned(),
+            });
         };
+        let classifier = segments.next();
 
         validate_component(group, invalid_label, notation)?;
         validate_component(artifact, invalid_label, notation)?;

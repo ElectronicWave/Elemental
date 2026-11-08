@@ -94,7 +94,7 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for VanillaDriver {
         VANILLA_DRIVER
     }
 
-    async fn inspect(&self, probe: &InstanceProbe<L, VL>) -> Result<Option<InstalledDriver>> {
+    async fn inspect(&self, probe: &InstanceProbe) -> Result<Option<InstalledDriver>> {
         let Some(metadata) = &probe.metadata else {
             return Ok(None);
         };

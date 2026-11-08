@@ -58,14 +58,23 @@ where
 {
     let archive = InstallerArchive::new(installer_artifact.path.clone());
     let state_paths = InstallerStatePaths::new(instance_root, family_name)?;
-    let install_profile = archive
-        .read_json::<ForgeInstallerProfile>("install_profile.json")
-        .map_err(|source| Error::ReadInstallerProfile {
-            family_name: family_name.to_owned(),
-            source: Box::new(source),
-        })?;
+    let (install_profile, embedded_version) = {
+        let archive = archive.clone();
+        let family_name = family_name.to_owned();
+        tokio::task::spawn_blocking(move || {
+            let install_profile = archive
+                .read_json::<ForgeInstallerProfile>("install_profile.json")
+                .map_err(|source| Error::ReadInstallerProfile {
+                    family_name: family_name.clone(),
+                    source: Box::new(source),
+                })?;
+            let embedded_version = read_embedded_version(&archive, &install_profile, &family_name)?;
+
+            Ok::<_, Error>((install_profile, embedded_version))
+        })
+        .await??
+    };
     validate_profile(&install_profile)?;
-    let embedded_version = read_embedded_version(&archive, &install_profile, family_name)?;
 
     state_paths
         .persist_install_profile(&install_profile)
@@ -75,6 +84,7 @@ where
         .await?;
     archive
         .extract_maven_artifacts(libraries_root)
+        .await
         .map_err(|source| Error::ExtractInstallerMavenArtifacts {
             family_name: family_name.to_owned(),
             source: Box::new(source),

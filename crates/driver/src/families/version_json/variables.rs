@@ -1,9 +1,4 @@
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
-
-use crate::error::{Error, Result};
 
 mod apply;
 mod offline;
@@ -82,40 +77,44 @@ pub enum UserType {
     Mojang,
 }
 
+impl UserType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Legacy => "legacy",
+            Self::Msa => "msa",
+            Self::Mojang => "mojang",
+        }
+    }
+}
+
 impl LauncherVariables {
-    pub fn hashmap(&self) -> Result<HashMap<String, String>> {
-        Ok(HashMap::from_iter(self.map()?.into_iter().filter_map(
-            |(key, value)| match value {
-                Value::String(string) => Some((key, string)),
-                _ => None,
-            },
-        )))
-    }
-
-    pub fn map(&self) -> Result<Map<String, Value>> {
-        Ok(serde_json::to_value(self)?
-            .as_object()
-            .ok_or(Error::LauncherVariablesNotObject)?
-            .clone())
-    }
-
-    pub fn json(&self) -> Result<String> {
-        Ok(serde_json::to_string(self)?)
-    }
-
-    pub fn copy_with(&self, key: String, value: String) -> Result<Self> {
-        let mut map = self.map()?;
-        map.insert(key, Value::String(value));
-        Ok(serde_json::from_value(Value::Object(map))?)
-    }
-
-    pub fn copy_with_option(&self, key: String, value: Option<String>) -> Result<Self> {
-        if let Some(value) = value {
-            self.copy_with(key, value)
-        } else {
-            let mut map = self.map()?;
-            map.remove(&key);
-            Ok(serde_json::from_value(Value::Object(map))?)
+    pub(super) fn value_for(&self, key: &str) -> Option<&str> {
+        match key {
+            "auth_player_name" => Some(self.auth_player_name.as_str()),
+            "version_name" => Some(self.version_name.as_str()),
+            "game_directory" => Some(self.game_directory.as_str()),
+            "assets_root" => Some(self.assets_root.as_str()),
+            "assets_index_name" => Some(self.assets_index_name.as_str()),
+            "auth_uuid" => Some(self.auth_uuid.as_str()),
+            "auth_access_token" => Some(self.auth_access_token.as_str()),
+            "user_properties" => Some(self.user_properties.as_str()),
+            "clientid" => Some(self.clientid.as_str()),
+            "auth_xuid" => Some(self.auth_xuid.as_str()),
+            "user_type" => Some(self.user_type.as_str()),
+            "version_type" => Some(self.version_type.as_str()),
+            "resolution_width" => Some(self.resolution_width.as_str()),
+            "resolution_height" => Some(self.resolution_height.as_str()),
+            "quickPlayPath" => self.quick_play_path.as_deref(),
+            "quickPlaySingleplayer" => self.quick_play_singleplayer.as_deref(),
+            "quickPlayMultiplayer" => self.quick_play_multiplayer.as_deref(),
+            "quickPlayRealms" => self.quick_play_realms.as_deref(),
+            "natives_directory" => Some(self.natives_directory.as_str()),
+            "launcher_name" => Some(self.launcher_name.as_str()),
+            "launcher_version" => Some(self.launcher_version.as_str()),
+            "library_directory" => Some(self.library_directory.as_str()),
+            "classpath_separator" => Some(self.classpath_separator.as_str()),
+            "classpath" => Some(self.classpath.as_str()),
+            _ => None,
         }
     }
 }

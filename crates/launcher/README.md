@@ -345,6 +345,94 @@ Use `root_layout()` and `instance_layout()` for custom layouts, or
 `with_layouts()` to replace both at once. `Launcher::new(storage_root,
 downloader)` is the shorthand when the base layouts are sufficient.
 
+### Custom layouts
+
+A layout only maps typed resources to paths; `storage_root` remains the game
+root. Implement `Layout` with `Resource = VersionJsonRootResource` or
+`Resource = VersionJsonInstanceResource`; the marker traits are implemented
+automatically. Delegating unknown resources to the base layout keeps the
+custom layout complete:
+
+```rust
+use std::path::{Path, PathBuf};
+
+use elemental_core::storage::layout::Layout;
+use elemental_driver::families::version_json::{
+    BaseInstanceLayout, BaseRootLayout, VersionJsonInstanceResource, VersionJsonRootResource,
+};
+use elemental_launcher::Launcher;
+
+#[derive(Debug, Clone, Default)]
+struct SharedLibrariesRoot;
+
+impl Layout for SharedLibrariesRoot {
+    type Resource = VersionJsonRootResource;
+    type ExtendedResource = VersionJsonRootResource;
+
+    fn get_resource(&self, root: &Path, resource: Self::Resource) -> Option<PathBuf> {
+        match resource {
+            VersionJsonRootResource::Libraries(relative) => {
+                let libraries_root = root.join("shared").join("libraries");
+                Some(match relative {
+                    Some(relative) => libraries_root.join(relative.as_path()),
+                    None => libraries_root,
+                })
+            }
+            other => BaseRootLayout.get_resource(root, other),
+        }
+    }
+
+    fn get_extended_resource(
+        &self,
+        root: &Path,
+        resource: Self::ExtendedResource,
+    ) -> Option<PathBuf> {
+        self.get_resource(root, resource)
+    }
+
+    fn name(&self) -> &'static str {
+        "SharedLibrariesRoot"
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct FlatInstanceLayout;
+
+impl Layout for FlatInstanceLayout {
+    type Resource = VersionJsonInstanceResource;
+    type ExtendedResource = VersionJsonInstanceResource;
+
+    fn get_resource(&self, root: &Path, resource: Self::Resource) -> Option<PathBuf> {
+        match resource {
+            VersionJsonInstanceResource::Jar => Some(root.join("client.jar")),
+            other => BaseInstanceLayout.get_resource(root, other),
+        }
+    }
+
+    fn get_extended_resource(
+        &self,
+        root: &Path,
+        resource: Self::ExtendedResource,
+    ) -> Option<PathBuf> {
+        self.get_resource(root, resource)
+    }
+
+    fn name(&self) -> &'static str {
+        "FlatInstanceLayout"
+    }
+}
+
+let launcher = Launcher::builder()
+    .storage_root(".minecraft")
+    .root_layout(SharedLibrariesRoot)
+    .instance_layout(FlatInstanceLayout)
+    .build();
+```
+
+Root layouts receive the game root; instance layouts receive the instance
+directory. Custom instance layouts must be `Clone + Send`, and both layouts
+must be `Clone` because the launcher clones them into scoped storage views.
+
 Runtime discovery is a launcher dependency rather than a process-wide setting.
 Pass providers explicitly when the host needs its own set:
 

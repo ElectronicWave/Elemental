@@ -300,8 +300,8 @@ impl NewInstanceWizard {
             .context("instance name is missing from the wizard state")?;
         let runtime = RuntimeOptions {
             runtime_major_version: runtime.major_version,
+            runtime_override: runtime.distribution,
             runtime_validation: runtime.validation,
-            ..RuntimeOptions::default()
         };
         let options = LaunchOptions::default();
         Ok(StepOutcome::Finished(Box::new(LaunchpadConfig {

@@ -41,8 +41,8 @@ impl InstalledSelection {
         let spec = build_spec(self.instance.driver.driver, game_version, loader_version)?;
         let runtime = RuntimeOptions {
             runtime_major_version: self.runtime.major_version,
+            runtime_override: self.runtime.distribution,
             runtime_validation: self.runtime.validation,
-            ..RuntimeOptions::default()
         };
         let options = LaunchOptions::default();
 

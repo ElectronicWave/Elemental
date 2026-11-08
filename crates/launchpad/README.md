@@ -108,7 +108,6 @@ Runtime options are available on `vanilla` and every loader command:
 | `--runtime-major-version N` | Select a Java major version |
 | `--runtime-validation strict\|disabled` | Validate the selected Java version or skip the check |
 | `--runtime-path PATH` | Prepend a custom runtime provider; repeatable |
-| `--runtime-executable PATH` | Use one explicit Java executable |
 
 Custom runtime providers are prepended before the platform defaults. Cleanroom
 defaults to Java 25 when no major version is supplied.

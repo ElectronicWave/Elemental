@@ -9,6 +9,7 @@ use tokio::fs;
 use tokio::process::Command;
 
 use crate::runtime::{
+    RuntimeValidationMode,
     error::{Error, Result},
     provider::RuntimeProvider,
 };
@@ -44,18 +45,15 @@ pub struct DistributionReleaseData {
 #[derive(Debug, Clone)]
 pub struct Distribution {
     // Release Data (when available)
-    pub release: Option<DistributionReleaseData>,
+    release: Option<DistributionReleaseData>,
 
     // Physical Data
     /// Path to the runtime installation
-    pub path: PathBuf,
-
-    /// Explicit executable path when launch should use a specific java/javaw binary
-    pub executable_override: Option<PathBuf>,
+    path: PathBuf,
 
     // Discovery Data
     /// Elemental Provider used to discover this runtime
-    pub provider: &'static str,
+    provider: &'static str,
 }
 
 impl DistributionReleaseData {
@@ -230,7 +228,7 @@ impl DistributionReleaseData {
 }
 
 impl Distribution {
-    pub async fn build_from_root(root: PathBuf, provider: &'static str) -> Result<Self> {
+    pub(crate) async fn build_from_root(root: PathBuf, provider: &'static str) -> Result<Self> {
         let requested_root = root.clone();
         let root =
             fs::canonicalize(&root)
@@ -249,36 +247,6 @@ impl Distribution {
         Ok(Self {
             release: Some(release),
             path: root,
-            executable_override: None,
-            provider,
-        })
-    }
-
-    pub async fn build_from_executable(
-        executable: PathBuf,
-        provider: &'static str,
-    ) -> Result<Self> {
-        let normalized_executable = Self::normalize_executable_path(executable)?;
-        let normalized_executable =
-            fs::canonicalize(&normalized_executable)
-                .await
-                .map_err(|source| Error::CanonicalizeExecutable {
-                    path: normalized_executable.clone(),
-                    source,
-                })?;
-        let runtime_root = Self::infer_runtime_root(&normalized_executable)?;
-
-        let release = DistributionReleaseData::parse(&runtime_root)
-            .await
-            .map_err(|source| Error::DetermineRuntimeProperties {
-                path: runtime_root.clone(),
-                source: Box::new(source),
-            })?;
-
-        Ok(Self {
-            release: Some(release),
-            path: runtime_root,
-            executable_override: Some(normalized_executable),
             provider,
         })
     }
@@ -345,51 +313,45 @@ impl Distribution {
             .and_then(DistributionReleaseData::java_major_version)
     }
 
+    pub fn release(&self) -> Option<&DistributionReleaseData> {
+        self.release.as_ref()
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn provider(&self) -> &'static str {
+        self.provider
+    }
+
     pub fn executable(&self) -> PathBuf {
-        self.executable_override
-            .clone()
-            .unwrap_or_else(|| self.path.join("bin").join(format!("java{}", EXE_SUFFIX)))
+        self.path.join("bin").join(format!("java{EXE_SUFFIX}"))
     }
 
-    fn normalize_executable_path(executable: PathBuf) -> Result<PathBuf> {
-        let normalized = if executable.is_absolute() {
-            executable
-        } else {
-            std::env::current_dir()
-                .map_err(|source| Error::CurrentDir { source })?
-                .join(executable)
-        };
-
-        if !normalized.is_file() {
-            return Err(Error::ExecutableNotFile { path: normalized });
+    pub fn ensure_compatible(
+        &self,
+        required_major_version: usize,
+        validation_mode: RuntimeValidationMode,
+    ) -> Result<()> {
+        if validation_mode == RuntimeValidationMode::Disabled {
+            return Ok(());
         }
 
-        let executable_name = normalized
-            .file_stem()
-            .and_then(|value| value.to_str())
-            .ok_or_else(|| Error::ExecutableNoStem {
-                path: normalized.clone(),
-            })?;
-        if executable_name != "java" && executable_name != "javaw" {
-            return Err(Error::ExecutableNotJava { path: normalized });
+        let actual_major_version =
+            self.java_major_version()
+                .ok_or_else(|| Error::RuntimeVersionUnknown {
+                    path: self.path.clone(),
+                })?;
+        if actual_major_version != required_major_version {
+            return Err(Error::VersionMismatch {
+                actual: actual_major_version,
+                expected: required_major_version,
+                path: self.path.clone(),
+            });
         }
 
-        Ok(normalized)
-    }
-
-    fn infer_runtime_root(executable: &Path) -> Result<PathBuf> {
-        let bin_directory = executable
-            .parent()
-            .ok_or_else(|| Error::ExecutableNoParent {
-                path: executable.to_path_buf(),
-            })?;
-        let runtime_root = bin_directory
-            .parent()
-            .ok_or_else(|| Error::ExecutableNotInBin {
-                path: executable.to_path_buf(),
-            })?;
-
-        Ok(runtime_root.to_path_buf())
+        Ok(())
     }
 }
 

@@ -287,8 +287,8 @@ every loader-driven distribution.
 
 Launch configuration is split by lifecycle:
 
-- `RuntimeOptions` covers `runtime_major_version`,
-  `runtime_executable_path`, and `runtime_validation`.
+- `RuntimeOptions` covers `runtime_major_version`, `runtime_override`, and
+  `runtime_validation`.
 - `LaunchOptions` covers launcher name and version, client ID, window
   resolution, quick-play targets, and extra JVM and game arguments.
 

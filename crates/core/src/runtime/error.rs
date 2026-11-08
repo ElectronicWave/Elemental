@@ -58,34 +58,6 @@ pub enum Error {
         source: io::Error,
     },
 
-    #[error("canonicalize runtime executable failed: {}", path.display())]
-    CanonicalizeExecutable {
-        path: PathBuf,
-        #[source]
-        source: io::Error,
-    },
-
-    #[error("resolve current directory for runtime executable failed")]
-    CurrentDir {
-        #[source]
-        source: io::Error,
-    },
-
-    #[error("runtime executable path is not a file: {}", path.display())]
-    ExecutableNotFile { path: PathBuf },
-
-    #[error("runtime executable path has no valid file stem: {}", path.display())]
-    ExecutableNoStem { path: PathBuf },
-
-    #[error("runtime executable must point to java or javaw: {}", path.display())]
-    ExecutableNotJava { path: PathBuf },
-
-    #[error("runtime executable has no parent directory: {}", path.display())]
-    ExecutableNoParent { path: PathBuf },
-
-    #[error("runtime executable is not inside a bin directory: {}", path.display())]
-    ExecutableNotInBin { path: PathBuf },
-
     #[error("determine Java runtime properties failed: {}", path.display())]
     DetermineRuntimeProperties {
         path: PathBuf,
@@ -104,15 +76,8 @@ pub enum Error {
         source: Box<Error>,
     },
 
-    #[error("resolve runtime from executable failed: {}", path.display())]
-    ResolveRuntime {
-        path: PathBuf,
-        #[source]
-        source: Box<Error>,
-    },
-
     #[error(
-        "can't determine Java major version for explicit runtime executable: {}",
+        "can't determine Java major version for explicit runtime distribution: {}",
         path.display()
     )]
     RuntimeVersionUnknown { path: PathBuf },
@@ -121,7 +86,7 @@ pub enum Error {
     RuntimeNotFound { major_version: usize },
 
     #[error(
-        "explicit runtime executable has Java major version {actual}, expected {expected}: {}",
+        "explicit runtime distribution has Java major version {actual}, expected {expected}: {}",
         path.display()
     )]
     VersionMismatch {

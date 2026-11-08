@@ -49,8 +49,6 @@ pub(super) struct LaunchArgs {
     pub(super) runtime_validation: Option<RuntimeValidationArg>,
     #[arg(long = "runtime-path", value_name = "PATH")]
     pub(super) runtime_paths: Vec<PathBuf>,
-    #[arg(long = "runtime-executable", value_name = "PATH")]
-    pub(super) runtime_executable_path: Option<PathBuf>,
 }
 
 impl LaunchArgs {
@@ -62,7 +60,6 @@ impl LaunchArgs {
             && self.runtime_major_version.is_none()
             && self.runtime_validation.is_none()
             && self.runtime_paths.is_empty()
-            && self.runtime_executable_path.is_none()
     }
 }
 

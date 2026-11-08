@@ -390,9 +390,9 @@ installation still contains valid Minecraft metadata.
 
 Launch command construction lives in `elemental_driver::launch` and is shared
 by every driver, including installer-driven families. The driver layer only
-defines `RuntimeOptions`, which controls runtime selection, an explicit
-executable, and strict or disabled validation. Installer drivers also use it
-while running client processors.
+defines `RuntimeOptions`, which controls runtime selection, an optional
+explicit `Distribution`, and strict or disabled validation. Installer drivers
+also use it while running client processors.
 
 Host-facing launch options (launcher branding, client ID, resolution,
 quick-play targets, and extra arguments) belong to `elemental-launcher`.

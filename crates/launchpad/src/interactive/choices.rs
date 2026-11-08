@@ -1,11 +1,8 @@
-use std::{
-    fmt::{self, Display},
-    path::PathBuf,
-};
+use std::fmt::{self, Display};
 
 use anyhow::Result;
 use elemental::{
-    core::minecraft::MinecraftVersionId,
+    core::{minecraft::MinecraftVersionId, runtime::distribution::Distribution},
     driver::{
         catalog::{GameVersion, LoaderRelease},
         descriptors::FABRIC_DRIVER,
@@ -30,18 +27,57 @@ impl Display for DriverChoice {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub(super) enum RuntimeChoice {
     Auto,
-    Java { major: usize, path: PathBuf },
+    Java {
+        major: usize,
+        distribution: Distribution,
+    },
 }
+
+impl RuntimeChoice {
+    pub(super) fn major_version(&self) -> Option<usize> {
+        match self {
+            Self::Auto => None,
+            Self::Java { major, .. } => Some(*major),
+        }
+    }
+}
+
+impl PartialEq for RuntimeChoice {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Auto, Self::Auto) => true,
+            (
+                Self::Java {
+                    distribution: left, ..
+                },
+                Self::Java {
+                    distribution: right,
+                    ..
+                },
+            ) => left.path() == right.path(),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for RuntimeChoice {}
 
 impl Display for RuntimeChoice {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Auto => formatter.write_str("Auto"),
-            Self::Java { major, path } => {
-                write!(formatter, "Java {major} | {}", path.display())
+            Self::Java {
+                major,
+                distribution,
+            } => {
+                write!(
+                    formatter,
+                    "Java {major} | {}",
+                    distribution.path().display()
+                )
             }
         }
     }

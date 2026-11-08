@@ -49,7 +49,7 @@ use crate::{
     origin::{DriverOrigins, InstallerFamilySource, ProfiledFamilySource},
     preparation::InstancePreparation,
     request::{LaunchOptions, RuntimeOptions},
-    result::{Instance, LaunchedInstance, LoggedLaunchedInstance, PreparedInstance},
+    result::{Instance, LaunchedInstance, PreparedInstance},
     spec::{DriverFlow, DriverSpec},
 };
 
@@ -293,16 +293,6 @@ where
         let runtime = command.runtime.clone();
         let child = process::spawn_command(command)?;
         Ok(LaunchedInstance { runtime, child })
-    }
-
-    pub fn launch_logged(&self, command: LaunchCommand) -> Result<LoggedLaunchedInstance> {
-        let runtime = command.runtime.clone();
-        let logged = process::spawn_command_logged(command)?;
-        Ok(LoggedLaunchedInstance {
-            runtime,
-            child: logged.child,
-            lines: logged.lines,
-        })
     }
 
     pub async fn launch_prepared_instance(

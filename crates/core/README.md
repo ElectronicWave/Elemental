@@ -217,8 +217,8 @@ its own UI.
 A `LaunchCommand` contains the runtime, structured JVM and game arguments, the
 main class, environment variables, and optional working directory. It remains
 mutable before launch, so callers can append authentication-specific JVM
-arguments or other overrides. `spawn_command()` launches it directly, while
-`spawn_command_logged()` captures stdout and stderr as `LoggedChild` lines.
+arguments or other overrides. `spawn_command()` launches it directly and lets
+the child inherit the parent's stdout and stderr.
 
 ## Related Crates
 

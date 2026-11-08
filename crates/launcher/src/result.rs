@@ -4,7 +4,6 @@ use std::{
 };
 
 use elemental_core::{
-    launcher::process::ProcessLogLine,
     runtime::distribution::Distribution,
     storage::{Storage, layout::Layoutable},
 };
@@ -21,38 +20,6 @@ use crate::error::Result;
 pub struct LaunchedInstance {
     pub runtime: Distribution,
     pub child: tokio::process::Child,
-}
-
-pub struct LoggedLaunchedInstance {
-    pub runtime: Distribution,
-    pub child: tokio::process::Child,
-    pub lines: tokio::sync::mpsc::UnboundedReceiver<ProcessLogLine>,
-}
-
-impl LoggedLaunchedInstance {
-    pub async fn wait_with_logs<F>(self, mut on_line: F) -> Result<std::process::ExitStatus>
-    where
-        F: FnMut(ProcessLogLine),
-    {
-        let Self {
-            child, mut lines, ..
-        } = self;
-        let mut child = child;
-        let wait = child.wait();
-        tokio::pin!(wait);
-
-        loop {
-            tokio::select! {
-                Some(line) = lines.recv() => on_line(line),
-                status = &mut wait => {
-                    while let Some(line) = lines.recv().await {
-                        on_line(line);
-                    }
-                    return Ok(status?);
-                }
-            }
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

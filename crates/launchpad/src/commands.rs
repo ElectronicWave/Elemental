@@ -17,7 +17,7 @@ use elemental::{
 use crate::config::{LaunchpadCommand, LaunchpadConfig};
 use crate::diagnostics::{
     LaunchDiagnostics, LaunchSummary, collect_version_diagnostics, print_launch_diagnostics,
-    print_summary, run_logged_process,
+    print_summary, run_process,
 };
 use crate::progress;
 
@@ -148,7 +148,7 @@ pub(super) async fn finalize_launch(
         command: &command,
     });
 
-    let exit_status = run_logged_process(launcher, command).await?;
+    let exit_status = run_process(launcher, command).await?;
     print_summary(&LaunchSummary {
         driver_name: config.spec.name(),
         game_version: config.spec.game_version().as_str(),

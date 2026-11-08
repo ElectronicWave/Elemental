@@ -85,8 +85,7 @@ async fn main() -> Result<()> {
 ```
 
 `prepare()` downloads and writes missing artifacts with a default download
-session. To start the game, pass the command to `launch()` or
-`launch_logged()`.
+session. To start the game, pass the command to `launch()`.
 
 Inspect a prepared instance without touching driver internals:
 
@@ -212,7 +211,7 @@ let game = launcher.launch(command)?;
 | Install with a custom session and caller-owned lifecycle | `prepare_in_session(&session, name, driver, runtime)` |
 | Reload an existing installation | `load_instance(instance)` |
 | Build a command without spawning | `build_launch_command(...)` |
-| Spawn a customized command | `launch(command)` / `launch_logged(command)` |
+| Spawn a customized command | `launch(command)` |
 | Build and spawn in one call | `launch_prepared_instance(...)` |
 | Launch an installed instance by name | `launch_instance(...)` |
 
@@ -492,21 +491,6 @@ for runtime in launcher.runtime_distributions().await {
 
 The launcher caches distributions per `RuntimeResolver`, so multiple launchers
 can use different provider lists in the same process without sharing state.
-
-### Log streaming
-
-`launch_logged()` returns a handle that drains stdout and stderr until the
-process exits:
-
-```rust
-let status = launcher
-    .launch_logged(command)?
-    .wait_with_logs(|line| println!("{line}"))
-    .await?;
-```
-
-`wait_with_logs()` consumes the handle, so callers do not need to drive the
-line receiver and child status in parallel.
 
 ### Origin Overrides
 

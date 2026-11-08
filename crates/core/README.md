@@ -168,23 +168,21 @@ by Java version. Runtimes without a `release` file are probed with a bounded
 timeout and a cleaned Java environment.
 
 Use `RuntimeResolver` to own discovery and caching. `distributions()` returns
-every discovered runtime, and `resolve()` selects one by Java major version,
-applying an explicit executable or the configured validation mode:
+every discovered runtime, and `resolve()` selects one by Java major version:
 
 ```rust
-use elemental_core::runtime::{RuntimeResolver, RuntimeValidationMode};
+use elemental_core::runtime::RuntimeResolver;
 
 let resolver = RuntimeResolver::with_default_providers();
-let runtime = resolver
-    .resolve(21, None, RuntimeValidationMode::Strict)
-    .await?;
+let runtime = resolver.resolve(21).await?;
 assert!(runtime.executable().is_file());
 ```
 
-An explicit executable can be passed to `resolve()`; in strict mode its
-detected major version must match the requested version. `elemental-launcher`
-injects one resolver per `Launcher` so different hosts can use different
-provider lists without sharing process-wide state.
+Hosts can bypass discovery by setting `RuntimeOptions.runtime_override` to a
+`Distribution`. In strict mode its detected major version must match the
+required version; `RuntimeValidationMode::Disabled` skips that check.
+`elemental-launcher` injects one resolver per `Launcher` so different hosts can
+use different provider lists without sharing process-wide state.
 
 Custom runtime providers can reuse the public scanning helpers in
 `runtime::discovery`, including `find_runtime_homes()`,

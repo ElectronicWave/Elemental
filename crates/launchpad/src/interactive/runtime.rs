@@ -1,13 +1,14 @@
-use std::collections::HashSet;
-
 use anyhow::Result;
-use elemental::core::runtime::{RuntimeResolver, RuntimeValidationMode};
+use elemental::core::runtime::{
+    RuntimeResolver, RuntimeValidationMode, distribution::Distribution,
+};
 use inquire::Select;
 
 use super::choices::{RuntimeChoice, prompt_or_back};
 
 pub(super) struct RuntimeSelection {
     pub(super) major_version: Option<usize>,
+    pub(super) distribution: Option<Distribution>,
     pub(super) validation: RuntimeValidationMode,
 }
 
@@ -31,36 +32,34 @@ pub(super) async fn prompt(
     };
     *current_runtime = Some(choice.clone());
 
+    let (major_version, distribution) = match choice {
+        RuntimeChoice::Auto => (default_major_version, None),
+        RuntimeChoice::Java {
+            major,
+            distribution,
+        } => (Some(major), Some(distribution)),
+    };
+
     Ok(Some(RuntimeSelection {
-        major_version: match choice {
-            RuntimeChoice::Auto => default_major_version,
-            RuntimeChoice::Java { major, .. } => Some(major),
-        },
+        major_version,
+        distribution,
         validation: RuntimeValidationMode::Strict,
     }))
 }
 
 async fn runtime_choices(runtime_resolver: &RuntimeResolver) -> Vec<RuntimeChoice> {
-    let mut seen_majors = HashSet::new();
-    let mut runtimes = Vec::new();
-    for distribution in runtime_resolver.distributions().await {
-        let Some(major) = distribution.java_major_version() else {
-            continue;
-        };
-        if !seen_majors.insert(major) {
-            continue;
-        }
-        runtimes.push((major, distribution.path));
-    }
-    runtimes.sort_unstable_by_key(|(major, _)| *major);
-
-    let mut choices = Vec::with_capacity(runtimes.len() + 1);
+    let distributions = runtime_resolver.distributions().await;
+    let mut choices = Vec::with_capacity(distributions.len() + 1);
     choices.push(RuntimeChoice::Auto);
-    choices.extend(
-        runtimes
-            .into_iter()
-            .map(|(major, path)| RuntimeChoice::Java { major, path }),
-    );
+    choices.extend(distributions.into_iter().filter_map(|distribution| {
+        distribution
+            .java_major_version()
+            .map(|major| RuntimeChoice::Java {
+                major,
+                distribution,
+            })
+    }));
+    choices.sort_by_key(RuntimeChoice::major_version);
     choices
 }
 

@@ -51,7 +51,7 @@ Rust applications.
 
 - Rust 1.85 or newer. The workspace uses edition 2024.
 - A compatible Java runtime for launching Minecraft. Elemental can discover a
-  local runtime or use an executable supplied with `--runtime-executable`.
+  local runtime or use a custom runtime provider supplied with `--runtime-path`.
 - Network access for catalog and artifact downloads. Use `--local-only` when
   the instance is already prepared.
 

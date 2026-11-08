@@ -24,11 +24,11 @@ where
         .runtime_major_version
         .unwrap_or_else(|| prepared_version.required_java_major_version());
 
-    Ok(runtime_resolver
-        .resolve(
-            required_major_version,
-            runtime_options.runtime_executable_path.as_deref(),
-            runtime_options.runtime_validation,
-        )
-        .await?)
+    if let Some(distribution) = runtime_options.runtime_override.as_ref() {
+        distribution
+            .ensure_compatible(required_major_version, runtime_options.runtime_validation)?;
+        return Ok(distribution.clone());
+    }
+
+    Ok(runtime_resolver.resolve(required_major_version).await?)
 }

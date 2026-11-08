@@ -1,11 +1,9 @@
-use std::path::PathBuf;
-
-use elemental_core::runtime::RuntimeValidationMode;
+use elemental_core::runtime::{RuntimeValidationMode, distribution::Distribution};
 
 #[derive(Debug, Clone)]
 pub struct RuntimeOptions {
     pub runtime_major_version: Option<usize>,
-    pub runtime_executable_path: Option<PathBuf>,
+    pub runtime_override: Option<Distribution>,
     pub runtime_validation: RuntimeValidationMode,
 }
 
@@ -13,7 +11,7 @@ impl RuntimeOptions {
     pub fn new() -> Self {
         Self {
             runtime_major_version: None,
-            runtime_executable_path: None,
+            runtime_override: None,
             runtime_validation: RuntimeValidationMode::Strict,
         }
     }
@@ -23,8 +21,8 @@ impl RuntimeOptions {
         self
     }
 
-    pub fn set_runtime_executable_path(mut self, runtime_executable_path: PathBuf) -> Self {
-        self.runtime_executable_path = Some(runtime_executable_path);
+    pub fn set_runtime_override(mut self, runtime_override: Distribution) -> Self {
+        self.runtime_override = Some(runtime_override);
         self
     }
 

@@ -1,6 +1,6 @@
 use crate::error::{Error, Result};
 
-use super::validation::validate_component;
+use super::validate_component;
 
 /// Maven coordinate in launcher notation:
 /// `group:artifact:version[:classifier][@extension]`.

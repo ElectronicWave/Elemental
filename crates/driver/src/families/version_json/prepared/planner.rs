@@ -1,17 +1,20 @@
-use elemental_infra::downloader::DownloadBatch;
+use elemental_core::storage::layout::Layoutable;
+use elemental_infra::{
+    SafeRelativePath,
+    downloader::{DownloadBatch, DownloadTask},
+};
 use elemental_schema::mojang::piston::{PistonMetaAssetIndexObjects, PistonMetaData};
 
 use crate::{
     error::Result,
     families::version_json::{
         VersionJsonInstanceLayout, VersionJsonRemoteResolver, VersionJsonRootLayout,
-        VersionJsonRuleContext,
+        VersionJsonRootResource, VersionJsonRuleContext,
     },
 };
 
 use super::ResolvedVersionJsonInstance;
 
-mod assets;
 mod libraries;
 mod version;
 
@@ -43,6 +46,34 @@ where
             remote_resolver: self.remote_resolver.clone(),
             rule_context: VersionJsonRuleContext::current(),
         }
+    }
+}
+
+impl<R, L, VL> VersionJsonInstallPlanner<'_, R, L, VL>
+where
+    R: VersionJsonRemoteResolver,
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+{
+    pub(super) fn batch_assets(&self) -> Result<DownloadBatch> {
+        let tasks = self
+            .asset_index_objects
+            .objects
+            .values()
+            .map(|object| {
+                Ok(DownloadTask::new(
+                    self.remote_resolver.object_url(object.hash.as_str())?,
+                    self.version
+                        .parent
+                        .try_get_resource(VersionJsonRootResource::AssetObjects(Some(
+                            SafeRelativePath::parse(object.hash.as_str())?,
+                        )))?,
+                )
+                .size(object.size as u64)
+                .sha1(object.hash.clone()))
+            })
+            .collect::<Result<Vec<DownloadTask>>>()?;
+        Ok(DownloadBatch::new(tasks).group("assets"))
     }
 }
 

@@ -4,8 +4,6 @@ use crate::{
     url::{Origin, OriginPolicy},
 };
 
-mod mirror;
-
 const LAUNCHERMETA_ORIGIN: &str = "https://launchermeta.mojang.com";
 const PISTONMETA_ORIGIN: &str = "https://piston-meta.mojang.com";
 const PISTONDATA_ORIGIN: &str = "https://piston-data.mojang.com";
@@ -62,6 +60,22 @@ impl VanillaEndpoints {
 
     pub fn official() -> Self {
         Self::new(OriginPolicy::default())
+    }
+
+    pub fn mirror(
+        launchermeta_origin: String,
+        pistonmeta_origin: String,
+        pistondata_origin: String,
+        resources_origin: String,
+        libraries_origin: String,
+    ) -> Result<Self> {
+        let policy = OriginPolicy::default()
+            .with_override(VanillaOrigin::LauncherMeta, launchermeta_origin)?
+            .with_override(VanillaOrigin::PistonMeta, pistonmeta_origin)?
+            .with_override(VanillaOrigin::PistonData, pistondata_origin)?
+            .with_override(VanillaOrigin::Resources, resources_origin)?
+            .with_override(VanillaOrigin::Libraries, libraries_origin)?;
+        Ok(Self::new(policy))
     }
 
     pub fn origin_policy(&self) -> &OriginPolicy<VanillaOrigin> {

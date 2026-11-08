@@ -5,8 +5,6 @@ use elemental_core::{
     storage::{Storage, layout::Layout},
 };
 use elemental_infra::downloader::DownloadSession;
-use elemental_schema::mojang::piston::PistonMetaData;
-
 use crate::{
     descriptors::VANILLA_DRIVER,
     driver::{Driver, DriverDescriptor, InstalledDriver},
@@ -98,7 +96,7 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for VanillaDriver {
         let Some(metadata) = &probe.metadata else {
             return Ok(None);
         };
-        if has_loader_marker(metadata) {
+        if LOADER_MARKERS.matches(metadata) {
             return Ok(None);
         }
 
@@ -108,8 +106,4 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for VanillaDriver {
             None,
         )))
     }
-}
-
-fn has_loader_marker(metadata: &PistonMetaData) -> bool {
-    LOADER_MARKERS.matches(metadata)
 }

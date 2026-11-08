@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use elemental_schema::fabric::{
-    ProfileLibrary, ProfileLibraryArtifact, ProfileLibraryDownloads, ProfileLibraryExtract,
+    ProfileLibrary, ProfileLibraryArtifact, ProfileLibraryDownloads,
     ProfileLogging,
 };
 use elemental_schema::mojang::piston::{
@@ -71,7 +71,9 @@ fn profile_library_to_piston(profile_library: ProfileLibrary) -> Result<PistonMe
         name,
         natives,
         rules: None,
-        extract: extract.map(profile_library_extract_to_piston),
+        extract: extract.map(|extract| PistonMetaLibrariesExtract {
+            exclude: extract.exclude,
+        }),
     })
 }
 
@@ -97,12 +99,6 @@ fn profile_library_artifact_to_piston(
         size: artifact.size,
         url: artifact.url,
         path: artifact.path,
-    }
-}
-
-fn profile_library_extract_to_piston(extract: ProfileLibraryExtract) -> PistonMetaLibrariesExtract {
-    PistonMetaLibrariesExtract {
-        exclude: extract.exclude,
     }
 }
 

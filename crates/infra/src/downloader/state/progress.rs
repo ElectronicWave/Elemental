@@ -79,7 +79,7 @@ impl SessionState {
         });
 
         DownloadProgress {
-            tasks_total: self.accepted,
+            tasks_accepted: self.accepted,
             tasks_completed,
             tasks_failed: self.failed,
             tasks_skipped: self.skipped,

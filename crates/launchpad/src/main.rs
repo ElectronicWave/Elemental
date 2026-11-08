@@ -1,7 +1,11 @@
 mod cli;
 mod commands;
 mod config;
+mod defaults;
 mod diagnostics;
+mod interactive;
+mod invocation;
+mod progress;
 
 use anyhow::Result;
 use clap::Parser;
@@ -12,12 +16,19 @@ use elemental::core::runtime::{
 use std::sync::Arc;
 
 use crate::cli::Cli;
-use crate::config::DemoCommand;
+use crate::config::LaunchpadCommand;
+use crate::invocation::Invocation;
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
-    let command = Cli::parse().into_demo_command()?;
-    if let DemoCommand::Launch(config) = &command
+    let command = match Cli::parse().into_invocation()? {
+        Invocation::Command(command) => command,
+        Invocation::Interactive {
+            storage_root,
+            local_only,
+        } => interactive::prompt_command(storage_root, local_only).await?,
+    };
+    if let LaunchpadCommand::Launch(config) = &command
         && !config.runtime_paths.is_empty()
     {
         let mut providers = Vec::<Arc<dyn RuntimeProvider>>::new();

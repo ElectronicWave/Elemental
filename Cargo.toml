@@ -2,7 +2,7 @@
 resolver = "3"
 members = [
     "crates/core",
-    "crates/demo",
+    "crates/launchpad",
     "crates/driver",
     "crates/elemental",
     "crates/infra",
@@ -44,3 +44,17 @@ tokio = { version = "1.48.0", features = [
     "time",
 ] }
 toml = "1.0.0"
+
+# https://github.com/microsoft/edit/blob/main/Cargo.toml
+# `opt-level = "s"` significantly reduces binary size.
+# `#[optimize(speed)]` can be used for spot optimizations, but does not work
+# on intrinsics such as memset.
+[profile.release]
+codegen-units = 1           # reduces binary size by ~2%
+debug = "full"              # keeps release artifacts debuggable
+lto = true                  # reduces binary size by ~14%
+opt-level = "s"             # reduces binary size by ~25%
+panic = "abort"             # reduces binary size when combined with panic_immediate_abort
+split-debuginfo = "packed"  # emits a separate *.dwp/*.dSYM so the binary can be stripped
+strip = "symbols"           # see split-debuginfo; drops symbols from the executable
+incremental = true          # improves re-compile times

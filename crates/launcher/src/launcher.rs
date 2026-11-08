@@ -6,11 +6,9 @@ use std::{
 use elemental_core::{
     auth::credential::UserCredential,
     launcher::{command::LaunchCommand, process},
-    minecraft::MinecraftVersionId,
     storage::Storage,
 };
 use elemental_driver::{
-    catalog::{GameVersion, GameVersionCatalog, LoaderRelease, LoaderVersionCatalog},
     descriptors::{
         BABRIC_DRIVER, CLEANROOM_DRIVER, FABRIC_DRIVER, FORGE_DRIVER, LEGACY_FABRIC_DRIVER,
         LITELOADER_DRIVER, NEOFORGE_DRIVER, OUTLANDS_DRIVER, QUILT_DRIVER, RIFT_DRIVER,
@@ -46,6 +44,7 @@ use crate::{
     builder::LauncherBuilder,
     error::{Error, Result},
     origin::{DriverOrigins, InstallerFamilySource, ProfiledFamilySource},
+    preparation::InstancePreparation,
     request::LaunchOptions,
     result::{
         Instance, LaunchedInstance, LoggedLaunchedInstance, PreparedInstance, PreparedInstanceKind,
@@ -152,41 +151,61 @@ where
             .map(summarize_installed_instance))
     }
 
-    pub async fn game_versions<C: GameVersionCatalog>(
-        &self,
-        catalog: C,
-    ) -> Result<Vec<GameVersion>> {
-        Ok(catalog.game_versions().await?)
-    }
-
-    pub async fn loader_versions<C: LoaderVersionCatalog>(
-        &self,
-        catalog: C,
-        game_version: &MinecraftVersionId,
-    ) -> Result<Vec<LoaderRelease>> {
-        Ok(catalog.loader_versions(game_version).await?)
-    }
-
+    /// Install or refresh an instance with a default download session.
     pub async fn prepare(
         &self,
         instance_name: String,
         driver: DriverSpec,
     ) -> Result<PreparedInstance<L, VL>> {
+        self.begin_prepare(instance_name, driver)
+            .await?
+            .prepare()
+            .await
+    }
+
+    /// Start a preparation with a default session while exposing its progress.
+    ///
+    /// Calling [`InstancePreparation::prepare`] keeps session ownership inside
+    /// the launcher. Dropping the preparation without calling `prepare` cancels
+    /// the download session.
+    pub async fn begin_prepare(
+        &self,
+        instance_name: String,
+        driver: DriverSpec,
+    ) -> Result<InstancePreparation<'_, L, VL>> {
         let session = self
             .downloader
             .session(format!("prepare {instance_name}"))
             .open()
             .await?;
-        let prepared = self
-            .prepare_with_session(&session, instance_name, driver)
-            .await;
-        let report = session.finish().await?;
-        let prepared = prepared?;
-        report.success()?;
-        Ok(prepared)
+        Ok(InstancePreparation::new(
+            self,
+            session,
+            instance_name,
+            driver,
+        ))
     }
 
+    /// Install or refresh an instance with a caller-configured session.
+    ///
+    /// The launcher finishes and validates the session. Use
+    /// [`Launcher::prepare_in_session`] when the caller needs to own the
+    /// session lifecycle or inspect the download report.
     pub async fn prepare_with_session(
+        &self,
+        session: DownloadSession,
+        instance_name: String,
+        driver: DriverSpec,
+    ) -> Result<PreparedInstance<L, VL>> {
+        InstancePreparation::new(self, session, instance_name, driver)
+            .prepare()
+            .await
+    }
+
+    /// Low-level preparation inside a caller-owned session.
+    ///
+    /// The caller must finish or cancel `session` and validate its report.
+    pub async fn prepare_in_session(
         &self,
         session: &DownloadSession,
         instance_name: String,

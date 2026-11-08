@@ -10,7 +10,7 @@ mod failure;
 mod progress;
 
 pub use failure::{DownloadFailure, DownloadPhase};
-pub use progress::DownloadProgress;
+pub use progress::{ActiveTask, DownloadProgress};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
@@ -106,6 +106,7 @@ impl DownloadReport {
         self.failures().next().is_none() && self.cancelled_task_ids().next().is_none()
     }
 
+    /// Return an error if any task failed or was cancelled.
     pub fn success(&self) -> Result<()> {
         let session = self
             .session_name

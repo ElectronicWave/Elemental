@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 
-use elemental_core::{launcher::process::ProcessLogLine, runtime::distribution::Distribution};
+use elemental_core::{
+    launcher::process::ProcessLogLine, runtime::distribution::Distribution, storage::Storage,
+};
 use elemental_driver::{
     driver::{DriverDescriptor, InstalledDriver},
     families::{
@@ -65,6 +67,13 @@ where
         match &self.inner {
             PreparedInstanceKind::VersionJson(prepared) => prepared.instance_root(),
             PreparedInstanceKind::Installer(prepared) => prepared.instance_root(),
+        }
+    }
+
+    pub fn version(&self) -> &Storage<VL, Storage<L>> {
+        match &self.inner {
+            PreparedInstanceKind::VersionJson(prepared) => &prepared.version,
+            PreparedInstanceKind::Installer(prepared) => &prepared.instance,
         }
     }
 }

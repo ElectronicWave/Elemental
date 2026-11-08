@@ -16,7 +16,9 @@ impl SessionHandler {
         let mut state = self.lock_state();
         let update = transition(&mut state);
 
-        self.progress.send_replace(update.progress);
+        if let Some(progress) = update.progress {
+            self.progress.send_replace(progress);
+        }
         for event in update.events {
             self.emit(event);
         }
@@ -77,8 +79,14 @@ impl SessionHandler {
 
     pub(crate) fn finish_task(&self) {
         if self.pending_tasks.fetch_sub(1, Ordering::AcqRel) == 1 {
+            self.refresh_progress();
             self.idle.notify_waiters();
         }
+    }
+
+    fn refresh_progress(&self) {
+        let progress = self.lock_state().progress(Instant::now());
+        self.progress.send_replace(progress);
     }
 
     pub(crate) fn finish_failed(&self, failure: DownloadFailure) {

@@ -133,7 +133,6 @@ where
         )
         .await?;
 
-        session.wait_idle().await?;
         session.success().await?;
 
         let launch_version: PreparedVersionJsonInstance<L, VL> =

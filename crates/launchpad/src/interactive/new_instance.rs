@@ -21,7 +21,7 @@ use crate::{
 use super::{
     choices::{
         DriverChoice, GameVersionChoice, LoaderVersionChoice, RuntimeChoice, driver_choices,
-        driver_starting_cursor, fabric_starting_cursor, prompt_or_back,
+        driver_starting_cursor, fabric_starting_cursor, prompt_catalog, prompt_or_back,
     },
     runtime,
 };
@@ -178,11 +178,7 @@ impl NewInstanceWizard {
             .cloned()
             .map(|version| GameVersionChoice { version })
             .collect();
-        let result = Select::new("Minecraft version", choices)
-            .with_starting_cursor(starting_cursor)
-            .with_help_message("Type to filter the catalog. Esc goes back")
-            .prompt();
-        let Some(choice) = prompt_or_back(result)? else {
+        let Some(choice) = prompt_catalog("Minecraft version", choices, starting_cursor)? else {
             return Ok(StepOutcome::Step(NewInstanceStep::Driver));
         };
 
@@ -229,17 +225,11 @@ impl NewInstanceWizard {
         }
 
         let starting_cursor = self.loader_version_cursor(&loader_releases, default_loader_version);
-        let result = Select::new(
-            "Loader version",
-            loader_releases
-                .into_iter()
-                .map(|release| LoaderVersionChoice { release })
-                .collect(),
-        )
-        .with_starting_cursor(starting_cursor)
-        .with_help_message("Type to filter the catalog. Esc goes back")
-        .prompt();
-        let Some(choice) = prompt_or_back(result)? else {
+        let choices = loader_releases
+            .into_iter()
+            .map(|release| LoaderVersionChoice { release })
+            .collect();
+        let Some(choice) = prompt_catalog("Loader version", choices, starting_cursor)? else {
             return Ok(StepOutcome::Step(NewInstanceStep::GameVersion));
         };
 

@@ -13,7 +13,7 @@ use elemental::{
     },
     launcher::{DriverCatalog, Instance},
 };
-use inquire::InquireError;
+use inquire::{InquireError, Select};
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct DriverChoice {
@@ -120,6 +120,22 @@ pub(super) fn prompt_or_back<T>(result: std::result::Result<T, InquireError>) ->
         Err(InquireError::OperationCanceled) => Ok(None),
         Err(error) => Err(error.into()),
     }
+}
+
+pub(super) fn prompt_catalog<T>(
+    message: &'static str,
+    choices: Vec<T>,
+    starting_cursor: usize,
+) -> Result<Option<T>>
+where
+    T: Display,
+{
+    prompt_or_back(
+        Select::new(message, choices)
+            .with_starting_cursor(starting_cursor)
+            .with_help_message("Type to filter the catalog. Esc goes back")
+            .prompt(),
+    )
 }
 
 pub(super) fn driver_choices() -> Vec<DriverChoice> {

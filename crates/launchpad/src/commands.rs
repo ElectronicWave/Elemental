@@ -1,10 +1,15 @@
-use std::time::{Duration, Instant};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use anyhow::{Context, Result};
 use elemental::{
     core::{
         auth::{authorizer::Authorizer, authorizers::offline::OfflineAuthorizer},
         launcher::command::LaunchCommand,
+        runtime::provider::{RuntimeProvider, default_providers},
+        runtime::providers::custom::new_custom_provider,
     },
     launcher::{Launcher, PreparedInstance},
 };
@@ -25,9 +30,7 @@ pub async fn run(command: LaunchpadCommand) -> Result<()> {
 }
 
 async fn run_launch(config: LaunchpadConfig) -> Result<()> {
-    let launcher = Launcher::builder()
-        .storage_root(config.storage_root.clone())
-        .build();
+    let launcher = build_launcher(&config)?;
 
     let (prepared, prepare_elapsed) = prepare_instance(&launcher, &config).await?;
 
@@ -40,7 +43,27 @@ async fn run_launch(config: LaunchpadConfig) -> Result<()> {
         .build_launch_command(&prepared, &credential, &config.runtime, &config.options)
         .await?;
 
-    finalize_launch(&config, &prepared, prepare_elapsed.as_millis(), command).await
+    finalize_launch(
+        &launcher,
+        &config,
+        &prepared,
+        prepare_elapsed.as_millis(),
+        command,
+    )
+    .await
+}
+
+fn build_launcher(config: &LaunchpadConfig) -> Result<Launcher> {
+    let mut providers = Vec::<Arc<dyn RuntimeProvider>>::new();
+    if !config.runtime_paths.is_empty() {
+        providers.push(Arc::new(new_custom_provider(config.runtime_paths.clone())?));
+    }
+    providers.extend(default_providers());
+
+    Ok(Launcher::builder()
+        .storage_root(config.storage_root.clone())
+        .runtime_providers(providers)
+        .build())
 }
 
 async fn prepare_instance(
@@ -97,12 +120,14 @@ async fn run_list_instances(storage_root: std::path::PathBuf) -> Result<()> {
 }
 
 pub(super) async fn finalize_launch(
+    launcher: &Launcher,
     config: &LaunchpadConfig,
     prepared: &PreparedInstance,
     prepared_ms: u128,
     command: LaunchCommand,
 ) -> Result<()> {
-    let diagnostics = collect_version_diagnostics(prepared.version())?;
+    let info = prepared.info()?;
+    let diagnostics = collect_version_diagnostics(&info);
     let runtime_executable = command.runtime.executable().to_path_buf();
     let loader_version = config.spec.loader_version().map(|version| version.as_str());
     let install_status = if config.local_only {
@@ -123,13 +148,13 @@ pub(super) async fn finalize_launch(
         command: &command,
     });
 
-    let exit_status = run_logged_process(command).await?;
+    let exit_status = run_logged_process(launcher, command).await?;
     print_summary(&LaunchSummary {
         driver_name: config.spec.name(),
         game_version: config.spec.game_version().as_str(),
         loader_version,
         runtime_executable: runtime_executable.as_path(),
-        version_root: diagnostics.version_root.as_path(),
+        version_root: info.version_root.as_path(),
         install_status: &install_status,
         prepared_ms,
         exit_status,

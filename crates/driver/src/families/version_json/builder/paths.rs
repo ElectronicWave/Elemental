@@ -57,7 +57,7 @@ impl LaunchPaths {
     }
 }
 
-pub(super) fn resolve_absolute_path(path: PathBuf) -> Result<PathBuf> {
+pub(crate) fn resolve_absolute_path(path: PathBuf) -> Result<PathBuf> {
     if path.is_absolute() {
         return Ok(path);
     }

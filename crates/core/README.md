@@ -38,7 +38,7 @@ use anyhow::Result;
 use elemental_core::{
     auth::{authorizer::Authorizer, authorizers::offline::OfflineAuthorizer},
     minecraft::MinecraftVersionId,
-    runtime::distribution::Distribution,
+    runtime::RuntimeResolver,
 };
 
 #[tokio::main]
@@ -54,7 +54,8 @@ async fn main() -> Result<()> {
     let game_version = MinecraftVersionId::from("1.20.1");
     println!("game version: {game_version}");
 
-    for runtime in Distribution::cached().await.into_iter().take(5) {
+    let resolver = RuntimeResolver::with_default_providers();
+    for runtime in resolver.distributions().await.into_iter().take(5) {
         println!("{}: {}", runtime.provider, runtime.executable().display());
     }
 
@@ -176,10 +177,25 @@ assert!(runtime.executable().is_file());
 # Ok::<_, anyhow::Error>(())
 ```
 
-Use `Distribution::cached()` to inspect every discovered runtime, or
-`Distribution::find_cached_by_java_major()` to select one by Java major
-version. An explicit executable can be passed to `resolve_runtime`; in strict
-mode its detected major version must match the requested version.
+Use `RuntimeResolver` to own discovery and caching. `distributions()` returns
+every discovered runtime, `find_by_java_major()` selects one by Java major
+version, and `resolve()` applies an explicit executable or the configured
+validation mode:
+
+```rust
+use elemental_core::runtime::{RuntimeResolver, RuntimeValidationMode};
+
+let resolver = RuntimeResolver::with_default_providers();
+let runtime = resolver
+    .resolve(21, None, RuntimeValidationMode::Strict, "launch")
+    .await?;
+assert!(runtime.executable().is_file());
+```
+
+An explicit executable can be passed to `resolve()`; in strict mode its
+detected major version must match the requested version. `elemental-launcher`
+injects one resolver per `Launcher` so different hosts can use different
+provider lists without sharing process-wide state.
 
 Custom runtime providers can reuse the public scanning helpers in
 `runtime::discovery`, including `find_runtime_homes()`,
@@ -187,9 +203,10 @@ Custom runtime providers can reuse the public scanning helpers in
 reimplementing Java runtime layout checks.
 
 > [!IMPORTANT]
-> `with_runtime_providers()` replaces the process-wide provider list. Call it
-> before the first `Distribution::cached()` call, because the cached discovery
-> result is not refreshed when providers change.
+> `with_runtime_providers()` and `Distribution::cached()` remain for
+> compatibility with code that relies on the process-wide provider list. The
+> launcher path uses `RuntimeResolver` instead; prefer it for new code, because
+> the global cache is not refreshed when providers change.
 
 ### Authentication and launch processes
 

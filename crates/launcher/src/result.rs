@@ -1,15 +1,22 @@
-use std::path::{Path, PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use elemental_core::{
-    launcher::process::ProcessLogLine, runtime::distribution::Distribution, storage::Storage,
+    launcher::process::ProcessLogLine,
+    runtime::distribution::Distribution,
+    storage::{Storage, layout::Layoutable},
 };
 use elemental_driver::{
     driver::{DriverDescriptor, InstalledDriver},
     families::version_json::{
         BaseInstanceLayout, BaseRootLayout, PreparedVersionJsonInstance, VersionJsonInstanceLayout,
-        VersionJsonRootLayout,
+        VersionJsonInstanceResource, VersionJsonRootLayout,
     },
 };
+
+use crate::error::Result;
 
 pub struct LaunchedInstance {
     pub runtime: Distribution,
@@ -22,11 +29,58 @@ pub struct LoggedLaunchedInstance {
     pub lines: tokio::sync::mpsc::UnboundedReceiver<ProcessLogLine>,
 }
 
+impl LoggedLaunchedInstance {
+    pub async fn wait_with_logs<F>(self, mut on_line: F) -> Result<std::process::ExitStatus>
+    where
+        F: FnMut(ProcessLogLine),
+    {
+        let Self {
+            child, mut lines, ..
+        } = self;
+        let mut child = child;
+        let wait = child.wait();
+        tokio::pin!(wait);
+
+        loop {
+            tokio::select! {
+                Some(line) = lines.recv() => on_line(line),
+                status = &mut wait => {
+                    while let Some(line) = lines.recv().await {
+                        on_line(line);
+                    }
+                    return Ok(status?);
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Instance {
     pub instance_name: String,
     pub instance_root: PathBuf,
     pub driver: InstalledDriver,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedInstanceMetadata {
+    pub id: String,
+    pub main_class: String,
+    pub inherits_from: Option<String>,
+    pub asset_index: String,
+    pub release_type: String,
+    pub required_java_major_version: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedInstanceInfo {
+    pub metadata: PreparedInstanceMetadata,
+    pub version_root: PathBuf,
+    pub metadata_path: PathBuf,
+    pub version_jar: PathBuf,
+    pub natives_directory: PathBuf,
+    pub natives_files: Vec<PathBuf>,
+    pub classpath: Vec<PathBuf>,
 }
 
 pub struct PreparedInstance<L = BaseRootLayout, VL = BaseInstanceLayout>
@@ -64,4 +118,49 @@ where
     pub fn version(&self) -> &Storage<VL, Storage<L>> {
         &self.launch_version.version
     }
+
+    pub fn info(&self) -> Result<PreparedInstanceInfo> {
+        let version = &self.launch_version.version;
+        let metadata_path = version.try_get_resource(VersionJsonInstanceResource::Metadata)?;
+        let version_jar = version.try_get_resource(VersionJsonInstanceResource::Jar)?;
+        let natives_directory = version.try_get_resource(VersionJsonInstanceResource::Natives)?;
+        let mut natives_files = Vec::new();
+        collect_files(&natives_directory, &mut natives_files)?;
+        natives_files.sort();
+
+        Ok(PreparedInstanceInfo {
+            metadata: PreparedInstanceMetadata {
+                id: self.launch_version.metadata.id.clone(),
+                main_class: self.launch_version.metadata.main_class.clone(),
+                inherits_from: self.launch_version.metadata.inherits_from.clone(),
+                asset_index: self.launch_version.metadata.asset_index.id.clone(),
+                release_type: self.launch_version.metadata.release_type.clone(),
+                required_java_major_version: self.launch_version.required_java_major_version(),
+            },
+            version_root: version.path.clone(),
+            metadata_path,
+            version_jar,
+            natives_directory,
+            natives_files,
+            classpath: self.launch_version.classpath()?,
+        })
+    }
+}
+
+fn collect_files(root: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
+    if !root.exists() {
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(root)? {
+        let entry = entry?;
+        let path = entry.path();
+        if entry.file_type()?.is_dir() {
+            collect_files(&path, files)?;
+        } else {
+            files.push(path);
+        }
+    }
+
+    Ok(())
 }

@@ -16,7 +16,7 @@ use super::{
     variables::LauncherVariables,
 };
 
-use paths::LaunchPaths;
+pub(crate) use paths::resolve_absolute_path;
 
 pub struct VersionJsonLaunchBuilder<L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> {
     pub credential: UserCredential,
@@ -115,10 +115,9 @@ impl<L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> VersionJsonLaunchB
         &self,
         metadata: &PistonMetaData,
         rule_context: &VersionJsonRuleContext,
-        paths: &LaunchPaths,
         module_path_entries: &std::collections::HashSet<String>,
     ) -> Result<String> {
-        arguments::build_classpath(self, metadata, rule_context, paths, module_path_entries)
+        arguments::build_classpath(self, metadata, rule_context, module_path_entries)
     }
 
     fn collect_module_path_entries(

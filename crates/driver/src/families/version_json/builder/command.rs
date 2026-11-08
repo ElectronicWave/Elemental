@@ -39,7 +39,7 @@ where
         let raw_jvm_arguments = metadata.jvm_arguments(&rule_context);
         let module_path_entries = self.collect_module_path_entries(raw_jvm_arguments.as_slice())?;
         self.inner.classpath =
-            self.build_classpath(&metadata, &rule_context, &paths, &module_path_entries)?;
+            self.build_classpath(&metadata, &rule_context, &module_path_entries)?;
 
         let jvm_arguments = self.build_jvm_arguments(&metadata, raw_jvm_arguments)?;
         let game_arguments = self.build_game_arguments(&metadata, &rule_context)?;

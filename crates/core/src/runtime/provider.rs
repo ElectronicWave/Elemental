@@ -29,7 +29,7 @@ use super::providers::{
     registry::RegistryProvider,
 };
 
-type RuntimeProviderList = Vec<Arc<dyn RuntimeProvider>>;
+pub type RuntimeProviderList = Vec<Arc<dyn RuntimeProvider>>;
 type RuntimeProviderOverride = Option<RuntimeProviderList>;
 type RuntimeProviderOverrideLock = RwLock<RuntimeProviderOverride>;
 

@@ -24,7 +24,9 @@ directly.
 - Type-safe dispatch through `ProfiledDriver` and `InstallerDriver`.
 - Local instance inspection with driver and loader-version detection.
 - Configurable origins and mirror overrides for restricted networks.
-- Typed Java runtime, resolution, quick-play, and extra-argument launch options.
+- Typed Java runtime options and shared version JSON launch construction.
+- A prepared version JSON view that exposes metadata, natives, and classpath
+  without importing family traits.
 - Shared version JSON layouts for game roots and individual instances.
 
 ## Installation
@@ -387,14 +389,15 @@ installation still contains valid Minecraft metadata.
 ### Launch configuration
 
 Launch command construction lives in `elemental_driver::launch` and is shared
-by every driver, including installer-driven families. Configuration is split
-by lifecycle:
+by every driver, including installer-driven families. The driver layer only
+defines `RuntimeOptions`, which controls runtime selection, an explicit
+executable, and strict or disabled validation. Installer drivers also use it
+while running client processors.
 
-- `RuntimeOptions` controls runtime selection, an explicit executable, and
-  strict or disabled validation. Installer drivers also use it while running
-  client processors.
-- `LaunchOptions` controls launcher name and version, client ID, game
-  resolution, quick-play targets, and extra JVM and game arguments.
+Host-facing launch options (launcher branding, client ID, resolution,
+quick-play targets, and extra arguments) belong to `elemental-launcher`.
+`VersionJsonLaunchBuilder` remains a driver implementation detail; hosts should
+use `Launcher::build_launch_command()` instead of depending on it directly.
 
 Both installer and version JSON drivers expose a prepared version JSON
 instance, so launch construction does not branch on the driver family.

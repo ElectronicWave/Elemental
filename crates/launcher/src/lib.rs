@@ -4,6 +4,7 @@ pub mod error;
 mod launcher;
 mod origin;
 mod preparation;
+mod reporter;
 mod request;
 mod result;
 mod spec;
@@ -12,10 +13,14 @@ pub use builder::LauncherBuilder;
 pub use catalog::DriverCatalog;
 pub use elemental_core::auth::credential::UserCredential;
 pub use elemental_core::launcher::command::LaunchCommand;
-pub use elemental_infra::downloader::DownloadSession;
+pub use elemental_infra::downloader::{DownloadProgress, DownloadSession};
 pub use launcher::Launcher;
 pub use origin::DriverOrigins;
 pub use preparation::InstancePreparation;
-pub use request::{LaunchOptions, RuntimeOptions};
-pub use result::{Instance, LaunchedInstance, LoggedLaunchedInstance, PreparedInstance};
+pub use reporter::{CallbackReporter, NoopReporter, ProgressReporter};
+pub use request::{LaunchOptions, LaunchResolution, QuickPlayOptions, RuntimeOptions};
+pub use result::{
+    Instance, LaunchedInstance, LoggedLaunchedInstance, PreparedInstance, PreparedInstanceInfo,
+    PreparedInstanceMetadata,
+};
 pub use spec::{DriverSpec, LoaderSpec, VanillaSpec};

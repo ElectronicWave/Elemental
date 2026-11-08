@@ -1,5 +1,9 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{fmt, path::PathBuf, sync::Arc};
 
+use elemental_core::runtime::{
+    RuntimeResolver,
+    provider::{RuntimeProviderList, default_providers},
+};
 use elemental_driver::families::version_json::{
     BaseInstanceLayout, BaseRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
 };
@@ -7,7 +11,6 @@ use elemental_infra::downloader::ElementalDownloader;
 
 use crate::{error::Result, launcher::Launcher, origin::DriverOrigins};
 
-#[derive(Debug)]
 pub struct LauncherBuilder<L = BaseRootLayout, VL = BaseInstanceLayout>
 where
     L: VersionJsonRootLayout,
@@ -18,6 +21,24 @@ where
     root_layout: L,
     instance_layout: VL,
     origins: DriverOrigins,
+    runtime_providers: RuntimeProviderList,
+}
+
+impl<L, VL> fmt::Debug for LauncherBuilder<L, VL>
+where
+    L: VersionJsonRootLayout + fmt::Debug,
+    VL: VersionJsonInstanceLayout + fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LauncherBuilder")
+            .field("storage_root", &self.storage_root)
+            .field("downloader", &self.downloader)
+            .field("root_layout", &self.root_layout)
+            .field("instance_layout", &self.instance_layout)
+            .field("origins", &self.origins)
+            .field("runtime_providers", &self.runtime_providers.len())
+            .finish()
+    }
 }
 
 impl Default for LauncherBuilder<BaseRootLayout, BaseInstanceLayout> {
@@ -28,6 +49,7 @@ impl Default for LauncherBuilder<BaseRootLayout, BaseInstanceLayout> {
             root_layout: BaseRootLayout,
             instance_layout: BaseInstanceLayout,
             origins: DriverOrigins::default(),
+            runtime_providers: default_providers(),
         }
     }
 }
@@ -58,6 +80,7 @@ where
             root_layout,
             instance_layout,
             origins: self.origins,
+            runtime_providers: self.runtime_providers,
         }
     }
 
@@ -68,6 +91,11 @@ where
 
     pub fn downloader(mut self, downloader: Arc<ElementalDownloader>) -> Self {
         self.downloader = downloader;
+        self
+    }
+
+    pub fn runtime_providers(mut self, runtime_providers: RuntimeProviderList) -> Self {
+        self.runtime_providers = runtime_providers;
         self
     }
 
@@ -89,6 +117,7 @@ where
             root_layout,
             instance_layout: self.instance_layout,
             origins: self.origins,
+            runtime_providers: self.runtime_providers,
         }
     }
 
@@ -102,16 +131,18 @@ where
             root_layout: self.root_layout,
             instance_layout,
             origins: self.origins,
+            runtime_providers: self.runtime_providers,
         }
     }
 
     pub fn build(self) -> Launcher<L, VL> {
-        Launcher::with_layouts_and_origins(
+        Launcher::with_layouts_origins_and_runtime(
             self.storage_root,
             self.downloader,
             self.root_layout,
             self.instance_layout,
             self.origins,
+            RuntimeResolver::new(self.runtime_providers),
         )
     }
 }

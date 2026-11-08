@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{future::Future, path::Path};
 
 use crate::runtime::distribution::Distribution;
 
@@ -7,8 +7,10 @@ pub mod distribution;
 pub mod error;
 pub mod provider;
 pub mod providers;
+mod resolver;
 
 pub use error::{Error, Result};
+pub use resolver::RuntimeResolver;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeValidationMode {
@@ -22,6 +24,26 @@ pub async fn resolve_runtime(
     validation_mode: RuntimeValidationMode,
     usage: &str,
 ) -> Result<Distribution> {
+    resolve_runtime_with(
+        required_major_version,
+        runtime_executable_path,
+        validation_mode,
+        usage,
+        Distribution::find_cached_by_java_major(required_major_version),
+    )
+    .await
+}
+
+pub(crate) async fn resolve_runtime_with<F>(
+    required_major_version: usize,
+    runtime_executable_path: Option<&Path>,
+    validation_mode: RuntimeValidationMode,
+    usage: &str,
+    cached_distribution: F,
+) -> Result<Distribution>
+where
+    F: Future<Output = Option<Distribution>>,
+{
     if let Some(runtime_executable_path) = runtime_executable_path {
         let distribution =
             Distribution::build_from_executable(runtime_executable_path.to_path_buf(), "Launch")
@@ -53,7 +75,7 @@ pub async fn resolve_runtime(
         return Ok(distribution);
     }
 
-    Distribution::find_cached_by_java_major(required_major_version)
+    cached_distribution
         .await
         .ok_or_else(|| Error::RuntimeNotFound {
             major_version: required_major_version,

@@ -1,4 +1,4 @@
-use elemental_core::storage::Storage;
+use elemental_core::{runtime::RuntimeResolver, storage::Storage};
 use elemental_infra::downloader::DownloadSession;
 
 use crate::{
@@ -51,6 +51,7 @@ impl InstallerDriver {
         instance: &Storage<VL, Storage<L>>,
         request: LoaderRequest,
         runtime_options: &RuntimeOptions,
+        runtime_resolver: &RuntimeResolver,
     ) -> Result<PreparedInstallerVersion<L, VL>>
     where
         L: VersionJsonRootLayout + Clone,
@@ -64,6 +65,7 @@ impl InstallerDriver {
                 request.game_version,
                 request.loader_version,
                 runtime_options,
+                runtime_resolver,
             ) => [Forge, Cleanroom, Outlands, NeoForge]
         )
     }

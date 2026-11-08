@@ -1,7 +1,7 @@
-use std::{marker::PhantomData, path::Path};
+use std::marker::PhantomData;
 
 use elemental_core::minecraft::MinecraftVersionId;
-use elemental_core::runtime::RuntimeValidationMode;
+use elemental_core::runtime::RuntimeResolver;
 use elemental_core::storage::{Storage, layout::Layoutable};
 use elemental_infra::downloader::DownloadSession;
 use elemental_schema::forge::ForgeInstallerProfile;
@@ -22,6 +22,7 @@ use crate::{
             VersionJsonRootResource,
         },
     },
+    launch::RuntimeOptions,
     loader_version::LoaderVersionId,
 };
 
@@ -91,9 +92,8 @@ where
         session: &DownloadSession,
         vanilla_source: &VanillaSource,
         remote_resolver: &InstallerFamilyRemoteResolver<F>,
-        runtime_major_version: Option<usize>,
-        runtime_executable_path: Option<&Path>,
-        runtime_validation: RuntimeValidationMode,
+        runtime_options: &RuntimeOptions,
+        runtime_resolver: &RuntimeResolver,
     ) -> Result<PreparedInstallerVersion<L, VL>> {
         let state_paths = InstallerStatePaths::new(&self.instance.path, F::FAMILY_NAME)?;
         let libraries_root = self
@@ -143,9 +143,8 @@ where
             let processor_operation_name = format!("{} processors", F::FAMILY_NAME);
             let runtime = resolve_installer_processor_runtime(
                 &launch_version,
-                runtime_major_version,
-                runtime_executable_path,
-                runtime_validation,
+                runtime_options,
+                runtime_resolver,
                 &processor_operation_name,
             )
             .await?;

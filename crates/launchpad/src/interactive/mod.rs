@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::Result;
+use elemental::launcher::Launcher;
 use inquire::Select;
 
 use crate::config::LaunchpadCommand;
@@ -41,12 +42,19 @@ impl LaunchpadAction {
         )
     }
 
-    async fn execute(self, storage_root: PathBuf) -> Result<Option<LaunchpadCommand>> {
+    async fn execute(
+        self,
+        storage_root: PathBuf,
+        launcher: &Launcher,
+    ) -> Result<Option<LaunchpadCommand>> {
         match self {
-            Self::NewInstance => Ok(new_instance::prompt(storage_root)
-                .await?
-                .map(LaunchpadCommand::Launch)),
-            Self::InstalledInstance => installed::prompt(storage_root).await,
+            Self::NewInstance => Ok(new_instance::prompt(
+                storage_root,
+                launcher.runtime_resolver().clone(),
+            )
+            .await?
+            .map(LaunchpadCommand::Launch)),
+            Self::InstalledInstance => installed::prompt(launcher).await,
             Self::ListInstances => Ok(Some(LaunchpadCommand::ListInstances { storage_root })),
         }
     }
@@ -55,13 +63,16 @@ impl LaunchpadAction {
 pub async fn prompt_command(storage_root: PathBuf, local_only: bool) -> Result<LaunchpadCommand> {
     println!("Elemental launchpad interactive setup");
     println!("Storage root: {}", storage_root.display());
+    let launcher = Launcher::builder()
+        .storage_root(storage_root.clone())
+        .build();
 
     loop {
         let Some(action) = LaunchpadAction::prompt(local_only)? else {
             return Ok(LaunchpadCommand::Exit);
         };
 
-        if let Some(command) = action.execute(storage_root.clone()).await? {
+        if let Some(command) = action.execute(storage_root.clone(), &launcher).await? {
             return Ok(command);
         }
     }

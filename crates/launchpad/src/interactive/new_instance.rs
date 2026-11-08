@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result, bail};
 use elemental::{
     core::minecraft::MinecraftVersionId,
+    core::runtime::RuntimeResolver,
     driver::{
         catalog::{GameVersion, LoaderRelease},
         driver::DriverDescriptor,
@@ -98,6 +99,7 @@ impl DriverContext {
 
 struct NewInstanceWizard {
     storage_root: PathBuf,
+    runtime_resolver: RuntimeResolver,
     driver: Option<DriverContext>,
     game_version: Option<MinecraftVersionId>,
     loader_version: Option<LoaderVersionId>,
@@ -106,9 +108,10 @@ struct NewInstanceWizard {
 }
 
 impl NewInstanceWizard {
-    fn new(storage_root: PathBuf) -> Self {
+    fn new(storage_root: PathBuf, runtime_resolver: RuntimeResolver) -> Self {
         Self {
             storage_root,
+            runtime_resolver,
             driver: None,
             game_version: None,
             loader_version: None,
@@ -276,8 +279,12 @@ impl NewInstanceWizard {
             .context("driver is missing from the wizard state")?;
         let defaults = driver.defaults;
         let descriptor = driver.descriptor;
-        let Some(runtime) =
-            runtime::prompt(defaults.runtime_major_version, &mut self.runtime_choice).await?
+        let Some(runtime) = runtime::prompt(
+            &self.runtime_resolver,
+            defaults.runtime_major_version,
+            &mut self.runtime_choice,
+        )
+        .await?
         else {
             return Ok(StepOutcome::Step(NewInstanceStep::InstanceName));
         };
@@ -341,6 +348,11 @@ impl NewInstanceStep {
     }
 }
 
-pub(super) async fn prompt(storage_root: PathBuf) -> Result<Option<Box<LaunchpadConfig>>> {
-    NewInstanceWizard::new(storage_root).run().await
+pub(super) async fn prompt(
+    storage_root: PathBuf,
+    runtime_resolver: RuntimeResolver,
+) -> Result<Option<Box<LaunchpadConfig>>> {
+    NewInstanceWizard::new(storage_root, runtime_resolver)
+        .run()
+        .await
 }

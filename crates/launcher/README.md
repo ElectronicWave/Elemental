@@ -15,10 +15,13 @@ reload it, build a mutable launch command, then start the game.
 - Prepare new instances or reopen installations that already exist on disk.
 - Automatic driver and loader-version detection during inspection.
 - Shared downloader and configurable root or instance layouts.
+- Injected runtime providers with a per-launcher distribution cache.
 - Launch-command construction for hosts that manage process creation.
 - Process spawning through the core launch primitives.
 - Typed runtime and launch options for runtime selection, resolution, quick
   play, and extra arguments.
+- A stable read-only view of prepared instance metadata, natives, and the
+  resolved classpath.
 
 ## Installation
 
@@ -85,6 +88,18 @@ async fn main() -> Result<()> {
 session. To start the game, pass the command to `launch()` or
 `launch_logged()`.
 
+Inspect a prepared instance without touching driver internals:
+
+```rust
+let info = prepared.info()?;
+println!(
+    "{} requires Java {} and has {} classpath entries",
+    info.metadata.id,
+    info.metadata.required_java_major_version,
+    info.classpath.len()
+);
+```
+
 Authentication is independent from launch. An `Authorizer` returns a
 `UserCredential`; `build_launch_command()` injects that credential into the
 game arguments and returns a mutable `LaunchCommand`. Authentication-specific
@@ -112,6 +127,31 @@ println!("{:?}", progress.borrow().active_tasks);
 
 The view exposes active tasks, the last-seen group, and task and byte counters.
 Formatting task and group names is left to the UI.
+
+For a simple callback-based reporter, use `prepare_with_reporter()`:
+
+```rust
+use elemental_launcher::CallbackReporter;
+
+let reporter = CallbackReporter::new(|progress| {
+    println!(
+        "{} / {} tasks",
+        progress.tasks_completed, progress.tasks_accepted
+    );
+});
+let prepared = launcher
+    .prepare_with_reporter(
+        "Vanilla-1.20.1".to_owned(),
+        DriverSpec::vanilla("1.20.1".into()),
+        &RuntimeOptions::default(),
+        &reporter,
+    )
+    .await?;
+```
+
+`NoopReporter` is the default used by `prepare()`. `InstancePreparation` also
+exposes `prepare_with_reporter()` so a `begin_prepare()` session can report
+progress while the launcher keeps ownership of the session lifecycle.
 
 ### Custom download sessions
 
@@ -246,6 +286,25 @@ let driver = DriverSpec::any(
 )?;
 ```
 
+When the driver comes from inspection or a CLI, build the spec from the
+descriptor instead of matching on it:
+
+```rust
+let game_version = instance
+    .driver
+    .game_version
+    .clone()
+    .ok_or_else(|| anyhow::anyhow!("instance has no game version"))?;
+let spec = DriverSpec::from_descriptor(
+    instance.driver.driver,
+    game_version,
+    loader_version,
+)?;
+```
+
+`from_descriptor()` rejects a loader version for Vanilla and requires one for
+every loader-driven distribution.
+
 ## Launch Options
 
 Launch configuration is split by lifecycle:
@@ -254,6 +313,10 @@ Launch configuration is split by lifecycle:
   `runtime_executable_path`, and `runtime_validation`.
 - `LaunchOptions` covers launcher name and version, client ID, window
   resolution, quick-play targets, and extra JVM and game arguments.
+
+`LaunchOptions` is owned by `elemental-launcher`. The driver crate only exposes
+`RuntimeOptions`; version JSON launch configuration stays an implementation
+detail behind `Launcher::build_launch_command()`.
 
 Use `RuntimeOptions::default()` for automatic runtime selection with strict
 Java version validation, and `LaunchOptions::default()` when no branding or
@@ -281,6 +344,39 @@ let launcher = Launcher::builder()
 Use `root_layout()` and `instance_layout()` for custom layouts, or
 `with_layouts()` to replace both at once. `Launcher::new(storage_root,
 downloader)` is the shorthand when the base layouts are sufficient.
+
+Runtime discovery is a launcher dependency rather than a process-wide setting.
+Pass providers explicitly when the host needs its own set:
+
+```rust
+use elemental_core::runtime::provider::default_providers;
+
+let launcher = Launcher::builder()
+    .runtime_providers(default_providers())
+    .build();
+
+for runtime in launcher.runtime_distributions().await {
+    println!("{}", runtime.executable().display());
+}
+```
+
+The launcher caches distributions per `RuntimeResolver`, so multiple launchers
+can use different provider lists in the same process without sharing state.
+
+### Log streaming
+
+`launch_logged()` returns a handle that drains stdout and stderr until the
+process exits:
+
+```rust
+let status = launcher
+    .launch_logged(command)?
+    .wait_with_logs(|line| println!("{line}"))
+    .await?;
+```
+
+`wait_with_logs()` consumes the handle, so callers do not need to drive the
+line receiver and child status in parallel.
 
 ### Origin Overrides
 

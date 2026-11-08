@@ -6,6 +6,7 @@ use std::{
 use elemental_core::{
     auth::credential::UserCredential,
     launcher::{command::LaunchCommand, process},
+    runtime::{RuntimeResolver, distribution::Distribution},
     storage::Storage,
 };
 use elemental_driver::{
@@ -32,11 +33,12 @@ use elemental_driver::{
         version_json::{
             BaseInstanceLayout, BaseRootLayout, PreparedVersionJsonInstance,
             ProfiledVersionJsonDriver, ProfiledVersionJsonFamilyExt, VersionJsonGameStorageExt,
-            VersionJsonInstanceLayout, VersionJsonRootLayout, inspect_instances,
+            VersionJsonInstanceLayout, VersionJsonRootLayout, builder::VersionJsonLaunchBuilder,
+            inspect_instances,
         },
     },
     inspect::InstalledInstance,
-    launch::build_launch_command,
+    launch::resolve_prepared_version_runtime,
     loader_version::LoaderVersionId,
 };
 use elemental_infra::downloader::{DownloadSession, ElementalDownloader};
@@ -46,6 +48,7 @@ use crate::{
     error::{Error, Result},
     origin::{DriverOrigins, InstallerFamilySource, ProfiledFamilySource},
     preparation::InstancePreparation,
+    reporter::ProgressReporter,
     request::{LaunchOptions, RuntimeOptions},
     result::{Instance, LaunchedInstance, LoggedLaunchedInstance, PreparedInstance},
     spec::{DriverFlow, DriverSpec},
@@ -71,6 +74,7 @@ where
     root_layout: L,
     instance_layout: VL,
     origins: DriverOrigins,
+    runtime_resolver: RuntimeResolver,
 }
 
 impl Launcher<BaseRootLayout, BaseInstanceLayout> {
@@ -110,12 +114,31 @@ where
         instance_layout: VL,
         origins: DriverOrigins,
     ) -> Self {
+        Self::with_layouts_origins_and_runtime(
+            storage_root,
+            downloader,
+            root_layout,
+            instance_layout,
+            origins,
+            RuntimeResolver::with_default_providers(),
+        )
+    }
+
+    pub fn with_layouts_origins_and_runtime(
+        storage_root: PathBuf,
+        downloader: Arc<ElementalDownloader>,
+        root_layout: L,
+        instance_layout: VL,
+        origins: DriverOrigins,
+        runtime_resolver: RuntimeResolver,
+    ) -> Self {
         Self {
             storage_root,
             downloader,
             root_layout,
             instance_layout,
             origins,
+            runtime_resolver,
         }
     }
 
@@ -125,6 +148,16 @@ where
 
     pub fn downloader(&self) -> &Arc<ElementalDownloader> {
         &self.downloader
+    }
+
+    pub fn runtime_resolver(&self) -> &RuntimeResolver {
+        &self.runtime_resolver
+    }
+
+    pub async fn runtime_distributions(
+        &self,
+    ) -> Vec<elemental_core::runtime::distribution::Distribution> {
+        self.runtime_resolver.distributions().await
     }
 
     pub async fn inspect_instances(&self) -> Result<Vec<Instance>> {
@@ -160,6 +193,22 @@ where
         self.begin_prepare(instance_name, driver, runtime_options)
             .await?
             .prepare()
+            .await
+    }
+
+    pub async fn prepare_with_reporter<R>(
+        &self,
+        instance_name: String,
+        driver: DriverSpec,
+        runtime_options: &RuntimeOptions,
+        reporter: &R,
+    ) -> Result<PreparedInstance<L, VL>>
+    where
+        R: ProgressReporter,
+    {
+        self.begin_prepare(instance_name, driver, runtime_options)
+            .await?
+            .prepare_with_reporter(reporter)
             .await
     }
 
@@ -218,7 +267,13 @@ where
         let instance = self.ensure_instance(instance_name).await?;
         let prepared_kind = self
             .resolve_driver(driver.descriptor())?
-            .prepare(session, &instance, &driver, runtime_options)
+            .prepare(
+                session,
+                &instance,
+                &driver,
+                runtime_options,
+                &self.runtime_resolver,
+            )
             .await?;
         Ok(PreparedInstance::new(driver.descriptor(), prepared_kind))
     }
@@ -240,13 +295,15 @@ where
         runtime_options: &RuntimeOptions,
         options: &LaunchOptions,
     ) -> Result<LaunchCommand> {
-        Ok(build_launch_command(
-            credential,
+        let runtime = resolve_prepared_version_runtime(
             &prepared.launch_version,
             runtime_options,
-            options,
+            &self.runtime_resolver,
+            "launch",
         )
-        .await?)
+        .await?;
+        let builder = launch_builder(credential, runtime, prepared, options);
+        Ok(builder.build_command()?)
     }
 
     pub fn launch(&self, command: LaunchCommand) -> Result<LaunchedInstance> {
@@ -387,6 +444,7 @@ impl ResolvedLauncherDriver {
         instance: &LauncherInstanceStorage<L, VL>,
         spec: &DriverSpec,
         runtime_options: &RuntimeOptions,
+        runtime_resolver: &RuntimeResolver,
     ) -> Result<PreparedVersionJsonInstance<L, VL>>
     where
         L: VersionJsonRootLayout + Clone,
@@ -407,7 +465,13 @@ impl ResolvedLauncherDriver {
             }
             (Self::Installer(driver), DriverFlow::Installer) => {
                 let prepared = driver
-                    .prepare_with_runtime(session, instance, loader_request(spec)?, runtime_options)
+                    .prepare_with_runtime(
+                        session,
+                        instance,
+                        loader_request(spec)?,
+                        runtime_options,
+                        runtime_resolver,
+                    )
                     .await?;
                 Ok(prepared.launch_version)
             }
@@ -431,6 +495,54 @@ impl ResolvedLauncherDriver {
             Self::Installer(driver) => Ok(driver.load_prepared(instance).await?.launch_version),
         }
     }
+}
+
+fn launch_builder<L, VL>(
+    credential: &UserCredential,
+    runtime: Distribution,
+    prepared: &PreparedInstance<L, VL>,
+    options: &LaunchOptions,
+) -> VersionJsonLaunchBuilder<L, VL>
+where
+    L: VersionJsonRootLayout + Clone,
+    VL: VersionJsonInstanceLayout + Clone,
+{
+    let mut builder = VersionJsonLaunchBuilder::new(
+        credential.clone(),
+        runtime,
+        prepared.launch_version.version.clone(),
+    );
+
+    if let Some(client_id) = &options.client_id {
+        builder = builder.set_client_id(client_id.clone());
+    }
+
+    if let Some(resolution) = &options.resolution {
+        builder = builder.set_resolution(resolution.width.clone(), resolution.height.clone());
+    }
+
+    if let (Some(name), Some(version)) = (&options.launcher_name, &options.launcher_version) {
+        builder = builder.set_launcher(name.clone(), version.clone());
+    }
+
+    if let Some(quick_play) = &options.quick_play {
+        builder = builder.set_quick_play(
+            quick_play.path.clone(),
+            quick_play.multiplayer.clone(),
+            quick_play.singleplayer.clone(),
+            quick_play.realms.clone(),
+        );
+    }
+
+    if !options.extra_jvm_arguments.is_empty() {
+        builder = builder.set_extra_jvm_arguments(options.extra_jvm_arguments.clone());
+    }
+
+    if !options.extra_game_arguments.is_empty() {
+        builder = builder.set_extra_game_arguments(options.extra_game_arguments.clone());
+    }
+
+    builder
 }
 
 fn loader_version(spec: &DriverSpec) -> Result<LoaderVersionId> {

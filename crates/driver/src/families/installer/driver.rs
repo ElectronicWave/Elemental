@@ -4,6 +4,7 @@ use crate::error::Result;
 use async_trait::async_trait;
 use elemental_core::{
     minecraft::MinecraftVersionId,
+    runtime::RuntimeResolver,
     storage::{Storage, layout::Layout},
 };
 use elemental_infra::downloader::DownloadSession;
@@ -71,6 +72,7 @@ where
             game_version,
             loader_version,
             &RuntimeOptions::new(),
+            &RuntimeResolver::with_default_providers(),
         )
         .await
     }
@@ -82,6 +84,7 @@ where
         game_version: MinecraftVersionId,
         loader_version: LoaderVersionId,
         runtime_options: &RuntimeOptions,
+        runtime_resolver: &RuntimeResolver,
     ) -> Result<PreparedInstallerVersion<L, VL>>
     where
         L: VersionJsonRootLayout + Clone,
@@ -97,9 +100,8 @@ where
             session,
             &self.vanilla_source,
             &self.remote_resolver(),
-            runtime_options.runtime_major_version,
-            runtime_options.runtime_executable_path.as_deref(),
-            runtime_options.runtime_validation,
+            runtime_options,
+            runtime_resolver,
         )
         .await
     }

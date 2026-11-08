@@ -58,10 +58,8 @@ impl InstalledSelection {
     }
 }
 
-pub(super) async fn prompt(storage_root: PathBuf) -> Result<Option<LaunchpadCommand>> {
-    let launcher = Launcher::builder()
-        .storage_root(storage_root.clone())
-        .build();
+pub(super) async fn prompt(launcher: &Launcher) -> Result<Option<LaunchpadCommand>> {
+    let storage_root = launcher.storage_root().to_path_buf();
     let instances = launcher.inspect_instances().await?;
     if instances.is_empty() {
         bail!(
@@ -70,7 +68,7 @@ pub(super) async fn prompt(storage_root: PathBuf) -> Result<Option<LaunchpadComm
         );
     }
 
-    let Some(selection) = select_instance(&instances).await? else {
+    let Some(selection) = select_instance(&instances, launcher).await? else {
         return Ok(None);
     };
     let config = selection.into_config(storage_root)?;
@@ -78,7 +76,10 @@ pub(super) async fn prompt(storage_root: PathBuf) -> Result<Option<LaunchpadComm
     Ok(Some(LaunchpadCommand::Launch(Box::new(config))))
 }
 
-async fn select_instance(instances: &[Instance]) -> Result<Option<InstalledSelection>> {
+async fn select_instance(
+    instances: &[Instance],
+    launcher: &Launcher,
+) -> Result<Option<InstalledSelection>> {
     let Some(mut instance) = prompt_instance(instances, None)? else {
         return Ok(None);
     };
@@ -86,7 +87,12 @@ async fn select_instance(instances: &[Instance]) -> Result<Option<InstalledSelec
 
     loop {
         let defaults = instance_defaults(&instance)?;
-        let runtime = runtime::prompt(defaults.runtime_major_version, &mut runtime_choice).await?;
+        let runtime = runtime::prompt(
+            launcher.runtime_resolver(),
+            defaults.runtime_major_version,
+            &mut runtime_choice,
+        )
+        .await?;
         if let Some(runtime) = runtime {
             return Ok(Some(InstalledSelection {
                 instance,

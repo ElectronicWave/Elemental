@@ -11,11 +11,7 @@ use elemental_infra::downloader::ElementalDownloader;
 
 use crate::{error::Result, launcher::Launcher, origin::DriverOrigins};
 
-pub struct LauncherBuilder<L = BaseRootLayout, VL = BaseInstanceLayout>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+pub struct LauncherBuilder<L = BaseRootLayout, VL = BaseInstanceLayout> {
     storage_root: PathBuf,
     downloader: Arc<ElementalDownloader>,
     root_layout: L,
@@ -26,8 +22,8 @@ where
 
 impl<L, VL> fmt::Debug for LauncherBuilder<L, VL>
 where
-    L: VersionJsonRootLayout + fmt::Debug,
-    VL: VersionJsonInstanceLayout + fmt::Debug,
+    L: fmt::Debug,
+    VL: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LauncherBuilder")
@@ -60,11 +56,7 @@ impl LauncherBuilder<BaseRootLayout, BaseInstanceLayout> {
     }
 }
 
-impl<L, VL> LauncherBuilder<L, VL>
-where
-    L: VersionJsonRootLayout + Clone,
-    VL: VersionJsonInstanceLayout + Clone + Send,
-{
+impl<L, VL> LauncherBuilder<L, VL> {
     pub fn with_layouts<NL, NVL>(
         self,
         root_layout: NL,
@@ -134,7 +126,13 @@ where
             runtime_providers: self.runtime_providers,
         }
     }
+}
 
+impl<L, VL> LauncherBuilder<L, VL>
+where
+    L: VersionJsonRootLayout + Clone,
+    VL: VersionJsonInstanceLayout + Clone + Send,
+{
     pub fn build(self) -> Launcher<L, VL> {
         Launcher::with_layouts_origins_and_runtime(
             self.storage_root,

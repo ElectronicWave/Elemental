@@ -13,6 +13,7 @@ pub mod error;
 pub mod families;
 mod http;
 pub mod inspect;
+pub mod launch;
 pub mod loader_version;
 mod maven;
 pub mod url;

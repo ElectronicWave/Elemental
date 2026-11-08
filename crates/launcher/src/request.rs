@@ -1,3 +1,1 @@
-use elemental_driver::families::version_json::VersionJsonLaunchConfig;
-
-pub type LaunchOptions = VersionJsonLaunchConfig;
+pub use elemental_driver::launch::{LaunchOptions, RuntimeOptions};

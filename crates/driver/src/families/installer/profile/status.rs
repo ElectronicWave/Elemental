@@ -42,6 +42,7 @@ where
 
 pub async fn resolve_installer_processor_runtime<L, VL>(
     launch_version: &PreparedVersionJsonInstance<L, VL>,
+    runtime_major_version: Option<usize>,
     runtime_executable_path: Option<&Path>,
     runtime_validation: RuntimeValidationMode,
     operation_name: &str,
@@ -50,8 +51,11 @@ where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
+    let required_major_version =
+        runtime_major_version.unwrap_or_else(|| launch_version.required_java_major_version());
+
     Ok(resolve_runtime(
-        launch_version.required_java_major_version(),
+        required_major_version,
         runtime_executable_path,
         runtime_validation,
         operation_name,

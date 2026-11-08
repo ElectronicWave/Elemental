@@ -386,12 +386,18 @@ installation still contains valid Minecraft metadata.
 
 ### Launch configuration
 
-`VersionJsonLaunchConfig` is shared by all version JSON drivers. It controls:
+Launch command construction lives in `elemental_driver::launch` and is shared
+by every driver, including installer-driven families. Configuration is split
+by lifecycle:
 
-- Runtime selection, an explicit executable, and strict or disabled validation.
-- Launcher name and version, client ID, and game resolution.
-- Quick-play targets.
-- Extra JVM and game arguments.
+- `RuntimeOptions` controls runtime selection, an explicit executable, and
+  strict or disabled validation. Installer drivers also use it while running
+  client processors.
+- `LaunchOptions` controls launcher name and version, client ID, game
+  resolution, quick-play targets, and extra JVM and game arguments.
+
+Both installer and version JSON drivers expose a prepared version JSON
+instance, so launch construction does not branch on the driver family.
 
 ## Related Crates
 

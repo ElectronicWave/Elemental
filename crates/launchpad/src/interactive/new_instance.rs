@@ -8,7 +8,7 @@ use elemental::{
         driver::DriverDescriptor,
         loader_version::LoaderVersionId,
     },
-    launcher::{DriverCatalog, LaunchOptions},
+    launcher::{DriverCatalog, LaunchOptions, RuntimeOptions},
 };
 use inquire::{Select, Text};
 
@@ -291,13 +291,15 @@ impl NewInstanceWizard {
             .instance_name
             .take()
             .context("instance name is missing from the wizard state")?;
-        let options = LaunchOptions {
+        let runtime = RuntimeOptions {
             runtime_major_version: runtime.major_version,
             runtime_validation: runtime.validation,
-            ..LaunchOptions::default()
+            ..RuntimeOptions::default()
         };
+        let options = LaunchOptions::default();
         Ok(StepOutcome::Finished(Box::new(LaunchpadConfig {
             spec,
+            runtime,
             options,
             runtime_paths: Vec::new(),
             storage_root: self.storage_root.clone(),

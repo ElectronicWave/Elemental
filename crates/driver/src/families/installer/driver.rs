@@ -16,9 +16,10 @@ use crate::{
             InstallerFamily, InstallerFamilyRemoteResolver, PreparedInstallerVersion,
             ResolvedInstallerFamilyVersion,
         },
-        version_json::{VersionJsonInstanceLayout, VersionJsonLaunchConfig, VersionJsonRootLayout},
+        version_json::{VersionJsonInstanceLayout, VersionJsonRootLayout},
     },
     inspect::InstanceProbe,
+    launch::RuntimeOptions,
     loader_version::LoaderVersionId,
 };
 
@@ -64,23 +65,23 @@ where
         L: VersionJsonRootLayout + Clone,
         VL: VersionJsonInstanceLayout + Clone,
     {
-        self.prepare_with_config(
+        self.prepare_with_runtime(
             session,
             instance,
             game_version,
             loader_version,
-            &VersionJsonLaunchConfig::new(),
+            &RuntimeOptions::new(),
         )
         .await
     }
 
-    pub async fn prepare_with_config<L, VL>(
+    pub async fn prepare_with_runtime<L, VL>(
         &self,
         session: &DownloadSession,
         instance: &Storage<VL, Storage<L>>,
         game_version: MinecraftVersionId,
         loader_version: LoaderVersionId,
-        config: &VersionJsonLaunchConfig,
+        runtime_options: &RuntimeOptions,
     ) -> Result<PreparedInstallerVersion<L, VL>>
     where
         L: VersionJsonRootLayout + Clone,
@@ -96,8 +97,9 @@ where
             session,
             &self.vanilla_source,
             &self.remote_resolver(),
-            config.runtime_executable_path.as_deref(),
-            config.runtime_validation,
+            runtime_options.runtime_major_version,
+            runtime_options.runtime_executable_path.as_deref(),
+            runtime_options.runtime_validation,
         )
         .await
     }

@@ -4,7 +4,7 @@ use elemental_schema::mojang::piston::{
 
 use crate::error::Result;
 
-use super::{PistonMetaRulesExt, VersionJsonRuleContext, launch::parse_argument_string};
+use super::{PistonMetaRulesExt, VersionJsonRuleContext, parse_argument_string};
 
 mod libraries;
 

@@ -2,11 +2,11 @@
 resolver = "3"
 members = [
     "crates/core",
-    "crates/launchpad",
     "crates/driver",
     "crates/elemental",
     "crates/infra",
     "crates/launcher",
+    "crates/launchpad",
     "crates/object",
     "crates/schema",
     "crates/shared",

@@ -91,6 +91,7 @@ where
         session: &DownloadSession,
         vanilla_source: &VanillaSource,
         remote_resolver: &InstallerFamilyRemoteResolver<F>,
+        runtime_major_version: Option<usize>,
         runtime_executable_path: Option<&Path>,
         runtime_validation: RuntimeValidationMode,
     ) -> Result<PreparedInstallerVersion<L, VL>> {
@@ -142,6 +143,7 @@ where
             let processor_operation_name = format!("{} processors", F::FAMILY_NAME);
             let runtime = resolve_installer_processor_runtime(
                 &launch_version,
+                runtime_major_version,
                 runtime_executable_path,
                 runtime_validation,
                 &processor_operation_name,

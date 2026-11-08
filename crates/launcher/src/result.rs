@@ -5,12 +5,9 @@ use elemental_core::{
 };
 use elemental_driver::{
     driver::{DriverDescriptor, InstalledDriver},
-    families::{
-        installer::PreparedInstallerVersion,
-        version_json::{
-            BaseInstanceLayout, BaseRootLayout, PreparedVersionJsonInstance,
-            VersionJsonInstanceLayout, VersionJsonRootLayout,
-        },
+    families::version_json::{
+        BaseInstanceLayout, BaseRootLayout, PreparedVersionJsonInstance, VersionJsonInstanceLayout,
+        VersionJsonRootLayout,
     },
 };
 
@@ -38,16 +35,7 @@ where
     VL: VersionJsonInstanceLayout,
 {
     pub(crate) driver: DriverDescriptor,
-    pub(crate) inner: PreparedInstanceKind<L, VL>,
-}
-
-pub(crate) enum PreparedInstanceKind<L = BaseRootLayout, VL = BaseInstanceLayout>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
-    VersionJson(Box<PreparedVersionJsonInstance<L, VL>>),
-    Installer(Box<PreparedInstallerVersion<L, VL>>),
+    pub(crate) launch_version: PreparedVersionJsonInstance<L, VL>,
 }
 
 impl<L, VL> PreparedInstance<L, VL>
@@ -55,8 +43,14 @@ where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    pub(crate) fn new(driver: DriverDescriptor, inner: PreparedInstanceKind<L, VL>) -> Self {
-        Self { driver, inner }
+    pub(crate) fn new(
+        driver: DriverDescriptor,
+        launch_version: PreparedVersionJsonInstance<L, VL>,
+    ) -> Self {
+        Self {
+            driver,
+            launch_version,
+        }
     }
 
     pub fn driver(&self) -> &DriverDescriptor {
@@ -64,16 +58,10 @@ where
     }
 
     pub fn instance_root(&self) -> &Path {
-        match &self.inner {
-            PreparedInstanceKind::VersionJson(prepared) => prepared.instance_root(),
-            PreparedInstanceKind::Installer(prepared) => prepared.instance_root(),
-        }
+        self.launch_version.instance_root()
     }
 
     pub fn version(&self) -> &Storage<VL, Storage<L>> {
-        match &self.inner {
-            PreparedInstanceKind::VersionJson(prepared) => &prepared.version,
-            PreparedInstanceKind::Installer(prepared) => &prepared.instance,
-        }
+        &self.launch_version.version
     }
 }

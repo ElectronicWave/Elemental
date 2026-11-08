@@ -100,7 +100,7 @@ Prepare and launch a vanilla instance:
 use anyhow::Result;
 use elemental::{
     core::auth::{authorizer::Authorizer, authorizers::offline::OfflineAuthorizer},
-    launcher::{DriverSpec, LaunchOptions, Launcher},
+    launcher::{DriverSpec, LaunchOptions, Launcher, RuntimeOptions},
 };
 
 #[tokio::main(flavor = "multi_thread")]
@@ -113,6 +113,7 @@ async fn main() -> Result<()> {
         .prepare(
             "Vanilla-1.20.1".to_owned(),
             DriverSpec::vanilla("1.20.1".into()),
+            &RuntimeOptions::default(),
         )
         .await?;
 
@@ -123,7 +124,12 @@ async fn main() -> Result<()> {
     .await?;
 
     let command = launcher
-        .build_launch_command(&prepared, &credential, &LaunchOptions::default())
+        .build_launch_command(
+            &prepared,
+            &credential,
+            &RuntimeOptions::default(),
+            &LaunchOptions::default(),
+        )
         .await?;
     let mut game = launcher.launch(command)?;
 

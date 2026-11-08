@@ -37,7 +37,7 @@ async fn run_launch(config: LaunchpadConfig) -> Result<()> {
     .authorize()
     .await?;
     let command = launcher
-        .build_launch_command(&prepared, &credential, &config.options)
+        .build_launch_command(&prepared, &credential, &config.runtime, &config.options)
         .await?;
 
     finalize_launch(&config, &prepared, prepare_elapsed.as_millis(), command).await
@@ -61,7 +61,11 @@ async fn prepare_instance(
         Ok((prepared, started_at.elapsed()))
     } else {
         let preparation = launcher
-            .begin_prepare(config.instance_name.clone(), config.spec.clone())
+            .begin_prepare(
+                config.instance_name.clone(),
+                config.spec.clone(),
+                &config.runtime,
+            )
             .await?;
         let _download_progress = progress::download(preparation.session()).await?;
         let started_at = Instant::now();

@@ -6,12 +6,13 @@ use elemental::{
     driver::{
         descriptors::VANILLA_DRIVER, driver::DriverDescriptor, loader_version::LoaderVersionId,
     },
-    launcher::{DriverSpec, LaunchOptions},
+    launcher::{DriverSpec, LaunchOptions, RuntimeOptions},
 };
 
 #[derive(Clone)]
 pub struct LaunchpadConfig {
     pub spec: DriverSpec,
+    pub runtime: RuntimeOptions,
     pub options: LaunchOptions,
     pub runtime_paths: Vec<PathBuf>,
     pub storage_root: PathBuf,

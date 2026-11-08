@@ -11,6 +11,7 @@ use crate::{
         installer::PreparedInstallerVersion,
         version_json::{VersionJsonInstanceLayout, VersionJsonRootLayout},
     },
+    launch::RuntimeOptions,
 };
 
 use super::LoaderRequest;
@@ -40,6 +41,29 @@ impl InstallerDriver {
                 instance,
                 request.game_version,
                 request.loader_version,
+            ) => [Forge, Cleanroom, Outlands, NeoForge]
+        )
+    }
+
+    pub async fn prepare_with_runtime<L, VL>(
+        &self,
+        session: &DownloadSession,
+        instance: &Storage<VL, Storage<L>>,
+        request: LoaderRequest,
+        runtime_options: &RuntimeOptions,
+    ) -> Result<PreparedInstallerVersion<L, VL>>
+    where
+        L: VersionJsonRootLayout + Clone,
+        VL: VersionJsonInstanceLayout + Clone,
+    {
+        dispatch_driver_await!(
+            self,
+            |driver| driver.prepare_with_runtime(
+                session,
+                instance,
+                request.game_version,
+                request.loader_version,
+                runtime_options,
             ) => [Forge, Cleanroom, Outlands, NeoForge]
         )
     }

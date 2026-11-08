@@ -17,8 +17,8 @@ reload it, build a mutable launch command, then start the game.
 - Shared downloader and configurable root or instance layouts.
 - Launch-command construction for hosts that manage process creation.
 - Process spawning through the core launch primitives.
-- Typed launch options for runtime selection, resolution, quick play, and extra
-  arguments.
+- Typed runtime and launch options for runtime selection, resolution, quick
+  play, and extra arguments.
 
 ## Installation
 
@@ -40,7 +40,7 @@ Prepare a Vanilla instance and build its launch command:
 ```rust
 use anyhow::Result;
 use elemental_core::auth::{authorizer::Authorizer, authorizers::offline::OfflineAuthorizer};
-use elemental_launcher::{DriverSpec, LaunchOptions, Launcher};
+use elemental_launcher::{DriverSpec, LaunchOptions, Launcher, RuntimeOptions};
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
@@ -52,6 +52,7 @@ async fn main() -> Result<()> {
         .prepare(
             "Vanilla-1.20.1".to_owned(),
             DriverSpec::vanilla("1.20.1".into()),
+            &RuntimeOptions::default(),
         )
         .await?;
 
@@ -65,6 +66,7 @@ async fn main() -> Result<()> {
         .build_launch_command(
             &prepared,
             &credential,
+            &RuntimeOptions::default(),
             &LaunchOptions::default(),
         )
         .await?;
@@ -99,6 +101,7 @@ let preparation = launcher
     .begin_prepare(
         "Vanilla-1.20.1".to_owned(),
         DriverSpec::vanilla("1.20.1".into()),
+        &RuntimeOptions::default(),
     )
     .await?;
 let progress = preparation.session().progress_receiver();
@@ -128,6 +131,7 @@ let prepared = launcher
         session,
         "Vanilla-1.20.1".to_owned(),
         DriverSpec::vanilla("1.20.1".into()),
+        &RuntimeOptions::default(),
     )
     .await?;
 ```
@@ -148,6 +152,7 @@ let prepared = launcher
         &session,
         "Vanilla-1.20.1".to_owned(),
         DriverSpec::vanilla("1.20.1".into()),
+        &RuntimeOptions::default(),
     )
     .await?;
 
@@ -162,7 +167,12 @@ UI progress reporting.
 
 ```rust
 let mut command = launcher
-    .build_launch_command(&prepared, &credential, &LaunchOptions::default())
+    .build_launch_command(
+        &prepared,
+        &credential,
+        &RuntimeOptions::default(),
+        &LaunchOptions::default(),
+    )
     .await?;
 command.add_jvm_argument(format!(
     "-javaagent:{}",
@@ -177,10 +187,10 @@ let game = launcher.launch(command)?;
 | --- | --- |
 | Discover local instances | `inspect_instances()` |
 | Detect one instance and its driver | `inspect_instance(name)` |
-| Install or refresh an instance | `prepare(name, driver)` |
-| Prepare with an observed session | `begin_prepare(name, driver).prepare()` |
-| Install with a custom session and managed lifecycle | `prepare_with_session(session, name, driver)` |
-| Install with a custom session and caller-owned lifecycle | `prepare_in_session(&session, name, driver)` |
+| Install or refresh an instance | `prepare(name, driver, runtime)` |
+| Prepare with an observed session | `begin_prepare(name, driver, runtime).prepare()` |
+| Install with a custom session and managed lifecycle | `prepare_with_session(session, name, driver, runtime)` |
+| Install with a custom session and caller-owned lifecycle | `prepare_in_session(&session, name, driver, runtime)` |
 | Reload an existing installation | `load_instance(instance)` |
 | Build a command without spawning | `build_launch_command(...)` |
 | Spawn a customized command | `launch(command)` / `launch_logged(command)` |
@@ -238,16 +248,20 @@ let driver = DriverSpec::any(
 
 ## Launch Options
 
-`LaunchOptions` is an alias for `VersionJsonLaunchConfig`. It covers:
+Launch configuration is split by lifecycle:
 
-- `runtime_major_version`, `runtime_executable_path`, and
-  `runtime_validation`.
-- Launcher name, launcher version, and client ID.
-- Window resolution and quick-play targets.
-- Extra JVM and game arguments.
+- `RuntimeOptions` covers `runtime_major_version`,
+  `runtime_executable_path`, and `runtime_validation`.
+- `LaunchOptions` covers launcher name and version, client ID, window
+  resolution, quick-play targets, and extra JVM and game arguments.
 
-Use `LaunchOptions::default()` for automatic runtime selection with strict Java
-version validation.
+Use `RuntimeOptions::default()` for automatic runtime selection with strict
+Java version validation, and `LaunchOptions::default()` when no branding or
+window customization is needed.
+
+Pass the same `RuntimeOptions` to preparation and launch. Installer-driven
+families resolve their client-processor runtime during preparation, so the
+override must be available there as well.
 
 ## Builder Customization
 

@@ -1,9 +1,9 @@
+mod arguments;
 pub mod builder;
 pub mod classpath;
 pub mod driver;
 pub mod extensions;
 pub mod family;
-pub mod launch;
 pub mod layout;
 pub mod platform;
 pub mod prepared;
@@ -16,13 +16,10 @@ mod state;
 pub mod storage;
 pub mod variables;
 
+pub use arguments::parse_argument_string;
 pub use driver::ProfiledVersionJsonDriver;
 pub use extensions::{PistonMetaDataExt, PistonMetaLibrariesExt};
 pub use family::{ProfiledVersionJsonFamily, ProfiledVersionJsonFamilyExt};
-pub use launch::{
-    LaunchResolution, QuickPlayOptions, VersionJsonLaunchConfig, build_version_json_launch_builder,
-    build_version_json_launch_command, parse_argument_string, resolve_prepared_version_runtime,
-};
 pub use layout::{
     BaseInstanceLayout, BaseRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
 };

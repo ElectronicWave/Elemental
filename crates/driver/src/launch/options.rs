@@ -3,6 +3,13 @@ use std::path::PathBuf;
 use elemental_core::runtime::RuntimeValidationMode;
 
 #[derive(Clone)]
+pub struct RuntimeOptions {
+    pub runtime_major_version: Option<usize>,
+    pub runtime_executable_path: Option<PathBuf>,
+    pub runtime_validation: RuntimeValidationMode,
+}
+
+#[derive(Clone)]
 pub struct LaunchResolution {
     pub width: String,
     pub height: String,
@@ -17,10 +24,7 @@ pub struct QuickPlayOptions {
 }
 
 #[derive(Clone)]
-pub struct VersionJsonLaunchConfig {
-    pub runtime_major_version: Option<usize>,
-    pub runtime_executable_path: Option<PathBuf>,
-    pub runtime_validation: RuntimeValidationMode,
+pub struct LaunchOptions {
     pub launcher_name: Option<String>,
     pub launcher_version: Option<String>,
     pub client_id: Option<String>,
@@ -28,6 +32,32 @@ pub struct VersionJsonLaunchConfig {
     pub quick_play: Option<QuickPlayOptions>,
     pub extra_jvm_arguments: Vec<String>,
     pub extra_game_arguments: Vec<String>,
+}
+
+impl RuntimeOptions {
+    pub fn new() -> Self {
+        Self {
+            runtime_major_version: None,
+            runtime_executable_path: None,
+            runtime_validation: RuntimeValidationMode::Strict,
+        }
+    }
+
+    pub fn set_runtime_executable_path(mut self, runtime_executable_path: PathBuf) -> Self {
+        self.runtime_executable_path = Some(runtime_executable_path);
+        self
+    }
+
+    pub fn set_runtime_validation(mut self, runtime_validation: RuntimeValidationMode) -> Self {
+        self.runtime_validation = runtime_validation;
+        self
+    }
+}
+
+impl Default for RuntimeOptions {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl LaunchResolution {
@@ -52,12 +82,9 @@ impl QuickPlayOptions {
     }
 }
 
-impl VersionJsonLaunchConfig {
+impl LaunchOptions {
     pub fn new() -> Self {
         Self {
-            runtime_major_version: None,
-            runtime_executable_path: None,
-            runtime_validation: RuntimeValidationMode::Strict,
             launcher_name: None,
             launcher_version: None,
             client_id: None,
@@ -73,23 +100,13 @@ impl VersionJsonLaunchConfig {
         self
     }
 
-    pub fn set_runtime_executable_path(mut self, runtime_executable_path: PathBuf) -> Self {
-        self.runtime_executable_path = Some(runtime_executable_path);
-        self
-    }
-
-    pub fn set_runtime_validation(mut self, runtime_validation: RuntimeValidationMode) -> Self {
-        self.runtime_validation = runtime_validation;
-        self
-    }
-
     pub fn set_extra_game_arguments(mut self, extra_game_arguments: Vec<String>) -> Self {
         self.extra_game_arguments = extra_game_arguments;
         self
     }
 }
 
-impl Default for VersionJsonLaunchConfig {
+impl Default for LaunchOptions {
     fn default() -> Self {
         Self::new()
     }

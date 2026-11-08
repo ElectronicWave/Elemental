@@ -7,7 +7,7 @@ use elemental_schema::mojang::piston::{
 
 use crate::error::{Error, Result};
 
-use super::launch::parse_argument_string;
+use super::parse_argument_string;
 
 mod library;
 mod maven;

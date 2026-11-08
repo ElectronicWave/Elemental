@@ -4,7 +4,7 @@ use anyhow::{Context, Result, bail};
 use elemental::{
     core::minecraft::MinecraftVersionId,
     driver::loader_version::LoaderVersionId,
-    launcher::{Instance, LaunchOptions, Launcher},
+    launcher::{Instance, LaunchOptions, Launcher, RuntimeOptions},
 };
 use inquire::Select;
 
@@ -39,14 +39,16 @@ impl InstalledSelection {
             .map(LoaderVersionId::from)
             .or_else(|| self.defaults.loader_version.map(LoaderVersionId::from));
         let spec = build_spec(self.instance.driver.driver, game_version, loader_version)?;
-        let options = LaunchOptions {
+        let runtime = RuntimeOptions {
             runtime_major_version: self.runtime.major_version,
             runtime_validation: self.runtime.validation,
-            ..LaunchOptions::default()
+            ..RuntimeOptions::default()
         };
+        let options = LaunchOptions::default();
 
         Ok(LaunchpadConfig {
             spec,
+            runtime,
             options,
             runtime_paths: Vec::new(),
             storage_root,

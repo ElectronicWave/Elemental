@@ -16,6 +16,6 @@ pub use elemental_infra::downloader::DownloadSession;
 pub use launcher::Launcher;
 pub use origin::DriverOrigins;
 pub use preparation::InstancePreparation;
-pub use request::LaunchOptions;
+pub use request::{LaunchOptions, RuntimeOptions};
 pub use result::{Instance, LaunchedInstance, LoggedLaunchedInstance, PreparedInstance};
 pub use spec::{DriverSpec, LoaderSpec, VanillaSpec};

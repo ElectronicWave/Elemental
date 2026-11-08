@@ -26,13 +26,13 @@ where
     // Legacy metadata may already be normalized into `arguments.game`, while still needing
     // the historical JVM bootstrap arguments such as `-cp` and `-Djava.library.path`.
     if raw_jvm_arguments.is_empty() {
-        jvm.extend(builder.inner.apply(common::legacy_jvm_arguments()));
+        jvm.extend(builder.inner.apply(common::legacy_jvm_arguments())?);
     }
     if let Some(logging_arguments) = logging::logging_arguments(builder, metadata)? {
         jvm.extend(logging_arguments);
     }
 
-    jvm.extend(builder.inner.apply(raw_jvm_arguments));
-    jvm.extend(builder.inner.apply(builder.extra_jvm_arguments.clone()));
+    jvm.extend(builder.inner.apply(raw_jvm_arguments)?);
+    jvm.extend(builder.inner.apply(builder.extra_jvm_arguments.clone())?);
     Ok(jvm)
 }

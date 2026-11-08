@@ -52,7 +52,7 @@ where
 {
     let resolved = builder
         .inner
-        .apply(vec![raw_value.to_owned()])
+        .apply(vec![raw_value.to_owned()])?
         .into_iter()
         .next()
         .ok_or(Error::ResolveModulePath)?;

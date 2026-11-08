@@ -142,6 +142,9 @@ pub enum Error {
         source: Box<Error>,
     },
 
+    #[error("launcher variables serialized to a non-object JSON value")]
+    LauncherVariablesNotObject,
+
     #[error("can't find a valid instance named '{name}'")]
     InstanceNotFound { name: String },
 

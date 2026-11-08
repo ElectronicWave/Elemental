@@ -104,26 +104,27 @@ pub enum Error {
         source: Box<Error>,
     },
 
-    #[error("resolve {usage} runtime from executable failed: {}", path.display())]
+    #[error("resolve runtime from executable failed: {}", path.display())]
     ResolveRuntime {
-        usage: String,
         path: PathBuf,
         #[source]
         source: Box<Error>,
     },
 
-    #[error("can't determine Java major version for explicit {usage} runtime executable: {}", path.display())]
-    RuntimeVersionUnknown { usage: String, path: PathBuf },
+    #[error(
+        "can't determine Java major version for explicit runtime executable: {}",
+        path.display()
+    )]
+    RuntimeVersionUnknown { path: PathBuf },
 
-    #[error("can't find a local Java runtime with major version {major_version} for {usage}")]
-    RuntimeNotFound { major_version: usize, usage: String },
+    #[error("can't find a local Java runtime with major version {major_version}")]
+    RuntimeNotFound { major_version: usize },
 
     #[error(
-        "explicit {usage} runtime executable has Java major version {actual}, expected {expected}: {}",
+        "explicit runtime executable has Java major version {actual}, expected {expected}: {}",
         path.display()
     )]
     VersionMismatch {
-        usage: String,
         actual: usize,
         expected: usize,
         path: PathBuf,

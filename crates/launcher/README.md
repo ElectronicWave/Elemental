@@ -484,7 +484,7 @@ let launcher = Launcher::builder()
     .runtime_providers(default_providers())
     .build();
 
-for runtime in launcher.runtime_distributions().await {
+for runtime in launcher.runtime_resolver().distributions().await {
     println!("{}", runtime.executable().display());
 }
 ```

@@ -168,29 +168,17 @@ by Java version. Runtimes without a `release` file are probed with a bounded
 timeout and a cleaned Java environment.
 
 Use `RuntimeResolver` to own discovery and caching. `distributions()` returns
-every discovered runtime, `find_by_java_major()` selects one by Java major
-version, and `resolve()` applies an explicit executable or the configured
-validation mode:
+every discovered runtime, and `resolve()` selects one by Java major version,
+applying an explicit executable or the configured validation mode:
 
 ```rust
 use elemental_core::runtime::{RuntimeResolver, RuntimeValidationMode};
 
 let resolver = RuntimeResolver::with_default_providers();
 let runtime = resolver
-    .resolve(21, None, RuntimeValidationMode::Strict, "launch")
+    .resolve(21, None, RuntimeValidationMode::Strict)
     .await?;
 assert!(runtime.executable().is_file());
-```
-
-For one-shot resolution, `resolve_runtime()` uses the default providers and
-performs a fresh discovery:
-
-```rust
-use elemental_core::runtime::{RuntimeValidationMode, resolve_runtime};
-
-let runtime = resolve_runtime(21, None, RuntimeValidationMode::Strict, "launch").await?;
-assert!(runtime.executable().is_file());
-# Ok::<_, anyhow::Error>(())
 ```
 
 An explicit executable can be passed to `resolve()`; in strict mode its

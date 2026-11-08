@@ -153,12 +153,6 @@ where
         &self.runtime_resolver
     }
 
-    pub async fn runtime_distributions(
-        &self,
-    ) -> Vec<elemental_core::runtime::distribution::Distribution> {
-        self.runtime_resolver.distributions().await
-    }
-
     pub async fn inspect_instances(&self) -> Result<Vec<Instance>> {
         let storage = self.game_storage();
         let drivers = self.inspect_drivers()?;
@@ -282,7 +276,6 @@ where
             &prepared.launch_version,
             runtime_options,
             &self.runtime_resolver,
-            "launch",
         )
         .await?;
         let builder = launch_builder(credential, runtime, prepared, options);

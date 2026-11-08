@@ -15,7 +15,6 @@ pub async fn resolve_prepared_version_runtime<L, VL>(
     prepared_version: &PreparedVersionJsonInstance<L, VL>,
     runtime_options: &RuntimeOptions,
     runtime_resolver: &RuntimeResolver,
-    usage: &str,
 ) -> Result<Distribution>
 where
     L: VersionJsonRootLayout,
@@ -30,7 +29,6 @@ where
             required_major_version,
             runtime_options.runtime_executable_path.as_deref(),
             runtime_options.runtime_validation,
-            usage,
         )
         .await?)
 }

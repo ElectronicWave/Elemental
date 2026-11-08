@@ -140,12 +140,10 @@ where
             launch_version.finish_preparation().await?;
 
         if installer_has_client_processors(&installer_state.install_profile) {
-            let processor_operation_name = format!("{} processors", F::FAMILY_NAME);
             let runtime = resolve_installer_processor_runtime(
                 &launch_version,
                 runtime_options,
                 runtime_resolver,
-                &processor_operation_name,
             )
             .await?;
             run_installer_client_processors(

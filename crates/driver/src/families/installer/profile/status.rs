@@ -43,19 +43,12 @@ pub async fn resolve_installer_processor_runtime<L, VL>(
     launch_version: &PreparedVersionJsonInstance<L, VL>,
     runtime_options: &RuntimeOptions,
     runtime_resolver: &RuntimeResolver,
-    operation_name: &str,
 ) -> Result<Distribution>
 where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    resolve_prepared_version_runtime(
-        launch_version,
-        runtime_options,
-        runtime_resolver,
-        operation_name,
-    )
-    .await
+    resolve_prepared_version_runtime(launch_version, runtime_options, runtime_resolver).await
 }
 
 pub async fn installer_install_status<L, VL>(

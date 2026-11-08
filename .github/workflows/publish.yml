@@ -20,5 +20,5 @@ jobs:
         run: cargo login ${{ secrets.CARGO_TOKEN }} --verbose
       - name: Publish
         run: |
-          cargo package --list --workspace --exclude demo
-          cargo publish --workspace --exclude demo
+          cargo package --list --workspace --exclude launchpad
+          cargo publish --workspace --exclude launchpad

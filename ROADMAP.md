@@ -23,7 +23,7 @@ ordered around four concerns:
 - The workspace is preparing `0.2.0` under milestone
   [#1](https://github.com/ElectronicWave/Elemental/milestone/1).
 - The workspace is split into `core`, `driver`, `launcher`, `infra`, `shared`,
-  `object`, `schema`, `elemental-kit`, and the `demo` CLI.
+  `object`, `schema`, `elemental-kit`, and the `launchpad` CLI.
 - Catalog, inspect, install, load-installed, and launch are implemented for
   every driver listed below.
 

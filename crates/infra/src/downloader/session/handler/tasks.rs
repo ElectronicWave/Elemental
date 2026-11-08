@@ -5,6 +5,7 @@ use std::{
 
 use super::SessionHandler;
 use crate::downloader::{
+    batch::DownloadBatch,
     report::DownloadFailure,
     state::{SessionState, SessionTransition},
     task::{DownloadTask, TaskId},
@@ -15,7 +16,9 @@ impl SessionHandler {
         let mut state = self.lock_state();
         let update = transition(&mut state);
 
-        self.progress.send_replace(update.progress);
+        if let Some(progress) = update.progress {
+            self.progress.send_replace(progress);
+        }
         for event in update.events {
             self.emit(event);
         }
@@ -23,6 +26,10 @@ impl SessionHandler {
 
     pub(crate) fn start_task(&self) {
         self.pending_tasks.fetch_add(1, Ordering::AcqRel);
+    }
+
+    pub(crate) fn mark_batch_accepted(&self, batch: &DownloadBatch) {
+        self.with_state(|state| state.accept_batch(batch, Instant::now()));
     }
 
     pub(crate) fn mark_enqueued(
@@ -72,8 +79,14 @@ impl SessionHandler {
 
     pub(crate) fn finish_task(&self) {
         if self.pending_tasks.fetch_sub(1, Ordering::AcqRel) == 1 {
+            self.refresh_progress();
             self.idle.notify_waiters();
         }
+    }
+
+    fn refresh_progress(&self) {
+        let progress = self.lock_state().progress(Instant::now());
+        self.progress.send_replace(progress);
     }
 
     pub(crate) fn finish_failed(&self, failure: DownloadFailure) {

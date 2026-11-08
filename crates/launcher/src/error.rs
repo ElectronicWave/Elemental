@@ -7,6 +7,9 @@ pub enum Error {
     #[error("unsupported driver '{id}'")]
     UnsupportedDriver { id: String },
 
+    #[error("driver '{id}' does not support loader versions")]
+    LoaderVersionsUnsupported { id: String },
+
     #[error("driver '{id}' does not accept a loader version")]
     UnexpectedLoaderVersion { id: String },
 

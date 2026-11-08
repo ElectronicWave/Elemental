@@ -97,6 +97,9 @@ impl DownloadSession {
         self.lease.downloader.wait_session_idle(self.lease.id).await
     }
 
+    /// Wait for all submitted tasks and return an error on failure or cancellation.
+    ///
+    /// The session stays open, so the caller can submit more work afterwards.
     pub async fn success(&self) -> Result<()> {
         self.lease.downloader.session_success(self.lease.id).await
     }

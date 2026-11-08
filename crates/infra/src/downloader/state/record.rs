@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use crate::downloader::event::{TaskInfo, TaskSnapshot};
-use crate::downloader::report::{TaskOutcome, TaskStatus};
+use crate::downloader::report::{ActiveTask, TaskOutcome, TaskStatus};
 use crate::downloader::task::{DownloadTask, TaskId};
 
 #[derive(Debug, Clone)]
@@ -35,6 +35,14 @@ impl TaskRecord {
 
     pub(super) fn outcome(&self) -> TaskOutcome {
         self.details.outcome(self.status.clone().finalized())
+    }
+
+    pub(super) fn active_task(&self) -> ActiveTask {
+        ActiveTask {
+            task_id: self.details.task_id.clone(),
+            group: self.details.group.clone(),
+            path: self.details.path.clone(),
+        }
     }
 
     pub(super) fn snapshot(&self) -> TaskSnapshot {

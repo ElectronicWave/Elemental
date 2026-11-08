@@ -29,13 +29,6 @@ where
             source,
         })?;
     session
-        .wait_idle()
-        .await
-        .map_err(|source| Error::DownloadInstaller {
-            family_name: family_name.to_owned(),
-            source,
-        })?;
-    session
         .success()
         .await
         .map_err(|source| Error::DownloadInstaller {

@@ -15,7 +15,7 @@ for launcher-style workloads.
 | `DownloadBatch` | A batch of tasks with an optional group |
 | `DownloadSession` | One logical operation, such as installing one Minecraft version |
 | `DownloadReport` | Final per-task outcomes plus byte and timing totals |
-| `DownloadProgress` | Live task counts, byte counters, throughput, and ETA |
+| `DownloadProgress` | Live task counts, active task paths, byte counters, throughput, and ETA |
 | `DownloadEvent` | Session and task events, serializable with the `serde` feature |
 | `SessionSnapshot` | Current progress and task states for initial render or resync |
 | `RetryPolicy` | Per-task attempts and exponential backoff |
@@ -353,8 +353,9 @@ async fn download_with_events(
 
 Use `session.snapshot()` to initialize the frontend or recover after a
 `Lagged` event. The snapshot contains the current aggregate progress and every
-task state. `session.progress()` and `progress_receiver()` remain available for
-consumers that only need the aggregate `DownloadProgress`.
+task state. `session.progress()` and `progress_receiver()` expose the aggregate
+`DownloadProgress`, including active tasks and the last-seen group. The watch
+channel updates at the same 10 Hz cadence; `snapshot()` is always current.
 
 ## Failures and cancellation
 

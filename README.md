@@ -61,28 +61,29 @@ Rust applications.
 git clone https://github.com/ElectronicWave/Elemental.git
 cd Elemental
 
-cargo run -p demo -- --help
-cargo run -p demo -- list
+cargo run -p launchpad -- --help
+cargo run -p launchpad -- list
 ```
 
-The demo writes to `.minecraft` by default. With a compatible Java runtime
-available, the default command prepares and launches Fabric 1.20.1:
+Launchpad writes to `.minecraft` by default. Running it without launch
+arguments opens the interactive wizard:
 
 ```bash
-cargo run -p demo
+cargo run -p launchpad
 ```
 
-Other drivers accept the same storage, runtime, and local-only options. The
-driver id is parsed directly:
+For non-interactive launches, pass the driver id and optional versions
+directly. Other drivers accept the same storage, runtime, and local-only
+options:
 
 ```bash
-cargo run -p demo -- forge 1.20.1 47.3.1
-cargo run -p demo -- --local-only fabric 1.20.1 0.16.10 --instance-name MyFabric-1.20.1
-cargo run -p demo -- vanilla 1.20.1 --instance-name MyVanilla-1.20.1
+cargo run -p launchpad -- forge 1.20.1 47.3.1
+cargo run -p launchpad -- --local-only fabric 1.20.1 0.16.10 --instance-name MyFabric-1.20.1
+cargo run -p launchpad -- vanilla 1.20.1 --instance-name MyVanilla-1.20.1
 ```
 
-The demo defaults live in
-[`crates/demo/src/cli.rs`](https://github.com/ElectronicWave/Elemental/blob/main/crates/demo/src/cli.rs).
+Launchpad defaults live in
+[`crates/launchpad/src/defaults.rs`](https://github.com/ElectronicWave/Elemental/blob/main/crates/launchpad/src/defaults.rs).
 
 ## Use as a Library
 
@@ -135,8 +136,9 @@ async fn main() -> Result<()> {
 Offline authentication keeps local development simple. Use a production
 `Authorizer` for real player accounts. Authentication and launch are separate:
 obtain a `UserCredential`, build a `LaunchCommand`, optionally customize its
-arguments, then spawn it. Use `prepare_with_session()` when the host owns the
-download session lifecycle.
+arguments, then spawn it. Use `prepare_with_session()` to supply a configured
+session while the launcher finishes it, or `prepare_in_session()` when the host
+owns the session lifecycle.
 
 Inspect and reopen an existing instance without preparing it again:
 
@@ -164,7 +166,7 @@ if let Some(instance) = launcher.inspect_instance("MyFabric-1.20.1".to_owned()).
 | [`elemental-shared`](https://github.com/ElectronicWave/Elemental/blob/main/crates/shared/README.md) | Version-aware persistence and migrations |
 | [`elemental-object`](https://github.com/ElectronicWave/Elemental/blob/main/crates/object/README.md) | Type-indexed global and task-local object pools |
 | [`elemental-schema`](https://github.com/ElectronicWave/Elemental/blob/main/crates/schema/README.md) | Mojang and modloader manifest types |
-| [`demo`](https://github.com/ElectronicWave/Elemental/blob/main/crates/demo/README.md) | End-to-end CLI example |
+| [`launchpad`](https://github.com/ElectronicWave/Elemental/blob/main/crates/launchpad/README.md) | End-to-end CLI launcher |
 
 ### The elemental-kit facade
 

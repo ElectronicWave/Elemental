@@ -88,11 +88,32 @@ Authentication is independent from launch. An `Authorizer` returns a
 game arguments and returns a mutable `LaunchCommand`. Authentication-specific
 JVM arguments can be appended after that without changing the credential type.
 
+### Observing preparation progress
+
+`begin_prepare()` keeps the session lifecycle inside the launcher while
+exposing the session to the host. The session state derives a structured
+progress view and publishes it on a watch channel:
+
+```rust
+let preparation = launcher
+    .begin_prepare(
+        "Vanilla-1.20.1".to_owned(),
+        DriverSpec::vanilla("1.20.1".into()),
+    )
+    .await?;
+let progress = preparation.session().progress_receiver();
+
+let prepared = preparation.prepare().await?;
+println!("{:?}", progress.borrow().active_tasks);
+```
+
+The view exposes active tasks, the last-seen group, and task and byte counters.
+Formatting task and group names is left to the UI.
+
 ### Custom download sessions
 
-Use `prepare_with_session()` when the host needs progress events, custom retry
-or rate-limit settings, cancellation, or a download report. The caller owns the
-session lifecycle:
+Use `prepare_with_session()` when the host needs custom retry or rate-limit
+settings but still wants the launcher to finish and validate the session:
 
 ```rust
 let session = launcher
@@ -104,6 +125,26 @@ let session = launcher
 
 let prepared = launcher
     .prepare_with_session(
+        session,
+        "Vanilla-1.20.1".to_owned(),
+        DriverSpec::vanilla("1.20.1".into()),
+    )
+    .await?;
+```
+
+Use `prepare_in_session()` when the caller also needs to own the session
+lifecycle, cancellation, or the download report:
+
+```rust
+let session = launcher
+    .downloader()
+    .session("prepare Vanilla-1.20.1")
+    .parallelism(8)
+    .open()
+    .await?;
+
+let prepared = launcher
+    .prepare_in_session(
         &session,
         "Vanilla-1.20.1".to_owned(),
         DriverSpec::vanilla("1.20.1".into()),
@@ -137,13 +178,18 @@ let game = launcher.launch(command)?;
 | Discover local instances | `inspect_instances()` |
 | Detect one instance and its driver | `inspect_instance(name)` |
 | Install or refresh an instance | `prepare(name, driver)` |
-| Install with a custom session | `prepare_with_session(session, name, driver)` |
+| Prepare with an observed session | `begin_prepare(name, driver).prepare()` |
+| Install with a custom session and managed lifecycle | `prepare_with_session(session, name, driver)` |
+| Install with a custom session and caller-owned lifecycle | `prepare_in_session(&session, name, driver)` |
 | Reload an existing installation | `load_instance(instance)` |
 | Build a command without spawning | `build_launch_command(...)` |
 | Spawn a customized command | `launch(command)` / `launch_logged(command)` |
 | Build and spawn in one call | `launch_prepared_instance(...)` |
 | Launch an installed instance by name | `launch_instance(...)` |
-| Run a catalog directly | `catalog(catalog)` |
+
+Catalogs are not wrapped by the launcher. Use
+`DriverCatalog::for_driver(driver)?.game_versions()` and
+`DriverCatalog::for_driver(driver)?.loader_versions(&game_version)` directly.
 
 Reopen an instance without preparing it again:
 
@@ -164,7 +210,7 @@ if let Some(instance) = launcher
 
 > [!NOTE]
 > `load_instance()` expects a complete local installation. Use `--local-only`
-> in the demo, or inspect before loading, when network access is unavailable.
+> in launchpad, or inspect before loading, when network access is unavailable.
 
 ## Driver Specifications
 
@@ -266,5 +312,5 @@ let launcher = Launcher::builder()
   supplies the downloader.
 - [elemental-kit](https://github.com/ElectronicWave/Elemental/blob/main/README.md#the-elemental-kit-facade)
   re-exports this crate behind the `launcher` feature.
-- [demo](https://github.com/ElectronicWave/Elemental/blob/main/crates/demo/README.md)
+- [launchpad](https://github.com/ElectronicWave/Elemental/blob/main/crates/launchpad/README.md)
   shows the complete CLI flow.

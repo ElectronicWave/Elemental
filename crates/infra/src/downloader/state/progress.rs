@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use super::{SessionState, record::TaskRecord};
 use crate::downloader::event::SessionSnapshot;
-use crate::downloader::report::{DownloadProgress, DownloadReport};
+use crate::downloader::report::{DownloadProgress, DownloadReport, TaskStatus};
 
 const PROGRESS_EVENT_INTERVAL: Duration = Duration::from_millis(100);
 
@@ -25,21 +25,33 @@ impl SessionState {
     }
 
     pub(crate) fn report(&self, session_name: Option<String>, elapsed: Duration) -> DownloadReport {
-        let outcomes = self
-            .record_order
-            .iter()
-            .filter_map(|task_id| self.records.get(task_id))
-            .map(TaskRecord::outcome)
-            .collect();
-        let expected_bytes = self.expected_bytes_known.then_some(self.expected_bytes);
+        let mut downloaded_bytes = 0_u64;
+        let mut skipped_bytes = 0_u64;
+        let mut outcomes = Vec::with_capacity(self.record_order.len());
+        for task_id in &self.record_order {
+            let Some(record) = self.records.get(task_id) else {
+                continue;
+            };
+
+            match &record.status {
+                TaskStatus::Downloaded { bytes, .. } => {
+                    downloaded_bytes = downloaded_bytes.saturating_add(*bytes);
+                }
+                TaskStatus::Skipped { bytes } => {
+                    skipped_bytes = skipped_bytes.saturating_add(*bytes);
+                }
+                _ => {}
+            }
+            outcomes.push(record.outcome());
+        }
 
         DownloadReport {
             session_id: self.session_id,
             session_name,
             outcomes,
-            downloaded_bytes: self.bytes_downloaded,
-            skipped_bytes: self.bytes_skipped,
-            expected_bytes,
+            downloaded_bytes,
+            skipped_bytes,
+            expected_bytes: self.expected_bytes,
             elapsed,
         }
     }
@@ -56,18 +68,57 @@ impl SessionState {
     pub(crate) fn progress(&mut self, now: Instant) -> DownloadProgress {
         let bytes_per_second = self.throughput.value(now);
         let bytes_per_second = u64::try_from(bytes_per_second).unwrap_or(u64::MAX);
-        let tasks_completed = self.downloaded.saturating_add(self.skipped);
+        let mut tasks_completed = 0_usize;
+        let mut tasks_failed = 0_usize;
+        let mut tasks_skipped = 0_usize;
+        let mut tasks_cancelled = 0_usize;
+        let mut bytes_downloaded = 0_u64;
+        let mut bytes_skipped = 0_u64;
+        let mut bytes_in_progress = 0_u64;
+        let mut active_tasks = Vec::new();
+        let mut last_group = None;
+
+        for task_id in &self.record_order {
+            let Some(record) = self.records.get(task_id) else {
+                continue;
+            };
+
+            if let Some(group) = &record.details.group {
+                last_group = Some(group);
+            }
+            match &record.status {
+                TaskStatus::Active => {
+                    bytes_in_progress = bytes_in_progress.saturating_add(record.received_bytes);
+                    active_tasks.push(record.active_task());
+                }
+                TaskStatus::Downloaded { bytes, .. } => {
+                    tasks_completed = tasks_completed.saturating_add(1);
+                    bytes_downloaded = bytes_downloaded.saturating_add(*bytes);
+                }
+                TaskStatus::Skipped { bytes } => {
+                    tasks_completed = tasks_completed.saturating_add(1);
+                    tasks_skipped = tasks_skipped.saturating_add(1);
+                    bytes_skipped = bytes_skipped.saturating_add(*bytes);
+                }
+                TaskStatus::Failed { .. } => {
+                    tasks_failed = tasks_failed.saturating_add(1);
+                }
+                TaskStatus::Cancelled => {
+                    tasks_cancelled = tasks_cancelled.saturating_add(1);
+                }
+                TaskStatus::Queued => {}
+            }
+        }
+
         let tasks_pending = self.accepted.saturating_sub(
             tasks_completed
-                .saturating_add(self.failed)
-                .saturating_add(self.cancelled),
+                .saturating_add(tasks_failed)
+                .saturating_add(tasks_cancelled),
         );
-        let expected_bytes = self.expected_bytes_known.then_some(self.expected_bytes);
-        let completed_bytes = self
-            .bytes_downloaded
-            .saturating_add(self.bytes_skipped)
-            .saturating_add(self.bytes_in_progress);
-        let eta = expected_bytes.and_then(|total| {
+        let completed_bytes = bytes_downloaded
+            .saturating_add(bytes_skipped)
+            .saturating_add(bytes_in_progress);
+        let eta = self.expected_bytes.and_then(|total| {
             let remaining = total.saturating_sub(completed_bytes);
             if remaining == 0 {
                 Some(Duration::ZERO)
@@ -79,18 +130,20 @@ impl SessionState {
         });
 
         DownloadProgress {
-            tasks_total: self.accepted,
+            tasks_accepted: self.accepted,
             tasks_completed,
-            tasks_failed: self.failed,
-            tasks_skipped: self.skipped,
-            tasks_cancelled: self.cancelled,
+            tasks_failed,
+            tasks_skipped,
+            tasks_cancelled,
             tasks_pending,
-            bytes_downloaded: self.bytes_downloaded,
+            bytes_downloaded,
             bytes_received: self.bytes_received,
-            bytes_skipped: self.bytes_skipped,
-            expected_bytes,
+            bytes_skipped,
+            expected_bytes: self.expected_bytes,
             bytes_per_second,
             eta,
+            last_group: last_group.cloned(),
+            active_tasks,
         }
     }
 }

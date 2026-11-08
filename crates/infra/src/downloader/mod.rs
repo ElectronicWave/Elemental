@@ -28,7 +28,8 @@ pub use materializer::{
 pub use policy::{FailurePolicy, RetryPolicy};
 pub use rate::{ByteRate, DownloadRateLimit};
 pub use report::{
-    DownloadFailure, DownloadPhase, DownloadProgress, DownloadReport, TaskOutcome, TaskStatus,
+    ActiveTask, DownloadFailure, DownloadPhase, DownloadProgress, DownloadReport, TaskOutcome,
+    TaskStatus,
 };
 pub use session::{DownloadSession, DownloadSessionBuilder};
 pub use task::{DownloadTask, SessionId, TaskId};

@@ -21,6 +21,19 @@ impl DownloadBatch {
         self.tasks.is_empty()
     }
 
+    pub(crate) fn task_count(&self) -> usize {
+        self.tasks.len()
+    }
+
+    pub(crate) fn expected_bytes(&self) -> Option<u64> {
+        self.tasks
+            .iter()
+            .map(DownloadTask::expected_size)
+            .try_fold(0_u64, |total, size| {
+                size.map(|size| total.saturating_add(size))
+            })
+    }
+
     pub(crate) fn into_parts(self) -> (Option<String>, Vec<DownloadTask>) {
         (self.group, self.tasks)
     }

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use anyhow::Result;
-use elemental::core::runtime::{RuntimeValidationMode, distribution::Distribution};
+use elemental::core::runtime::{RuntimeResolver, RuntimeValidationMode};
 use inquire::Select;
 
 use super::choices::{RuntimeChoice, prompt_or_back};
@@ -12,10 +12,11 @@ pub(super) struct RuntimeSelection {
 }
 
 pub(super) async fn prompt(
+    runtime_resolver: &RuntimeResolver,
     default_major_version: Option<usize>,
     current_runtime: &mut Option<RuntimeChoice>,
 ) -> Result<Option<RuntimeSelection>> {
-    let choices = runtime_choices().await;
+    let choices = runtime_choices(runtime_resolver).await;
     let starting_cursor = runtime_starting_cursor(current_runtime.as_ref(), &choices);
     let help_message = match default_major_version {
         Some(major) => format!("Auto uses Java {major} from the driver default. Esc goes back"),
@@ -39,10 +40,10 @@ pub(super) async fn prompt(
     }))
 }
 
-async fn runtime_choices() -> Vec<RuntimeChoice> {
+async fn runtime_choices(runtime_resolver: &RuntimeResolver) -> Vec<RuntimeChoice> {
     let mut seen_majors = HashSet::new();
     let mut runtimes = Vec::new();
-    for distribution in Distribution::cached().await {
+    for distribution in runtime_resolver.distributions().await {
         let Some(major) = distribution.java_major_version() else {
             continue;
         };

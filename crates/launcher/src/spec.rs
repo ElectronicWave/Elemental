@@ -46,6 +46,26 @@ impl DriverSpec {
         Self::Vanilla(VanillaSpec { game_version })
     }
 
+    pub fn from_descriptor(
+        descriptor: DriverDescriptor,
+        game_version: MinecraftVersionId,
+        loader_version: Option<LoaderVersionId>,
+    ) -> Result<Self> {
+        if descriptor == VANILLA_DRIVER {
+            if loader_version.is_some() {
+                return Err(Error::UnexpectedLoaderVersion {
+                    id: descriptor.id.to_owned(),
+                });
+            }
+            return Ok(Self::vanilla(game_version));
+        }
+
+        let loader_version = loader_version.ok_or_else(|| Error::LoaderVersionRequired {
+            id: descriptor.id.to_owned(),
+        })?;
+        Self::any(descriptor, game_version, loader_version)
+    }
+
     pub fn any(
         loader: DriverDescriptor,
         game_version: MinecraftVersionId,

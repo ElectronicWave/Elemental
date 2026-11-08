@@ -15,10 +15,13 @@ reload it, build a mutable launch command, then start the game.
 - Prepare new instances or reopen installations that already exist on disk.
 - Automatic driver and loader-version detection during inspection.
 - Shared downloader and configurable root or instance layouts.
+- Injected runtime providers with a per-launcher distribution cache.
 - Launch-command construction for hosts that manage process creation.
 - Process spawning through the core launch primitives.
-- Typed launch options for runtime selection, resolution, quick play, and extra
-  arguments.
+- Typed runtime and launch options for runtime selection, resolution, quick
+  play, and extra arguments.
+- A stable read-only view of prepared instance metadata, natives, and the
+  resolved classpath.
 
 ## Installation
 
@@ -40,7 +43,7 @@ Prepare a Vanilla instance and build its launch command:
 ```rust
 use anyhow::Result;
 use elemental_core::auth::{authorizer::Authorizer, authorizers::offline::OfflineAuthorizer};
-use elemental_launcher::{DriverSpec, LaunchOptions, Launcher};
+use elemental_launcher::{DriverSpec, LaunchOptions, Launcher, RuntimeOptions};
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
@@ -52,6 +55,7 @@ async fn main() -> Result<()> {
         .prepare(
             "Vanilla-1.20.1".to_owned(),
             DriverSpec::vanilla("1.20.1".into()),
+            &RuntimeOptions::default(),
         )
         .await?;
 
@@ -65,6 +69,7 @@ async fn main() -> Result<()> {
         .build_launch_command(
             &prepared,
             &credential,
+            &RuntimeOptions::default(),
             &LaunchOptions::default(),
         )
         .await?;
@@ -80,8 +85,19 @@ async fn main() -> Result<()> {
 ```
 
 `prepare()` downloads and writes missing artifacts with a default download
-session. To start the game, pass the command to `launch()` or
-`launch_logged()`.
+session. To start the game, pass the command to `launch()`.
+
+Inspect a prepared instance without touching driver internals:
+
+```rust
+let info = prepared.info()?;
+println!(
+    "{} requires Java {} and has {} classpath entries",
+    info.metadata.id,
+    info.metadata.required_java_major_version,
+    info.classpath.len()
+);
+```
 
 Authentication is independent from launch. An `Authorizer` returns a
 `UserCredential`; `build_launch_command()` injects that credential into the
@@ -99,6 +115,7 @@ let preparation = launcher
     .begin_prepare(
         "Vanilla-1.20.1".to_owned(),
         DriverSpec::vanilla("1.20.1".into()),
+        &RuntimeOptions::default(),
     )
     .await?;
 let progress = preparation.session().progress_receiver();
@@ -109,6 +126,10 @@ println!("{:?}", progress.borrow().active_tasks);
 
 The view exposes active tasks, the last-seen group, and task and byte counters.
 Formatting task and group names is left to the UI.
+
+The session is the only progress source. Use `progress_receiver()` for
+snapshots or `subscribe()` for structured download events; the launcher does not
+wrap either stream.
 
 ### Custom download sessions
 
@@ -128,6 +149,7 @@ let prepared = launcher
         session,
         "Vanilla-1.20.1".to_owned(),
         DriverSpec::vanilla("1.20.1".into()),
+        &RuntimeOptions::default(),
     )
     .await?;
 ```
@@ -148,6 +170,7 @@ let prepared = launcher
         &session,
         "Vanilla-1.20.1".to_owned(),
         DriverSpec::vanilla("1.20.1".into()),
+        &RuntimeOptions::default(),
     )
     .await?;
 
@@ -162,7 +185,12 @@ UI progress reporting.
 
 ```rust
 let mut command = launcher
-    .build_launch_command(&prepared, &credential, &LaunchOptions::default())
+    .build_launch_command(
+        &prepared,
+        &credential,
+        &RuntimeOptions::default(),
+        &LaunchOptions::default(),
+    )
     .await?;
 command.add_jvm_argument(format!(
     "-javaagent:{}",
@@ -177,13 +205,13 @@ let game = launcher.launch(command)?;
 | --- | --- |
 | Discover local instances | `inspect_instances()` |
 | Detect one instance and its driver | `inspect_instance(name)` |
-| Install or refresh an instance | `prepare(name, driver)` |
-| Prepare with an observed session | `begin_prepare(name, driver).prepare()` |
-| Install with a custom session and managed lifecycle | `prepare_with_session(session, name, driver)` |
-| Install with a custom session and caller-owned lifecycle | `prepare_in_session(&session, name, driver)` |
+| Install or refresh an instance | `prepare(name, driver, runtime)` |
+| Prepare with an observed session | `begin_prepare(name, driver, runtime).prepare()` |
+| Install with a custom session and managed lifecycle | `prepare_with_session(session, name, driver, runtime)` |
+| Install with a custom session and caller-owned lifecycle | `prepare_in_session(&session, name, driver, runtime)` |
 | Reload an existing installation | `load_instance(instance)` |
 | Build a command without spawning | `build_launch_command(...)` |
-| Spawn a customized command | `launch(command)` / `launch_logged(command)` |
+| Spawn a customized command | `launch(command)` |
 | Build and spawn in one call | `launch_prepared_instance(...)` |
 | Launch an installed instance by name | `launch_instance(...)` |
 
@@ -236,18 +264,45 @@ let driver = DriverSpec::any(
 )?;
 ```
 
+When the driver comes from inspection or a CLI, build the spec from the
+descriptor instead of matching on it:
+
+```rust
+let game_version = instance
+    .driver
+    .game_version
+    .clone()
+    .ok_or_else(|| anyhow::anyhow!("instance has no game version"))?;
+let spec = DriverSpec::from_descriptor(
+    instance.driver.driver,
+    game_version,
+    loader_version,
+)?;
+```
+
+`from_descriptor()` rejects a loader version for Vanilla and requires one for
+every loader-driven distribution.
+
 ## Launch Options
 
-`LaunchOptions` is an alias for `VersionJsonLaunchConfig`. It covers:
+Launch configuration is split by lifecycle:
 
-- `runtime_major_version`, `runtime_executable_path`, and
-  `runtime_validation`.
-- Launcher name, launcher version, and client ID.
-- Window resolution and quick-play targets.
-- Extra JVM and game arguments.
+- `RuntimeOptions` covers `runtime_major_version`,
+  `runtime_executable_path`, and `runtime_validation`.
+- `LaunchOptions` covers launcher name and version, client ID, window
+  resolution, quick-play targets, and extra JVM and game arguments.
 
-Use `LaunchOptions::default()` for automatic runtime selection with strict Java
-version validation.
+`LaunchOptions` is owned by `elemental-launcher`. The driver crate only exposes
+`RuntimeOptions`; version JSON launch configuration stays an implementation
+detail behind `Launcher::build_launch_command()`.
+
+Use `RuntimeOptions::default()` for automatic runtime selection with strict
+Java version validation, and `LaunchOptions::default()` when no branding or
+window customization is needed.
+
+Pass the same `RuntimeOptions` to preparation and launch. Installer-driven
+families resolve their client-processor runtime during preparation, so the
+override must be available there as well.
 
 ## Builder Customization
 
@@ -267,6 +322,175 @@ let launcher = Launcher::builder()
 Use `root_layout()` and `instance_layout()` for custom layouts, or
 `with_layouts()` to replace both at once. `Launcher::new(storage_root,
 downloader)` is the shorthand when the base layouts are sufficient.
+
+### Custom layouts
+
+A layout only maps typed resources to paths; `storage_root` remains the game
+root. Implement `Layout` with `Resource = VersionJsonRootResource` or
+`Resource = VersionJsonInstanceResource`; the marker traits are implemented
+automatically. Delegating unknown resources to the base layout keeps the
+custom layout complete:
+
+```rust
+use std::path::{Path, PathBuf};
+
+use elemental_core::storage::layout::Layout;
+use elemental_driver::families::version_json::{
+    BaseInstanceLayout, BaseRootLayout, VersionJsonInstanceResource, VersionJsonRootResource,
+};
+use elemental_launcher::Launcher;
+
+#[derive(Debug, Clone, Default)]
+struct SharedLibrariesRoot;
+
+impl Layout for SharedLibrariesRoot {
+    type Resource = VersionJsonRootResource;
+    type ExtendedResource = VersionJsonRootResource;
+
+    fn get_resource(&self, root: &Path, resource: Self::Resource) -> Option<PathBuf> {
+        match resource {
+            VersionJsonRootResource::Libraries(relative) => {
+                let libraries_root = root.join("shared").join("libraries");
+                Some(match relative {
+                    Some(relative) => libraries_root.join(relative.as_path()),
+                    None => libraries_root,
+                })
+            }
+            other => BaseRootLayout.get_resource(root, other),
+        }
+    }
+
+    fn get_extended_resource(
+        &self,
+        root: &Path,
+        resource: Self::ExtendedResource,
+    ) -> Option<PathBuf> {
+        self.get_resource(root, resource)
+    }
+
+    fn name(&self) -> &'static str {
+        "SharedLibrariesRoot"
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct FlatInstanceLayout;
+
+impl Layout for ExtendedInstanceLayout {
+    type Resource = VersionJsonInstanceResource;
+    type ExtendedResource = VersionJsonInstanceResource;
+
+    fn get_resource(&self, root: &Path, resource: Self::Resource) -> Option<PathBuf> {
+        match resource {
+            VersionJsonInstanceResource::Jar => Some(root.join("client.jar")),
+            other => BaseInstanceLayout.get_resource(root, other),
+        }
+    }
+
+    fn get_extended_resource(
+        &self,
+        root: &Path,
+        resource: Self::ExtendedResource,
+    ) -> Option<PathBuf> {
+        self.get_resource(root, resource)
+    }
+
+    fn name(&self) -> &'static str {
+        "FlatInstanceLayout"
+    }
+}
+
+let launcher = Launcher::builder()
+    .storage_root(".minecraft")
+    .root_layout(SharedLibrariesRoot)
+    .instance_layout(FlatInstanceLayout)
+    .build();
+```
+
+Root layouts receive the game root; instance layouts receive the instance
+directory. Custom instance layouts must be `Clone + Send`, and both layouts
+must be `Clone` because the launcher clones them into scoped storage views.
+
+### Extending resources
+
+`VersionJsonRootResource` and `VersionJsonInstanceResource` are closed enums:
+the launcher and drivers match them to locate metadata, libraries, assets, and
+natives. Hosts cannot add variants to them.
+
+Use `Layout::ExtendedResource` for resources that only your application
+consumes. Wrap the standard resource in your own enum and delegate through
+`get_resource()`:
+
+```rust
+#[derive(Debug, Clone, Default)]
+struct ExtendedInstanceLayout;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum CustomInstanceResource {
+    Standard(VersionJsonInstanceResource),
+    Screenshots,
+}
+
+impl Layout for FlatInstanceLayout {
+    type Resource = VersionJsonInstanceResource;
+    type ExtendedResource = CustomInstanceResource;
+
+    fn get_resource(&self, root: &Path, resource: Self::Resource) -> Option<PathBuf> {
+        match resource {
+            VersionJsonInstanceResource::Jar => Some(root.join("client.jar")),
+            other => BaseInstanceLayout.get_resource(root, other),
+        }
+    }
+
+    fn get_extended_resource(
+        &self,
+        root: &Path,
+        resource: Self::ExtendedResource,
+    ) -> Option<PathBuf> {
+        match resource {
+            CustomInstanceResource::Standard(resource) => self.get_resource(root, resource),
+            CustomInstanceResource::Screenshots => Some(root.join("screenshots")),
+        }
+    }
+
+    fn name(&self) -> &'static str {
+        "ExtendedInstanceLayout"
+    }
+}
+```
+
+When the launcher uses this layout, read extended resources through
+`Layoutable`:
+
+```rust
+use elemental_core::storage::layout::Layoutable;
+
+let screenshots = prepared
+    .version()
+    .try_get_extended_resource(CustomInstanceResource::Screenshots)?;
+```
+
+If a resource must participate in installation or launch, it cannot be added
+from the host; it belongs in the driver's resource enum and its installation
+or launch logic.
+
+Runtime discovery is a launcher dependency rather than a process-wide setting.
+Pass providers explicitly when the host needs its own set:
+
+```rust
+use elemental_core::runtime::provider::default_providers;
+
+let launcher = Launcher::builder()
+    .runtime_providers(default_providers())
+    .build();
+
+for runtime in launcher.runtime_resolver().distributions().await {
+    println!("{}", runtime.executable().display());
+}
+```
+
+The launcher caches distributions per `RuntimeResolver`, so multiple launchers
+can use different provider lists in the same process without sharing state.
 
 ### Origin Overrides
 

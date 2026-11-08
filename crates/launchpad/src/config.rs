@@ -1,17 +1,16 @@
 use std::path::PathBuf;
 
-use anyhow::{Context, Result, bail};
+use anyhow::Result;
 use elemental::{
     core::minecraft::MinecraftVersionId,
-    driver::{
-        descriptors::VANILLA_DRIVER, driver::DriverDescriptor, loader_version::LoaderVersionId,
-    },
-    launcher::{DriverSpec, LaunchOptions},
+    driver::{driver::DriverDescriptor, loader_version::LoaderVersionId},
+    launcher::{DriverSpec, LaunchOptions, RuntimeOptions},
 };
 
 #[derive(Clone)]
 pub struct LaunchpadConfig {
     pub spec: DriverSpec,
+    pub runtime: RuntimeOptions,
     pub options: LaunchOptions,
     pub runtime_paths: Vec<PathBuf>,
     pub storage_root: PathBuf,
@@ -31,14 +30,9 @@ pub fn build_spec(
     game_version: MinecraftVersionId,
     loader_version: Option<LoaderVersionId>,
 ) -> Result<DriverSpec> {
-    if driver == VANILLA_DRIVER {
-        if loader_version.is_some() {
-            bail!("vanilla does not accept a loader version");
-        }
-        return Ok(DriverSpec::vanilla(game_version));
-    }
-
-    let loader_version = loader_version
-        .with_context(|| format!("{} launchpad requires a loader version", driver.name))?;
-    Ok(DriverSpec::any(driver, game_version, loader_version)?)
+    Ok(DriverSpec::from_descriptor(
+        driver,
+        game_version,
+        loader_version,
+    )?)
 }

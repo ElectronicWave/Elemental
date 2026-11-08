@@ -3,7 +3,10 @@ use elemental_driver::families::version_json::{
 };
 use elemental_infra::downloader::DownloadSession;
 
-use crate::{error::Result, launcher::Launcher, result::PreparedInstance, spec::DriverSpec};
+use crate::{
+    error::Result, launcher::Launcher, request::RuntimeOptions, result::PreparedInstance,
+    spec::DriverSpec,
+};
 
 pub struct InstancePreparation<'a, L = BaseRootLayout, VL = BaseInstanceLayout>
 where
@@ -14,6 +17,7 @@ where
     session: DownloadSession,
     instance_name: String,
     driver: DriverSpec,
+    runtime_options: RuntimeOptions,
 }
 
 impl<'a, L, VL> InstancePreparation<'a, L, VL>
@@ -26,12 +30,14 @@ where
         session: DownloadSession,
         instance_name: String,
         driver: DriverSpec,
+        runtime_options: &RuntimeOptions,
     ) -> Self {
         Self {
             launcher,
             session,
             instance_name,
             driver,
+            runtime_options: runtime_options.clone(),
         }
     }
 
@@ -45,9 +51,11 @@ where
             session,
             instance_name,
             driver,
+            runtime_options,
         } = self;
+
         let prepared = launcher
-            .prepare_in_session(&session, instance_name, driver)
+            .prepare_in_session(&session, instance_name, driver, &runtime_options)
             .await;
         let report = session.finish().await;
         let prepared = prepared?;

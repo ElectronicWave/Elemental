@@ -38,7 +38,7 @@ use anyhow::Result;
 use elemental_core::{
     auth::{authorizer::Authorizer, authorizers::offline::OfflineAuthorizer},
     minecraft::MinecraftVersionId,
-    runtime::distribution::Distribution,
+    runtime::RuntimeResolver,
 };
 
 #[tokio::main]
@@ -54,7 +54,8 @@ async fn main() -> Result<()> {
     let game_version = MinecraftVersionId::from("1.20.1");
     println!("game version: {game_version}");
 
-    for runtime in Distribution::cached().await.into_iter().take(5) {
+    let resolver = RuntimeResolver::with_default_providers();
+    for runtime in resolver.distributions().await.into_iter().take(5) {
         println!("{}: {}", runtime.provider, runtime.executable().display());
     }
 
@@ -166,30 +167,33 @@ bundled runtimes. Candidate roots are canonicalized, deduplicated, and sorted
 by Java version. Runtimes without a `release` file are probed with a bounded
 timeout and a cleaned Java environment.
 
-```rust
-use elemental_core::runtime::{
-    RuntimeValidationMode, distribution::Distribution, resolve_runtime,
-};
+Use `RuntimeResolver` to own discovery and caching. `distributions()` returns
+every discovered runtime, and `resolve()` selects one by Java major version,
+applying an explicit executable or the configured validation mode:
 
-let runtime = resolve_runtime(21, None, RuntimeValidationMode::Strict, "launch").await?;
+```rust
+use elemental_core::runtime::{RuntimeResolver, RuntimeValidationMode};
+
+let resolver = RuntimeResolver::with_default_providers();
+let runtime = resolver
+    .resolve(21, None, RuntimeValidationMode::Strict)
+    .await?;
 assert!(runtime.executable().is_file());
-# Ok::<_, anyhow::Error>(())
 ```
 
-Use `Distribution::cached()` to inspect every discovered runtime, or
-`Distribution::find_cached_by_java_major()` to select one by Java major
-version. An explicit executable can be passed to `resolve_runtime`; in strict
-mode its detected major version must match the requested version.
+An explicit executable can be passed to `resolve()`; in strict mode its
+detected major version must match the requested version. `elemental-launcher`
+injects one resolver per `Launcher` so different hosts can use different
+provider lists without sharing process-wide state.
 
 Custom runtime providers can reuse the public scanning helpers in
 `runtime::discovery`, including `find_runtime_homes()`,
 `find_runtime_homes_with_prefixes()`, and `is_runtime_home()`, instead of
 reimplementing Java runtime layout checks.
 
-> [!IMPORTANT]
-> `with_runtime_providers()` replaces the process-wide provider list. Call it
-> before the first `Distribution::cached()` call, because the cached discovery
-> result is not refreshed when providers change.
+Provider lists and their cache belong to a `RuntimeResolver`. There is no
+process-wide provider override, so independent resolvers can use different
+providers without sharing state.
 
 ### Authentication and launch processes
 
@@ -201,8 +205,8 @@ its own UI.
 A `LaunchCommand` contains the runtime, structured JVM and game arguments, the
 main class, environment variables, and optional working directory. It remains
 mutable before launch, so callers can append authentication-specific JVM
-arguments or other overrides. `spawn_command()` launches it directly, while
-`spawn_command_logged()` captures stdout and stderr as `LoggedChild` lines.
+arguments or other overrides. `spawn_command()` launches it directly and lets
+the child inherit the parent's stdout and stderr.
 
 ## Related Crates
 

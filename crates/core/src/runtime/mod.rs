@@ -18,6 +18,26 @@ pub enum RuntimeValidationMode {
     Disabled,
 }
 
+/// Resolve one runtime with the default provider list.
+///
+/// This creates a fresh resolver and therefore performs a fresh discovery.
+/// Reuse a [`RuntimeResolver`] when resolving multiple runtimes.
+pub async fn resolve_runtime(
+    required_major_version: usize,
+    runtime_executable_path: Option<&Path>,
+    validation_mode: RuntimeValidationMode,
+    usage: &str,
+) -> Result<Distribution> {
+    RuntimeResolver::with_default_providers()
+        .resolve(
+            required_major_version,
+            runtime_executable_path,
+            validation_mode,
+            usage,
+        )
+        .await
+}
+
 pub(crate) async fn resolve_runtime_with<F>(
     required_major_version: usize,
     runtime_executable_path: Option<&Path>,

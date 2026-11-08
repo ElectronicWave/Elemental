@@ -182,6 +182,17 @@ let runtime = resolver
 assert!(runtime.executable().is_file());
 ```
 
+For one-shot resolution, `resolve_runtime()` uses the default providers and
+performs a fresh discovery:
+
+```rust
+use elemental_core::runtime::{RuntimeValidationMode, resolve_runtime};
+
+let runtime = resolve_runtime(21, None, RuntimeValidationMode::Strict, "launch").await?;
+assert!(runtime.executable().is_file());
+# Ok::<_, anyhow::Error>(())
+```
+
 An explicit executable can be passed to `resolve()`; in strict mode its
 detected major version must match the requested version. `elemental-launcher`
 injects one resolver per `Launcher` so different hosts can use different

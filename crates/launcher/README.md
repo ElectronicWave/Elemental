@@ -398,7 +398,7 @@ impl Layout for SharedLibrariesRoot {
 #[derive(Debug, Clone, Default)]
 struct FlatInstanceLayout;
 
-impl Layout for FlatInstanceLayout {
+impl Layout for ExtendedInstanceLayout {
     type Resource = VersionJsonInstanceResource;
     type ExtendedResource = VersionJsonInstanceResource;
 
@@ -432,6 +432,69 @@ let launcher = Launcher::builder()
 Root layouts receive the game root; instance layouts receive the instance
 directory. Custom instance layouts must be `Clone + Send`, and both layouts
 must be `Clone` because the launcher clones them into scoped storage views.
+
+### Extending resources
+
+`VersionJsonRootResource` and `VersionJsonInstanceResource` are closed enums:
+the launcher and drivers match them to locate metadata, libraries, assets, and
+natives. Hosts cannot add variants to them.
+
+Use `Layout::ExtendedResource` for resources that only your application
+consumes. Wrap the standard resource in your own enum and delegate through
+`get_resource()`:
+
+```rust
+#[derive(Debug, Clone, Default)]
+struct ExtendedInstanceLayout;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum CustomInstanceResource {
+    Standard(VersionJsonInstanceResource),
+    Screenshots,
+}
+
+impl Layout for FlatInstanceLayout {
+    type Resource = VersionJsonInstanceResource;
+    type ExtendedResource = CustomInstanceResource;
+
+    fn get_resource(&self, root: &Path, resource: Self::Resource) -> Option<PathBuf> {
+        match resource {
+            VersionJsonInstanceResource::Jar => Some(root.join("client.jar")),
+            other => BaseInstanceLayout.get_resource(root, other),
+        }
+    }
+
+    fn get_extended_resource(
+        &self,
+        root: &Path,
+        resource: Self::ExtendedResource,
+    ) -> Option<PathBuf> {
+        match resource {
+            CustomInstanceResource::Standard(resource) => self.get_resource(root, resource),
+            CustomInstanceResource::Screenshots => Some(root.join("screenshots")),
+        }
+    }
+
+    fn name(&self) -> &'static str {
+        "ExtendedInstanceLayout"
+    }
+}
+```
+
+When the launcher uses this layout, read extended resources through
+`Layoutable`:
+
+```rust
+use elemental_core::storage::layout::Layoutable;
+
+let screenshots = prepared
+    .version()
+    .try_get_extended_resource(CustomInstanceResource::Screenshots)?;
+```
+
+If a resource must participate in installation or launch, it cannot be added
+from the host; it belongs in the driver's resource enum and its installation
+or launch logic.
 
 Runtime discovery is a launcher dependency rather than a process-wide setting.
 Pass providers explicitly when the host needs its own set:

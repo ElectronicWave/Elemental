@@ -193,6 +193,15 @@ reusable infrastructure together.
 `full` enables every module. The default feature set is `full` plus
 `shared-json` and `object-notify`.
 
+Common launcher types are available through the prelude:
+
+```rust
+use elemental::prelude::*;
+```
+
+The prelude only re-exports types from enabled modules, so it works with a
+selective feature set.
+
 For a smaller dependency surface, disable default features and select only the
 modules an application uses:
 
@@ -202,7 +211,7 @@ elemental = {
     package = "elemental-kit",
     version = "0.2",
     default-features = false,
-    features = ["core", "driver", "launcher"],
+    features = ["launcher"],
 }
 ```
 

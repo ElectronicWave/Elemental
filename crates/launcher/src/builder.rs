@@ -57,25 +57,6 @@ impl LauncherBuilder<BaseRootLayout, BaseInstanceLayout> {
 }
 
 impl<L, VL> LauncherBuilder<L, VL> {
-    pub fn with_layouts<NL, NVL>(
-        self,
-        root_layout: NL,
-        instance_layout: NVL,
-    ) -> LauncherBuilder<NL, NVL>
-    where
-        NL: VersionJsonRootLayout + Clone,
-        NVL: VersionJsonInstanceLayout + Clone + Send,
-    {
-        LauncherBuilder {
-            storage_root: self.storage_root,
-            downloader: self.downloader,
-            root_layout,
-            instance_layout,
-            origins: self.origins,
-            runtime_providers: self.runtime_providers,
-        }
-    }
-
     pub fn storage_root(mut self, storage_root: impl Into<PathBuf>) -> Self {
         self.storage_root = storage_root.into();
         self
@@ -134,7 +115,7 @@ where
     VL: VersionJsonInstanceLayout + Clone + Send,
 {
     pub fn build(self) -> Launcher<L, VL> {
-        Launcher::with_layouts_origins_and_runtime(
+        Launcher::new(
             self.storage_root,
             self.downloader,
             self.root_layout,

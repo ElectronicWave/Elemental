@@ -55,28 +55,6 @@ where
         F::descriptor()
     }
 
-    pub async fn prepare<L, VL>(
-        &self,
-        session: &DownloadSession,
-        instance: &Storage<VL, Storage<L>>,
-        game_version: MinecraftVersionId,
-        loader_version: LoaderVersionId,
-    ) -> Result<PreparedInstallerVersion<L, VL>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
-        self.prepare_with_runtime(
-            session,
-            instance,
-            game_version,
-            loader_version,
-            &RuntimeOptions::new(),
-            &RuntimeResolver::with_default_providers(),
-        )
-        .await
-    }
-
     pub async fn prepare_with_runtime<L, VL>(
         &self,
         session: &DownloadSession,

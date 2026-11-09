@@ -82,12 +82,14 @@ use elemental_infra::downloader::{DownloadTask, ElementalDownloader};
 async fn main() -> anyhow::Result<()> {
     let downloader = ElementalDownloader::builder().build()?;
 
-    let report = downloader
-        .download(DownloadTask::new(
+    let session = downloader.session("version manifest").open().await?;
+    session
+        .submit(DownloadTask::new(
             "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json",
             ".minecraft/version_manifest_v2.json",
         ))
         .await?;
+    let report = session.finish().await?;
 
     println!(
         "downloaded {} bytes in {:?}",
@@ -97,8 +99,8 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-`download()` returns an error if the task fails. Add validation when the source
-publishes a size or SHA-1:
+`report.success()` returns an error if the task fails. Add validation when the
+source publishes a size or SHA-1:
 
 ```rust
 use elemental_infra::downloader::{DownloadTask, ElementalDownloader};
@@ -112,7 +114,10 @@ async fn download_library(
 ) -> anyhow::Result<()> {
     let task = DownloadTask::new(url, path).size(size).sha1(sha1);
 
-    downloader.download(task).await?;
+    let session = downloader.session("library").open().await?;
+    session.submit(task).await?;
+    let report = session.finish().await?;
+    report.success()?;
     Ok(())
 }
 ```
@@ -359,8 +364,7 @@ channel updates at the same 10 Hz cadence; `snapshot()` is always current.
 
 ## Failures and cancellation
 
-- `download()` and `report.success()` return an error when any task
-  failed or was cancelled.
+- `report.success()` returns an error when any task failed or was cancelled.
 - Session `finish()` and `cancel()` return the report without failing on task
   errors. Call `success()` when that is not what you want.
 - `report.failures()` yields structured `DownloadFailure` values, including

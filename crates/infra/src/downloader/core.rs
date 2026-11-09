@@ -7,9 +7,8 @@ use super::event::{DownloadEvent, DownloadEventStream};
 use super::limits::{BandwidthLimiter, ConcurrencyController};
 use super::materializer::Materializer;
 use super::rate::DownloadRateLimit;
-use super::report::DownloadReport;
-use super::session::{DownloadSessionBuilder, DownloadSessionOptions, SessionHandler};
-use super::task::{DownloadTask, SessionId};
+use super::session::{DownloadSessionBuilder, SessionHandler};
+use super::task::SessionId;
 use crate::error::Result;
 
 mod builder;
@@ -80,17 +79,6 @@ impl ElementalDownloader {
 
     pub(crate) fn event_receiver(&self) -> broadcast::Receiver<DownloadEvent> {
         self.events.subscribe()
-    }
-
-    pub async fn download(self: &Arc<Self>, task: DownloadTask) -> Result<DownloadReport> {
-        task.validate()?;
-        let session = self
-            .create_session(None, DownloadSessionOptions::default())
-            .await?;
-        session.submit(task).await?;
-        let report = session.finish().await?;
-        report.success()?;
-        Ok(report)
     }
 
     pub fn max_concurrent_downloads(&self) -> usize {

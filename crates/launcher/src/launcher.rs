@@ -34,7 +34,7 @@ use elemental_driver::{
             BaseInstanceLayout, BaseRootLayout, PreparedVersionJsonInstance,
             ProfiledVersionJsonDriver, ProfiledVersionJsonFamilyExt, VersionJsonGameStorageExt,
             VersionJsonInstanceLayout, VersionJsonRootLayout, builder::VersionJsonLaunchBuilder,
-            inspect_instances,
+            inspect_instances, variables::LauncherVariables,
         },
     },
     inspect::InstalledInstance,
@@ -47,7 +47,6 @@ use crate::{
     builder::LauncherBuilder,
     error::{Error, Result},
     origin::{DriverOrigins, InstallerFamilySource, ProfiledFamilySource},
-    preparation::InstancePreparation,
     request::{LaunchOptions, RuntimeOptions},
     result::{Instance, LaunchedInstance, PreparedInstance},
     spec::{DriverFlow, DriverSpec},
@@ -80,10 +79,6 @@ impl Launcher<BaseRootLayout, BaseInstanceLayout> {
     pub fn builder() -> LauncherBuilder<BaseRootLayout, BaseInstanceLayout> {
         LauncherBuilder::new()
     }
-
-    pub fn new(storage_root: PathBuf, downloader: Arc<ElementalDownloader>) -> Self {
-        Self::with_layouts(storage_root, downloader, BaseRootLayout, BaseInstanceLayout)
-    }
 }
 
 impl<L, VL> Launcher<L, VL>
@@ -91,39 +86,7 @@ where
     L: VersionJsonRootLayout + Clone,
     VL: VersionJsonInstanceLayout + Clone + Send,
 {
-    pub fn with_layouts(
-        storage_root: PathBuf,
-        downloader: Arc<ElementalDownloader>,
-        root_layout: L,
-        instance_layout: VL,
-    ) -> Self {
-        Self::with_layouts_and_origins(
-            storage_root,
-            downloader,
-            root_layout,
-            instance_layout,
-            DriverOrigins::default(),
-        )
-    }
-
-    pub fn with_layouts_and_origins(
-        storage_root: PathBuf,
-        downloader: Arc<ElementalDownloader>,
-        root_layout: L,
-        instance_layout: VL,
-        origins: DriverOrigins,
-    ) -> Self {
-        Self::with_layouts_origins_and_runtime(
-            storage_root,
-            downloader,
-            root_layout,
-            instance_layout,
-            origins,
-            RuntimeResolver::with_default_providers(),
-        )
-    }
-
-    pub fn with_layouts_origins_and_runtime(
+    pub(crate) fn new(
         storage_root: PathBuf,
         downloader: Arc<ElementalDownloader>,
         root_layout: L,
@@ -183,42 +146,20 @@ where
         driver: DriverSpec,
         runtime_options: &RuntimeOptions,
     ) -> Result<PreparedInstance<L, VL>> {
-        self.begin_prepare(instance_name, driver, runtime_options)
-            .await?
-            .prepare()
-            .await
-    }
-
-    /// Start a preparation with a default session while exposing its progress.
-    ///
-    /// Calling [`InstancePreparation::prepare`] keeps session ownership inside
-    /// the launcher. Dropping the preparation without calling `prepare` cancels
-    /// the download session.
-    pub async fn begin_prepare(
-        &self,
-        instance_name: String,
-        driver: DriverSpec,
-        runtime_options: &RuntimeOptions,
-    ) -> Result<InstancePreparation<'_, L, VL>> {
         let session = self
             .downloader
             .session(format!("prepare {instance_name}"))
             .open()
             .await?;
-        Ok(InstancePreparation::new(
-            self,
-            session,
-            instance_name,
-            driver,
-            runtime_options,
-        ))
+        self.prepare_with_session(session, instance_name, driver, runtime_options)
+            .await
     }
 
     /// Install or refresh an instance with a caller-configured session.
     ///
-    /// The launcher finishes and validates the session. Use
-    /// [`Launcher::prepare_in_session`] when the caller needs to own the
-    /// session lifecycle or inspect the download report.
+    /// Observe progress or download events through the session before passing it
+    /// here. The launcher then finishes and validates the session before
+    /// returning.
     pub async fn prepare_with_session(
         &self,
         session: DownloadSession,
@@ -226,15 +167,20 @@ where
         driver: DriverSpec,
         runtime_options: &RuntimeOptions,
     ) -> Result<PreparedInstance<L, VL>> {
-        InstancePreparation::new(self, session, instance_name, driver, runtime_options)
-            .prepare()
-            .await
+        let prepared = self
+            .prepare_in_session(&session, instance_name, driver, runtime_options)
+            .await;
+        let report = session.finish().await;
+        let prepared = prepared?;
+        let report = report?;
+        report.success()?;
+        Ok(prepared)
     }
 
     /// Low-level preparation inside a caller-owned session.
     ///
     /// The caller must finish or cancel `session` and validate its report.
-    pub async fn prepare_in_session(
+    pub(crate) async fn prepare_in_session(
         &self,
         session: &DownloadSession,
         instance_name: String,
@@ -473,42 +419,37 @@ where
     L: VersionJsonRootLayout + Clone,
     VL: VersionJsonInstanceLayout + Clone,
 {
-    let mut builder = VersionJsonLaunchBuilder::new(
-        credential.clone(),
-        runtime,
-        prepared.launch_version.version.clone(),
-    );
+    let mut variables = LauncherVariables::default();
 
     if let Some(client_id) = &options.client_id {
-        builder = builder.set_client_id(client_id.clone());
+        variables.clientid = client_id.clone();
     }
 
     if let Some(resolution) = &options.resolution {
-        builder = builder.set_resolution(resolution.width.clone(), resolution.height.clone());
+        variables.resolution_width = resolution.width.clone();
+        variables.resolution_height = resolution.height.clone();
     }
 
     if let (Some(name), Some(version)) = (&options.launcher_name, &options.launcher_version) {
-        builder = builder.set_launcher(name.clone(), version.clone());
+        variables.launcher_name = name.clone();
+        variables.launcher_version = version.clone();
     }
 
     if let Some(quick_play) = &options.quick_play {
-        builder = builder.set_quick_play(
-            quick_play.path.clone(),
-            quick_play.multiplayer.clone(),
-            quick_play.singleplayer.clone(),
-            quick_play.realms.clone(),
-        );
+        variables.quick_play_path = quick_play.path.clone();
+        variables.quick_play_multiplayer = quick_play.multiplayer.clone();
+        variables.quick_play_singleplayer = quick_play.singleplayer.clone();
+        variables.quick_play_realms = quick_play.realms.clone();
     }
 
-    if !options.extra_jvm_arguments.is_empty() {
-        builder = builder.set_extra_jvm_arguments(options.extra_jvm_arguments.clone());
-    }
-
-    if !options.extra_game_arguments.is_empty() {
-        builder = builder.set_extra_game_arguments(options.extra_game_arguments.clone());
-    }
-
-    builder
+    VersionJsonLaunchBuilder::new(
+        credential.clone(),
+        runtime,
+        prepared.launch_version.version.clone(),
+        variables,
+        options.extra_jvm_arguments.clone(),
+        options.extra_game_arguments.clone(),
+    )
 }
 
 fn loader_version(spec: &DriverSpec) -> Result<LoaderVersionId> {

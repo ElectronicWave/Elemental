@@ -106,21 +106,25 @@ JVM arguments can be appended after that without changing the credential type.
 
 ### Observing preparation progress
 
-`begin_prepare()` keeps the session lifecycle inside the launcher while
-exposing the session to the host. The session state derives a structured
-progress view and publishes it on a watch channel:
+Create and observe the session before passing it to `prepare_with_session()`.
+The launcher finishes and validates the session after preparation:
 
 ```rust
-let preparation = launcher
-    .begin_prepare(
+let session = launcher
+    .downloader()
+    .session("prepare Vanilla-1.20.1")
+    .open()
+    .await?;
+let progress = session.progress_receiver();
+
+let prepared = launcher
+    .prepare_with_session(
+        session,
         "Vanilla-1.20.1".to_owned(),
         DriverSpec::vanilla("1.20.1".into()),
         &RuntimeOptions::default(),
     )
     .await?;
-let progress = preparation.session().progress_receiver();
-
-let prepared = preparation.prepare().await?;
 println!("{:?}", progress.borrow().active_tasks);
 ```
 
@@ -134,7 +138,8 @@ wrap either stream.
 ### Custom download sessions
 
 Use `prepare_with_session()` when the host needs custom retry or rate-limit
-settings but still wants the launcher to finish and validate the session:
+settings. Build and observe the session first, then pass ownership to the
+launcher for finishing and validation:
 
 ```rust
 let session = launcher
@@ -152,30 +157,6 @@ let prepared = launcher
         &RuntimeOptions::default(),
     )
     .await?;
-```
-
-Use `prepare_in_session()` when the caller also needs to own the session
-lifecycle, cancellation, or the download report:
-
-```rust
-let session = launcher
-    .downloader()
-    .session("prepare Vanilla-1.20.1")
-    .parallelism(8)
-    .open()
-    .await?;
-
-let prepared = launcher
-    .prepare_in_session(
-        &session,
-        "Vanilla-1.20.1".to_owned(),
-        DriverSpec::vanilla("1.20.1".into()),
-        &RuntimeOptions::default(),
-    )
-    .await?;
-
-let report = session.finish().await?;
-report.success()?;
 ```
 
 The session exposes `progress_receiver()`, `subscribe()`, and `snapshot()` for
@@ -206,9 +187,7 @@ let game = launcher.launch(command)?;
 | Discover local instances | `inspect_instances()` |
 | Detect one instance and its driver | `inspect_instance(name)` |
 | Install or refresh an instance | `prepare(name, driver, runtime)` |
-| Prepare with an observed session | `begin_prepare(name, driver, runtime).prepare()` |
-| Install with a custom session and managed lifecycle | `prepare_with_session(session, name, driver, runtime)` |
-| Install with a custom session and caller-owned lifecycle | `prepare_in_session(&session, name, driver, runtime)` |
+| Install with an observed or configured session | `prepare_with_session(session, name, driver, runtime)` |
 | Reload an existing installation | `load_instance(instance)` |
 | Build a command without spawning | `build_launch_command(...)` |
 | Spawn a customized command | `launch(command)` |
@@ -319,9 +298,8 @@ let launcher = Launcher::builder()
     .build();
 ```
 
-Use `root_layout()` and `instance_layout()` for custom layouts, or
-`with_layouts()` to replace both at once. `Launcher::new(storage_root,
-downloader)` is the shorthand when the base layouts are sufficient.
+Use `root_layout()` and `instance_layout()` for custom layouts. All launcher
+construction goes through `Launcher::builder()`.
 
 ### Custom layouts
 

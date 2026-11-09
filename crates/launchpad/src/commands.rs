@@ -83,16 +83,21 @@ async fn prepare_instance(
         .await?;
         Ok((prepared, started_at.elapsed()))
     } else {
-        let preparation = launcher
-            .begin_prepare(
+        let session = launcher
+            .downloader()
+            .session(format!("prepare {}", config.instance_name))
+            .open()
+            .await?;
+        let _download_progress = progress::download(&session).await?;
+        let started_at = Instant::now();
+        let prepared = launcher
+            .prepare_with_session(
+                session,
                 config.instance_name.clone(),
                 config.spec.clone(),
                 &config.runtime,
             )
             .await?;
-        let _download_progress = progress::download(preparation.session()).await?;
-        let started_at = Instant::now();
-        let prepared = preparation.prepare().await?;
         Ok((prepared, started_at.elapsed()))
     }
 }

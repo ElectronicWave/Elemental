@@ -21,7 +21,7 @@ directly.
   Forge, NeoForge, Cleanroom, and Outlands.
 - Separate `GameVersionCatalog` and `LoaderVersionCatalog` contracts.
 - Direct, profiled, installer-driven, and RetroFutura installation families.
-- Type-safe dispatch through `ProfiledDriver` and `InstallerDriver`.
+- A shared `Driver` trait for inspection, preparation, and loading.
 - Local instance inspection with driver and loader-version detection.
 - Configurable origins and mirror overrides for restricted networks.
 - Typed Java runtime options and shared version JSON launch construction.
@@ -290,10 +290,13 @@ If a loader does not fit any shared family, implement `Driver` directly:
 
 ```rust
 use async_trait::async_trait;
-use elemental_core::storage::layout::Layout;
+use elemental_core::storage::{Storage, layout::Layout};
 use elemental_driver::{
-    driver::{Driver, DriverDescriptor, InstalledDriver},
+    driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest},
     error::Result,
+    families::version_json::{
+        PreparedVersionJsonInstance, VersionJsonInstanceLayout, VersionJsonRootLayout,
+    },
     inspect::InstanceProbe,
 };
 
@@ -304,7 +307,7 @@ const MY_DRIVER: DriverDescriptor = DriverDescriptor {
 
 struct MyDriver;
 
-#[async_trait]
+#[async_trait(?Send)]
 impl<L: Layout, VL: Layout> Driver<L, VL> for MyDriver {
     fn descriptor(&self) -> DriverDescriptor {
         MY_DRIVER
@@ -312,7 +315,7 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for MyDriver {
 
     async fn inspect(
         &self,
-        probe: &InstanceProbe<L, VL>,
+        probe: &InstanceProbe,
     ) -> Result<Option<InstalledDriver>> {
         let Some(metadata) = &probe.metadata else {
             return Ok(None);
@@ -321,14 +324,40 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for MyDriver {
         // Match loader-specific metadata and return InstalledDriver::version_json(...).
         Ok(None)
     }
+
+    async fn prepare(
+        &self,
+        request: &PrepareRequest<'_, L, VL>,
+    ) -> Result<PreparedVersionJsonInstance<L, VL>>
+    where
+        L: VersionJsonRootLayout + Clone,
+        VL: VersionJsonInstanceLayout + Clone,
+    {
+        // Resolve metadata, submit downloads through request.session, and
+        // return the prepared version.
+        todo!()
+    }
+
+    async fn load_prepared(
+        &self,
+        instance: &Storage<VL, Storage<L>>,
+    ) -> Result<PreparedVersionJsonInstance<L, VL>>
+    where
+        L: VersionJsonRootLayout + Clone,
+        VL: VersionJsonInstanceLayout + Clone,
+    {
+        todo!()
+    }
 }
 ```
 
 Custom drivers can be passed directly to `InstalledInstance::detect()` or
-`inspect_instances()`. `elemental-launcher` intentionally uses a closed, typed
-`DriverSpec`; exposing a custom driver through the high-level launcher requires
-adding a `DriverSpec` variant, a descriptor, and a `ResolvedLauncherDriver`
-mapping.
+`inspect_instances()`. A driver that supports preparation must also implement
+`prepare` and `load_prepared`; most loaders should use the shared vanilla,
+profiled, or installer families instead of implementing those operations
+directly. `elemental-launcher` intentionally uses a closed, typed `DriverSpec`;
+exposing a custom driver through the high-level launcher requires adding a
+`DriverSpec` variant, a descriptor, and a matching `resolve_driver` arm.
 
 ## Modules
 
@@ -337,7 +366,7 @@ mapping.
 | `catalog` | `GameVersionCatalog`, `LoaderVersionCatalog`, `GameVersion`, `LoaderRelease`, `InstallerMavenCatalog`, and `LoaderMetaCatalog` |
 | `descriptors` | Stable driver identifiers and display names |
 | `driver` | `DriverDescriptor`, `InstalledDriver`, and the `Driver` trait |
-| `drivers` | Per-loader catalogs, sources, drivers, configs, prepared state, and typed dispatch |
+| `drivers` | Per-loader catalogs, sources, drivers, configs, and prepared state |
 | `families` | Shared version JSON, installer, processor, and RetroFutura implementation families |
 | `inspect` | Instance probes, installed-driver detection, and library markers |
 | `loader_version` | The typed `LoaderVersionId` |

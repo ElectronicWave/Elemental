@@ -1,5 +1,4 @@
 pub mod cleanroom;
-pub mod dispatch;
 pub mod fabric;
 pub mod forge;
 pub mod liteloader;

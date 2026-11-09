@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use regex::Regex;
-
 use crate::error::Result;
 
 use super::LauncherVariables;
@@ -25,25 +23,32 @@ impl LauncherVariables {
         let mut result = Vec::with_capacity(args.len());
         let mut data = self.hashmap()?;
         data.extend(extra_variables.clone());
-        let regex = Regex::new(r#"\$\{(.*?)\}"#)?;
 
-        result.extend(
-            args.iter()
-                .map(|value| replace_variables(value, &regex, &data)),
-        );
+        result.extend(args.iter().map(|value| replace_variables(value, &data)));
 
         Ok(result)
     }
 }
 
-fn replace_variables(value: &str, regex: &Regex, data: &HashMap<String, String>) -> String {
-    let mut replaced = value.to_owned();
-    for variable in regex.captures_iter(value) {
-        if let Some(key) = variable.get(1).map(|item| item.as_str())
-            && let Some(replacement) = data.get(key)
-        {
-            replaced = replaced.replace(&format!("${{{key}}}"), replacement);
+fn replace_variables(value: &str, data: &HashMap<String, String>) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut rest = value;
+
+    while let Some(start) = rest.find("${") {
+        output.push_str(&rest[..start]);
+        let after_open = &rest[start + 2..];
+        let Some(end) = after_open.find('}') else {
+            output.push_str(&rest[start..]);
+            return output;
+        };
+        let key = &after_open[..end];
+        match data.get(key) {
+            Some(replacement) => output.push_str(replacement),
+            None => output.push_str(&rest[start..start + 2 + end + 1]),
         }
+        rest = &after_open[end + 1..];
     }
-    replaced
+
+    output.push_str(rest);
+    output
 }

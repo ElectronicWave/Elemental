@@ -143,8 +143,7 @@ Offline authentication keeps local development simple. Use a production
 `Authorizer` for real player accounts. Authentication and launch are separate:
 obtain a `UserCredential`, build a `LaunchCommand`, optionally customize its
 arguments, then spawn it. Use `prepare_with_session()` to supply a configured
-session while the launcher finishes it, or `prepare_in_session()` when the host
-owns the session lifecycle.
+session while the launcher finishes and validates it.
 
 Inspect and reopen an existing instance without preparing it again:
 

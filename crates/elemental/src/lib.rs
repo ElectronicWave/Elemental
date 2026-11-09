@@ -49,9 +49,9 @@ pub mod prelude {
 
     #[cfg(feature = "launcher")]
     pub use crate::launcher::{
-        DriverCatalog, DriverOrigins, DriverSpec, Instance, InstancePreparation, LaunchOptions,
-        LaunchResolution, LaunchedInstance, Launcher, LauncherBuilder, LoaderSpec,
-        PreparedInstance, PreparedInstanceInfo, PreparedInstanceMetadata, QuickPlayOptions,
-        RuntimeOptions, VanillaSpec,
+        DriverCatalog, DriverOrigins, DriverSpec, Instance, LaunchOptions, LaunchResolution,
+        LaunchedInstance, Launcher, LauncherBuilder, LoaderSpec, PreparedInstance,
+        PreparedInstanceInfo, PreparedInstanceMetadata, QuickPlayOptions, RuntimeOptions,
+        VanillaSpec,
     };
 }

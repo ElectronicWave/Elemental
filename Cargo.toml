@@ -26,7 +26,6 @@ dirs = { version = "7" }
 futures = "0.3.32"
 hex = "0.4.3"
 jiff = { version = "0.2.0", features = ["serde"] }
-regex = "1.12.3"
 reqwest = { version = "0.13.1", features = ["json", "stream", "default-tls"] }
 scc = { version = "3.4.8", features = ["serde"] }
 serde = { version = "1.0.228", features = ["derive"] }

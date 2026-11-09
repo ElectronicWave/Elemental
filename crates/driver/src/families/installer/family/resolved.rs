@@ -11,8 +11,7 @@ use crate::{
     error::Result,
     families::{
         installer::{
-            InstallerArtifact, InstallerLaunchVersionRequest, InstallerStatePaths,
-            installer_has_client_processors, installer_install_status,
+            InstallerArtifact, InstallerLaunchVersionRequest, installer_has_client_processors,
             persist_installer_launch_version, prepare_installer_state,
             resolve_installer_processor_runtime, run_installer_client_processors,
             submit_installer_profile_libraries, validate_installer_profile_identity,
@@ -26,7 +25,7 @@ use crate::{
     loader_version::LoaderVersionId,
 };
 
-use super::{InstallerFamily, InstallerFamilyRemoteResolver, PreparedInstallerVersion};
+use super::{InstallerFamily, InstallerFamilyRemoteResolver};
 
 #[derive(Debug, Clone)]
 pub struct ResolvedInstallerFamilyVersion<F, L, VL>
@@ -94,8 +93,7 @@ where
         remote_resolver: &InstallerFamilyRemoteResolver<F>,
         runtime_options: &RuntimeOptions,
         runtime_resolver: &RuntimeResolver,
-    ) -> Result<PreparedInstallerVersion<L, VL>> {
-        let state_paths = InstallerStatePaths::new(&self.instance.path, F::FAMILY_NAME)?;
+    ) -> Result<PreparedVersionJsonInstance<L, VL>> {
         let libraries_root = self
             .instance
             .parent
@@ -156,23 +154,6 @@ where
             .await?;
         }
 
-        let install_status = installer_install_status(
-            &self.instance,
-            &self.installer_artifact,
-            &installer_state.install_profile,
-            launch_version.install_status.is_ready(),
-            F::FAMILY_NAME,
-        )
-        .await?;
-
-        Ok(PreparedInstallerVersion {
-            instance: self.instance.clone(),
-            install_profile: installer_state.install_profile,
-            embedded_version: installer_state.embedded_version,
-            launch_version,
-            install_status,
-            install_profile_path: state_paths.install_profile_path(),
-            embedded_version_path: state_paths.embedded_version_path(),
-        })
+        Ok(launch_version)
     }
 }

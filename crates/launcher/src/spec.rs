@@ -34,13 +34,6 @@ pub enum DriverSpec {
     NeoForge(LoaderSpec),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum DriverFlow {
-    Vanilla,
-    Profiled,
-    Installer,
-}
-
 impl DriverSpec {
     pub fn vanilla(game_version: MinecraftVersionId) -> Self {
         Self::Vanilla(VanillaSpec { game_version })
@@ -96,21 +89,6 @@ impl DriverSpec {
             _ => Err(Error::UnsupportedDriver {
                 id: loader.id.to_owned(),
             }),
-        }
-    }
-
-    pub(crate) fn flow(&self) -> DriverFlow {
-        match self {
-            Self::Vanilla(_) => DriverFlow::Vanilla,
-            Self::Fabric(_)
-            | Self::LegacyFabric(_)
-            | Self::Babric(_)
-            | Self::Quilt(_)
-            | Self::LiteLoader(_)
-            | Self::Rift(_) => DriverFlow::Profiled,
-            Self::Forge(_) | Self::Cleanroom(_) | Self::Outlands(_) | Self::NeoForge(_) => {
-                DriverFlow::Installer
-            }
         }
     }
 

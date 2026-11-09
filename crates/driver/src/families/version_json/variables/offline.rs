@@ -49,7 +49,8 @@ impl LauncherVariables {
             .iter()
             .filter(|library| library.is_allowed(&rule_context))
         {
-            let Some(artifact) = library.downloads.artifact.as_ref() else {
+            let downloads = library.downloads()?;
+            let Some(artifact) = downloads.artifact.as_ref() else {
                 continue;
             };
             if artifact.path.contains("natives") {

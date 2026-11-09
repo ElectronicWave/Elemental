@@ -9,7 +9,7 @@ use elemental_schema::{
     mojang::piston::{PistonMetaArguments, PistonMetaGenericArgument},
 };
 
-use crate::{error::Result, maven::MavenNotation};
+use crate::{error::Result, maven::MavenCoordinate};
 
 use super::{
     manifest::{LiteLoaderManifestLibrary, LiteLoaderRepositoryStream, LiteLoaderSelectedBuild},
@@ -67,7 +67,7 @@ async fn build_loader_library(
     selected: &LiteLoaderSelectedBuild,
 ) -> Result<ProfileLibrary> {
     let notation = format!("com.mumfrey:liteloader:{}", selected.build.version);
-    let parsed = MavenNotation::parse(notation.as_str(), "liteloader library")?;
+    let parsed = MavenCoordinate::parse_labeled(notation.as_str(), "liteloader library")?;
     let repository = rewritten_repository(
         endpoints,
         selected.repository.url.as_str(),
@@ -80,7 +80,7 @@ async fn build_loader_library(
     } else {
         repository.artifact_download(SafeRelativePath::parse(format!(
             "{}/{}",
-            parsed.version_directory_path()?.as_str(),
+            parsed.safe_version_directory()?.as_str(),
             selected.build.file.as_str()
         ))?)?
     };

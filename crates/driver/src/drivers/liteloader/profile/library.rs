@@ -2,7 +2,7 @@ use elemental_schema::fabric::{ProfileLibrary, ProfileLibraryArtifact, ProfileLi
 
 use crate::{
     error::{Error, Result},
-    maven::{MavenArtifactDownload, MavenNotation, MavenRepository},
+    maven::{MavenArtifactDownload, MavenCoordinate, MavenRepository},
 };
 
 use super::super::source::LiteLoaderEndpoints;
@@ -64,10 +64,10 @@ pub(super) fn rewritten_repository(
 
 pub(super) fn default_snapshot_repository(
     endpoints: &LiteLoaderEndpoints,
-    notation: &MavenNotation,
+    coordinate: &MavenCoordinate,
     library_name: &str,
 ) -> Result<MavenRepository> {
-    if notation.group() == "org.spongepowered" {
+    if coordinate.group() == "org.spongepowered" {
         return MavenRepository::parse(
             endpoints.sponge_maven_url()?.as_str(),
             "Sponge Maven repository",

@@ -1,10 +1,11 @@
-mod notation;
-mod path;
+mod artifact;
+mod coordinate;
 mod repository;
 mod snapshot;
 mod url;
 
-pub use notation::MavenNotation;
+pub use artifact::maven_library_downloads;
+pub use coordinate::MavenCoordinate;
 pub use repository::MavenRepository;
 pub use snapshot::fetch_maven_metadata;
 
@@ -13,13 +14,7 @@ use elemental_infra::SafeRelativePath;
 use crate::error::{Error, Result};
 
 pub(crate) fn validate_component(value: &str, label: &str, notation: &str) -> Result<()> {
-    let rejected = value.is_empty()
-        || value == "."
-        || value == ".."
-        || value.contains(['/', '\\', ':', '?', '#'])
-        || value.chars().any(char::is_control);
-
-    if rejected {
+    if !coordinate::is_valid_component(value) {
         return Err(Error::InvalidNotation {
             label: label.to_owned(),
             notation: notation.to_owned(),

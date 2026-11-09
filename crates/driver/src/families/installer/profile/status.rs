@@ -30,12 +30,12 @@ where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    let artifact_paths = install_profile
-        .libraries
-        .iter()
-        .flat_map(installer_library_artifacts)
-        .map(|artifact| SafeRelativePath::parse(artifact.path.as_str()))
-        .collect::<std::result::Result<Vec<SafeRelativePath>, _>>()?;
+    let mut artifact_paths = Vec::new();
+    for library in &install_profile.libraries {
+        for artifact in installer_library_artifacts(library)? {
+            artifact_paths.push(SafeRelativePath::parse(artifact.path.as_str())?);
+        }
+    }
     library_artifacts_present(&instance.parent, artifact_paths)
 }
 

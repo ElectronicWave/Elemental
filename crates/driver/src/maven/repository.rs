@@ -7,7 +7,7 @@ use crate::url::ensure_directory_url;
 
 use super::snapshot::decode_snapshot_metadata;
 use super::url::{artifact_url, ensure_http_scheme};
-use super::{MavenArtifactDownload, MavenNotation};
+use super::{MavenArtifactDownload, MavenCoordinate};
 
 #[derive(Debug, Clone)]
 pub struct MavenRepository {
@@ -47,19 +47,15 @@ impl MavenRepository {
     pub async fn resolve_snapshot_artifact(
         &self,
         client: &reqwest::Client,
-        notation: &MavenNotation,
+        coordinate: &MavenCoordinate,
     ) -> Result<MavenArtifactDownload> {
-        let version_directory = notation.version_directory_path()?;
-        let metadata_path =
-            SafeRelativePath::parse(format!("{}/maven-metadata.xml", version_directory.as_str()))?;
+        let metadata_path = coordinate.safe_metadata_path()?;
         let metadata_url = artifact_url(&self.base_url, &metadata_path)?;
         let raw_metadata =
             fetch_text(client, metadata_url.as_str(), "maven snapshot metadata").await?;
         let metadata = decode_snapshot_metadata(raw_metadata.as_str(), metadata_url)?;
-        let resolved_version = self.resolve_snapshot_version(notation, &metadata)?;
-        let file_name = notation.file_name_for_version(resolved_version.as_str())?;
-        let path =
-            SafeRelativePath::parse(format!("{}/{}", version_directory.as_str(), file_name))?;
+        let resolved_version = self.resolve_snapshot_version(coordinate, &metadata)?;
+        let path = coordinate.safe_artifact_path_for_version(resolved_version.as_str())?;
         let url = artifact_url(&self.base_url, &path)?;
 
         Ok(MavenArtifactDownload { path, url })

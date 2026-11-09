@@ -36,7 +36,7 @@ where
                 .exists(),
             version_artifacts_ready: self.version_artifacts_ready(&rule_context)?,
             assets_ready: self.assets_ready()?,
-            natives_extracted: self.version.natives_are_extracted().await,
+            natives_extracted: self.version.natives_are_extracted().await?,
         })
     }
 

@@ -44,6 +44,7 @@ pub fn merge_profile_with_behavior(
     let PistonMetaData {
         arguments: base_arguments,
         minecraft_arguments: base_minecraft_arguments,
+        client_version,
         asset_index,
         assets: base_assets,
         compliance_level,
@@ -65,6 +66,7 @@ pub fn merge_profile_with_behavior(
         arguments,
         minecraft_arguments: None,
         inherits_from: Some(profile.inherits_from),
+        client_version,
         asset_index,
         assets: profile.assets.unwrap_or(base_assets),
         compliance_level,

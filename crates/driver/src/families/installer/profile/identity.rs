@@ -3,6 +3,7 @@ use elemental_schema::forge::ForgeInstallerProfile;
 use crate::{
     error::{Error, Result},
     loader_version::LoaderVersionId,
+    maven::MavenCoordinate,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,7 +40,10 @@ impl InstallerProfileIdentity {
                     .as_ref()
                     .and_then(|legacy| legacy.path.clone())
             })
-            .and_then(|coordinate| coordinate.split(':').nth(2).map(ToOwned::to_owned))
+            .and_then(|coordinate| {
+                MavenCoordinate::parse(coordinate.as_str())
+                    .map(|parsed| parsed.version().to_owned())
+            })
             .or_else(|| install_profile.version.clone())
             .ok_or_else(|| Error::InstallerProfileLoaderVersionMissing {
                 family_name: family_name.to_owned(),

@@ -98,6 +98,9 @@ pub enum Error {
     #[error("invalid {label} notation: {notation}")]
     InvalidNotation { label: String, notation: String },
 
+    #[error("maven library '{notation}' has neither downloads nor a repository url")]
+    MavenLibraryMissingSource { notation: String },
+
     #[error("{context} must use http or https: {url}")]
     UnsupportedUrlScheme { context: String, url: String },
 

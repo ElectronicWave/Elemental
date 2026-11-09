@@ -1,6 +1,14 @@
 ## Elemental
 
-Follow CONTRIBUTING.md for information on how to contribute to this project.
+Follow CONTRIBUTING.md for information on 
+how to contribute to this project.
+
+## Compatibility
+
+- Respect vanilla configuration
+- Respect loader configuration
+- Respect other launchers' configuration
+- Avoid modifying existing files whenever possible
 
 ## Commands
 
@@ -17,6 +25,8 @@ npx -y @codacy/codacy-mcp
 ```
 
 ## Code Style
+
+`Numquam ponenda est pluralitas sine necessitate”`
 
 Prefer to use default trait functions instead of batch of little functions.
 

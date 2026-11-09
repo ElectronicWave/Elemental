@@ -36,15 +36,17 @@ where
     }
 
     fn libraries_ready(&self, rule_context: &VersionJsonRuleContext) -> Result<bool> {
-        let artifact_paths = self
+        let mut artifact_paths = Vec::new();
+        for library in self
             .metadata
             .libraries
             .iter()
             .filter(|library| library.is_allowed(rule_context))
-            .flat_map(|library| library.version_artifacts(rule_context.platform()))
-            .flatten()
-            .map(|artifact| SafeRelativePath::parse(artifact.path.as_str()))
-            .collect::<std::result::Result<Vec<SafeRelativePath>, _>>()?;
+        {
+            for artifact in library.version_artifacts(rule_context.platform())? {
+                artifact_paths.push(SafeRelativePath::parse(artifact.path.as_str())?);
+            }
+        }
         library_artifacts_present(&self.version.parent, artifact_paths)
     }
 

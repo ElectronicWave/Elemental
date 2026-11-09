@@ -17,6 +17,8 @@ struct EmbeddedVersionData {
     minecraft_arguments: Option<String>,
     #[serde(rename = "inheritsFrom", default)]
     inherits_from: Option<String>,
+    #[serde(rename = "clientVersion", default)]
+    client_version: Option<String>,
     #[serde(rename = "assetIndex", default)]
     asset_index: Option<PistonMetaAssetIndex>,
     #[serde(default)]
@@ -67,6 +69,7 @@ where
         arguments: base_arguments,
         minecraft_arguments: base_minecraft_arguments,
         inherits_from,
+        client_version,
         asset_index,
         assets,
         compliance_level,
@@ -92,6 +95,7 @@ where
         arguments,
         minecraft_arguments,
         inherits_from: embedded.inherits_from.or(inherits_from),
+        client_version: embedded.client_version.or(client_version),
         asset_index: embedded.asset_index.unwrap_or(asset_index),
         assets: embedded.assets.unwrap_or(assets),
         compliance_level: embedded.compliance_level.unwrap_or(compliance_level),

@@ -8,6 +8,7 @@ use elemental_core::minecraft::MinecraftVersionId;
 use elemental_schema::fabric::ProfileJson;
 use elemental_schema::mojang::piston::PistonMetaData;
 
+use crate::families::version_json::PistonMetaDataExt;
 use crate::inspect::LibraryPrefixSet;
 use crate::loader_version::LoaderVersionId;
 use crate::{
@@ -125,10 +126,7 @@ impl FabricFlavorSpec {
             return false;
         }
 
-        let base_game_version = metadata
-            .inherits_from
-            .as_deref()
-            .unwrap_or(metadata.id.as_str());
+        let base_game_version = metadata.game_version();
 
         match self.kind {
             FabricFlavorKind::Fabric => {

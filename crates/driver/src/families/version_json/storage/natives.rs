@@ -24,18 +24,16 @@ use self::{
     },
 };
 
-pub(super) async fn natives_are_extracted<L, VL>(storage: &Storage<VL, Storage<L>>) -> bool
+pub(super) async fn natives_are_extracted<L, VL>(
+    storage: &Storage<VL, Storage<L>>,
+) -> Result<bool>
 where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    let Some(expected) = expected_natives(storage) else {
-        return false;
-    };
-    let Ok(store) = natives_state_store(&storage.path).await else {
-        return false;
-    };
-    natives_state_matches(&store.cloned().await.value, &expected)
+    let expected = expected_natives(storage)?;
+    let store = natives_state_store(&storage.path).await?;
+    Ok(natives_state_matches(&store.cloned().await.value, &expected))
 }
 
 pub(super) async fn extract_natives<L, VL>(storage: &Storage<VL, Storage<L>>) -> Result<()>
@@ -71,8 +69,9 @@ where
     VL: VersionJsonInstanceLayout,
 {
     tokio::task::block_in_place(|| {
-        native_source_artifacts(metadata, rule_context)
-            .try_for_each(|artifact| extract_native_library(storage, artifact, destination))?;
+        for artifact in native_source_artifacts(metadata, rule_context)? {
+            extract_native_library(storage, &artifact, destination)?;
+        }
         NativesDirectory::new(destination).flatten_binaries()
     })
 }

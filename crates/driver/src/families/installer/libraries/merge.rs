@@ -2,6 +2,8 @@ use std::collections::HashSet;
 
 use elemental_schema::mojang::piston::PistonMetaLibraries;
 
+use crate::maven::MavenCoordinate;
+
 pub fn merge_libraries_prefer_embedded(
     base_libraries: Vec<PistonMetaLibraries>,
     embedded_libraries: Vec<PistonMetaLibraries>,
@@ -31,19 +33,22 @@ pub fn merge_libraries_prefer_embedded(
 
 fn library_identity_key(library: &PistonMetaLibraries) -> String {
     let notation = library.name.as_str();
-    let (coordinates, extension) = notation.split_once('@').unwrap_or((notation, "jar"));
-    let mut segments = coordinates.splitn(4, ':');
-    let (Some(group), Some(artifact), Some(_version)) =
-        (segments.next(), segments.next(), segments.next())
-    else {
+    let Some(coordinate) = MavenCoordinate::parse(notation) else {
         return notation.to_owned();
     };
 
-    match segments.next() {
-        Some(classifier) if !classifier.contains(':') => {
-            format!("{group}:{artifact}:{classifier}@{extension}")
-        }
-        Some(_) => notation.to_owned(),
-        None => format!("{group}:{artifact}@{extension}"),
+    match coordinate.classifier() {
+        Some(classifier) => format!(
+            "{}:{}:{classifier}@{}",
+            coordinate.group(),
+            coordinate.artifact(),
+            coordinate.extension()
+        ),
+        None => format!(
+            "{}:{}@{}",
+            coordinate.group(),
+            coordinate.artifact(),
+            coordinate.extension()
+        ),
     }
 }

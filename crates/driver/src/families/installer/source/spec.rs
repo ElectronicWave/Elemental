@@ -5,9 +5,10 @@ use elemental_infra::SafeRelativePath;
 
 use crate::{
     catalog::LoaderRelease,
-    error::Result,
+    error::{Error, Result},
     families::installer::InstallerMavenArtifactSpec,
     loader_version::LoaderVersionId,
+    maven::MavenCoordinate,
     url::{Origin, OriginEndpoints},
 };
 
@@ -16,29 +17,38 @@ pub trait MavenSpec: Clone + Debug + Send + Sync + 'static {
 
     const SOURCE_NAME: &'static str;
     const MAVEN_ORIGIN: Self::Origin;
-    const GROUP_PATH: &'static str;
-    const COORDINATE_GROUP: &'static str;
+    const GROUP: &'static str;
     const ARTIFACT: &'static str;
 
     fn version(game_version: &MinecraftVersionId, loader_version: &LoaderVersionId) -> String {
         format!("{}-{}", game_version.as_str(), loader_version.as_str())
     }
 
-    fn metadata_path() -> String {
-        format!(
-            "/{}/{}/maven-metadata.xml",
-            Self::GROUP_PATH,
-            Self::ARTIFACT
-        )
+    fn coordinate(version: &str) -> Result<MavenCoordinate> {
+        let notation = format!("{}:{}:{version}", Self::GROUP, Self::ARTIFACT);
+        MavenCoordinate::parse(&notation).ok_or_else(|| Error::InvalidNotation {
+            label: Self::SOURCE_NAME.to_owned(),
+            notation,
+        })
     }
 
-    fn artifact_path(version: &str) -> String {
-        format!(
-            "/{}/{}/{version}/{}-{version}-installer.jar",
-            Self::GROUP_PATH,
-            Self::ARTIFACT,
-            Self::ARTIFACT,
-        )
+    fn metadata_path() -> Result<String> {
+        let directory = MavenCoordinate::artifact_directory_path_for(Self::GROUP, Self::ARTIFACT)
+            .ok_or_else(|| Error::InvalidNotation {
+            label: Self::SOURCE_NAME.to_owned(),
+            notation: format!("{}:{}", Self::GROUP, Self::ARTIFACT),
+        })?;
+        Ok(format!("/{directory}/maven-metadata.xml"))
+    }
+
+    fn installer_coordinate(version: &str) -> Result<MavenCoordinate> {
+        let coordinate = Self::coordinate(version)?;
+        coordinate
+            .with_classifier("installer")
+            .ok_or_else(|| Error::InvalidNotation {
+                label: Self::SOURCE_NAME.to_owned(),
+                notation: coordinate.to_string(),
+            })
     }
 
     fn installer_artifact(
@@ -47,15 +57,12 @@ pub trait MavenSpec: Clone + Debug + Send + Sync + 'static {
         loader_version: &LoaderVersionId,
     ) -> Result<InstallerMavenArtifactSpec> {
         let version = Self::version(game_version, loader_version);
-        let artifact_path = Self::artifact_path(&version);
+        let coordinate = Self::installer_coordinate(&version)?;
+        let artifact_path = coordinate.artifact_path();
         Ok(InstallerMavenArtifactSpec {
-            coordinate: format!(
-                "{}:{}:{version}:installer",
-                Self::COORDINATE_GROUP,
-                Self::ARTIFACT
-            ),
+            coordinate: coordinate.to_string(),
             download_url: endpoints.resolve(Self::MAVEN_ORIGIN, &artifact_path)?,
-            relative_path: SafeRelativePath::parse(artifact_path.trim_start_matches('/'))?,
+            relative_path: SafeRelativePath::parse(artifact_path)?,
         })
     }
 

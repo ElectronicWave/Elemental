@@ -40,8 +40,7 @@ impl RetroFuturaCatalog for OutlandsRetroFutura {
 
     const ORIGIN: OutlandsOrigin = OutlandsOrigin;
     const SOURCE_NAME: &'static str = "Outlands source";
-    const GROUP_PATH: &'static str = "top/outlands";
-    const COORDINATE_GROUP: &'static str = "top.outlands";
+    const GROUP: &'static str = "top.outlands";
     const ARTIFACT: &'static str = "outlands";
     const GAME_VERSION: &'static str = OUTLANDS_GAME_VERSION;
     const RELEASE_DESCRIPTION: &'static str = OUTLANDS_RELEASE_DESCRIPTION;

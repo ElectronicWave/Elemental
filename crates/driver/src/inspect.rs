@@ -11,6 +11,7 @@ pub use profile_id::ProfileIdPattern;
 use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::driver::{DriverDescriptor, InstalledDriver};
+use crate::maven::MavenCoordinate;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LibraryPrefixSet {
@@ -36,7 +37,9 @@ impl LibraryPrefixSet {
             .iter()
             .map(|library| library.name.as_str())
             .find(|name| self.matches_name(name))
-            .and_then(|name| name.split(':').nth(2).map(ToOwned::to_owned))
+            .and_then(|name| {
+                MavenCoordinate::parse(name).map(|coordinate| coordinate.version().to_owned())
+            })
     }
 
     pub fn installed_driver(

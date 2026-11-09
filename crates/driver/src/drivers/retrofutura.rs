@@ -21,8 +21,7 @@ pub trait RetroFuturaCatalog: Copy + std::fmt::Debug + Send + Sync + 'static {
 
     const ORIGIN: Self::Origin;
     const SOURCE_NAME: &'static str;
-    const GROUP_PATH: &'static str;
-    const COORDINATE_GROUP: &'static str;
+    const GROUP: &'static str;
     const ARTIFACT: &'static str;
     const GAME_VERSION: &'static str;
     const RELEASE_DESCRIPTION: &'static str;
@@ -42,8 +41,7 @@ where
 
     const SOURCE_NAME: &'static str = C::SOURCE_NAME;
     const MAVEN_ORIGIN: C::Origin = C::ORIGIN;
-    const GROUP_PATH: &'static str = C::GROUP_PATH;
-    const COORDINATE_GROUP: &'static str = C::COORDINATE_GROUP;
+    const GROUP: &'static str = C::GROUP;
     const ARTIFACT: &'static str = C::ARTIFACT;
 
     fn version(_game_version: &MinecraftVersionId, loader_version: &LoaderVersionId) -> String {

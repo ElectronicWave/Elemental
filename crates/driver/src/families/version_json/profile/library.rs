@@ -1,13 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
 use elemental_schema::fabric::{
-    ProfileLibrary, ProfileLibraryArtifact, ProfileLibraryDownloads,
-    ProfileLogging,
+    ProfileLibrary, ProfileLibraryArtifact, ProfileLibraryDownloads, ProfileLogging,
 };
 use elemental_schema::mojang::piston::{
     PistonMetaLibraries, PistonMetaLibrariesDownloads, PistonMetaLibrariesDownloadsArtifact,
-    PistonMetaLibrariesExtract, PistonMetaLogging, PistonMetaLoggingSide,
-    PistonMetaLoggingSideFile,
+    PistonMetaLibrariesExtract, PistonMetaLibrariesSource, PistonMetaLogging,
+    PistonMetaLoggingSide, PistonMetaLoggingSideFile,
 };
 
 use crate::error::Result;
@@ -67,8 +66,11 @@ fn profile_library_to_piston(profile_library: ProfileLibrary) -> Result<PistonMe
     };
 
     Ok(PistonMetaLibraries {
-        downloads,
         name,
+        source: PistonMetaLibrariesSource::Downloads {
+            downloads,
+            extra: serde_json::Map::new(),
+        },
         natives,
         rules: None,
         extract: extract.map(|extract| PistonMetaLibrariesExtract {

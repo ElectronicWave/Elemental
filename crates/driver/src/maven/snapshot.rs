@@ -5,8 +5,7 @@ use serde::Deserialize;
 use crate::error::{Error, Result};
 use crate::http::fetch_text;
 
-use super::MavenNotation;
-use super::validate_component;
+use super::{MavenCoordinate, validate_component};
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct SnapshotMavenMetadata {
@@ -36,24 +35,25 @@ struct SnapshotArtifactVersion {
     value: String,
 }
 
-impl MavenNotation {
-    fn matches_snapshot_artifact(&self, artifact: &SnapshotArtifactVersion) -> bool {
-        artifact.extension.as_str() == self.extension.as_str()
-            && artifact.classifier.as_deref() == self.classifier.as_deref()
-    }
+fn matches_snapshot_artifact(
+    coordinate: &MavenCoordinate,
+    artifact: &SnapshotArtifactVersion,
+) -> bool {
+    artifact.extension.as_str() == coordinate.extension()
+        && artifact.classifier.as_deref() == coordinate.classifier()
 }
 
 impl super::MavenRepository {
     pub(crate) fn resolve_snapshot_version(
         &self,
-        notation: &MavenNotation,
+        coordinate: &MavenCoordinate,
         metadata: &SnapshotMavenMetadata,
     ) -> Result<String> {
         if let Some(artifact) = metadata
             .versioning
             .snapshot_versions
             .iter()
-            .find(|artifact| notation.matches_snapshot_artifact(artifact))
+            .find(|artifact| matches_snapshot_artifact(coordinate, artifact))
         {
             validate_component(
                 artifact.value.as_str(),
@@ -82,7 +82,7 @@ impl super::MavenRepository {
             ));
         }
 
-        Ok(notation.version().to_owned())
+        Ok(coordinate.version().to_owned())
     }
 }
 

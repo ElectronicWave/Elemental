@@ -41,8 +41,7 @@ impl RetroFuturaCatalog for CleanroomRetroFutura {
 
     const ORIGIN: CleanroomOrigin = CleanroomOrigin;
     const SOURCE_NAME: &'static str = "cleanroom source";
-    const GROUP_PATH: &'static str = "com/cleanroommc";
-    const COORDINATE_GROUP: &'static str = "com.cleanroommc";
+    const GROUP: &'static str = "com.cleanroommc";
     const ARTIFACT: &'static str = "cleanroom";
     const GAME_VERSION: &'static str = CLEANROOM_GAME_VERSION;
     const RELEASE_DESCRIPTION: &'static str = CLEANROOM_RELEASE_DESCRIPTION;

@@ -76,7 +76,7 @@ where
     const SOURCE_NAME: &'static str = S::SOURCE_NAME;
 
     fn maven_metadata_url(&self) -> Result<String> {
-        self.resolve(&S::metadata_path())
+        self.resolve(&S::metadata_path()?)
     }
 
     fn installer_artifact_spec(

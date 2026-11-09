@@ -20,7 +20,7 @@ pub trait VersionJsonVersionStorageExt {
 
     fn metadata(&self) -> Result<PistonMetaData>;
     async fn write_metadata(&self, metadata: &PistonMetaData) -> Result<()>;
-    async fn natives_are_extracted(&self) -> bool;
+    async fn natives_are_extracted(&self) -> Result<bool>;
     async fn extract_natives(&self) -> Result<()>;
 }
 
@@ -45,7 +45,7 @@ where
         Ok(())
     }
 
-    async fn natives_are_extracted(&self) -> bool {
+    async fn natives_are_extracted(&self) -> Result<bool> {
         natives::natives_are_extracted(self).await
     }
 

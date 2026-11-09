@@ -11,11 +11,19 @@ mod libraries;
 pub use libraries::PistonMetaLibrariesExt;
 
 pub trait PistonMetaDataExt {
+    fn game_version(&self) -> &str;
     fn jvm_arguments(&self, context: &VersionJsonRuleContext) -> Vec<String>;
     fn game_arguments(&self, context: &VersionJsonRuleContext) -> Result<Vec<String>>;
 }
 
 impl PistonMetaDataExt for PistonMetaData {
+    fn game_version(&self) -> &str {
+        self.inherits_from
+            .as_deref()
+            .or(self.client_version.as_deref())
+            .unwrap_or(self.id.as_str())
+    }
+
     fn jvm_arguments(&self, context: &VersionJsonRuleContext) -> Vec<String> {
         self.arguments
             .as_ref()

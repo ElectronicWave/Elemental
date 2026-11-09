@@ -25,17 +25,16 @@ where
         if !library.is_allowed(&self.rule_context) {
             return Ok(Vec::new());
         }
-        library
-            .version_artifacts(self.rule_context.platform())
+        let artifacts = library.version_artifacts(self.rule_context.platform())?;
+        artifacts
             .into_iter()
-            .flatten()
             .map(|artifact| self.plan_library_artifact_task(artifact))
             .collect()
     }
 
     fn plan_library_artifact_task(
         &self,
-        artifact: &PistonMetaLibrariesDownloadsArtifact,
+        artifact: PistonMetaLibrariesDownloadsArtifact,
     ) -> Result<DownloadTask> {
         let mut task = DownloadTask::new(
             self.remote_resolver

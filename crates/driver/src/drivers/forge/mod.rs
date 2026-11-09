@@ -32,8 +32,7 @@ impl MavenSpec for ForgeSpec {
 
     const SOURCE_NAME: &'static str = "forge source";
     const MAVEN_ORIGIN: ForgeOrigin = ForgeOrigin;
-    const GROUP_PATH: &'static str = "net/minecraftforge";
-    const COORDINATE_GROUP: &'static str = "net.minecraftforge";
+    const GROUP: &'static str = "net.minecraftforge";
     const ARTIFACT: &'static str = "forge";
 
     fn release(version: String) -> Option<(MinecraftVersionId, LoaderRelease)> {

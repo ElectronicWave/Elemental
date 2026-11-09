@@ -6,6 +6,7 @@ use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::descriptors::from_id;
 use crate::error::{Error, Result};
+use crate::families::version_json::PistonMetaDataExt;
 use crate::inspect::InstanceProbe;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,11 +56,7 @@ impl InstalledDriver {
         Self {
             driver: descriptor,
             driver_version,
-            game_version: metadata
-                .inherits_from
-                .clone()
-                .or_else(|| Some(metadata.id.clone()))
-                .map(MinecraftVersionId::from),
+            game_version: Some(MinecraftVersionId::from(metadata.game_version())),
             description: Some(metadata.release_type.clone()),
         }
     }

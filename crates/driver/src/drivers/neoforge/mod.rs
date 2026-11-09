@@ -34,8 +34,7 @@ impl MavenSpec for NeoForgeSpec {
 
     const SOURCE_NAME: &'static str = "neoforge source";
     const MAVEN_ORIGIN: NeoForgeOrigin = NeoForgeOrigin;
-    const GROUP_PATH: &'static str = "net/neoforged";
-    const COORDINATE_GROUP: &'static str = "net.neoforged";
+    const GROUP: &'static str = "net.neoforged";
     const ARTIFACT: &'static str = "neoforge";
 
     fn version(_game_version: &MinecraftVersionId, loader_version: &LoaderVersionId) -> String {

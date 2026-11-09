@@ -2,7 +2,7 @@ use elemental_schema::fabric::ProfileLibrary;
 
 use crate::{
     error::{Error, Result},
-    maven::MavenNotation,
+    maven::MavenCoordinate,
 };
 
 use super::super::manifest::{LiteLoaderLibraryResolution, LiteLoaderManifestLibrary};
@@ -17,8 +17,8 @@ pub(super) async fn normalize_manifest_library(
     endpoints: &LiteLoaderEndpoints,
     library: LiteLoaderManifestLibrary,
 ) -> Result<ProfileLibrary> {
-    let notation = MavenNotation::parse(library.name.as_str(), "liteloader library")?;
-    if let Some(repository) = fixed_library_repository(endpoints, notation.group())? {
+    let coordinate = MavenCoordinate::parse_labeled(library.name.as_str(), "liteloader library")?;
+    if let Some(repository) = fixed_library_repository(endpoints, coordinate.group())? {
         return Ok(profile_library_with_repository(
             library.name,
             &repository,
@@ -28,7 +28,7 @@ pub(super) async fn normalize_manifest_library(
 
     let repository = match (library.resolution, library.url.is_empty()) {
         (LiteLoaderLibraryResolution::Snapshot, true) => {
-            default_snapshot_repository(endpoints, &notation, library.name.as_str())?
+            default_snapshot_repository(endpoints, &coordinate, library.name.as_str())?
         }
         (_, false) => {
             rewritten_repository(endpoints, library.url.as_str(), "liteloader repository")?
@@ -42,7 +42,7 @@ pub(super) async fn normalize_manifest_library(
     let artifact = if library.resolution == LiteLoaderLibraryResolution::Snapshot {
         Some(
             repository
-                .resolve_snapshot_artifact(client, &notation)
+                .resolve_snapshot_artifact(client, &coordinate)
                 .await?,
         )
     } else {

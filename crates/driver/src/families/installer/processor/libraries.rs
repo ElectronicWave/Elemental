@@ -53,31 +53,29 @@ where
     let mut seen = HashSet::new();
     let mut tasks = Vec::new();
 
-    for artifact in install_profile
-        .libraries
-        .iter()
-        .flat_map(installer_library_artifacts)
-    {
-        let relative_path = SafeRelativePath::parse(artifact.path.as_str())?;
-        let path = instance
-            .parent
-            .try_get_resource(VersionJsonRootResource::Libraries(Some(relative_path)))?;
+    for library in &install_profile.libraries {
+        for artifact in installer_library_artifacts(library)? {
+            let relative_path = SafeRelativePath::parse(artifact.path.as_str())?;
+            let path = instance
+                .parent
+                .try_get_resource(VersionJsonRootResource::Libraries(Some(relative_path)))?;
 
-        if !seen.insert(path.clone()) {
-            continue;
-        }
+            if !seen.insert(path.clone()) {
+                continue;
+            }
 
-        let mut task = DownloadTask::new(
-            artifact_url(artifact.url.as_str(), artifact.path.as_str())?,
-            path,
-        );
-        if let Some(size) = artifact.size {
-            task = task.size(size as u64);
+            let mut task = DownloadTask::new(
+                artifact_url(artifact.url.as_str(), artifact.path.as_str())?,
+                path,
+            );
+            if let Some(size) = artifact.size {
+                task = task.size(size as u64);
+            }
+            if let Some(sha1) = &artifact.sha1 {
+                task = task.sha1(sha1.clone());
+            }
+            tasks.push(task);
         }
-        if let Some(sha1) = &artifact.sha1 {
-            task = task.sha1(sha1.clone());
-        }
-        tasks.push(task);
     }
 
     Ok(tasks)

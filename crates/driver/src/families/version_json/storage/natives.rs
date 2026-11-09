@@ -24,16 +24,27 @@ use self::{
     },
 };
 
-pub(super) async fn natives_are_extracted<L, VL>(
-    storage: &Storage<VL, Storage<L>>,
-) -> Result<bool>
+pub(super) async fn natives_are_extracted<L, VL>(storage: &Storage<VL, Storage<L>>) -> Result<bool>
 where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
     let expected = expected_natives(storage)?;
+    if expected.native_artifacts.is_empty() {
+        return Ok(true);
+    }
+
     let store = natives_state_store(&storage.path).await?;
-    Ok(natives_state_matches(&store.cloned().await.value, &expected))
+    if natives_state_matches(&store.cloned().await.value, &expected) {
+        return Ok(true);
+    }
+
+    if !expected.destination.is_dir() {
+        return Ok(false);
+    }
+
+    extract_natives(storage).await?;
+    Ok(true)
 }
 
 pub(super) async fn extract_natives<L, VL>(storage: &Storage<VL, Storage<L>>) -> Result<()>
@@ -90,6 +101,6 @@ where
         .parent
         .try_get_resource(VersionJsonRootResource::Libraries(Some(path)))?;
     JarFile::new(source)
-        .extract_blocking(destination)
+        .extract_missing_blocking(destination, NativesDirectory::is_binary)
         .map_err(Error::from)
 }

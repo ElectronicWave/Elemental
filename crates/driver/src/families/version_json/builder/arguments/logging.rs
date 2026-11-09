@@ -4,7 +4,7 @@ use elemental_infra::SafeRelativePath;
 use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::{
-    error::{Error, Result},
+    error::Result,
     families::version_json::{VersionJsonRootLayout, VersionJsonRootResource},
 };
 
@@ -34,9 +34,7 @@ where
         )?)),
     )?;
     if !log_config_path.exists() {
-        return Err(Error::LoggingConfigMissing {
-            path: log_config_path,
-        });
+        return Ok(None);
     }
 
     Ok(Some(builder.inner.apply_with(

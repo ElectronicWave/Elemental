@@ -14,7 +14,6 @@ default = []
 
 [dependencies]
 async-trait = { workspace = true }
-const_format = { version = "0.2.35" }
 dirs = { workspace = true }
 elemental-schema = { path = "../schema", version = "0.2.0" }
 futures = { workspace = true }

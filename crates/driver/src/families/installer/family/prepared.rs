@@ -41,7 +41,7 @@ where
             remote_resolver,
             instance.clone(),
         )?
-        .into_prepared()
+        .finish_preparation()
         .await?;
         let install_status = installer_install_status(
             &resolved_version.instance,

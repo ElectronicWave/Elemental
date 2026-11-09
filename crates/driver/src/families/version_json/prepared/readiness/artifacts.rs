@@ -5,8 +5,8 @@ use crate::{
     error::Result,
     families::version_json::{
         PistonMetaLibrariesExt, VersionJsonInstanceLayout, VersionJsonInstanceResource,
-        VersionJsonRemoteResolver, VersionJsonRootLayout, VersionJsonRootResource,
-        VersionJsonRuleContext, storage::library_artifacts_present,
+        VersionJsonRemoteResolver, VersionJsonRootLayout, VersionJsonRuleContext,
+        storage::library_artifacts_present,
     },
 };
 
@@ -32,7 +32,7 @@ where
         if !self.libraries_ready(rule_context)? {
             return Ok(false);
         }
-        self.logging_config_ready()
+        Ok(true)
     }
 
     fn libraries_ready(&self, rule_context: &VersionJsonRuleContext) -> Result<bool> {
@@ -48,23 +48,5 @@ where
             }
         }
         library_artifacts_present(&self.version.parent, artifact_paths)
-    }
-
-    fn logging_config_ready(&self) -> Result<bool> {
-        let Some(client) = self
-            .metadata
-            .logging
-            .as_ref()
-            .and_then(|logging| logging.client.as_ref())
-        else {
-            return Ok(true);
-        };
-        Ok(self
-            .version
-            .parent
-            .try_get_resource(VersionJsonRootResource::AssetLogConfigs(Some(
-                SafeRelativePath::parse(client.file.id.as_str())?,
-            )))?
-            .exists())
     }
 }

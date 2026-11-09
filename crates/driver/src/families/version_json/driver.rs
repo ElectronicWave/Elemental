@@ -108,7 +108,7 @@ where
         VL: VersionJsonInstanceLayout + Clone,
     {
         ResolvedVersionJsonInstance::load(self.remote_resolver(), instance.clone())?
-            .into_prepared()
+            .finish_preparation()
             .await
     }
 }

@@ -39,6 +39,30 @@ impl<P: AsRef<Path>> JarFile<P> {
         Ok(())
     }
 
+    pub fn extract_missing_blocking<S, F>(&self, dest: &S, include: F) -> Result<()>
+    where
+        S: AsRef<OsStr> + ?Sized,
+        F: Fn(&Path) -> bool,
+    {
+        let file = File::open(&self.path)?;
+        let mut archive = ZipArchive::new(file)?;
+        let destination = Path::new(dest);
+        extract_entries_blocking(&mut archive, destination, |relative_path| {
+            if relative_path.starts_with("META-INF") || !include(relative_path) {
+                return None;
+            }
+
+            let file_name = relative_path.file_name()?;
+            if destination.join(file_name).exists() {
+                return None;
+            }
+
+            Some(PathBuf::from(file_name))
+        })?;
+
+        Ok(())
+    }
+
     pub fn by_name_bytes(&self, name: &str) -> Result<Vec<u8>> {
         let file = File::open(&self.path)?;
         read_archive_entry_bytes(file, name)

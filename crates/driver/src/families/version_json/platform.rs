@@ -22,4 +22,8 @@ impl VersionJsonPlatform {
     pub fn arch(&self) -> &str {
         &self.arch
     }
+
+    pub fn natives_dir_name(&self) -> String {
+        format!("natives-{}-{}", self.os, self.arch)
+    }
 }

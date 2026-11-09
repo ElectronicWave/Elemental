@@ -102,7 +102,7 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for VanillaDriver {
         VL: VersionJsonInstanceLayout + Clone,
     {
         ResolvedVanillaVersion::load(self.source.endpoints().clone(), instance.clone())?
-            .into_prepared()
+            .finish_preparation()
             .await
     }
 }

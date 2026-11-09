@@ -20,7 +20,7 @@ impl<'a> NativesDirectory<'a> {
         for (path, file_name) in self.binaries()? {
             let name = file_name.to_string_lossy().into_owned();
             let target = self.root.join(&name);
-            if target != path {
+            if target != path && !target.exists() {
                 std::fs::copy(&path, &target).map_err(|source| Error::CopyNativeBinary {
                     source_path: path,
                     target_path: target,
@@ -51,7 +51,7 @@ impl<'a> NativesDirectory<'a> {
         Ok(files)
     }
 
-    fn is_binary(path: &Path) -> bool {
+    pub(super) fn is_binary(path: &Path) -> bool {
         path.extension()
             .and_then(|extension| extension.to_str())
             .is_some_and(|extension| {

@@ -19,8 +19,8 @@ use crate::{
 };
 
 pub(super) struct NativesExpectation {
-    destination: PathBuf,
-    native_artifacts: Vec<String>,
+    pub(super) destination: PathBuf,
+    pub(super) native_artifacts: Vec<String>,
 }
 
 pub(super) fn expected_natives<L, VL>(

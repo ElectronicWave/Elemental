@@ -1,28 +1,34 @@
-use std::sync::LazyLock;
-
-use regex::Regex;
-
 use crate::error::{Error, Result};
 
 use super::context::InstallerProcessorContext;
 
 mod archive;
 
-static VARIABLE_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\{([^}]+)\}").expect("processor variable regex is valid"));
-
 impl InstallerProcessorContext<'_> {
     pub(super) async fn resolve_argument(&self, value: &str) -> Result<String> {
-        let mut resolved = value.to_owned();
+        let mut resolved = String::with_capacity(value.len());
+        let mut rest = value;
 
-        for capture in VARIABLE_PATTERN.captures_iter(value) {
-            let Some(key) = capture.get(1).map(|group| group.as_str()) else {
-                continue;
+        while let Some(start) = rest.find('{') {
+            resolved.push_str(&rest[..start]);
+            let after_open = &rest[start + 1..];
+            let Some(end) = after_open.find('}') else {
+                resolved.push_str(&rest[start..]);
+                rest = "";
+                break;
             };
+            let key = &after_open[..end];
+            if key.is_empty() {
+                resolved.push('{');
+                rest = after_open;
+                continue;
+            }
             let replacement = self.resolve_variable(key).await?;
-            resolved = resolved.replace(&format!("{{{key}}}"), replacement.as_str());
+            resolved.push_str(replacement.as_str());
+            rest = &after_open[end + 1..];
         }
 
+        resolved.push_str(rest);
         self.materialize_data_value(resolved.as_str()).await
     }
 

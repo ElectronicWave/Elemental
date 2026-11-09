@@ -25,9 +25,6 @@ pub enum Error {
     LoaderVersionRequired { driver: String },
 
     #[error(transparent)]
-    Regex(#[from] regex::Error),
-
-    #[error(transparent)]
     Infra(#[from] elemental_infra::error::Error),
 
     #[error(transparent)]

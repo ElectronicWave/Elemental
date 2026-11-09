@@ -301,8 +301,25 @@ where
     }
 
     fn resolve_driver(&self, desc: DriverDescriptor) -> Result<Box<dyn Driver<L, VL>>> {
-        Ok(match desc {
-            VANILLA_DRIVER => Box::new(self.vanilla_driver()),
+        if desc == VANILLA_DRIVER {
+            return Ok(Box::new(self.vanilla_driver()));
+        }
+        if let Some(driver) = self.resolve_profiled_driver(desc)? {
+            return Ok(driver);
+        }
+        if let Some(driver) = self.resolve_installer_driver(desc)? {
+            return Ok(driver);
+        }
+        Err(Error::UnsupportedDriver {
+            id: desc.id.to_owned(),
+        })
+    }
+
+    fn resolve_profiled_driver(
+        &self,
+        desc: DriverDescriptor,
+    ) -> Result<Option<Box<dyn Driver<L, VL>>>> {
+        Ok(Some(match desc {
             FABRIC_DRIVER => {
                 Box::new(self.profiled_driver(FabricDriverFamily::new(FabricFlavor::Fabric))?)
             }
@@ -315,16 +332,21 @@ where
             QUILT_DRIVER => Box::new(self.profiled_driver(QuiltDriverFamily)?),
             LITELOADER_DRIVER => Box::new(self.profiled_driver(LiteLoaderDriverFamily)?),
             RIFT_DRIVER => Box::new(self.profiled_driver(RiftDriverFamily)?),
+            _ => return Ok(None),
+        }))
+    }
+
+    fn resolve_installer_driver(
+        &self,
+        desc: DriverDescriptor,
+    ) -> Result<Option<Box<dyn Driver<L, VL>>>> {
+        Ok(Some(match desc {
             FORGE_DRIVER => Box::new(self.installer_driver::<ForgeFamily>()?),
             CLEANROOM_DRIVER => Box::new(self.installer_driver::<CleanroomDriverSpec>()?),
             OUTLANDS_DRIVER => Box::new(self.installer_driver::<OutlandsDriverSpec>()?),
             NEOFORGE_DRIVER => Box::new(self.installer_driver::<NeoForgeFamily>()?),
-            _ => {
-                return Err(Error::UnsupportedDriver {
-                    id: desc.id.to_owned(),
-                });
-            }
-        })
+            _ => return Ok(None),
+        }))
     }
 }
 

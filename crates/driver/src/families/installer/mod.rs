@@ -15,7 +15,7 @@ pub use artifact::{
 pub use driver::InstallerFamilyDriver;
 pub use family::{
     InstallerArtifactEndpoints, InstallerArtifactSource, InstallerFamily,
-    InstallerFamilyInstallStatus, InstallerFamilyRemoteResolver, PreparedInstallerVersion,
+    InstallerFamilyInstallStatus, InstallerFamilyRemoteResolver,
     ResolvedInstallerFamilyLaunchVersion, ResolvedInstallerFamilyMetadata,
     ResolvedInstallerFamilyVersion,
 };
@@ -32,7 +32,7 @@ pub use profile::{
     load_persisted_installer_state, persist_installer_launch_version, prepare_installer_state,
 };
 pub(crate) use profile::{
-    InstallerStatePaths, installer_install_status, profile_game_and_raw_loader_version,
+    installer_install_status, profile_game_and_raw_loader_version,
     resolve_installer_processor_runtime, validate_installer_profile_identity,
 };
 pub use source::{

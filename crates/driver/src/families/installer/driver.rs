@@ -2,26 +2,20 @@ use std::marker::PhantomData;
 
 use crate::error::Result;
 use async_trait::async_trait;
-use elemental_core::{
-    minecraft::MinecraftVersionId,
-    runtime::RuntimeResolver,
-    storage::{Storage, layout::Layout},
-};
-use elemental_infra::downloader::DownloadSession;
+use elemental_core::storage::{Storage, layout::Layout};
 
 use crate::{
-    driver::{Driver, DriverDescriptor, InstalledDriver},
+    driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest},
     drivers::vanilla::source::VanillaSource,
     families::{
         installer::{
-            InstallerFamily, InstallerFamilyRemoteResolver, PreparedInstallerVersion,
-            ResolvedInstallerFamilyVersion,
+            InstallerFamily, InstallerFamilyRemoteResolver, ResolvedInstallerFamilyVersion,
         },
-        version_json::{VersionJsonInstanceLayout, VersionJsonRootLayout},
+        version_json::{
+            PreparedVersionJsonInstance, VersionJsonInstanceLayout, VersionJsonRootLayout,
+        },
     },
     inspect::InstanceProbe,
-    launch::RuntimeOptions,
-    loader_version::LoaderVersionId,
 };
 
 #[derive(Debug, Clone)]
@@ -55,51 +49,6 @@ where
         F::descriptor()
     }
 
-    pub async fn prepare_with_runtime<L, VL>(
-        &self,
-        session: &DownloadSession,
-        instance: &Storage<VL, Storage<L>>,
-        game_version: MinecraftVersionId,
-        loader_version: LoaderVersionId,
-        runtime_options: &RuntimeOptions,
-        runtime_resolver: &RuntimeResolver,
-    ) -> Result<PreparedInstallerVersion<L, VL>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
-        ResolvedInstallerFamilyVersion::new(
-            self.source.clone(),
-            instance.clone(),
-            game_version,
-            loader_version,
-        )?
-        .prepare(
-            session,
-            &self.vanilla_source,
-            &self.remote_resolver(),
-            runtime_options,
-            runtime_resolver,
-        )
-        .await
-    }
-
-    pub async fn load_prepared<L, VL>(
-        &self,
-        instance: &Storage<VL, Storage<L>>,
-    ) -> Result<PreparedInstallerVersion<L, VL>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
-        ResolvedInstallerFamilyVersion::load(
-            self.source.clone(),
-            self.remote_resolver(),
-            instance.clone(),
-        )
-        .await
-    }
-
     fn remote_resolver(&self) -> InstallerFamilyRemoteResolver<F> {
         InstallerFamilyRemoteResolver::new(
             self.vanilla_source.endpoints().clone(),
@@ -118,7 +67,7 @@ where
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl<F, L, VL> Driver<L, VL> for InstallerFamilyDriver<F>
 where
     F: InstallerFamily,
@@ -136,5 +85,46 @@ where
         };
 
         Ok(F::IDENTITY.inspect_installed(metadata))
+    }
+
+    async fn prepare(
+        &self,
+        request: &PrepareRequest<'_, L, VL>,
+    ) -> Result<PreparedVersionJsonInstance<L, VL>>
+    where
+        L: VersionJsonRootLayout + Clone,
+        VL: VersionJsonInstanceLayout + Clone,
+    {
+        let loader_version = request.required_loader_version(self.descriptor())?;
+        ResolvedInstallerFamilyVersion::new(
+            self.source.clone(),
+            request.instance.clone(),
+            request.game_version.clone(),
+            loader_version.clone(),
+        )?
+        .prepare(
+            request.session,
+            &self.vanilla_source,
+            &self.remote_resolver(),
+            request.runtime_options,
+            request.runtime_resolver,
+        )
+        .await
+    }
+
+    async fn load_prepared(
+        &self,
+        instance: &Storage<VL, Storage<L>>,
+    ) -> Result<PreparedVersionJsonInstance<L, VL>>
+    where
+        L: VersionJsonRootLayout + Clone,
+        VL: VersionJsonInstanceLayout + Clone,
+    {
+        ResolvedInstallerFamilyVersion::load(
+            self.source.clone(),
+            self.remote_resolver(),
+            instance.clone(),
+        )
+        .await
     }
 }

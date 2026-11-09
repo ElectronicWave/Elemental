@@ -21,6 +21,9 @@ pub enum Error {
     #[error("unsupported driver id: '{id}'")]
     UnsupportedDriver { id: String },
 
+    #[error("driver '{driver}' requires a loader version")]
+    LoaderVersionRequired { driver: String },
+
     #[error(transparent)]
     Regex(#[from] regex::Error),
 

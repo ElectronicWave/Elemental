@@ -1,16 +1,11 @@
 use crate::error::Result;
 use async_trait::async_trait;
-use elemental_core::{
-    minecraft::MinecraftVersionId,
-    storage::{Storage, layout::Layout},
-};
-use elemental_infra::downloader::DownloadSession;
+use elemental_core::storage::{Storage, layout::Layout};
 
 use crate::{
-    driver::{Driver, DriverDescriptor, InstalledDriver},
+    driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest},
     drivers::vanilla::source::VanillaSource,
     inspect::InstanceProbe,
-    loader_version::LoaderVersionId,
 };
 
 use super::{
@@ -59,43 +54,13 @@ where
         self.family.descriptor()
     }
 
-    pub async fn prepare<L, VL>(
-        &self,
-        session: &DownloadSession,
-        instance: &Storage<VL, Storage<L>>,
-        game_version: MinecraftVersionId,
-        loader_version: LoaderVersionId,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
-        self.resolve_or_load(instance, game_version, loader_version)
-            .await?
-            .prepare(session)
-            .await
-    }
-
-    pub async fn load_prepared<L, VL>(
-        &self,
-        instance: &Storage<VL, Storage<L>>,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
-        ResolvedVersionJsonInstance::load(self.remote_resolver(), instance.clone())?
-            .into_prepared()
-            .await
-    }
-
     fn remote_resolver(&self) -> F::RemoteResolver {
         self.family
             .remote_resolver(&self.vanilla_source, &self.source)
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl<F, L, VL> Driver<L, VL> for ProfiledVersionJsonDriver<F>
 where
     F: ProfiledVersionJsonFamily,
@@ -113,5 +78,37 @@ where
         };
 
         Ok(self.family.inspect_installed(metadata))
+    }
+
+    async fn prepare(
+        &self,
+        request: &PrepareRequest<'_, L, VL>,
+    ) -> Result<PreparedVersionJsonInstance<L, VL>>
+    where
+        L: VersionJsonRootLayout + Clone,
+        VL: VersionJsonInstanceLayout + Clone,
+    {
+        let loader_version = request.required_loader_version(self.descriptor())?;
+        self.resolve_or_load(
+            request.instance,
+            request.game_version.clone(),
+            loader_version.clone(),
+        )
+        .await?
+        .prepare(request.session)
+        .await
+    }
+
+    async fn load_prepared(
+        &self,
+        instance: &Storage<VL, Storage<L>>,
+    ) -> Result<PreparedVersionJsonInstance<L, VL>>
+    where
+        L: VersionJsonRootLayout + Clone,
+        VL: VersionJsonInstanceLayout + Clone,
+    {
+        ResolvedVersionJsonInstance::load(self.remote_resolver(), instance.clone())?
+            .into_prepared()
+            .await
     }
 }

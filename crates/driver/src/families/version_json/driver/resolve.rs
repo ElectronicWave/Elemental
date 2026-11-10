@@ -6,8 +6,8 @@ use crate::{
 };
 
 use super::super::{
-    ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata, VersionJsonInstanceLayout,
-    VersionJsonRootLayout, family::ProfiledVersionJsonFamily,
+    ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata, VersionJsonDownloadStatus,
+    VersionJsonInstanceLayout, VersionJsonRootLayout, family::ProfiledVersionJsonFamily,
 };
 use super::ProfiledVersionJsonDriver;
 
@@ -20,7 +20,10 @@ where
         instance: &Storage<VL, Storage<L>>,
         game_version: MinecraftVersionId,
         loader_version: LoaderVersionId,
-    ) -> Result<ResolvedVersionJsonInstance<F::RemoteResolver, L, VL>>
+    ) -> Result<(
+        ResolvedVersionJsonInstance<F::RemoteResolver, L, VL>,
+        Option<VersionJsonDownloadStatus>,
+    )>
     where
         L: VersionJsonRootLayout + Clone,
         VL: VersionJsonInstanceLayout + Clone,
@@ -28,7 +31,7 @@ where
         if let Ok(resolved) =
             ResolvedVersionJsonInstance::load(self.remote_resolver(), instance.clone())
         {
-            let status = resolved.status().await?;
+            let status = resolved.download_status().await?;
             if status.is_downloaded()
                 && !self.family.local_metadata_needs_refresh(
                     &resolved.metadata,
@@ -36,14 +39,16 @@ where
                     &loader_version,
                 )
             {
-                return Ok(resolved);
+                return Ok((resolved, Some(status)));
             }
         }
 
-        self.resolve_metadata(game_version, loader_version)
+        let resolved = self
+            .resolve_metadata(game_version, loader_version)
             .await?
             .persist(instance)
-            .await
+            .await?;
+        Ok((resolved, None))
     }
 
     async fn resolve_metadata(

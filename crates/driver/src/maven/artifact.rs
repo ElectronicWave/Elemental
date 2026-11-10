@@ -14,6 +14,7 @@ pub fn maven_library_downloads(
     sha1: Option<String>,
     size: Option<usize>,
     natives: Option<&HashMap<String, String>>,
+    arch_bits: &str,
 ) -> Result<PistonMetaLibrariesDownloads> {
     let repository = MavenRepository::parse(repository_url, "maven repository")?;
 
@@ -23,16 +24,16 @@ pub fn maven_library_downloads(
             natives
                 .values()
                 .map(|classifier| {
-                    let classifier_coordinate =
-                        coordinate.with_classifier(classifier).ok_or_else(|| {
-                            Error::InvalidNotation {
-                                label: "maven classifier".to_owned(),
-                                notation: classifier.clone(),
-                            }
+                    let classifier = classifier.replace("${arch}", arch_bits);
+                    let classifier_coordinate = coordinate
+                        .with_classifier(classifier.as_str())
+                        .ok_or_else(|| Error::InvalidNotation {
+                            label: "maven classifier".to_owned(),
+                            notation: classifier.clone(),
                         })?;
                     let artifact = maven_artifact(&repository, &classifier_coordinate, None, None)?;
 
-                    Ok((classifier.clone(), artifact))
+                    Ok((classifier, artifact))
                 })
                 .collect::<Result<HashMap<_, _>>>()
         })

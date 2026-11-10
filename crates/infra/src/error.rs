@@ -11,6 +11,9 @@ pub enum Error {
     #[error("failed to read ZIP archive: {0}")]
     Zip(#[from] zip::result::ZipError),
 
+    #[error("ZIP symlink '{entry}' points outside the destination directory: {target}")]
+    ZipSymlinkEscapesDestination { entry: String, target: String },
+
     #[error("archive entry is not valid UTF-8: {0}")]
     Utf8(#[from] std::string::FromUtf8Error),
 

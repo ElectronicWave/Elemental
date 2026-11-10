@@ -66,6 +66,13 @@ where
 
     pub async fn into_prepared(self) -> Result<PreparedVersionJsonInstance<L, VL>> {
         let status = self.status().await?;
+        self.into_prepared_with_status(status).await
+    }
+
+    async fn into_prepared_with_status(
+        self,
+        status: VersionJsonInstallStatus,
+    ) -> Result<PreparedVersionJsonInstance<L, VL>> {
         if !status.is_ready() {
             let version = self
                 .version

@@ -7,4 +7,4 @@ pub use instance::{
     PreparedVersionJsonInstance, ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata,
 };
 pub use planner::VersionJsonInstallPlanner;
-pub use status::VersionJsonInstallStatus;
+pub use status::{VersionJsonDownloadStatus, VersionJsonInstallStatus};

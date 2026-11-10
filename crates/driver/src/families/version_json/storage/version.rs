@@ -20,8 +20,10 @@ pub trait VersionJsonVersionStorageExt {
 
     fn metadata(&self) -> Result<PistonMetaData>;
     async fn write_metadata(&self, metadata: &PistonMetaData) -> Result<()>;
-    async fn natives_are_extracted(&self) -> Result<bool>;
-    async fn extract_natives(&self) -> Result<()>;
+    async fn natives_are_extracted_with_metadata(&self, metadata: &PistonMetaData) -> Result<bool>;
+    async fn ensure_natives_extracted_with_metadata(&self, metadata: &PistonMetaData)
+    -> Result<()>;
+    async fn extract_natives_with_metadata(&self, metadata: &PistonMetaData) -> Result<()>;
 }
 
 #[async_trait(?Send)]
@@ -45,11 +47,18 @@ where
         Ok(())
     }
 
-    async fn natives_are_extracted(&self) -> Result<bool> {
-        natives::natives_are_extracted(self).await
+    async fn natives_are_extracted_with_metadata(&self, metadata: &PistonMetaData) -> Result<bool> {
+        natives::natives_are_extracted_with_metadata(self, metadata).await
     }
 
-    async fn extract_natives(&self) -> Result<()> {
-        natives::extract_natives(self).await
+    async fn ensure_natives_extracted_with_metadata(
+        &self,
+        metadata: &PistonMetaData,
+    ) -> Result<()> {
+        natives::ensure_natives_extracted_with_metadata(self, metadata).await
+    }
+
+    async fn extract_natives_with_metadata(&self, metadata: &PistonMetaData) -> Result<()> {
+        natives::extract_natives_with_metadata(self, metadata).await
     }
 }

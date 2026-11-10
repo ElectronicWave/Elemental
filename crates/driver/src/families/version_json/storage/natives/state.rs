@@ -9,7 +9,6 @@ use elemental_schema::mojang::piston::{PistonMetaData, PistonMetaLibrariesDownlo
 use crate::{
     error::Result,
     families::version_json::{
-        VersionJsonVersionStorageExt,
         extensions::PistonMetaLibrariesExt,
         layout::{VersionJsonInstanceLayout, VersionJsonRootLayout},
         resource::VersionJsonInstanceResource,
@@ -23,20 +22,25 @@ pub(super) struct NativesExpectation {
     pub(super) native_artifacts: Vec<String>,
 }
 
+pub(super) struct NativeLibrarySource {
+    pub(super) artifact: PistonMetaLibrariesDownloadsArtifact,
+    pub(super) exclude: Vec<String>,
+}
+
 pub(super) fn expected_natives<L, VL>(
     storage: &Storage<VL, Storage<L>>,
+    metadata: &PistonMetaData,
 ) -> Result<NativesExpectation>
 where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    let metadata = VersionJsonVersionStorageExt::metadata(storage)?;
     let rule_context = VersionJsonRuleContext::current();
     let destination = storage.try_get_resource(VersionJsonInstanceResource::Natives)?;
 
     Ok(NativesExpectation {
         destination,
-        native_artifacts: collect_native_artifact_paths(&metadata, &rule_context)?,
+        native_artifacts: collect_native_artifact_paths(metadata, &rule_context)?,
     })
 }
 
@@ -83,27 +87,40 @@ fn collect_native_artifact_paths(
     metadata: &PistonMetaData,
     rule_context: &VersionJsonRuleContext,
 ) -> Result<Vec<String>> {
-    let mut paths = native_source_artifacts(metadata, rule_context)?
+    let mut paths = native_library_sources(metadata, rule_context)?
         .into_iter()
-        .map(|artifact| artifact.path)
+        .map(|source| source.artifact.path)
         .collect::<Vec<String>>();
     paths.sort();
     paths.dedup();
     Ok(paths)
 }
 
-pub(super) fn native_source_artifacts(
+pub(super) fn native_library_sources(
     metadata: &PistonMetaData,
     rule_context: &VersionJsonRuleContext,
-) -> Result<Vec<PistonMetaLibrariesDownloadsArtifact>> {
-    let mut artifacts = Vec::new();
+) -> Result<Vec<NativeLibrarySource>> {
+    let mut sources = Vec::new();
     for library in metadata
         .libraries
         .iter()
         .filter(|library| library.is_allowed(rule_context))
     {
-        artifacts.extend(library.native_source_artifacts(rule_context.platform())?);
+        let exclude = library
+            .extract
+            .as_ref()
+            .map(|extract| extract.exclude.clone())
+            .unwrap_or_default();
+        sources.extend(
+            library
+                .native_source_artifacts(rule_context.platform())?
+                .into_iter()
+                .map(|artifact| NativeLibrarySource {
+                    artifact,
+                    exclude: exclude.clone(),
+                }),
+        );
     }
 
-    Ok(artifacts)
+    Ok(sources)
 }

@@ -14,7 +14,13 @@ use super::super::{PistonMetaRulesExt, VersionJsonPlatform, VersionJsonRuleConte
 
 pub trait PistonMetaLibrariesExt {
     fn is_allowed(&self, context: &VersionJsonRuleContext) -> bool;
-    fn downloads(&self) -> Result<Cow<'_, PistonMetaLibrariesDownloads>>;
+    fn downloads(&self) -> Result<Cow<'_, PistonMetaLibrariesDownloads>> {
+        self.downloads_for(&VersionJsonPlatform::current())
+    }
+    fn downloads_for(
+        &self,
+        platform: &VersionJsonPlatform,
+    ) -> Result<Cow<'_, PistonMetaLibrariesDownloads>>;
     fn version_artifacts(
         &self,
         platform: &VersionJsonPlatform,
@@ -33,7 +39,10 @@ impl PistonMetaLibrariesExt for PistonMetaLibraries {
             .unwrap_or(true)
     }
 
-    fn downloads(&self) -> Result<Cow<'_, PistonMetaLibrariesDownloads>> {
+    fn downloads_for(
+        &self,
+        platform: &VersionJsonPlatform,
+    ) -> Result<Cow<'_, PistonMetaLibrariesDownloads>> {
         match &self.source {
             PistonMetaLibrariesSource::Downloads { downloads, .. } => Ok(Cow::Borrowed(downloads)),
             PistonMetaLibrariesSource::Maven {
@@ -53,6 +62,7 @@ impl PistonMetaLibrariesExt for PistonMetaLibraries {
                     sha1.clone(),
                     *size,
                     self.natives.as_ref(),
+                    platform.arch_bits(),
                 )
                 .map(Cow::Owned)
             }
@@ -63,7 +73,7 @@ impl PistonMetaLibrariesExt for PistonMetaLibraries {
         &self,
         platform: &VersionJsonPlatform,
     ) -> Result<Vec<PistonMetaLibrariesDownloadsArtifact>> {
-        let downloads = self.downloads()?;
+        let downloads = self.downloads_for(platform)?;
         Ok(downloads
             .artifact
             .iter()
@@ -80,7 +90,7 @@ impl PistonMetaLibrariesExt for PistonMetaLibraries {
         &self,
         platform: &VersionJsonPlatform,
     ) -> Result<Vec<PistonMetaLibrariesDownloadsArtifact>> {
-        let downloads = self.downloads()?;
+        let downloads = self.downloads_for(platform)?;
         Ok(
             classifiers_native_artifact(&downloads, self.natives.as_ref(), platform)
                 .into_iter()
@@ -97,16 +107,24 @@ fn classifiers_native_artifact<'a>(
     platform: &VersionJsonPlatform,
 ) -> Option<&'a PistonMetaLibrariesDownloadsArtifact> {
     let classifiers = downloads.classifiers.as_ref()?;
-    let natives = natives?;
+    let descriptors = platform.native_descriptors();
 
-    if let Some(key) = natives.get(platform.os()) {
-        return classifiers.get(key);
+    if let Some(natives) = natives {
+        for descriptor in &descriptors {
+            let Some(classifier) = natives.get(descriptor) else {
+                continue;
+            };
+            let classifier = classifier.replace("${arch}", platform.arch_bits());
+            if let Some(artifact) = classifiers.get(&classifier) {
+                return Some(artifact);
+            }
+        }
     }
 
-    if platform.os() == "macos"
-        && let Some(key) = natives.get("osx")
-    {
-        return classifiers.get(key);
+    for descriptor in &descriptors {
+        if let Some(artifact) = classifiers.get(descriptor) {
+            return Some(artifact);
+        }
     }
 
     None
@@ -117,10 +135,10 @@ fn native_artifact<'a>(
     platform: &VersionJsonPlatform,
 ) -> Option<&'a PistonMetaLibrariesDownloadsArtifact> {
     let artifact = downloads.artifact.as_ref()?;
-    if artifact
-        .path
-        .ends_with(&format!("-natives-{}.jar", platform.os()))
-        || platform.os() == "macos" && artifact.path.ends_with("-natives-osx.jar")
+    if platform
+        .native_os_names()
+        .iter()
+        .any(|os| artifact.path.ends_with(&format!("-natives-{os}.jar")))
     {
         return Some(artifact);
     }

@@ -18,50 +18,63 @@ use crate::{
 };
 
 use self::{
-    directory::NativesDirectory,
+    directory::{NativesDirectory, relative_path_key},
     state::{
-        expected_natives, native_source_artifacts, natives_state_matches, record_natives_state,
+        expected_natives, native_library_sources, natives_state_matches, record_natives_state,
     },
 };
 
-pub(super) async fn natives_are_extracted<L, VL>(storage: &Storage<VL, Storage<L>>) -> Result<bool>
+pub(super) async fn natives_are_extracted_with_metadata<L, VL>(
+    storage: &Storage<VL, Storage<L>>,
+    metadata: &PistonMetaData,
+) -> Result<bool>
 where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    let expected = expected_natives(storage)?;
+    let expected = expected_natives(storage, metadata)?;
     if expected.native_artifacts.is_empty() {
         return Ok(true);
     }
 
     let store = natives_state_store(&storage.path).await?;
-    if natives_state_matches(&store.cloned().await.value, &expected) {
-        return Ok(true);
-    }
-
-    if !expected.destination.is_dir() {
-        return Ok(false);
-    }
-
-    extract_natives(storage).await?;
-    Ok(true)
+    Ok(natives_state_matches(
+        &store.cloned().await.value,
+        &expected,
+    ))
 }
 
-pub(super) async fn extract_natives<L, VL>(storage: &Storage<VL, Storage<L>>) -> Result<()>
+pub(super) async fn ensure_natives_extracted_with_metadata<L, VL>(
+    storage: &Storage<VL, Storage<L>>,
+    metadata: &PistonMetaData,
+) -> Result<()>
 where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    let metadata = super::VersionJsonVersionStorageExt::metadata(storage)?;
+    if natives_are_extracted_with_metadata(storage, metadata).await? {
+        return Ok(());
+    }
+
+    extract_natives_with_metadata(storage, metadata).await
+}
+
+pub(super) async fn extract_natives_with_metadata<L, VL>(
+    storage: &Storage<VL, Storage<L>>,
+    metadata: &PistonMetaData,
+) -> Result<()>
+where
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+{
     let destination = storage.try_get_resource(VersionJsonInstanceResource::Natives)?;
     let rule_context = VersionJsonRuleContext::current();
     std::fs::create_dir_all(&destination)?;
 
-    let extracted_files =
-        extract_native_libraries(storage, &metadata, &destination, &rule_context)?;
+    let extracted_files = extract_native_libraries(storage, metadata, &destination, &rule_context)?;
     record_natives_state(
         storage,
-        &metadata,
+        metadata,
         &destination,
         &rule_context,
         extracted_files,
@@ -80,10 +93,10 @@ where
     VL: VersionJsonInstanceLayout,
 {
     tokio::task::block_in_place(|| {
-        for artifact in native_source_artifacts(metadata, rule_context)? {
-            extract_native_library(storage, &artifact, destination)?;
+        for source in native_library_sources(metadata, rule_context)? {
+            extract_native_library(storage, &source.artifact, destination, &source.exclude)?;
         }
-        NativesDirectory::new(destination).flatten_binaries()
+        NativesDirectory::new(destination).binary_paths()
     })
 }
 
@@ -91,6 +104,7 @@ fn extract_native_library<L, VL>(
     storage: &Storage<VL, Storage<L>>,
     artifact: &PistonMetaLibrariesDownloadsArtifact,
     destination: &Path,
+    exclude: &[String],
 ) -> Result<()>
 where
     L: VersionJsonRootLayout,
@@ -101,6 +115,17 @@ where
         .parent
         .try_get_resource(VersionJsonRootResource::Libraries(Some(path)))?;
     JarFile::new(source)
-        .extract_missing_blocking(destination, NativesDirectory::is_binary)
+        .extract_missing_blocking(destination, |relative_path| {
+            NativesDirectory::is_binary(relative_path)
+                && !is_excluded_relative_path(relative_path, exclude)
+        })
+        .map(|_| ())
         .map_err(Error::from)
+}
+
+fn is_excluded_relative_path(relative_path: &Path, exclude: &[String]) -> bool {
+    let relative_path = relative_path_key(relative_path);
+    exclude
+        .iter()
+        .any(|excluded| relative_path.starts_with(excluded))
 }

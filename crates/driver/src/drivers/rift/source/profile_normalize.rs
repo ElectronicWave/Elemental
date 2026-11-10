@@ -6,6 +6,7 @@ use crate::{error::Result, inspect::ProfileIdPattern, maven::MavenCoordinate};
 
 use super::endpoints::RiftEndpoints;
 use super::release::RiftRelease;
+use super::with_trailing_slash;
 
 const RIFT_PROFILE_ID: ProfileIdPattern = ProfileIdPattern::new("-rift-");
 
@@ -39,7 +40,6 @@ pub(super) fn normalize_profile_json(
 
     Ok(profile)
 }
-
 fn normalize_profile_library(
     library: ProfileLibrary,
     endpoints: &RiftEndpoints,
@@ -52,7 +52,7 @@ fn normalize_profile_library(
     if library.url == "http://repo1.maven.org/maven2/" {
         let maven_central_url = endpoints.maven_central_url()?;
         return Ok(ProfileLibrary {
-            url: ensure_trailing_slash(maven_central_url.as_str()),
+            url: with_trailing_slash(maven_central_url.as_str()),
             ..library
         });
     }
@@ -102,7 +102,7 @@ fn build_rift_mixin_library(endpoints: &RiftEndpoints) -> Result<ProfileLibrary>
 
     Ok(ProfileLibrary {
         name: coordinate.to_string(),
-        url: ensure_trailing_slash(sponge_maven_url.as_str()),
+        url: with_trailing_slash(sponge_maven_url.as_str()),
         downloads: Some(ProfileLibraryDownloads {
             artifact: Some(ProfileLibraryArtifact {
                 path: artifact_path,
@@ -120,12 +120,4 @@ fn build_rift_mixin_library(endpoints: &RiftEndpoints) -> Result<ProfileLibrary>
 fn is_rift_loader_library(library_name: &str) -> bool {
     library_name.starts_with("org.dimdev:rift:")
         || library_name.starts_with("com.github.Chocohead:Rift:")
-}
-
-fn ensure_trailing_slash(url: &str) -> String {
-    if url.is_empty() || url.ends_with('/') {
-        return url.to_owned();
-    }
-
-    format!("{url}/")
 }

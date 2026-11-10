@@ -4,7 +4,7 @@ use elemental_infra::SafeRelativePath;
 use reqwest::Url;
 
 use super::Origin;
-use super::util::{ensure_directory_url, ensure_http_url, trim_trailing_slash};
+use super::util::{require_http_scheme, trim_trailing_slash, with_directory_path};
 use crate::error::{Error, Result};
 
 #[derive(Debug, Clone)]
@@ -23,7 +23,7 @@ impl<O: Origin> Default for OriginPolicy<O> {
 impl<O: Origin> OriginPolicy<O> {
     pub fn new(overrides: HashMap<O, Url>) -> Result<Self> {
         for url in overrides.values() {
-            ensure_http_url(url, "origin override")?;
+            require_http_scheme(url, "origin override")?;
         }
         Ok(Self { overrides })
     }
@@ -37,7 +37,7 @@ impl<O: Origin> OriginPolicy<O> {
         let url = Url::parse(&raw_url).map_err(move |source| {
             Error::invalid_url("parse origin override failed", raw_url, source)
         })?;
-        ensure_http_url(&url, "origin override")?;
+        require_http_scheme(&url, "origin override")?;
         self.overrides.insert(origin, url);
         Ok(())
     }
@@ -62,7 +62,7 @@ impl<O: Origin> OriginPolicy<O> {
             })?,
         };
 
-        ensure_directory_url(url)
+        with_directory_path(url)
     }
 
     pub fn resolve(&self, origin: O, path: &str) -> Result<String> {

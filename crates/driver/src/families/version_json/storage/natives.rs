@@ -24,7 +24,7 @@ use self::{
     },
 };
 
-pub(crate) async fn natives_are_extracted_with_metadata<L, VL>(
+pub(crate) async fn natives_are_extracted<L, VL>(
     storage: &Storage<VL, Storage<L>>,
     metadata: &PistonMetaData,
 ) -> Result<bool>
@@ -44,7 +44,7 @@ where
     ))
 }
 
-pub(crate) async fn ensure_natives_extracted_with_metadata<L, VL>(
+pub(crate) async fn ensure_natives_extracted<L, VL>(
     storage: &Storage<VL, Storage<L>>,
     metadata: &PistonMetaData,
 ) -> Result<()>
@@ -52,7 +52,7 @@ where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    if natives_are_extracted_with_metadata(storage, metadata).await? {
+    if natives_are_extracted(storage, metadata).await? {
         return Ok(());
     }
 

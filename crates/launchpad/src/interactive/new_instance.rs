@@ -63,7 +63,7 @@ impl DriverContext {
         })
     }
 
-    async fn ensure_game_versions(&mut self) -> Result<()> {
+    async fn load_game_versions_once(&mut self) -> Result<()> {
         if !self.game_versions.is_empty() {
             return Ok(());
         }
@@ -171,7 +171,7 @@ impl NewInstanceWizard {
             .driver
             .as_mut()
             .context("driver is missing from the wizard state")?;
-        driver.ensure_game_versions().await?;
+        driver.load_game_versions_once().await?;
 
         let defaults = driver.defaults;
         let starting_cursor = driver.game_version_cursor(self.game_version.as_ref());

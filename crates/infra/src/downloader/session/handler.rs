@@ -124,7 +124,7 @@ impl SessionHandler {
         self.workers.wait().await;
     }
 
-    pub(crate) async fn ensure_success(&self) -> crate::error::Result<()> {
+    pub(crate) async fn wait_and_require_success(&self) -> crate::error::Result<()> {
         let _submission_guard = self.submission.lock().await;
         self.wait_idle().await;
         self.build_report().success()

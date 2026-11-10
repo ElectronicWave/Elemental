@@ -179,7 +179,10 @@ where
         driver: DriverSpec,
         runtime_options: &RuntimeOptions,
     ) -> Result<PreparedInstance<L, VL>> {
-        let instance = self.ensure_instance(instance_name).await?;
+        let instance = self
+            .game_storage()
+            .ensure_instance(instance_name, self.instance_layout.clone())
+            .await?;
         let resolved_driver = self.resolve_driver(driver.descriptor())?;
         let prepared = resolved_driver
             .prepare(&PrepareRequest {
@@ -260,16 +263,6 @@ where
 
     fn game_storage(&self) -> LauncherGameStorage<L> {
         Storage::new(self.storage_root.clone(), self.root_layout.clone())
-    }
-
-    async fn ensure_instance(
-        &self,
-        instance_name: String,
-    ) -> Result<LauncherInstanceStorage<L, VL>> {
-        Ok(self
-            .game_storage()
-            .ensure_instance(instance_name, self.instance_layout.clone())
-            .await?)
     }
 
     fn instance(&self, instance_name: String) -> Result<LauncherInstanceStorage<L, VL>> {

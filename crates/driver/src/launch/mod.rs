@@ -26,7 +26,7 @@ where
 
     if let Some(distribution) = runtime_options.runtime_override.as_ref() {
         distribution
-            .ensure_compatible(required_major_version, runtime_options.runtime_validation)?;
+            .require_compatible(required_major_version, runtime_options.runtime_validation)?;
         return Ok(distribution.clone());
     }
 

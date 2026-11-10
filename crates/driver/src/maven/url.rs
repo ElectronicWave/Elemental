@@ -17,14 +17,3 @@ pub(crate) fn artifact_url(base_url: &Url, artifact_path: &SafeRelativePath) -> 
         })
         .map(|url| url.to_string())
 }
-
-pub(crate) fn ensure_http_scheme(url: &Url, context: impl Into<String>) -> Result<()> {
-    if matches!(url.scheme(), "http" | "https") {
-        return Ok(());
-    }
-
-    Err(Error::UnsupportedUrlScheme {
-        context: context.into(),
-        url: url.to_string(),
-    })
-}

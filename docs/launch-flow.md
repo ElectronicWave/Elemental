@@ -45,7 +45,7 @@ flowchart TD
     U --> V
 
     J --> V
-    V --> W[ensure_natives_extracted_with_metadata]
+    V --> W[ensure_natives_extracted]
     W --> X{State matches?}
     X -->|Yes| Y[Skip extraction]
     X -->|No| Z[Extract missing binaries]
@@ -140,7 +140,7 @@ descriptor. Vanilla is probed last so a Fabric, Forge, or other specific driver
 can claim the instance first.
 
 ```rust
-// crates/launcher/src/launcher.rs:401
+// crates/launcher/src/launcher.rs:394
 fn inspect_drivers(&self) -> Result<Vec<Box<dyn Driver<L, VL>>>> {
     [
         FABRIC_DRIVER,
@@ -175,7 +175,10 @@ pub(crate) async fn prepare_in_session(
     runtime_options: &RuntimeOptions,
 ) -> Result<PreparedInstance<L, VL>> {
     // Create or locate the instance directory before any driver work.
-    let instance = self.ensure_instance(instance_name).await?;
+    let instance = self
+        .game_storage()
+        .ensure_instance(instance_name, self.instance_layout.clone())
+        .await?;
     // Translate the user-facing driver spec into a concrete driver.
     let resolved_driver = self.resolve_driver(driver.descriptor())?;
     let prepared = resolved_driver
@@ -421,8 +424,7 @@ pub async fn download_status(&self) -> Result<VersionJsonDownloadStatus> {
 pub async fn status(&self) -> Result<VersionJsonInstallStatus> {
     let download_status = self.download_status().await?;
     // Reuse the metadata already held in memory instead of re-reading the JSON.
-    let natives_extracted =
-        natives_are_extracted_with_metadata(&self.version, &self.metadata).await?;
+    let natives_extracted = natives_are_extracted(&self.version, &self.metadata).await?;
     Ok(download_status.with_natives_extracted(natives_extracted))
 }
 ```
@@ -430,7 +432,7 @@ pub async fn status(&self) -> Result<VersionJsonInstallStatus> {
 Artifact checks are presence-based, not content-based:
 
 ```rust
-// crates/driver/src/families/version_json/prepared/readiness/artifacts.rs:20
+// crates/driver/src/families/version_json/prepared/readiness/artifacts.rs:21
 pub(super) fn version_artifacts_ready(
     &self,
     rule_context: &VersionJsonRuleContext,
@@ -469,7 +471,7 @@ fn libraries_ready(&self, rule_context: &VersionJsonRuleContext) -> Result<bool>
 ```
 
 Every asset object is checked by existence only
-(`crates/driver/src/families/version_json/prepared/readiness.rs:49`).
+(`crates/driver/src/families/version_json/prepared/readiness.rs:48`).
 
 ### Why There Is No Forced SHA1 Check
 
@@ -486,7 +488,7 @@ Natives are handled during `finish_preparation`, after downloads and before the
 carried forward, so artifact and asset existence is not scanned again.
 
 ```rust
-// crates/driver/src/families/version_json/prepared/instance/prepare.rs:22
+// crates/driver/src/families/version_json/prepared/instance/prepare.rs:21
 pub async fn prepare(
     self,
     session: &DownloadSession,
@@ -495,7 +497,7 @@ pub async fn prepare(
     self.prepare_with_download_status(session, None).await
 }
 
-// crates/driver/src/families/version_json/prepared/instance/prepare.rs:29
+// crates/driver/src/families/version_json/prepared/instance/prepare.rs:28
 pub(crate) async fn prepare_with_download_status(
     self,
     session: &DownloadSession,
@@ -505,14 +507,14 @@ pub(crate) async fn prepare_with_download_status(
         // Reuse the scan performed by resolve_or_load when it is complete.
         Some(status) if status.is_downloaded() => status,
         // Otherwise compute once, download if needed, then compute again.
-        _ => self.ensure_downloaded(session).await?,
+        _ => self.download_missing(session).await?,
     };
     self.finish_preparation_with_download_status(download_status)
         .await
 }
 
-// crates/driver/src/families/version_json/prepared/instance/prepare.rs:42
-async fn ensure_downloaded(
+// crates/driver/src/families/version_json/prepared/instance/prepare.rs:41
+async fn download_missing(
     &self,
     session: &DownloadSession,
 ) -> Result<VersionJsonDownloadStatus> {
@@ -526,7 +528,7 @@ async fn ensure_downloaded(
     self.download_status().await
 }
 
-// crates/driver/src/families/version_json/prepared/instance/prepare.rs:62
+// crates/driver/src/families/version_json/prepared/instance/prepare.rs:61
 pub async fn finish_preparation(self) -> Result<PreparedVersionJsonInstance<L, VL>> {
     // Local-only and installer paths enter here without a cached status.
     let download_status = self.download_status().await?;
@@ -534,13 +536,13 @@ pub async fn finish_preparation(self) -> Result<PreparedVersionJsonInstance<L, V
         .await
 }
 
-// crates/driver/src/families/version_json/prepared/instance/prepare.rs:68
+// crates/driver/src/families/version_json/prepared/instance/prepare.rs:67
 async fn finish_preparation_with_download_status(
     self,
     download_status: VersionJsonDownloadStatus,
 ) -> Result<PreparedVersionJsonInstance<L, VL>> {
     // Exactly one natives state comparison; no repeated asset scan.
-    ensure_natives_extracted_with_metadata(&self.version, &self.metadata).await?;
+    ensure_natives_extracted(&self.version, &self.metadata).await?;
     // Extraction success proves natives are present, so no second scan.
     self.into_prepared_with_status(download_status.with_natives_extracted(true))
         .await
@@ -549,7 +551,7 @@ async fn finish_preparation_with_download_status(
 
 ```rust
 // crates/driver/src/families/version_json/storage/natives.rs:27
-pub(super) async fn natives_are_extracted_with_metadata<L, VL>(
+pub(crate) async fn natives_are_extracted<L, VL>(
     storage: &Storage<VL, Storage<L>>,
     metadata: &PistonMetaData,
 ) -> Result<bool> {
@@ -568,12 +570,12 @@ pub(super) async fn natives_are_extracted_with_metadata<L, VL>(
 }
 
 // crates/driver/src/families/version_json/storage/natives.rs:47
-pub(super) async fn ensure_natives_extracted_with_metadata<L, VL>(
+pub(crate) async fn ensure_natives_extracted<L, VL>(
     storage: &Storage<VL, Storage<L>>,
     metadata: &PistonMetaData,
 ) -> Result<()> {
     // Fast path: a matching state record avoids filesystem extraction.
-    if natives_are_extracted_with_metadata(storage, metadata).await? {
+    if natives_are_extracted(storage, metadata).await? {
         return Ok(());
     }
     extract_natives_with_metadata(storage, metadata).await
@@ -677,7 +679,7 @@ where
     if let Some(distribution) = runtime_options.runtime_override.as_ref() {
         // Overrides are validated for compatibility before use.
         distribution
-            .ensure_compatible(required_major_version, runtime_options.runtime_validation)?;
+            .require_compatible(required_major_version, runtime_options.runtime_validation)?;
         return Ok(distribution.clone());
     }
 
@@ -716,10 +718,15 @@ pub fn build_command(mut self) -> Result<LaunchCommand> {
         .ok_or_else(|| Error::MissingVersionName {
             path: self.version.path.clone(),
         })?;
-    // Resolve version root, jar, assets, libraries, and natives directories.
+    // The builder is public and can be used without the readiness checks.
+    let version_jar = self
+        .version
+        .try_get_resource(VersionJsonInstanceResource::Jar)?;
+    if !version_jar.exists() {
+        return Err(Error::VersionJarMissing { path: version_jar });
+    }
+    // Resolve version root, assets, libraries, and natives directories.
     let paths = LaunchPaths::resolve(&self.version)?;
-    // Fail early if the client jar is missing; do not spawn a doomed JVM.
-    paths.ensure_version_jar_exists()?;
 
     let credential = self.credential.clone();
     // Fill built-in variables such as game directory, assets, auth, natives.
@@ -749,7 +756,7 @@ pub fn build_command(mut self) -> Result<LaunchCommand> {
 The path object centralizes all location decisions:
 
 ```rust
-// crates/driver/src/families/version_json/builder/paths.rs:23
+// crates/driver/src/families/version_json/builder/paths.rs:22
 pub(super) fn resolve<L, VL>(version: &Storage<VL, Storage<L>>) -> Result<Self>
 where
     L: VersionJsonRootLayout,
@@ -758,10 +765,6 @@ where
     Ok(Self {
         // Instance root, also used as the default game directory and cwd.
         version_root: resolve_absolute_path(version.path.clone())?,
-        // Client jar.
-        version_jar: resolve_absolute_path(
-            version.try_get_resource(VersionJsonInstanceResource::Jar)?,
-        )?,
         // Shared assets root and libraries root live in the game storage parent.
         assets_root: resolve_absolute_path(
             version
@@ -785,7 +788,7 @@ Default variables include the `natives_directory` consumed by JVM arguments such
 as `-Djava.library.path`:
 
 ```rust
-// crates/driver/src/families/version_json/builder/command.rs:56
+// crates/driver/src/families/version_json/builder/command.rs:55
 fn apply_default_variables(
     &mut self,
     metadata: &PistonMetaData,

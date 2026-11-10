@@ -1,10 +1,11 @@
+use elemental_core::storage::layout::Layoutable;
 use elemental_core::{auth::credential::UserCredential, launcher::command::LaunchCommand};
 use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::{
     error::{Error, Result},
     families::version_json::{
-        classpath::classpath_separator, extensions::PistonMetaDataExt,
+        VersionJsonInstanceResource, classpath::classpath_separator, extensions::PistonMetaDataExt,
         rules::VersionJsonRuleContext, storage::VersionJsonMetadataStorageExt, variables::UserType,
     },
 };
@@ -30,8 +31,14 @@ where
             .ok_or_else(|| Error::MissingVersionName {
                 path: self.version.path.clone(),
             })?;
+        // The builder is public and can be used without the readiness checks.
+        let version_jar = self
+            .version
+            .try_get_resource(VersionJsonInstanceResource::Jar)?;
+        if !version_jar.exists() {
+            return Err(Error::VersionJarMissing { path: version_jar });
+        }
         let paths = LaunchPaths::resolve(&self.version)?;
-        paths.ensure_version_jar_exists()?;
 
         let credential = self.credential.clone();
         self.apply_default_variables(&metadata, &credential, version_name, &paths);

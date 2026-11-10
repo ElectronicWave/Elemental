@@ -4,7 +4,7 @@ use crate::{
     error::Result,
     families::version_json::{
         VersionJsonInstanceLayout, VersionJsonRootLayout, remote::VersionJsonRemoteResolver,
-        storage::ensure_natives_extracted_with_metadata,
+        storage::ensure_natives_extracted,
     },
 };
 
@@ -32,13 +32,13 @@ where
     ) -> Result<PreparedVersionJsonInstance<L, VL>> {
         let download_status = match download_status {
             Some(status) if status.is_downloaded() => status,
-            _ => self.ensure_downloaded(session).await?,
+            _ => self.download_missing(session).await?,
         };
         self.finish_preparation_with_download_status(download_status)
             .await
     }
 
-    async fn ensure_downloaded(
+    async fn download_missing(
         &self,
         session: &DownloadSession,
     ) -> Result<VersionJsonDownloadStatus> {
@@ -68,7 +68,7 @@ where
         self,
         download_status: VersionJsonDownloadStatus,
     ) -> Result<PreparedVersionJsonInstance<L, VL>> {
-        ensure_natives_extracted_with_metadata(&self.version, &self.metadata).await?;
+        ensure_natives_extracted(&self.version, &self.metadata).await?;
         self.into_prepared_with_status(download_status.with_natives_extracted(true))
             .await
     }

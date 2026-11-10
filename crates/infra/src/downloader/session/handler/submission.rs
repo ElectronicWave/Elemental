@@ -11,7 +11,7 @@ impl SessionHandler {
     pub(crate) async fn submit_batch(&self, batch: DownloadBatch) -> Result<()> {
         batch.validate()?;
         let _submission_guard = self.submission.lock().await;
-        self.lifecycle.ensure_accepting_tasks(self.session_id)?;
+        self.lifecycle.require_accepting_tasks(self.session_id)?;
 
         self.mark_batch_accepted(&batch);
         let (group, tasks) = batch.into_parts();

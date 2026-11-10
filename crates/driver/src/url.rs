@@ -10,7 +10,7 @@ mod tests;
 mod util;
 
 pub use policy::OriginPolicy;
-pub(crate) use util::ensure_directory_url;
+pub(crate) use util::{require_http_scheme, with_directory_path};
 
 pub trait Origin: Copy + Debug + Eq + Hash + Send + Sync + 'static {
     fn canonical(self) -> &'static str;

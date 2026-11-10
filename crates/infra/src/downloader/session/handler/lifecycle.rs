@@ -35,7 +35,7 @@ impl SessionLifecycle {
         }
     }
 
-    pub(super) fn ensure_accepting_tasks(&self, session_id: SessionId) -> Result<()> {
+    pub(super) fn require_accepting_tasks(&self, session_id: SessionId) -> Result<()> {
         match self.state() {
             LifecycleState::Open => Ok(()),
             LifecycleState::Draining => Err(Error::SessionNotAcceptingTasks { session_id }),

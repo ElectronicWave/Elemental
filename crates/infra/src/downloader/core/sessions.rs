@@ -67,7 +67,7 @@ impl ElementalDownloader {
     pub(crate) async fn session_success(&self, session_id: SessionId) -> Result<()> {
         self.session_handler(session_id)
             .await?
-            .ensure_success()
+            .wait_and_require_success()
             .await
     }
 

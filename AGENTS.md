@@ -77,3 +77,11 @@ impl MyTrait for MyStruct {
   chains solely to satisfy a complexity metric.
 - Evaluate refactors by readability, ownership boundaries, and testability,
   not by CCN alone.
+
+## Breaking Changes
+
+- Dare to make breaking changes when they remove dead compatibility layers or
+  simplify the design.
+- Do not preserve an obsolete API without an active consumer.
+- Always explicitly tell the user when a change is breaking, including the
+  affected API and the required migration.

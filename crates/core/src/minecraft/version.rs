@@ -32,7 +32,7 @@ pub struct MinecraftVersion {
 
 impl MinecraftVersion {
     pub fn parse(raw: &str) -> Result<Self, MinecraftVersionParseError> {
-        ensure_not_empty(raw)?;
+        validate_non_empty(raw)?;
         parse_known_format(raw)
     }
 
@@ -94,7 +94,7 @@ impl MinecraftVersion {
     }
 }
 
-fn ensure_not_empty(raw: &str) -> Result<(), MinecraftVersionParseError> {
+fn validate_non_empty(raw: &str) -> Result<(), MinecraftVersionParseError> {
     if raw.is_empty() {
         Err(MinecraftVersionParseError::Empty)
     } else {

@@ -154,18 +154,6 @@ pub enum Error {
     #[error("{context} has no parent directory: {}", path.display())]
     MissingParentDirectory { context: String, path: PathBuf },
 
-    #[error(
-        "copy native binary '{}' to '{}' failed",
-        source_path.display(),
-        target_path.display()
-    )]
-    CopyNativeBinary {
-        source_path: PathBuf,
-        target_path: PathBuf,
-        #[source]
-        source: io::Error,
-    },
-
     #[error("installer coordinate has no file name: {notation}")]
     InstallerCoordinateFileNameMissing { notation: String },
 

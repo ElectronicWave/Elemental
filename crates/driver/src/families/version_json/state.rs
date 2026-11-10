@@ -2,6 +2,7 @@ use std::path::Path;
 
 use crate::error::Result;
 use elemental_shared::{
+    error::Error as SharedError,
     migrator::NoMigrator,
     persistor::{JsonFilePersistor, json_persistor},
     scope::Scope,
@@ -27,15 +28,37 @@ pub type NativeStateStore = StoreLoader<
 >;
 
 pub async fn natives_state_store(instance_root: &Path) -> Result<NativeStateStore> {
-    let store = Store::load(
+    let scope = Scope::Directory(instance_root.to_owned());
+    let store = match Store::load(
         NoMigrator,
-        json_persistor(
-            "natives".to_owned(),
-            Scope::Directory(instance_root.to_owned()),
-        ),
+        json_persistor("natives".to_owned(), scope.clone()),
         NATIVES_STATE_VERSION,
     )
-    .await?;
+    .await
+    {
+        Ok(store) => store,
+        Err(SharedError::Json(_)) | Err(SharedError::StoredVersionNewer { .. }) => {
+            remove_stale_natives_state(&scope).await?;
+            Store::load(
+                NoMigrator,
+                json_persistor("natives".to_owned(), scope),
+                NATIVES_STATE_VERSION,
+            )
+            .await?
+        }
+        Err(error) => return Err(error.into()),
+    };
 
     Ok(store)
+}
+
+async fn remove_stale_natives_state(scope: &Scope) -> Result<()> {
+    let path = scope
+        .get_full_path("natives", Some("json".to_owned()))
+        .await?;
+    match tokio::fs::remove_file(&path).await {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
+    }
 }

@@ -2,18 +2,18 @@ use reqwest::Url;
 
 use crate::error::{Error, Result};
 
-pub(super) fn ensure_http_url(url: &Url, context: &str) -> Result<()> {
+pub(crate) fn require_http_scheme(url: &Url, context: impl Into<String>) -> Result<()> {
     if matches!(url.scheme(), "http" | "https") {
         return Ok(());
     }
 
     Err(Error::UnsupportedUrlScheme {
-        context: context.to_owned(),
+        context: context.into(),
         url: url.to_string(),
     })
 }
 
-pub(crate) fn ensure_directory_url(mut url: Url) -> Result<Url> {
+pub(crate) fn with_directory_path(mut url: Url) -> Result<Url> {
     if !url.path().ends_with('/') {
         let raw_url = url.to_string();
         url.path_segments_mut()

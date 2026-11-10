@@ -4,35 +4,20 @@ use async_trait::async_trait;
 use elemental_core::storage::{Storage, layout::Layoutable};
 use elemental_schema::mojang::piston::PistonMetaData;
 
-use super::natives;
-use crate::{
-    error::Result,
-    families::version_json::{
-        layout::{VersionJsonInstanceLayout, VersionJsonRootLayout},
-        resource::VersionJsonInstanceResource,
-    },
-};
+use crate::{error::Result, families::version_json::resource::VersionJsonInstanceResource};
 
 #[async_trait(?Send)]
-pub trait VersionJsonVersionStorageExt {
-    type GameLayout: VersionJsonRootLayout;
-    type VersionLayout: VersionJsonInstanceLayout;
-
+pub trait VersionJsonMetadataStorageExt {
     fn metadata(&self) -> Result<PistonMetaData>;
     async fn write_metadata(&self, metadata: &PistonMetaData) -> Result<()>;
-    async fn natives_are_extracted(&self) -> Result<bool>;
-    async fn extract_natives(&self) -> Result<()>;
 }
 
 #[async_trait(?Send)]
-impl<L, VL> VersionJsonVersionStorageExt for Storage<VL, Storage<L>>
+impl<L, VL> VersionJsonMetadataStorageExt for Storage<VL, Storage<L>>
 where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
+    L: elemental_core::storage::layout::Layout,
+    VL: elemental_core::storage::layout::Layout<Resource = VersionJsonInstanceResource>,
 {
-    type GameLayout = L;
-    type VersionLayout = VL;
-
     fn metadata(&self) -> Result<PistonMetaData> {
         let path = self.try_get_resource(VersionJsonInstanceResource::Metadata)?;
         Ok(serde_json::from_reader(File::open(path)?)?)
@@ -43,13 +28,5 @@ where
         let path = self.try_get_resource(VersionJsonInstanceResource::Metadata)?;
         tokio::fs::write(path, serde_json::to_vec(metadata)?).await?;
         Ok(())
-    }
-
-    async fn natives_are_extracted(&self) -> Result<bool> {
-        natives::natives_are_extracted(self).await
-    }
-
-    async fn extract_natives(&self) -> Result<()> {
-        natives::extract_natives(self).await
     }
 }

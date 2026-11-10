@@ -9,6 +9,13 @@ use zip::ZipArchive;
 
 use crate::error::Result;
 
+#[cfg(unix)]
+use std::{
+    ffi::OsString,
+    os::unix::{ffi::OsStringExt, fs::PermissionsExt},
+    path::Component,
+};
+
 #[derive(Debug, Clone)]
 pub struct JarFile<P: AsRef<Path>> {
     path: P,
@@ -37,6 +44,27 @@ impl<P: AsRef<Path>> JarFile<P> {
         })?;
 
         Ok(())
+    }
+
+    pub fn extract_missing_blocking<S, F>(&self, dest: &S, include: F) -> Result<Vec<PathBuf>>
+    where
+        S: AsRef<OsStr> + ?Sized,
+        F: Fn(&Path) -> bool,
+    {
+        let file = File::open(&self.path)?;
+        let mut archive = ZipArchive::new(file)?;
+        let destination = Path::new(dest);
+        extract_entries_blocking(&mut archive, destination, |relative_path| {
+            if !include(relative_path) {
+                return None;
+            }
+
+            if destination.join(relative_path).symlink_metadata().is_ok() {
+                return None;
+            }
+
+            Some(relative_path.to_path_buf())
+        })
     }
 
     pub fn by_name_bytes(&self, name: &str) -> Result<Vec<u8>> {
@@ -131,10 +159,66 @@ where
             create_dir_all(parent)?;
         }
 
+        if entry.is_symlink() {
+            extract_symlink_entry(&mut entry, dest, &output_path)?;
+            extracted.push(output_path);
+            continue;
+        }
+
         let mut output = File::create(&output_path)?;
         io::copy(&mut entry, &mut output)?;
+        #[cfg(unix)]
+        if let Some(mode) = entry.unix_mode() {
+            std::fs::set_permissions(&output_path, std::fs::Permissions::from_mode(mode & 0o777))?;
+        }
         extracted.push(output_path);
     }
 
     Ok(extracted)
+}
+
+#[cfg(unix)]
+fn extract_symlink_entry<R: Read>(entry: &mut R, dest: &Path, output_path: &Path) -> Result<()> {
+    let mut target_bytes = Vec::new();
+    entry.read_to_end(&mut target_bytes)?;
+    let target = OsString::from_vec(target_bytes);
+    let target_path = PathBuf::from(&target);
+    let resolved = if target_path.is_absolute() {
+        target_path.clone()
+    } else {
+        output_path.parent().unwrap_or(dest).join(&target_path)
+    };
+    let resolved = normalize_lexically(&resolved);
+    let destination = normalize_lexically(dest);
+    if !resolved.starts_with(&destination) {
+        return Err(crate::error::Error::ZipSymlinkEscapesDestination {
+            entry: output_path.to_string_lossy().to_string(),
+            target: target.to_string_lossy().to_string(),
+        });
+    }
+
+    if output_path.symlink_metadata().is_err() {
+        std::os::unix::fs::symlink(&target, output_path)?;
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn extract_symlink_entry<R: Read>(_entry: &mut R, _dest: &Path, _output_path: &Path) -> Result<()> {
+    Ok(())
+}
+
+#[cfg(unix)]
+fn normalize_lexically(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            component => normalized.push(component.as_os_str()),
+        }
+    }
+    normalized
 }

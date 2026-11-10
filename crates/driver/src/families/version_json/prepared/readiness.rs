@@ -6,11 +6,11 @@ use crate::{
     families::version_json::{
         VersionJsonInstanceLayout, VersionJsonInstanceResource, VersionJsonRemoteResolver,
         VersionJsonRootLayout, VersionJsonRootResource, VersionJsonRuleContext,
-        VersionJsonVersionStorageExt,
+        storage::natives_are_extracted,
     },
 };
 
-use super::{ResolvedVersionJsonInstance, VersionJsonInstallStatus};
+use super::{ResolvedVersionJsonInstance, VersionJsonDownloadStatus, VersionJsonInstallStatus};
 
 mod artifacts;
 
@@ -20,9 +20,9 @@ where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    pub async fn status(&self) -> Result<VersionJsonInstallStatus> {
+    pub async fn download_status(&self) -> Result<VersionJsonDownloadStatus> {
         let rule_context = VersionJsonRuleContext::current();
-        Ok(VersionJsonInstallStatus {
+        Ok(VersionJsonDownloadStatus {
             metadata_persisted: self
                 .version
                 .try_get_resource(VersionJsonInstanceResource::Metadata)?
@@ -36,8 +36,13 @@ where
                 .exists(),
             version_artifacts_ready: self.version_artifacts_ready(&rule_context)?,
             assets_ready: self.assets_ready()?,
-            natives_extracted: self.version.natives_are_extracted().await?,
         })
+    }
+
+    pub async fn status(&self) -> Result<VersionJsonInstallStatus> {
+        let download_status = self.download_status().await?;
+        let natives_extracted = natives_are_extracted(&self.version, &self.metadata).await?;
+        Ok(download_status.with_natives_extracted(natives_extracted))
     }
 
     fn assets_ready(&self) -> Result<bool> {

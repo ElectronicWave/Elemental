@@ -1,9 +1,6 @@
-use std::{
-    ffi::OsString,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct NativesDirectory<'a> {
@@ -15,43 +12,30 @@ impl<'a> NativesDirectory<'a> {
         Self { root }
     }
 
-    pub(super) fn flatten_binaries(self) -> Result<Vec<String>> {
-        let mut names = Vec::new();
-        for (path, file_name) in self.binaries()? {
-            let name = file_name.to_string_lossy().into_owned();
-            let target = self.root.join(&name);
-            if target != path {
-                std::fs::copy(&path, &target).map_err(|source| Error::CopyNativeBinary {
-                    source_path: path,
-                    target_path: target,
-                    source,
-                })?;
-            }
-            names.push(name);
-        }
-        names.sort();
-        names.dedup();
-        Ok(names)
-    }
-
-    fn binaries(self) -> Result<Vec<(PathBuf, OsString)>> {
-        let mut pending = vec![self.root.to_path_buf()];
-        let mut files = Vec::new();
-        while let Some(current) = pending.pop() {
+    pub(super) fn binary_paths(self) -> Result<Vec<String>> {
+        let mut paths = Vec::new();
+        let mut pending = vec![(self.root.to_path_buf(), PathBuf::new())];
+        while let Some((current, relative)) = pending.pop() {
             for entry in std::fs::read_dir(current)? {
                 let entry = entry?;
                 let path = entry.path();
+                let relative_path = relative.join(entry.file_name());
                 if entry.file_type()?.is_dir() {
-                    pending.push(path);
-                } else if Self::is_binary(&path) {
-                    files.push((path, entry.file_name()));
+                    pending.push((path, relative_path));
+                    continue;
                 }
+                if !Self::is_binary(&path) {
+                    continue;
+                }
+                paths.push(relative_path_key(&relative_path));
             }
         }
-        Ok(files)
+        paths.sort();
+        paths.dedup();
+        Ok(paths)
     }
 
-    fn is_binary(path: &Path) -> bool {
+    pub(super) fn is_binary(path: &Path) -> bool {
         path.extension()
             .and_then(|extension| extension.to_str())
             .is_some_and(|extension| {
@@ -61,4 +45,11 @@ impl<'a> NativesDirectory<'a> {
                 )
             })
     }
+}
+
+pub(super) fn relative_path_key(path: &Path) -> String {
+    path.components()
+        .map(|component| component.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
 }

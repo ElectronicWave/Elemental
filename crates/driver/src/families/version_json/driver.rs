@@ -89,14 +89,16 @@ where
         VL: VersionJsonInstanceLayout + Clone,
     {
         let loader_version = request.required_loader_version(self.descriptor())?;
-        self.resolve_or_load(
-            request.instance,
-            request.game_version.clone(),
-            loader_version.clone(),
-        )
-        .await?
-        .prepare(request.session)
-        .await
+        let (resolved, download_status) = self
+            .resolve_or_load(
+                request.instance,
+                request.game_version.clone(),
+                loader_version.clone(),
+            )
+            .await?;
+        resolved
+            .prepare_with_download_status(request.session, download_status)
+            .await
     }
 
     async fn load_prepared(
@@ -108,7 +110,7 @@ where
         VL: VersionJsonInstanceLayout + Clone,
     {
         ResolvedVersionJsonInstance::load(self.remote_resolver(), instance.clone())?
-            .into_prepared()
+            .finish_preparation()
             .await
     }
 }

@@ -3,10 +3,10 @@ use reqwest::Url;
 
 use crate::error::{Error, Result};
 use crate::http::fetch_text;
-use crate::url::ensure_directory_url;
+use crate::url::{require_http_scheme, with_directory_path};
 
 use super::snapshot::decode_snapshot_metadata;
-use super::url::{artifact_url, ensure_http_scheme};
+use super::url::artifact_url;
 use super::{MavenArtifactDownload, MavenCoordinate};
 
 #[derive(Debug, Clone)]
@@ -23,8 +23,8 @@ impl MavenRepository {
                 source,
             )
         })?;
-        ensure_http_scheme(&parsed, format!("{invalid_label} url"))?;
-        let base_url = ensure_directory_url(parsed)?;
+        require_http_scheme(&parsed, format!("{invalid_label} url"))?;
+        let base_url = with_directory_path(parsed)?;
 
         Ok(Self { base_url })
     }

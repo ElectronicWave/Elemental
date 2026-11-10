@@ -329,7 +329,7 @@ impl Distribution {
         self.path.join("bin").join(format!("java{EXE_SUFFIX}"))
     }
 
-    pub fn ensure_compatible(
+    pub fn require_compatible(
         &self,
         required_major_version: usize,
         validation_mode: RuntimeValidationMode,

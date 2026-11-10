@@ -32,7 +32,7 @@ fn release_components(
         None => (raw, None),
     };
     let numbers = parse_numeric_components(raw, base)?;
-    ensure_component_count(raw, &numbers)?;
+    validate_component_count(raw, &numbers)?;
     let (stage, stage_number) = match stage_part {
         Some(stage) => parse_stage(raw, stage)?,
         None => (VersionStage::Release, 0),
@@ -41,7 +41,7 @@ fn release_components(
     Ok((numbers, stage, stage_number))
 }
 
-fn ensure_component_count(raw: &str, numbers: &[u32]) -> Result<(), MinecraftVersionParseError> {
+fn validate_component_count(raw: &str, numbers: &[u32]) -> Result<(), MinecraftVersionParseError> {
     if (2..=3).contains(&numbers.len()) {
         Ok(())
     } else {
@@ -58,7 +58,7 @@ fn legacy_release(
     stage: VersionStage,
     stage_number: u32,
 ) -> Result<MinecraftVersion, MinecraftVersionParseError> {
-    ensure_legacy_stage(raw, stage)?;
+    validate_legacy_stage(raw, stage)?;
 
     let version = LegacyReleaseVersion {
         major: 1,
@@ -74,7 +74,7 @@ fn legacy_release(
     ))
 }
 
-fn ensure_legacy_stage(raw: &str, stage: VersionStage) -> Result<(), MinecraftVersionParseError> {
+fn validate_legacy_stage(raw: &str, stage: VersionStage) -> Result<(), MinecraftVersionParseError> {
     if stage == VersionStage::Snapshot {
         return Err(MinecraftVersionParseError::InvalidFormat {
             raw: raw.to_owned(),

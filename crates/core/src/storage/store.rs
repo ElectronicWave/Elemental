@@ -22,20 +22,6 @@ impl<L: Layout> Storage<L> {
             layout,
         }
     }
-
-    pub fn new_ensure_dir<P: AsRef<Path>>(path: P, layout: L) -> Result<Self> {
-        let path = path.as_ref().to_path_buf();
-        std::fs::create_dir_all(&path).map_err(|source| Error::Io {
-            operation: "create storage directory",
-            path: path.clone(),
-            source,
-        })?;
-        Ok(Self {
-            path,
-            parent: (),
-            layout,
-        })
-    }
 }
 
 impl<L: Layout, P> Storage<L, P> {

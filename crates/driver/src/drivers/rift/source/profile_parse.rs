@@ -10,6 +10,8 @@ use serde::Deserialize;
 
 use crate::error::{Error, Result};
 
+use super::with_trailing_slash;
+
 #[derive(Debug, Deserialize)]
 struct RiftRawProfileJson {
     id: String,
@@ -29,7 +31,6 @@ struct RiftRawProfileJson {
     #[serde(rename = "releaseTime")]
     release_time: String,
 }
-
 #[derive(Debug, Deserialize)]
 struct RiftRawProfileLibrary {
     name: String,
@@ -67,17 +68,9 @@ fn raw_profile_library_to_profile(raw_library: RiftRawProfileLibrary) -> Profile
     ProfileLibrary {
         name: raw_library.name.clone(),
         // Legacy Rift profiles omit the launcher libraries base for Mojang-hosted artifacts.
-        url: ensure_trailing_slash(raw_library.url.as_str()),
+        url: with_trailing_slash(raw_library.url.as_str()),
         downloads: raw_library.downloads,
         natives: raw_library.natives,
         extract: raw_library.extract,
     }
-}
-
-fn ensure_trailing_slash(url: &str) -> String {
-    if url.is_empty() || url.ends_with('/') {
-        return url.to_owned();
-    }
-
-    format!("{url}/")
 }

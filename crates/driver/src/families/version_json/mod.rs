@@ -26,7 +26,7 @@ pub use layout::{
 pub use platform::VersionJsonPlatform;
 pub use prepared::{
     PreparedVersionJsonInstance, ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata,
-    VersionJsonInstallStatus,
+    VersionJsonDownloadStatus, VersionJsonInstallStatus,
 };
 pub use profile::{
     LibraryReplacementFamily, PASSTHROUGH_PROFILE_BEHAVIOR, PassthroughProfileBehavior,
@@ -40,6 +40,6 @@ pub use rules::{
 };
 pub use source::{LoaderMetaEndpoints, LoaderMetaSource, LoaderProfileEndpoints};
 pub use storage::{
-    VersionJsonAssetIndexStorageExt, VersionJsonGameStorageExt, VersionJsonVersionStorageExt,
+    VersionJsonAssetIndexStorageExt, VersionJsonGameStorageExt, VersionJsonMetadataStorageExt,
     inspect_instances,
 };

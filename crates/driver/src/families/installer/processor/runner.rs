@@ -29,7 +29,7 @@ pub(super) async fn run_processor(
         resolved_args.push(context.resolve_argument(argument.as_str()).await?);
     }
 
-    ensure_parent_directories(&resolved_args).await?;
+    ensure_output_directories(context, processor).await?;
 
     let output = Command::new(runtime.executable())
         .arg("-cp")
@@ -103,16 +103,20 @@ fn unfold_manifest_lines(manifest: &str) -> String {
         .join("\n")
 }
 
-async fn ensure_parent_directories(arguments: &[String]) -> Result<()> {
-    let parents = arguments
-        .iter()
-        .map(PathBuf::from)
-        .filter_map(|path| {
-            path.parent()
-                .filter(|parent| !parent.as_os_str().is_empty())
-                .map(Path::to_path_buf)
-        })
-        .collect::<HashSet<PathBuf>>();
+async fn ensure_output_directories(
+    context: &InstallerProcessorContext<'_>,
+    processor: &ForgeInstallerProcessor,
+) -> Result<()> {
+    let mut parents = HashSet::new();
+    for output in processor.outputs.keys() {
+        let path = PathBuf::from(context.resolve_argument(output).await?);
+        if let Some(parent) = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
+            parents.insert(parent.to_path_buf());
+        }
+    }
 
     for parent in parents {
         create_dir_all(parent).await?;

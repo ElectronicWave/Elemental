@@ -24,7 +24,7 @@ use self::{
     },
 };
 
-pub(super) async fn natives_are_extracted_with_metadata<L, VL>(
+pub(crate) async fn natives_are_extracted_with_metadata<L, VL>(
     storage: &Storage<VL, Storage<L>>,
     metadata: &PistonMetaData,
 ) -> Result<bool>
@@ -44,7 +44,7 @@ where
     ))
 }
 
-pub(super) async fn ensure_natives_extracted_with_metadata<L, VL>(
+pub(crate) async fn ensure_natives_extracted_with_metadata<L, VL>(
     storage: &Storage<VL, Storage<L>>,
     metadata: &PistonMetaData,
 ) -> Result<()>

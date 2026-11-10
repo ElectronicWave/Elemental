@@ -5,8 +5,8 @@ use elemental_schema::mojang::piston::{PistonMetaAssetIndexObjects, PistonMetaDa
 use crate::{
     error::{Error, Result},
     families::version_json::{
-        VersionJsonAssetIndexStorageExt, VersionJsonInstanceLayout, VersionJsonRootLayout,
-        VersionJsonRuleContext, VersionJsonVersionStorageExt, classpath::resolve_classpath,
+        VersionJsonAssetIndexStorageExt, VersionJsonInstanceLayout, VersionJsonMetadataStorageExt,
+        VersionJsonRootLayout, VersionJsonRuleContext, classpath::resolve_classpath,
         remote::VersionJsonRemoteResolver,
     },
 };

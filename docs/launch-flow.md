@@ -421,10 +421,8 @@ pub async fn download_status(&self) -> Result<VersionJsonDownloadStatus> {
 pub async fn status(&self) -> Result<VersionJsonInstallStatus> {
     let download_status = self.download_status().await?;
     // Reuse the metadata already held in memory instead of re-reading the JSON.
-    let natives_extracted = self
-        .version
-        .natives_are_extracted_with_metadata(&self.metadata)
-        .await?;
+    let natives_extracted =
+        natives_are_extracted_with_metadata(&self.version, &self.metadata).await?;
     Ok(download_status.with_natives_extracted(natives_extracted))
 }
 ```
@@ -471,7 +469,7 @@ fn libraries_ready(&self, rule_context: &VersionJsonRuleContext) -> Result<bool>
 ```
 
 Every asset object is checked by existence only
-(`crates/driver/src/families/version_json/prepared/readiness.rs:51`).
+(`crates/driver/src/families/version_json/prepared/readiness.rs:49`).
 
 ### Why There Is No Forced SHA1 Check
 
@@ -488,7 +486,7 @@ Natives are handled during `finish_preparation`, after downloads and before the
 carried forward, so artifact and asset existence is not scanned again.
 
 ```rust
-// crates/driver/src/families/version_json/prepared/instance/prepare.rs:21
+// crates/driver/src/families/version_json/prepared/instance/prepare.rs:22
 pub async fn prepare(
     self,
     session: &DownloadSession,
@@ -497,7 +495,7 @@ pub async fn prepare(
     self.prepare_with_download_status(session, None).await
 }
 
-// crates/driver/src/families/version_json/prepared/instance/prepare.rs:28
+// crates/driver/src/families/version_json/prepared/instance/prepare.rs:29
 pub(crate) async fn prepare_with_download_status(
     self,
     session: &DownloadSession,
@@ -513,7 +511,7 @@ pub(crate) async fn prepare_with_download_status(
         .await
 }
 
-// crates/driver/src/families/version_json/prepared/instance/prepare.rs:41
+// crates/driver/src/families/version_json/prepared/instance/prepare.rs:42
 async fn ensure_downloaded(
     &self,
     session: &DownloadSession,
@@ -528,7 +526,7 @@ async fn ensure_downloaded(
     self.download_status().await
 }
 
-// crates/driver/src/families/version_json/prepared/instance/prepare.rs:61
+// crates/driver/src/families/version_json/prepared/instance/prepare.rs:62
 pub async fn finish_preparation(self) -> Result<PreparedVersionJsonInstance<L, VL>> {
     // Local-only and installer paths enter here without a cached status.
     let download_status = self.download_status().await?;
@@ -536,15 +534,13 @@ pub async fn finish_preparation(self) -> Result<PreparedVersionJsonInstance<L, V
         .await
 }
 
-// crates/driver/src/families/version_json/prepared/instance/prepare.rs:67
+// crates/driver/src/families/version_json/prepared/instance/prepare.rs:68
 async fn finish_preparation_with_download_status(
     self,
     download_status: VersionJsonDownloadStatus,
 ) -> Result<PreparedVersionJsonInstance<L, VL>> {
     // Exactly one natives state comparison; no repeated asset scan.
-    self.version
-        .ensure_natives_extracted_with_metadata(&self.metadata)
-        .await?;
+    ensure_natives_extracted_with_metadata(&self.version, &self.metadata).await?;
     // Extraction success proves natives are present, so no second scan.
     self.into_prepared_with_status(download_status.with_natives_extracted(true))
         .await

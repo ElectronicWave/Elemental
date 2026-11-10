@@ -40,6 +40,6 @@ pub use rules::{
 };
 pub use source::{LoaderMetaEndpoints, LoaderMetaSource, LoaderProfileEndpoints};
 pub use storage::{
-    VersionJsonAssetIndexStorageExt, VersionJsonGameStorageExt, VersionJsonVersionStorageExt,
+    VersionJsonAssetIndexStorageExt, VersionJsonGameStorageExt, VersionJsonMetadataStorageExt,
     inspect_instances,
 };

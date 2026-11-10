@@ -3,8 +3,8 @@ use elemental_infra::downloader::DownloadSession;
 use crate::{
     error::Result,
     families::version_json::{
-        VersionJsonInstanceLayout, VersionJsonRootLayout, VersionJsonVersionStorageExt,
-        remote::VersionJsonRemoteResolver,
+        VersionJsonInstanceLayout, VersionJsonRootLayout, remote::VersionJsonRemoteResolver,
+        storage::ensure_natives_extracted_with_metadata,
     },
 };
 
@@ -68,9 +68,7 @@ where
         self,
         download_status: VersionJsonDownloadStatus,
     ) -> Result<PreparedVersionJsonInstance<L, VL>> {
-        self.version
-            .ensure_natives_extracted_with_metadata(&self.metadata)
-            .await?;
+        ensure_natives_extracted_with_metadata(&self.version, &self.metadata).await?;
         self.into_prepared_with_status(download_status.with_natives_extracted(true))
             .await
     }

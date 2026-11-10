@@ -5,7 +5,7 @@ use crate::{
     error::{Error, Result},
     families::version_json::{
         classpath::classpath_separator, extensions::PistonMetaDataExt,
-        rules::VersionJsonRuleContext, storage::VersionJsonVersionStorageExt, variables::UserType,
+        rules::VersionJsonRuleContext, storage::VersionJsonMetadataStorageExt, variables::UserType,
     },
 };
 

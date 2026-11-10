@@ -6,7 +6,7 @@ use crate::{
     families::version_json::{
         VersionJsonInstanceLayout, VersionJsonInstanceResource, VersionJsonRemoteResolver,
         VersionJsonRootLayout, VersionJsonRootResource, VersionJsonRuleContext,
-        VersionJsonVersionStorageExt,
+        storage::natives_are_extracted_with_metadata,
     },
 };
 
@@ -41,10 +41,8 @@ where
 
     pub async fn status(&self) -> Result<VersionJsonInstallStatus> {
         let download_status = self.download_status().await?;
-        let natives_extracted = self
-            .version
-            .natives_are_extracted_with_metadata(&self.metadata)
-            .await?;
+        let natives_extracted =
+            natives_are_extracted_with_metadata(&self.version, &self.metadata).await?;
         Ok(download_status.with_natives_extracted(natives_extracted))
     }
 

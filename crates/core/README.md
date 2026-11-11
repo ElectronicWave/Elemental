@@ -85,7 +85,7 @@ implements `Authorizer` for real accounts.
 | `storage` | Generic `Storage` and `Layout` resource resolution |
 | `version` | The tagged `Version<Tag>` identifier wrapper |
 
-### Features
+### Feature Flags
 
 | Feature | Description |
 | --- | --- |

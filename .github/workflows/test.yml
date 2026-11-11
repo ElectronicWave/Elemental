@@ -28,6 +28,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
       - name: Check formatting
         run: cargo fmt -p elemental-infra --check
       - name: Run clippy

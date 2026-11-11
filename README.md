@@ -17,10 +17,10 @@ schemas. Use `elemental-kit` end to end, or adopt the individual crates in other
 Rust applications.
 
 > [!NOTE]
-> Elemental is under active development. The support matrix below reflects
-> current workspace coverage, not a stability guarantee. See
-> [ROADMAP.md](https://github.com/ElectronicWave/Elemental/blob/main/ROADMAP.md)
-> for current scope and known gaps.
+> Elemental is under active development. The driver table below reflects
+> current workspace coverage, not a stability guarantee. See the
+> [issue tracker](https://github.com/ElectronicWave/Elemental/issues) for
+> current scope and known gaps.
 
 ## Highlights
 
@@ -30,28 +30,35 @@ Rust applications.
   installer-driven, and profiled legacy distributions.
 - **Typed storage and layouts**: game roots, instances, libraries, assets, and
   version artifacts resolve through `Storage` and `Layout`.
-- **Runtime validation**: use an explicit Java executable or discover a
-  compatible local runtime from the Minecraft version metadata.
+- **Runtime and authentication**: discover or select a local Java runtime, and
+  use offline, Microsoft, or Yggdrasil accounts through one `Authorizer`
+  interface.
 - **Reusable infrastructure**: `elemental-shared` for versioned persistence
   and migrations, `elemental-object` for type-indexed object pools,
   `elemental-infra` for downloads, and `elemental-schema` for manifests.
 - **Flexible adoption**: use the `elemental-kit` facade end to end or pick the
   individual async crates for another Rust application.
 
-## Support Matrix
+## Supported Drivers
 
-| Family | Drivers                                | Catalog | Inspect | Install | Load installed | Launch |
-| --- |----------------------------------------| :---: | :---: | :---: | :---: | :---: |
-| Vanilla | Vanilla                                | Yes | Yes | Yes | Yes | Yes |
-| Fabric ecosystem | Fabric, Legacy Fabric, Babric, Quilt   | Yes | Yes | Yes | Yes | Yes |
-| Installer-driven | Forge, NeoForge, CleanroomMC, Outlands | Yes | Yes | Yes | Yes | Yes |
-| Profiled legacy | Rift, LiteLoader                       | Yes | Yes | Yes | Yes | Yes |
+| Family | Drivers | Lifecycle |
+| --- | --- | --- |
+| Vanilla | Vanilla | Catalog, inspect, install, reload, launch |
+| Fabric ecosystem | Fabric, Legacy Fabric, Babric, Quilt | Catalog, inspect, install, reload, launch |
+| Installer-driven | Forge, NeoForge, CleanroomMC, Outlands | Catalog, inspect, install, reload, launch |
+| Profiled legacy | Rift, LiteLoader | Catalog, inspect, install, reload, launch |
+
+These are implementation claims, not stability guarantees. Compatibility
+regressions and missing coverage are tracked in the
+[issue tracker](https://github.com/ElectronicWave/Elemental/issues).
 
 ## Requirements
 
 - Rust 1.85 or newer. The workspace uses edition 2024.
-- A compatible Java runtime for launching Minecraft. Elemental can discover a
-  local runtime or use a custom runtime provider supplied with `--runtime-path`.
+- A compatible Java runtime for launching Minecraft. Elemental discovers local
+  runtimes by default; use `--runtime-major-version` to select a major version,
+  `--runtime-path` to add custom installation directories, or
+  `RuntimeOptions::set_runtime_override` to supply a distribution directly.
 - Network access for catalog and artifact downloads. Use `--local-only` when
   the instance is already prepared.
 
@@ -80,6 +87,7 @@ options:
 cargo run -p launchpad -- forge 1.20.1 47.3.1
 cargo run -p launchpad -- --local-only fabric 1.20.1 0.16.10 --instance-name MyFabric-1.20.1
 cargo run -p launchpad -- vanilla 1.20.1 --instance-name MyVanilla-1.20.1
+cargo run -p launchpad -- --runtime-major-version 21 vanilla 1.20.1
 ```
 
 Launchpad defaults live in
@@ -145,10 +153,23 @@ async fn main() -> Result<()> {
 
 Offline authentication keeps local development simple. Use a production
 `Authorizer` for real player accounts. Authentication and launch are separate:
-obtain an `Account`, derive a `Credential`, build a `LaunchCommand`,
-optionally customize its arguments, then spawn it. Use
-`prepare_with_session()` to supply a configured session while the launcher
-finishes and validates it.
+obtain an `Account`, derive a `Credential`, build a `LaunchCommand`, optionally
+customize its arguments, then spawn it. Use `prepare_with_session()` to supply a
+configured session while the launcher finishes and validates it.
+
+### Authentication and accounts
+
+`OfflineAuthorizer`, `MicrosoftAuthorizer`, and `YggdrasilAuthorizer` implement
+the same `Authorizer` contract. `AccountStore` persists accounts and refreshes
+them before a credential is used. Microsoft and Yggdrasil accounts also expose
+skin and cape reads and, when supported by the provider, uploads and cape
+selection.
+
+Enable `yggdrasil-auth` to install and inject authlib-injector for
+authlib-compatible credentials, or `offline-server` to run a local Yggdrasil
+server for development. See the
+[elemental-launcher README](https://github.com/ElectronicWave/Elemental/blob/main/crates/launcher/README.md#accounts)
+for account-store, texture, and offline-server examples.
 
 Inspect and reopen an existing instance without preparing it again:
 
@@ -163,6 +184,12 @@ if let Some(instance) = launcher.inspect_instance("MyFabric-1.20.1".to_owned()).
     println!("Loaded {}", prepared.driver().id);
 }
 ```
+
+## Migrating from 0.1
+
+0.2 is a breaking release at every layer. See the
+[0.1 to 0.2 migration guide](docs/migration/0.2.md) for package, core,
+authentication, launcher, downloader, persistence, object, and schema changes.
 
 ## Workspace
 
@@ -232,15 +259,14 @@ Forwarded features:
 | `offline-server` | Enables the local offline Yggdrasil server and authlib-injector support in `elemental-launcher` |
 
 > [!IMPORTANT]
-> Forwarded features do not enable the facade module itself. With
-> `default-features = false`, enable both `shared` and `shared-json` when using
-> JSON persistence, `shared` and `shared-toml` for TOML, and `object` plus
-> `object-notify` when waiter support is required. Enable both `infra` and
-> `infra-serde` when downloader events or reports need serialization.
+> Forwarded features enable their parent module where applicable:
+> `shared-json` and `shared-toml` enable `shared`, `object-notify` enables
+> `object`, `infra-serde` enables `infra`, and `yggdrasil-auth` enables `core`
+> and `launcher`. With `default-features = false`, add the module feature
+> directly when you need it without a forwarded feature.
 
 ## Documentation
 
-- [Roadmap and current gaps](https://github.com/ElectronicWave/Elemental/blob/main/ROADMAP.md)
 - [API documentation](https://docs.rs/elemental-kit)
 - [Persistence and migration design](https://github.com/ElectronicWave/Elemental/blob/main/crates/shared/DESIGN.md)
 - [Object pool design](https://github.com/ElectronicWave/Elemental/blob/main/crates/object/DESIGN.md)

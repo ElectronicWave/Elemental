@@ -16,6 +16,8 @@ jobs:
     needs: test
     steps:
       - uses: actions/checkout@v7
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
       - name: Login
         run: cargo login ${{ secrets.CARGO_TOKEN }} --verbose
       - name: Publish

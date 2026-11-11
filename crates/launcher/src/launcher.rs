@@ -4,7 +4,7 @@ use std::{
 };
 
 use elemental_core::{
-    auth::credential::UserCredential,
+    auth::credential::Credential,
     launcher::{command::LaunchCommand, process},
     runtime::{RuntimeResolver, distribution::Distribution},
     storage::Storage,
@@ -49,6 +49,9 @@ use crate::{
     result::{Instance, LaunchedInstance, PreparedInstance},
     spec::DriverSpec,
 };
+
+#[cfg(feature = "yggdrasil-auth")]
+use crate::authlib_injector::{self, AuthlibInjector};
 
 type LauncherGameStorage<L> = Storage<L>;
 type LauncherInstanceStorage<L, VL> = Storage<VL, LauncherGameStorage<L>>;
@@ -210,7 +213,7 @@ where
     pub async fn build_launch_command(
         &self,
         prepared: &PreparedInstance<L, VL>,
-        credential: &UserCredential,
+        credential: &Credential,
         runtime_options: &RuntimeOptions,
         options: &LaunchOptions,
     ) -> Result<LaunchCommand> {
@@ -220,8 +223,38 @@ where
             &self.runtime_resolver,
         )
         .await?;
-        let builder = launch_builder(credential, runtime, prepared, options);
+        #[cfg(feature = "yggdrasil-auth")]
+        let options = {
+            let mut options = options.clone();
+            self.inject_authlib_injector(credential, &mut options)
+                .await?;
+            options
+        };
+        #[cfg(not(feature = "yggdrasil-auth"))]
+        let options = options.clone();
+        let builder = launch_builder(credential, runtime, prepared, &options);
         Ok(builder.build_command()?)
+    }
+
+    #[cfg(feature = "yggdrasil-auth")]
+    pub async fn install_authlib_injector(&self) -> Result<AuthlibInjector> {
+        authlib_injector::install(&self.storage_root, &self.downloader).await
+    }
+
+    #[cfg(feature = "yggdrasil-auth")]
+    async fn inject_authlib_injector(
+        &self,
+        credential: &Credential,
+        options: &mut LaunchOptions,
+    ) -> Result<()> {
+        let Some(auth_server) = &credential.auth_server else {
+            return Ok(());
+        };
+        let injector = self.install_authlib_injector().await?;
+        options
+            .extra_jvm_arguments
+            .extend(injector.jvm_arguments(auth_server));
+        Ok(())
     }
 
     pub fn launch(&self, command: LaunchCommand) -> Result<LaunchedInstance> {
@@ -233,7 +266,7 @@ where
     pub async fn launch_prepared_instance(
         &self,
         prepared: &PreparedInstance<L, VL>,
-        credential: &UserCredential,
+        credential: &Credential,
         runtime_options: &RuntimeOptions,
         options: &LaunchOptions,
     ) -> Result<LaunchedInstance> {
@@ -246,7 +279,7 @@ where
     pub async fn launch_instance(
         &self,
         instance_name: String,
-        credential: &UserCredential,
+        credential: &Credential,
         runtime_options: &RuntimeOptions,
         options: &LaunchOptions,
     ) -> Result<LaunchedInstance> {
@@ -344,7 +377,7 @@ where
 }
 
 fn launch_builder<L, VL>(
-    credential: &UserCredential,
+    credential: &Credential,
     runtime: Distribution,
     prepared: &PreparedInstance<L, VL>,
     options: &LaunchOptions,

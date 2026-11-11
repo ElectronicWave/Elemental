@@ -36,13 +36,24 @@ tokio = { version = "1", features = ["macros", "process", "rt-multi-thread"] }
 `elemental-core` is needed only for the authorizer used in the example. A real
 application can supply its own `Authorizer` implementation.
 
+Enable `yggdrasil-auth` to install and inject authlib-injector for any
+Yggdrasil-compatible credential. Enable `offline-server` to additionally
+re-export nidhogg's local Yggdrasil server:
+
+```toml
+elemental-launcher = { version = "0.2", features = ["offline-server"] }
+```
+
 ## Quick Start
 
 Prepare a Vanilla instance and build its launch command:
 
 ```rust
 use anyhow::Result;
-use elemental_core::auth::{authorizer::Authorizer, authorizers::offline::OfflineAuthorizer};
+use elemental_core::auth::{
+    accounts::Account,
+    authorizers::{Authorizer, offline::OfflineAuthorizer},
+};
 use elemental_launcher::{DriverSpec, LaunchOptions, Launcher, RuntimeOptions};
 
 #[tokio::main(flavor = "multi_thread")]
@@ -59,11 +70,12 @@ async fn main() -> Result<()> {
         )
         .await?;
 
-    let credential = OfflineAuthorizer {
+    let account = OfflineAuthorizer {
         username: "Player".to_owned(),
     }
     .authorize()
     .await?;
+    let credential = account.credential().await?;
 
     let mut command = launcher
         .build_launch_command(
@@ -100,9 +112,61 @@ println!(
 ```
 
 Authentication is independent from launch. An `Authorizer` returns a
-`UserCredential`; `build_launch_command()` injects that credential into the
-game arguments and returns a mutable `LaunchCommand`. Authentication-specific
-JVM arguments can be appended after that without changing the credential type.
+`Account`; `Account::credential()` produces the `Credential` that
+`build_launch_command()` injects into the game arguments and returns a mutable
+`LaunchCommand`. Authentication-specific JVM arguments can be appended after
+that without changing the credential type.
+
+### Accounts
+
+`AccountStore` persists accounts under `.elemental/accounts`:
+
+- `index.json` lists `AccountRef` entries and the selected account.
+- `<authorizer>/<account_id>.json` stores one authorizer-specific account.
+
+`Authorizer::id()` is the stable persistence key, so it must not change once
+accounts exist. `Authorizer::name()` is only for user interfaces. Accounts are
+persisted and refreshable; `Credential` is derived per launch and is
+never written to disk. With `yggdrasil-auth`, Yggdrasil credentials
+carry their API root in `Credential::auth_server` for authlib-injector.
+
+Accounts are serializable domain models; the launcher owns when and where they
+are persisted. Third-party authorizers register their account type through
+`AccountRegistry`, then open the store with `AccountStore::with_registry()`.
+
+### Textures
+
+`AccountStore` refreshes an account when needed before texture operations:
+
+```rust
+use elemental_core::auth::accounts::Account;
+use elemental_launcher::SkinModel;
+
+let selected = store.selected().await?.expect("no selected account");
+let account = store.account(selected.account_id()).await?;
+let textures = account.textures().await?;
+if let Some(skin) = &textures.skin {
+    println!("skin: {} ({:?})", skin.url, skin.model);
+}
+for cape in &textures.capes {
+    println!("cape: {:?} active={}", cape.alias, cape.active);
+}
+
+let image_bytes = std::fs::read("skin.png")?;
+account
+    .upload_skin(image_bytes, SkinModel::Slim)
+    .await?;
+if let Some(cape_id) = textures.capes.iter().find_map(|cape| cape.id.clone()) {
+    account.select_cape(Some(cape_id)).await?;
+}
+```
+
+Microsoft accounts read skins and owned capes from Minecraft Services and
+support skin upload, skin reset, cape selection, and cape clearing. Yggdrasil
+accounts read `textures` and `uploadableTextures` from their session server and
+support skin or cape upload and deletion when the server advertises the
+capability. `ProfileTextures::uploadable` tells the UI which upload actions to
+offer; `ProfileTextures::active_cape()` returns the selected cape.
 
 ### Observing preparation progress
 
@@ -162,23 +226,46 @@ let prepared = launcher
 The session exposes `progress_receiver()`, `subscribe()`, and `snapshot()` for
 UI progress reporting.
 
-### Auth-specific JVM arguments
+### Offline server and authlib-injector
+
+With the `offline-server` feature, `elemental_launcher::offline_server`
+re-exports nidhogg's local Yggdrasil service:
 
 ```rust
-let mut command = launcher
-    .build_launch_command(
-        &prepared,
-        &credential,
-        &RuntimeOptions::default(),
-        &LaunchOptions::default(),
+use std::net::{Ipv4Addr, SocketAddr};
+
+use elemental_launcher::offline_server::{OfflineProfile, OfflineServer};
+
+let server = OfflineServer::builder()
+    .server_name("Local".to_owned())
+    .profile(
+        OfflineProfile::new("Player".to_owned())
+            .with_skin("skin.png".into())
+            .with_cape("cape.png".into()),
     )
-    .await?;
-command.add_jvm_argument(format!(
-    "-javaagent:{}",
-    authlib_injector.display()
-));
-let game = launcher.launch(command)?;
+    .start(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))?;
+
+let credential = account
+    .credential()
+    .await?
+    .with_auth_server(server.base_url.to_string());
 ```
+
+When `Credential::auth_server` is set and the `yggdrasil-auth` feature is
+enabled (included by `offline-server`), `build_launch_command()` installs
+authlib-injector to `.elemental/authlib-injector/authlib-injector.jar` and adds:
+
+```text
+-javaagent:<jar>=<auth_server>
+-Dauthlibinjector.side=client
+```
+
+The latest artifact metadata is fetched at runtime, and downloads are verified
+against the SHA-256 checksum in that metadata. Enable `authlib-injector-embed`
+to include a build-time snapshot; metadata, download, or verification failures
+then fall back to the embedded JAR. Without that feature, failures are returned
+to the caller. Call `launcher.install_authlib_injector().await?` to install it
+before launch.
 
 ## Instance Lifecycle
 

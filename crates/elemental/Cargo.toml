@@ -28,6 +28,9 @@ shared-toml = ["shared", "elemental-shared/toml"]
 
 driver = ["dep:elemental-driver", "core", "infra", "schema", "shared"]
 launcher = ["dep:elemental-launcher", "core", "driver", "infra"]
+yggdrasil-auth = ["core", "launcher", "elemental-core/yggdrasil-auth", "elemental-launcher/yggdrasil-auth"]
+authlib-injector-embed = ["yggdrasil-auth", "elemental-launcher/authlib-injector-embed"]
+offline-server = ["yggdrasil-auth", "elemental-launcher/offline-server"]
 
 object = ["dep:elemental-object"]
 object-notify = ["object", "elemental-object/notify"]

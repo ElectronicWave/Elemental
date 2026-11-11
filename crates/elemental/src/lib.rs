@@ -22,8 +22,14 @@ pub mod prelude {
     #[cfg(feature = "core")]
     pub use crate::core::{
         auth::{
-            authorizer::Authorizer, authorizers::offline::OfflineAuthorizer,
-            credential::UserCredential,
+            accounts::{Account, AccountId, microsoft::MicrosoftAccount, offline::OfflineAccount},
+            authorizers::{
+                Authorizer,
+                microsoft::{MICROSOFT_AUTHORIZER_ID, MicrosoftAuthorizer},
+                offline::{OFFLINE_AUTHORIZER_ID, OfflineAuthorizer},
+            },
+            credential::{Credential, CredentialKind},
+            texture::{Cape, ProfileTextures, Skin, SkinModel, TextureType},
         },
         launcher::command::LaunchCommand,
         minecraft::MinecraftVersionId,
@@ -32,6 +38,12 @@ pub mod prelude {
             distribution::Distribution,
             provider::{RuntimeProvider, RuntimeProviderList, default_providers},
         },
+    };
+
+    #[cfg(feature = "yggdrasil-auth")]
+    pub use crate::core::auth::{
+        accounts::yggdrasil::{YggdrasilAccount, YggdrasilProfile},
+        authorizers::yggdrasil::{YGGDRASIL_AUTHORIZER_ID, YggdrasilAuthorizer},
     };
 
     #[cfg(feature = "driver")]
@@ -49,9 +61,9 @@ pub mod prelude {
 
     #[cfg(feature = "launcher")]
     pub use crate::launcher::{
-        DriverCatalog, DriverOrigins, DriverSpec, Instance, LaunchOptions, LaunchResolution,
-        LaunchedInstance, Launcher, LauncherBuilder, LoaderSpec, PreparedInstance,
-        PreparedInstanceInfo, PreparedInstanceMetadata, QuickPlayOptions, RuntimeOptions,
-        VanillaSpec,
+        AccountIndex, AccountRef, AccountRegistry, AccountStore, DriverCatalog, DriverOrigins,
+        DriverSpec, Instance, LaunchOptions, LaunchResolution, LaunchedInstance, Launcher,
+        LauncherBuilder, LoaderSpec, PreparedInstance, PreparedInstanceInfo,
+        PreparedInstanceMetadata, QuickPlayOptions, RuntimeOptions, VanillaSpec,
     };
 }

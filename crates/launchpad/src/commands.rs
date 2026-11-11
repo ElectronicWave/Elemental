@@ -6,7 +6,9 @@ use std::{
 use anyhow::{Context, Result};
 use elemental::{
     core::{
-        auth::{authorizer::Authorizer, authorizers::offline::OfflineAuthorizer},
+        auth::{
+            accounts::Account, authorizers::Authorizer, authorizers::offline::OfflineAuthorizer,
+        },
         launcher::command::LaunchCommand,
         runtime::provider::{RuntimeProvider, default_providers},
         runtime::providers::custom::new_custom_provider,
@@ -34,11 +36,12 @@ async fn run_launch(config: LaunchpadConfig) -> Result<()> {
 
     let (prepared, prepare_elapsed) = prepare_instance(&launcher, &config).await?;
 
-    let credential = OfflineAuthorizer {
+    let account = OfflineAuthorizer {
         username: "Player".to_owned(),
     }
     .authorize()
     .await?;
+    let credential = account.credential().await?;
     let command = launcher
         .build_launch_command(&prepared, &credential, &config.runtime, &config.options)
         .await?;

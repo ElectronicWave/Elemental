@@ -20,14 +20,15 @@ homepage = "https://github.com/ElectronicWave/Elemental"
 license = "AGPL-3.0-only"
 
 [workspace.dependencies]
-anyhow = { version = "1.0.100" }
-async-trait = "0.1.89"
+# Just for dev test and cli use
+anyhow = { version = "1.0.104" }
+async-trait = "0.1.92"
 dirs = { version = "7" }
 erased-serde = "0.4.11"
-futures = "0.3.32"
+futures = "0.3.34"
 hex = "0.4.3"
 jiff = { version = "0.2.0", features = ["serde"] }
-nidhogg = { git = "https://github.com/ElectronicWave/nidhogg", rev = "68eaf3c7445ce34bfa6f3f5874f6fe28d1f7f2b8" }
+nidhogg = { version = "0.3.0" }
 reqwest = { version = "0.13.1", features = [
     "json",
     "multipart",
@@ -37,10 +38,11 @@ reqwest = { version = "0.13.1", features = [
 scc = { version = "3.4.8", features = ["serde"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.148"
+# for validation
 sha1 = "0.11.0"
-sha2 = "0.11.0"
+sha2 = "0.11.1"
 thiserror = "2.0.21"
-tokio = { version = "1.48.0", features = [
+tokio = { version = "1.54.1", features = [
     "rt",
     "macros",
     "fs",

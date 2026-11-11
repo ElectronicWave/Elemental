@@ -1580,7 +1580,7 @@ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 [[package]]
 name = "nidhogg"
 version = "0.3.0"
-source = "git+https://github.com/ElectronicWave/nidhogg?rev=68eaf3c7445ce34bfa6f3f5874f6fe28d1f7f2b8#68eaf3c7445ce34bfa6f3f5874f6fe28d1f7f2b8"
+source = "git+https://github.com/ElectronicWave/nidhogg?rev=a8682eb06cf1af90d0c268a6bede333c4325e222#a8682eb06cf1af90d0c268a6bede333c4325e222"
 dependencies = [
  "base64 0.23.1",
  "md-5",

@@ -27,7 +27,7 @@ erased-serde = "0.4.11"
 futures = "0.3.32"
 hex = "0.4.3"
 jiff = { version = "0.2.0", features = ["serde"] }
-nidhogg = { git = "https://github.com/ElectronicWave/nidhogg", rev = "68eaf3c7445ce34bfa6f3f5874f6fe28d1f7f2b8" }
+nidhogg = { git = "https://github.com/ElectronicWave/nidhogg", rev = "a8682eb06cf1af90d0c268a6bede333c4325e222" }
 reqwest = { version = "0.13.1", features = [
     "json",
     "multipart",

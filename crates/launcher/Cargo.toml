@@ -15,3 +15,22 @@ tokio = { workspace = true }
 elemental-core = { path = "../core", version = "0.2.0" }
 elemental-driver = { path = "../driver", version = "0.2.0" }
 elemental-infra = { path = "../infra", version = "0.2.0" }
+elemental-shared = { path = "../shared", version = "0.2.0" }
+erased-serde = { workspace = true }
+hex = { workspace = true, optional = true }
+nidhogg = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true, optional = true }
+
+[features]
+default = []
+yggdrasil-auth = [
+    "elemental-core/yggdrasil-auth",
+    "dep:hex",
+    "dep:nidhogg",
+    "dep:sha2",
+    "nidhogg/authlib-injector",
+]
+authlib-injector-embed = ["yggdrasil-auth", "nidhogg/authlib-injector-embed"]
+offline-server = ["elemental-core/offline-server", "yggdrasil-auth"]

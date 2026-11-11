@@ -792,7 +792,7 @@ as `-Djava.library.path`:
 fn apply_default_variables(
     &mut self,
     metadata: &PistonMetaData,
-    credential: &UserCredential,
+    credential: &Credential,
     version_name: String,
     paths: &LaunchPaths,
 ) {
@@ -808,11 +808,12 @@ fn apply_default_variables(
     self.inner.assets_index_name = metadata.assets.clone();
     self.inner.auth_uuid = credential.uuid.clone();
     self.inner.auth_access_token = credential.access_token.clone();
-    // Offline credentials have no access token and therefore use legacy user type.
-    self.inner.user_type = if self.inner.auth_access_token.is_empty() {
-        UserType::Legacy
-    } else {
-        UserType::Msa
+    // The credential kind selects the user type explicitly instead of inferring
+    // it from an empty access token.
+    self.inner.user_type = match credential.kind {
+        CredentialKind::Legacy => UserType::Legacy,
+        CredentialKind::Mojang => UserType::Mojang,
+        CredentialKind::Msa => UserType::Msa,
     };
     self.inner.version_type = metadata.release_type.clone();
     self.inner.library_directory = paths.libraries_root.to_string_lossy().to_string();

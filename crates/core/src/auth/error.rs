@@ -36,6 +36,12 @@ pub enum Error {
         source: DeviceTokenRequestError,
     },
 
+    #[error("refresh Microsoft access token failed")]
+    RefreshTokenRequest {
+        #[source]
+        source: DeviceCodeRequestError,
+    },
+
     #[error("exchange Microsoft token for Minecraft token failed")]
     MinecraftExchange {
         #[source]
@@ -54,16 +60,72 @@ pub enum Error {
         source: reqwest::Error,
     },
 
+    #[error("Microsoft OAuth response contains no refresh token")]
+    MicrosoftRefreshTokenMissing,
+
+    #[error("request Xbox XUID failed")]
+    XuidRequest {
+        #[source]
+        source: reqwest::Error,
+    },
+
+    #[error("decode Xbox XUID response failed")]
+    XuidDecode {
+        #[source]
+        source: reqwest::Error,
+    },
+
+    #[error("Xbox XUID response contains no XUID")]
+    XuidMissing,
+
     #[error("decode Minecraft profile response failed")]
     ProfileDecode {
         #[source]
         source: reqwest::Error,
     },
 
+    #[error("texture operation '{operation}' is not supported for this account")]
+    TextureUnsupported { operation: &'static str },
+
+    #[error("send texture request for '{operation}' failed")]
+    TextureRequest {
+        operation: &'static str,
+        #[source]
+        source: reqwest::Error,
+    },
+
+    #[error("texture request for '{operation}' returned {status}: {body}")]
+    TextureStatus {
+        operation: &'static str,
+        status: reqwest::StatusCode,
+        body: String,
+    },
+
+    #[error("unknown skin model '{model}'")]
+    TextureModelUnknown { model: String },
+
     #[error("verification handler failed")]
     VerificationHandler {
         #[source]
         source: Box<dyn std::error::Error + Send + Sync>,
+    },
+
+    #[cfg(feature = "yggdrasil-auth")]
+    #[error("Yggdrasil request failed")]
+    Yggdrasil {
+        #[source]
+        source: nidhogg::error::NidhoggError,
+    },
+
+    #[cfg(feature = "yggdrasil-auth")]
+    #[error("Yggdrasil authentication response contains no Minecraft profile")]
+    YggdrasilProfileMissing,
+
+    #[cfg(feature = "yggdrasil-auth")]
+    #[error("parse Yggdrasil profile textures failed")]
+    YggdrasilTexture {
+        #[source]
+        source: nidhogg::types::profile::ProfilePropertyError,
     },
 }
 

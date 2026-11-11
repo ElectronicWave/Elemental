@@ -99,7 +99,10 @@ Prepare and launch a vanilla instance:
 ```rust
 use anyhow::Result;
 use elemental::{
-    core::auth::{authorizer::Authorizer, authorizers::offline::OfflineAuthorizer},
+    core::auth::{
+        accounts::Account,
+        authorizers::{Authorizer, offline::OfflineAuthorizer},
+    },
     launcher::{DriverSpec, LaunchOptions, Launcher, RuntimeOptions},
 };
 
@@ -117,11 +120,12 @@ async fn main() -> Result<()> {
         )
         .await?;
 
-    let credential = OfflineAuthorizer {
+    let account = OfflineAuthorizer {
         username: "Player".to_owned(),
     }
     .authorize()
     .await?;
+    let credential = account.credential().await?;
 
     let command = launcher
         .build_launch_command(
@@ -141,9 +145,10 @@ async fn main() -> Result<()> {
 
 Offline authentication keeps local development simple. Use a production
 `Authorizer` for real player accounts. Authentication and launch are separate:
-obtain a `UserCredential`, build a `LaunchCommand`, optionally customize its
-arguments, then spawn it. Use `prepare_with_session()` to supply a configured
-session while the launcher finishes and validates it.
+obtain an `Account`, derive a `Credential`, build a `LaunchCommand`,
+optionally customize its arguments, then spawn it. Use
+`prepare_with_session()` to supply a configured session while the launcher
+finishes and validates it.
 
 Inspect and reopen an existing instance without preparing it again:
 
@@ -222,6 +227,9 @@ Forwarded features:
 | `shared-toml` | Enables `elemental-shared/toml` |
 | `infra-serde` | Enables `elemental-infra/serde` |
 | `object-notify` | Enables `elemental-object/notify` |
+| `yggdrasil-auth` | Enables Yggdrasil authentication support, including authlib-injector download and launch injection |
+| `authlib-injector-embed` | Embeds an authlib-injector snapshot as a fallback when metadata retrieval, download, or verification fails |
+| `offline-server` | Enables the local offline Yggdrasil server and authlib-injector support in `elemental-launcher` |
 
 > [!IMPORTANT]
 > Forwarded features do not enable the facade module itself. With

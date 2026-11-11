@@ -3,7 +3,7 @@ mod command;
 mod paths;
 
 use elemental_core::{
-    auth::credential::UserCredential, runtime::distribution::Distribution, storage::Storage,
+    auth::credential::Credential, runtime::distribution::Distribution, storage::Storage,
 };
 use elemental_schema::mojang::piston::PistonMetaData;
 
@@ -19,7 +19,7 @@ use super::{
 pub(crate) use paths::resolve_absolute_path;
 
 pub struct VersionJsonLaunchBuilder<L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> {
-    pub credential: UserCredential,
+    pub credential: Credential,
     pub runtime: Distribution,
     pub version: Storage<VL, Storage<L>>,
     inner: LauncherVariables,
@@ -29,7 +29,7 @@ pub struct VersionJsonLaunchBuilder<L: VersionJsonRootLayout, VL: VersionJsonIns
 
 impl<L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> VersionJsonLaunchBuilder<L, VL> {
     pub fn new(
-        credential: UserCredential,
+        credential: Credential,
         runtime: Distribution,
         version: Storage<VL, Storage<L>>,
         inner: LauncherVariables,

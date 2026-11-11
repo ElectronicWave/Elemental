@@ -1,25 +1,22 @@
-use crate::auth::{authorizer::Authorizer, credential::UserCredential, error::Result};
-use md5::{Digest, Md5};
-use uuid::Uuid;
+use crate::auth::accounts::offline::OfflineAccount;
+use crate::auth::authorizers::Authorizer;
+use crate::auth::error::Result;
+
+pub const OFFLINE_AUTHORIZER_ID: &str = "offline";
 
 pub struct OfflineAuthorizer {
     pub username: String,
 }
 
 impl Authorizer for OfflineAuthorizer {
-    async fn authorize(&self) -> Result<UserCredential> {
-        let offline_name = format!("OfflinePlayer:{}", self.username);
-        let mut hasher = Md5::new();
-        hasher.update(offline_name);
-        let mut buffer = hasher.finalize();
-        buffer[6] = (buffer[6] & 0x0f) | 0x30;
-        buffer[8] = (buffer[8] & 0x3f) | 0x80;
+    type Account = OfflineAccount;
 
-        Ok(UserCredential {
-            username: self.username.clone(),
-            uuid: Uuid::from_bytes(buffer.into()).to_string(),
-            access_token: "".to_string(),
-        })
+    async fn authorize(&self) -> Result<Self::Account> {
+        Ok(OfflineAccount::new(self.username.clone()))
+    }
+
+    fn id() -> &'static str {
+        OFFLINE_AUTHORIZER_ID
     }
 
     fn name() -> &'static str {

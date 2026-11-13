@@ -45,7 +45,7 @@ impl FabricDriverFamily {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl ProfiledVersionJsonFamily for FabricDriverFamily {
     type Source = FabricSource;
     type RemoteResolver = super::prepared::FabricRemoteResolver;

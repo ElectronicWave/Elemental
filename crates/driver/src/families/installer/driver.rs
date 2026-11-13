@@ -67,11 +67,11 @@ where
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl<F, L, VL> Driver<L, VL> for InstallerFamilyDriver<F>
 where
     F: InstallerFamily,
-    F::Source: Sync,
+    F::Source: Send + Sync,
     L: Layout,
     VL: Layout,
 {

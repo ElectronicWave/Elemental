@@ -13,7 +13,7 @@ use super::{
     instance_names_in,
 };
 
-#[async_trait(?Send)]
+#[async_trait]
 impl<L> VersionJsonGameStorageExt for Storage<L>
 where
     L: VersionJsonRootLayout,

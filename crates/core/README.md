@@ -27,7 +27,7 @@ spawning launch commands. Minecraft-specific installation logic lives in
 ```toml
 [dependencies]
 anyhow = "1"
-elemental-core = "0.2"
+elemental-core = "0.3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 

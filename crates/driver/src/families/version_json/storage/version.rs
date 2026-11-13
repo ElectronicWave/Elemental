@@ -6,13 +6,13 @@ use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::{error::Result, families::version_json::resource::VersionJsonInstanceResource};
 
-#[async_trait(?Send)]
+#[async_trait]
 pub trait VersionJsonMetadataStorageExt {
     fn metadata(&self) -> Result<PistonMetaData>;
     async fn write_metadata(&self, metadata: &PistonMetaData) -> Result<()>;
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl<L, VL> VersionJsonMetadataStorageExt for Storage<VL, Storage<L>>
 where
     L: elemental_core::storage::layout::Layout,

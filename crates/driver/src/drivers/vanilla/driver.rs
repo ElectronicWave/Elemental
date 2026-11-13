@@ -58,7 +58,7 @@ impl VanillaDriver {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl<L: Layout, VL: Layout> Driver<L, VL> for VanillaDriver {
     fn descriptor(&self) -> DriverDescriptor {
         VANILLA_DRIVER

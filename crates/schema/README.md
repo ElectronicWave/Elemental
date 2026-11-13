@@ -21,7 +21,7 @@ metadata in any Rust application without pulling in the launcher runtime.
 ```toml
 [dependencies]
 anyhow = "1"
-elemental-schema = "0.2"
+elemental-schema = "0.3"
 serde_json = "1"
 ```
 

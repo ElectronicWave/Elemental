@@ -59,7 +59,7 @@ Minecraft preparation uses one session per version with four groups:
 ```toml
 [dependencies]
 anyhow = "1"
-elemental-infra = "0.2"
+elemental-infra = "0.3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
@@ -67,7 +67,7 @@ Enable the `serde` feature when events, snapshots, progress, or reports need to
 be serialized:
 
 ```toml
-elemental-infra = { version = "0.2", features = ["serde"] }
+elemental-infra = { version = "0.3", features = ["serde"] }
 serde_json = "1"
 ```
 

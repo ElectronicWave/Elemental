@@ -34,7 +34,7 @@ directly.
 ```toml
 [dependencies]
 anyhow = "1"
-elemental-driver = "0.2"
+elemental-driver = "0.3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
@@ -212,7 +212,7 @@ type MyResolver = VanillaFallbackRemoteResolver<MyEndpoints>;
 #[derive(Debug, Clone, Copy, Default)]
 struct MyFamily;
 
-#[async_trait(?Send)]
+#[async_trait]
 impl ProfiledVersionJsonFamily for MyFamily {
     type Source = MySource;
     type RemoteResolver = MyResolver;
@@ -307,7 +307,7 @@ const MY_DRIVER: DriverDescriptor = DriverDescriptor {
 
 struct MyDriver;
 
-#[async_trait(?Send)]
+#[async_trait]
 impl<L: Layout, VL: Layout> Driver<L, VL> for MyDriver {
     fn descriptor(&self) -> DriverDescriptor {
         MY_DRIVER

@@ -60,7 +60,7 @@ where
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl<F, L, VL> Driver<L, VL> for ProfiledVersionJsonDriver<F>
 where
     F: ProfiledVersionJsonFamily,

@@ -98,8 +98,8 @@ where
     }
 }
 
-#[async_trait(?Send)]
-pub trait Driver<L: Layout, VL: Layout> {
+#[async_trait]
+pub trait Driver<L: Layout, VL: Layout>: Send + Sync {
     fn descriptor(&self) -> DriverDescriptor;
 
     async fn inspect(&self, probe: &InstanceProbe) -> Result<Option<InstalledDriver>>;

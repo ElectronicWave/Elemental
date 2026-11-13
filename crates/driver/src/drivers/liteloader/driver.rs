@@ -23,7 +23,7 @@ const LITELOADER_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(
 #[derive(Debug, Clone, Copy, Default)]
 pub struct LiteLoaderDriverFamily;
 
-#[async_trait(?Send)]
+#[async_trait]
 impl ProfiledVersionJsonFamily for LiteLoaderDriverFamily {
     type Source = LiteLoaderSource;
     type RemoteResolver = super::prepared::LiteLoaderRemoteResolver;

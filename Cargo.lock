@@ -597,7 +597,7 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "elemental-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "dirs",
@@ -623,7 +623,7 @@ dependencies = [
 
 [[package]]
 name = "elemental-driver"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "elemental-core",
@@ -641,7 +641,7 @@ dependencies = [
 
 [[package]]
 name = "elemental-infra"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "futures",
@@ -658,7 +658,7 @@ dependencies = [
 
 [[package]]
 name = "elemental-kit"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "elemental-core",
  "elemental-driver",
@@ -671,7 +671,7 @@ dependencies = [
 
 [[package]]
 name = "elemental-launcher"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "elemental-core",
  "elemental-driver",
@@ -689,7 +689,7 @@ dependencies = [
 
 [[package]]
 name = "elemental-object"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "scc",
@@ -699,7 +699,7 @@ dependencies = [
 
 [[package]]
 name = "elemental-schema"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "jiff",
  "serde",
@@ -708,7 +708,7 @@ dependencies = [
 
 [[package]]
 name = "elemental-shared"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "dirs",
  "serde",
@@ -1429,7 +1429,7 @@ dependencies = [
 
 [[package]]
 name = "launchpad"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",

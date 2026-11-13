@@ -24,7 +24,6 @@ pub trait RetroFuturaCatalog: Copy + std::fmt::Debug + Send + Sync + 'static {
     const GROUP: &'static str;
     const ARTIFACT: &'static str;
     const GAME_VERSION: &'static str;
-    const RELEASE_DESCRIPTION: &'static str;
     const IDENTITY: ProfiledDriverIdentity;
     const FAMILY_NAME: &'static str;
     const LOADER_VERSION_PREFIX: &'static str;
@@ -52,8 +51,7 @@ where
         let game_version = MinecraftVersionId::from(C::GAME_VERSION);
         Some((
             game_version.clone(),
-            LoaderRelease::new(game_version, LoaderVersionId::from(version))
-                .with_description(Some(C::RELEASE_DESCRIPTION.to_owned())),
+            LoaderRelease::new(game_version, LoaderVersionId::from(version)),
         ))
     }
 }

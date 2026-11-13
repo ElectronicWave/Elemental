@@ -11,8 +11,6 @@ use crate::{
     url::Origin,
 };
 
-const GAME_VERSION_HEURISTIC_DESCRIPTION: &str = "Game version is inferred from NeoForge version naming. Installer profile remains the source of truth.";
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct NeoForgeOrigin;
 
@@ -45,8 +43,7 @@ impl MavenSpec for NeoForgeSpec {
         let game_version = infer_neoforge_game_version(version.as_str())?;
         Some((
             game_version.clone(),
-            LoaderRelease::new(game_version, LoaderVersionId::from(version))
-                .with_description(Some(GAME_VERSION_HEURISTIC_DESCRIPTION.to_owned())),
+            LoaderRelease::new(game_version, LoaderVersionId::from(version)),
         ))
     }
 }

@@ -123,9 +123,6 @@ impl Display for GameVersionChoice {
         if let Some(stream) = self.version.stream.as_deref() {
             write!(formatter, " [{stream}]")?;
         }
-        if let Some(description) = self.version.description.as_deref() {
-            write!(formatter, " {description}")?;
-        }
         Ok(())
     }
 }
@@ -142,9 +139,6 @@ impl Display for LoaderVersionChoice {
         }
         if let Some(published_at) = self.release.published_at.as_deref() {
             write!(formatter, " {published_at}")?;
-        }
-        if let Some(description) = self.release.description.as_deref() {
-            write!(formatter, " {description}")?;
         }
         Ok(())
     }

@@ -33,11 +33,7 @@ impl GameVersionCatalog for RiftCatalog {
         for release in self.source.releases().await? {
             let id = rift_game_version(release.loader_version.as_str());
             if seen.insert(id.clone()) {
-                game_versions.push(GameVersion {
-                    id,
-                    description: None,
-                    stream: None,
-                });
+                game_versions.push(GameVersion { id, stream: None });
             }
         }
         Ok(game_versions)

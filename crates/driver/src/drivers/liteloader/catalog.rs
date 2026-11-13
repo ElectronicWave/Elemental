@@ -36,11 +36,8 @@ impl GameVersionCatalog for LiteLoaderCatalog {
             .into_iter()
             .filter_map(|release| {
                 let id = MinecraftVersionId::from(release.game_version);
-                seen.insert(id.clone()).then_some(GameVersion {
-                    id,
-                    description: None,
-                    stream: None,
-                })
+                seen.insert(id.clone())
+                    .then_some(GameVersion { id, stream: None })
             })
             .collect())
     }

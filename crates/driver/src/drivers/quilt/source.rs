@@ -90,7 +90,6 @@ impl LoaderMetaEndpoints for QuiltEndpoints {
     fn game_version(version: Self::GameVersion) -> crate::catalog::GameVersion {
         crate::catalog::GameVersion {
             id: MinecraftVersionId::from(version.version),
-            description: None,
             stream: Some(if version.stable { "stable" } else { "snapshot" }.to_owned()),
         }
     }

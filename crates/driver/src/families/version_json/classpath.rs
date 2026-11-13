@@ -45,9 +45,6 @@ where
         let Some(artifact) = downloads.artifact.as_ref() else {
             continue;
         };
-        if artifact.path.contains("natives") {
-            continue;
-        }
 
         let relative_path = SafeRelativePath::parse(artifact.path.as_str())?;
         let path = resolve_absolute_path(

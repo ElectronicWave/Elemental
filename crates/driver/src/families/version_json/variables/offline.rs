@@ -53,9 +53,6 @@ impl LauncherVariables {
             let Some(artifact) = downloads.artifact.as_ref() else {
                 continue;
             };
-            if artifact.path.contains("natives") {
-                continue;
-            }
 
             let relative_path = SafeRelativePath::parse(artifact.path.as_str())?;
             let path = root_layout.try_get_extended_resource(

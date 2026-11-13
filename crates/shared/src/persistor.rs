@@ -79,8 +79,11 @@ pub struct CustomPersistor<
     pub id: String,
     pub scope: Scope,
     pub suffix: Option<String>,
-    _marker: PhantomData<(IO, V, S, fn(&D))>,
+    _marker: CustomPersistorMarker<IO, V, S, D>,
 }
+
+#[allow(type_alias_bounds)]
+type CustomPersistorMarker<IO, V, S, D: ?Sized> = PhantomData<(IO, V, S, fn(&D))>;
 
 impl<V, S, D, IO, Ser, De> CustomPersistor<V, S, D, IO, Ser, De>
 where

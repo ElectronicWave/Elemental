@@ -28,8 +28,8 @@ reload it, build a mutable launch command, then start the game.
 ```toml
 [dependencies]
 anyhow = "1"
-elemental-core = "0.2"
-elemental-launcher = "0.2"
+elemental-core = "0.3"
+elemental-launcher = "0.3"
 tokio = { version = "1", features = ["macros", "process", "rt-multi-thread"] }
 ```
 
@@ -41,7 +41,7 @@ Yggdrasil-compatible credential. Enable `offline-server` to additionally
 re-export nidhogg's local Yggdrasil server:
 
 ```toml
-elemental-launcher = { version = "0.2", features = ["offline-server"] }
+elemental-launcher = { version = "0.3", features = ["offline-server"] }
 ```
 
 ## Quick Start

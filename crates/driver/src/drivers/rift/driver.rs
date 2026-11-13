@@ -27,7 +27,7 @@ const RIFT_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RiftDriverFamily;
 
-#[async_trait(?Send)]
+#[async_trait]
 impl ProfiledVersionJsonFamily for RiftDriverFamily {
     type Source = RiftSource;
     type RemoteResolver = super::prepared::RiftRemoteResolver;

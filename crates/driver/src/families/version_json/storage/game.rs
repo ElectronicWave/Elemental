@@ -11,7 +11,7 @@ use crate::{
     inspect::InstalledInstance,
 };
 
-#[async_trait::async_trait(?Send)]
+#[async_trait::async_trait]
 pub trait VersionJsonGameStorageExt {
     type Layout: VersionJsonRootLayout;
 

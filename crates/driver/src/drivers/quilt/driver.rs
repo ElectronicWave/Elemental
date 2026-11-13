@@ -20,7 +20,7 @@ const QUILT_LOADER_LIBRARIES: LibraryPrefixSet =
 #[derive(Debug, Clone, Copy, Default)]
 pub struct QuiltDriverFamily;
 
-#[async_trait(?Send)]
+#[async_trait]
 impl ProfiledVersionJsonFamily for QuiltDriverFamily {
     type Source = QuiltSource;
     type RemoteResolver = super::prepared::QuiltRemoteResolver;

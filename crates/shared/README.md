@@ -36,7 +36,7 @@ without the persistor needing to understand migrations.
 ```toml
 [dependencies]
 anyhow = "1"
-elemental-shared = "0.2"
+elemental-shared = "0.3"
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
@@ -45,7 +45,7 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 ```toml
 [dependencies]
-elemental-shared = { version = "0.2", features = ["toml"] }
+elemental-shared = { version = "0.3", features = ["toml"] }
 ```
 
 ## Quick Start

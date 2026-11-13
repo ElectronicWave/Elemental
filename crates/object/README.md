@@ -25,7 +25,7 @@ request- or tenant-scoped values separate from the global pool.
 [dependencies]
 anyhow = "1"
 async-trait = "0.1"
-elemental-object = "0.2"
+elemental-object = "0.3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
@@ -263,7 +263,7 @@ notifications. Tokio is always a dependency because task-local contexts need
 
 ```toml
 [dependencies]
-elemental-object = { version = "0.2", default-features = false }
+elemental-object = { version = "0.3", default-features = false }
 ```
 
 ## Error Handling

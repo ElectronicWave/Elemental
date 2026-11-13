@@ -98,7 +98,7 @@ Launchpad defaults live in
 ```toml
 [dependencies]
 anyhow = "1"
-elemental = { package = "elemental-kit", version = "0.2" }
+elemental = { package = "elemental-kit", version = "0.3" }
 tokio = { version = "1", features = ["macros", "process", "rt-multi-thread"] }
 ```
 
@@ -185,6 +185,12 @@ if let Some(instance) = launcher.inspect_instance("MyFabric-1.20.1".to_owned()).
 }
 ```
 
+## Migrating from 0.2
+
+0.3 is a breaking release for custom drivers: `Driver` now requires
+`Send + Sync` so launcher futures can be spawned on multi-threaded runtimes.
+See the [0.2 to 0.3 migration guide](docs/migration/0.3.md).
+
 ## Migrating from 0.1
 
 0.2 is a breaking release at every layer. See the
@@ -240,7 +246,7 @@ modules an application uses:
 [dependencies]
 elemental = {
     package = "elemental-kit",
-    version = "0.2",
+    version = "0.3",
     default-features = false,
     features = ["launcher"],
 }

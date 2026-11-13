@@ -16,7 +16,7 @@ use crate::{
 
 use super::{VersionJsonRemoteResolver, driver::ProfiledVersionJsonDriver};
 
-#[async_trait(?Send)]
+#[async_trait]
 pub trait ProfiledVersionJsonFamily: Clone + Debug + Send + Sync + 'static {
     type Source: Clone + Debug + Send + Sync + 'static;
     type RemoteResolver: VersionJsonRemoteResolver + Clone + Send + Sync + 'static;

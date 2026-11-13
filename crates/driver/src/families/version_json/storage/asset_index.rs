@@ -11,7 +11,7 @@ use crate::{
     families::version_json::{layout::VersionJsonRootLayout, resource::VersionJsonRootResource},
 };
 
-#[async_trait(?Send)]
+#[async_trait]
 pub trait VersionJsonAssetIndexStorageExt {
     async fn write_asset_index(
         &self,
@@ -21,7 +21,7 @@ pub trait VersionJsonAssetIndexStorageExt {
     fn asset_index_objects(&self, id: impl AsRef<str>) -> Result<PistonMetaAssetIndexObjects>;
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl<L> VersionJsonAssetIndexStorageExt for Storage<L>
 where
     L: VersionJsonRootLayout,

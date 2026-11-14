@@ -50,8 +50,7 @@ where
             if seen.insert(game_version.clone()) {
                 game_versions.push(GameVersion {
                     id: game_version,
-                    description: release.description,
-                    stream: release.stream,
+                    channel: release.channel,
                 });
             }
         }

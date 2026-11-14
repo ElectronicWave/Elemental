@@ -9,7 +9,6 @@ use crate::{
 };
 
 pub const OUTLANDS_GAME_VERSION: &str = "1.12.2";
-const OUTLANDS_RELEASE_DESCRIPTION: &str = "Outlands installer releases target Minecraft 1.12.2.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct OutlandsOrigin;
@@ -43,7 +42,6 @@ impl RetroFuturaCatalog for OutlandsRetroFutura {
     const GROUP: &'static str = "top.outlands";
     const ARTIFACT: &'static str = "outlands";
     const GAME_VERSION: &'static str = OUTLANDS_GAME_VERSION;
-    const RELEASE_DESCRIPTION: &'static str = OUTLANDS_RELEASE_DESCRIPTION;
     const IDENTITY: ProfiledDriverIdentity = OUTLANDS_IDENTITY;
     const FAMILY_NAME: &'static str = "outlands";
     const LOADER_VERSION_PREFIX: &'static str = "outlands-";

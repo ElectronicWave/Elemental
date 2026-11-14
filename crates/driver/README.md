@@ -379,7 +379,7 @@ exposing a custom driver through the high-level launcher requires adding a
 `GameVersionCatalog::game_versions()` returns the game versions known to a
 source. `LoaderVersionCatalog::loader_versions(&game_version)` returns the
 loader releases for one game version. `LoaderRelease` carries the typed game and
-loader versions plus optional upstream metadata such as stability, stream, and
+loader versions plus optional upstream metadata such as stability, channel, and
 publication time.
 
 `LoaderMetaCatalog` handles Fabric-style metadata APIs.

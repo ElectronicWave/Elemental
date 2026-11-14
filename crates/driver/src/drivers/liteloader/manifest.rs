@@ -10,7 +10,7 @@ pub(super) use release::{collect_releases, select_build};
 pub struct LiteLoaderRelease {
     pub game_version: String,
     pub loader_version: String,
-    pub stream: String,
+    pub channel: String,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

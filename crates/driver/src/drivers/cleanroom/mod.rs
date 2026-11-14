@@ -9,7 +9,6 @@ use crate::{
 };
 
 pub const CLEANROOM_GAME_VERSION: &str = "1.12.2";
-const CLEANROOM_RELEASE_DESCRIPTION: &str = "Cleanroom installer releases target Minecraft 1.12.2.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CleanroomOrigin;
@@ -44,7 +43,6 @@ impl RetroFuturaCatalog for CleanroomRetroFutura {
     const GROUP: &'static str = "com.cleanroommc";
     const ARTIFACT: &'static str = "cleanroom";
     const GAME_VERSION: &'static str = CLEANROOM_GAME_VERSION;
-    const RELEASE_DESCRIPTION: &'static str = CLEANROOM_RELEASE_DESCRIPTION;
     const IDENTITY: ProfiledDriverIdentity = CLEANROOM_IDENTITY;
     const FAMILY_NAME: &'static str = "cleanroom";
     const LOADER_VERSION_PREFIX: &'static str = "cleanroom-";

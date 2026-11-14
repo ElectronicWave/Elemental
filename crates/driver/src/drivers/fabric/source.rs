@@ -120,7 +120,7 @@ impl LoaderMetaEndpoints for FabricEndpoints {
     fn game_version(version: Self::GameVersion) -> crate::catalog::GameVersion {
         crate::catalog::GameVersion {
             id: MinecraftVersionId::from(version.version),
-            stream: Some(if version.stable { "stable" } else { "snapshot" }.to_owned()),
+            channel: Some(if version.stable { "stable" } else { "snapshot" }.to_owned()),
         }
     }
 
@@ -128,7 +128,7 @@ impl LoaderMetaEndpoints for FabricEndpoints {
         game_version: MinecraftVersionId,
         version: Self::LoaderGameVersion,
     ) -> crate::catalog::LoaderRelease {
-        let stream = if version.loader.stable {
+        let channel = if version.loader.stable {
             "stable"
         } else {
             "unstable"
@@ -137,7 +137,7 @@ impl LoaderMetaEndpoints for FabricEndpoints {
             game_version,
             LoaderVersionId::from(version.loader.version),
         )
-        .with_stream(Some(stream.to_owned()))
+        .with_channel(Some(channel.to_owned()))
     }
 }
 

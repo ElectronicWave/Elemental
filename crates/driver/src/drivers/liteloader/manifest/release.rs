@@ -16,7 +16,7 @@ pub(crate) fn collect_releases(manifest: LiteLoaderManifest) -> Vec<LiteLoaderRe
             releases.push(LiteLoaderRelease {
                 game_version: selected.game_version,
                 loader_version: selected.build.version,
-                stream: selected.build.stream,
+                channel: selected.build.stream,
             });
         }
     }

@@ -30,7 +30,7 @@ impl GameVersionCatalog for VanillaCatalog {
             .into_iter()
             .map(|version| GameVersion {
                 id: version.id.into(),
-                stream: Some(version.release_type),
+                channel: Some(version.release_type),
             })
             .collect())
     }

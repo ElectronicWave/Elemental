@@ -5,14 +5,14 @@ use crate::loader_version::LoaderVersionId;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GameVersion {
     pub id: MinecraftVersionId,
-    pub stream: Option<String>,
+    pub channel: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LoaderRelease {
     pub game_version: MinecraftVersionId,
     pub loader_version: LoaderVersionId,
-    pub stream: Option<String>,
+    pub channel: Option<String>,
     pub published_at: Option<String>,
     pub prerelease: Option<bool>,
 }
@@ -22,14 +22,14 @@ impl LoaderRelease {
         Self {
             game_version,
             loader_version,
-            stream: None,
+            channel: None,
             published_at: None,
             prerelease: None,
         }
     }
 
-    pub fn with_stream(mut self, stream: Option<String>) -> Self {
-        self.stream = stream;
+    pub fn with_channel(mut self, channel: Option<String>) -> Self {
+        self.channel = channel;
         self
     }
 

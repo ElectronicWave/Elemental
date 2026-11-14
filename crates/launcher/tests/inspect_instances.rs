@@ -41,7 +41,8 @@ fn temp_root() -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("system clock is before the Unix epoch")
         .as_nanos();
-    std::env::temp_dir().join(format!("elemental-inspect-{}-{nonce}", std::process::id()))
+    Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("elemental-inspect-{}-{nonce}", std::process::id()))
 }
 
 fn write_instance(root: &Path, name: &str, metadata: &str) {

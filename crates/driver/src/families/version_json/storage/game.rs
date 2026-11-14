@@ -8,7 +8,7 @@ use elemental_core::storage::Storage;
 use crate::{
     error::Result,
     families::version_json::layout::{VersionJsonInstanceLayout, VersionJsonRootLayout},
-    inspect::InstalledInstance,
+    inspect::{InstalledInstance, InstanceDetectionFailure},
 };
 
 #[async_trait::async_trait]
@@ -51,7 +51,7 @@ pub async fn inspect_instances<L, VL>(
     storage: &Storage<L>,
     version_layout: VL,
     drivers: &[&dyn crate::driver::Driver<L, VL>],
-) -> Result<Vec<InstalledInstance<L, VL>>>
+) -> Result<Vec<std::result::Result<InstalledInstance<L, VL>, InstanceDetectionFailure>>>
 where
     L: VersionJsonRootLayout + Clone,
     VL: VersionJsonInstanceLayout + Clone,

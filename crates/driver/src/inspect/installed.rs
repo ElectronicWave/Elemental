@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use elemental_core::storage::{Storage, layout::Layout};
 
 use crate::{
@@ -14,6 +16,13 @@ use super::InstanceProbe;
 pub struct InstalledInstance<L: Layout, VL: Layout> {
     pub storage: Storage<VL, Storage<L>>,
     pub driver: InstalledDriver,
+}
+
+#[derive(Debug)]
+pub struct InstanceDetectionFailure {
+    pub instance_name: String,
+    pub path: PathBuf,
+    pub error: crate::error::Error,
 }
 
 impl<L: Layout + Clone, VL: VersionJsonInstanceLayout + Clone> InstalledInstance<L, VL> {
@@ -44,15 +53,38 @@ where
         storage: &Storage<L>,
         version_layout: VL,
         drivers: &[&dyn Driver<L, VL>],
-    ) -> Result<Vec<Self>> {
-        let mut instances = Vec::new();
+    ) -> Result<Vec<std::result::Result<Self, InstanceDetectionFailure>>> {
+        let mut detected = Vec::new();
 
         for instance in storage.instances(version_layout)? {
-            if let Some(installed) = Self::detect(instance, drivers).await? {
-                instances.push(installed);
-            }
+            let instance_name = instance_name(&instance);
+            let path = instance.path.clone();
+            let result = match Self::detect(instance, drivers).await {
+                Ok(Some(installed)) => Ok(installed),
+                Ok(None) => continue,
+                Err(error) => Err(InstanceDetectionFailure {
+                    instance_name,
+                    path,
+                    error,
+                }),
+            };
+            detected.push(result);
         }
 
-        Ok(instances)
+        Ok(detected)
     }
+}
+
+fn instance_name<L, VL>(instance: &Storage<VL, Storage<L>>) -> String
+where
+    L: Layout,
+    VL: Layout,
+{
+    instance.name().unwrap_or_else(|| {
+        instance
+            .path
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_else(|| instance.path.display().to_string())
+    })
 }

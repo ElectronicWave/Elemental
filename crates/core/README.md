@@ -216,7 +216,9 @@ the corresponding login flows. An `Authorizer` is a login entry point with a
 stable `id()` used for persistence and a human-readable `name()`.
 `OfflineAuthorizer` derives a deterministic offline UUID,
 `MicrosoftAuthorizer` runs the Microsoft device-code flow, and
-`YggdrasilAuthorizer` authenticates against an authlib-compatible API. An
+`YggdrasilAuthorizer` authenticates against an authlib-compatible API.
+`MicrosoftAuthorizer` is non-generic and boxes its verification handler, so it
+can be used from `'static` futures such as `tokio::spawn`. An
 `Account` is the persisted result of authorization and can be refreshed; a
 `Credential` is the per-launch projection passed to the game and is never
 persisted.

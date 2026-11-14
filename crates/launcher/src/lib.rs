@@ -25,6 +25,7 @@ pub use launcher::Launcher;
 pub use origin::DriverOrigins;
 pub use request::{LaunchOptions, LaunchResolution, QuickPlayOptions, RuntimeOptions};
 pub use result::{
-    Instance, LaunchedInstance, PreparedInstance, PreparedInstanceInfo, PreparedInstanceMetadata,
+    InspectReport, Instance, InstanceInspectionFailure, LaunchedInstance, PreparedInstance,
+    PreparedInstanceInfo, PreparedInstanceMetadata,
 };
 pub use spec::{DriverSpec, LoaderSpec, VanillaSpec};

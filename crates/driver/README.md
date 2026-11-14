@@ -407,7 +407,9 @@ through drivers.
 
 `InstanceProbe` reads local version metadata. `InstalledInstance::detect()` and
 `detect_all()` test available drivers and return the matching descriptor, loader
-version, and game version. `ProfiledDriverIdentity` describes how a family
+version, and game version. `detect_all()` returns each instance result
+independently instead of aborting the whole scan, so one malformed installation
+does not hide the others. `ProfiledDriverIdentity` describes how a family
 recognizes its marker libraries, profile ids, and loader versions. The
 high-level launcher uses the same inspection path when reopening an existing
 instance.

@@ -271,7 +271,7 @@ before launch.
 
 | Operation | Method |
 | --- | --- |
-| Discover local instances | `inspect_instances()` |
+| Discover local instances | `inspect_instances()` returning `InspectReport` |
 | Detect one instance and its driver | `inspect_instance(name)` |
 | Install or refresh an instance | `prepare(name, driver, runtime)` |
 | Install with an observed or configured session | `prepare_with_session(session, name, driver, runtime)` |
@@ -288,9 +288,12 @@ Catalogs are not wrapped by the launcher. Use
 Reopen an instance without preparing it again:
 
 ```rust
-let instances = launcher.inspect_instances().await?;
-for instance in instances {
+let report = launcher.inspect_instances().await?;
+for instance in report.instances {
     println!("{} ({})", instance.instance_name, instance.driver.driver.id);
+}
+for failure in report.failures {
+    eprintln!("{}: {}", failure.instance_name, failure.error);
 }
 
 if let Some(instance) = launcher

@@ -107,15 +107,24 @@ async fn prepare_instance(
 
 async fn run_list_instances(storage_root: std::path::PathBuf) -> Result<()> {
     let launcher = Launcher::builder().storage_root(storage_root).build();
-    let instances = launcher.inspect_instances().await?;
+    let report = launcher.inspect_instances().await?;
 
-    if instances.is_empty() {
+    for failure in &report.failures {
+        eprintln!(
+            "Failed to inspect '{}' at {}: {}",
+            failure.instance_name,
+            failure.path.display(),
+            failure.error
+        );
+    }
+
+    if report.instances.is_empty() {
         println!("No local instances found.");
         return Ok(());
     }
 
-    println!("Found {} local instance(s):", instances.len());
-    for instance in instances {
+    println!("Found {} local instance(s):", report.instances.len());
+    for instance in report.instances {
         println!(
             "- {} | driver={} | root={}",
             instance.instance_name,

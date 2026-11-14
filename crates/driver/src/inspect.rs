@@ -4,7 +4,7 @@ mod probe;
 mod profile_id;
 
 pub use identity::ProfiledDriverIdentity;
-pub use installed::InstalledInstance;
+pub use installed::{InstalledInstance, InstanceDetectionFailure};
 pub use probe::InstanceProbe;
 pub use profile_id::ProfileIdPattern;
 

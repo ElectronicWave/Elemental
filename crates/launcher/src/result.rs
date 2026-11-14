@@ -15,7 +15,7 @@ use elemental_driver::{
     },
 };
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 
 pub struct LaunchedInstance {
     pub runtime: Distribution,
@@ -27,6 +27,24 @@ pub struct Instance {
     pub instance_name: String,
     pub instance_root: PathBuf,
     pub driver: InstalledDriver,
+}
+
+#[derive(Debug)]
+pub struct InspectReport {
+    pub instances: Vec<Instance>,
+    pub failures: Vec<InstanceInspectionFailure>,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error(
+    "inspect instance '{instance_name}' at '{}' failed: {error}",
+    path.display()
+)]
+pub struct InstanceInspectionFailure {
+    pub instance_name: String,
+    pub path: PathBuf,
+    #[source]
+    pub error: Error,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -70,13 +70,27 @@ type RefreshClient =
 pub type VerificationHandlerResult =
     std::result::Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
-pub struct MicrosoftAuthorizer<F: Fn(String, String) -> VerificationHandlerResult> {
+pub struct MicrosoftAuthorizer {
     pub client_id: String,
     /// Receives the verification URI and user code. Returning an error aborts authorization.
-    pub verification_handler: F,
+    pub verification_handler:
+        Box<dyn Fn(String, String) -> VerificationHandlerResult + Send + Sync>,
 }
 
-impl<F: Fn(String, String) -> VerificationHandlerResult> MicrosoftAuthorizer<F> {
+impl MicrosoftAuthorizer {
+    pub fn new(
+        client_id: String,
+        verification_handler: impl Fn(String, String) -> VerificationHandlerResult
+        + Send
+        + Sync
+        + 'static,
+    ) -> Self {
+        Self {
+            client_id,
+            verification_handler: Box::new(verification_handler),
+        }
+    }
+
     fn client() -> Result<ReqwestClient> {
         let reqwest_client = ClientBuilder::new()
             // Following redirects opens the client up to SSRF vulnerabilities.
@@ -87,7 +101,7 @@ impl<F: Fn(String, String) -> VerificationHandlerResult> MicrosoftAuthorizer<F> 
     }
 }
 
-impl<F: Fn(String, String) -> VerificationHandlerResult> Authorizer for MicrosoftAuthorizer<F> {
+impl Authorizer for MicrosoftAuthorizer {
     type Account = MicrosoftAccount;
 
     async fn authorize(&self) -> Result<Self::Account> {
@@ -140,8 +154,7 @@ impl<F: Fn(String, String) -> VerificationHandlerResult> Authorizer for Microsof
 }
 
 pub(crate) async fn refresh(account: &MicrosoftAccount) -> Result<MicrosoftAccount> {
-    let reqwest_client =
-        MicrosoftAuthorizer::<fn(String, String) -> VerificationHandlerResult>::client()?;
+    let reqwest_client = MicrosoftAuthorizer::client()?;
     let client = refresh_client(&account.client_id)?;
     let token = client
         .exchange_refresh_token(&RefreshToken::new(account.refresh_token.clone()))

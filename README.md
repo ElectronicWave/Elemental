@@ -174,9 +174,12 @@ for account-store, texture, and offline-server examples.
 Inspect and reopen an existing instance without preparing it again:
 
 ```rust
-let instances = launcher.inspect_instances().await?;
-for instance in instances {
+let report = launcher.inspect_instances().await?;
+for instance in report.instances {
     println!("{} ({})", instance.instance_name, instance.driver.driver.id);
+}
+for failure in report.failures {
+    eprintln!("{}: {}", failure.instance_name, failure.error);
 }
 
 if let Some(instance) = launcher.inspect_instance("MyFabric-1.20.1".to_owned()).await? {

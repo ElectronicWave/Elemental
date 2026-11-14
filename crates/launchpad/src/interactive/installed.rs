@@ -60,7 +60,16 @@ impl InstalledSelection {
 
 pub(super) async fn prompt(launcher: &Launcher) -> Result<Option<LaunchpadCommand>> {
     let storage_root = launcher.storage_root().to_path_buf();
-    let instances = launcher.inspect_instances().await?;
+    let report = launcher.inspect_instances().await?;
+    for failure in &report.failures {
+        eprintln!(
+            "Skipping instance '{}' at {}: {}",
+            failure.instance_name,
+            failure.path.display(),
+            failure.error
+        );
+    }
+    let instances = report.instances;
     if instances.is_empty() {
         bail!(
             "No installed instances found under {}",

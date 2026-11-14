@@ -46,7 +46,9 @@ use crate::{
     error::{Error, Result},
     origin::{DriverOrigins, InstallerFamilySource, ProfiledFamilySource},
     request::{LaunchOptions, RuntimeOptions},
-    result::{Instance, LaunchedInstance, PreparedInstance},
+    result::{
+        InspectReport, Instance, InstanceInspectionFailure, LaunchedInstance, PreparedInstance,
+    },
     spec::DriverSpec,
 };
 
@@ -111,17 +113,29 @@ where
         &self.runtime_resolver
     }
 
-    pub async fn inspect_instances(&self) -> Result<Vec<Instance>> {
+    pub async fn inspect_instances(&self) -> Result<InspectReport> {
         let storage = self.game_storage();
         let drivers = self.inspect_drivers()?;
         let driver_refs = driver_refs(&drivers);
-        let mut summaries = inspect_instances(&storage, self.instance_layout.clone(), &driver_refs)
-            .await?
-            .into_iter()
-            .map(summarize_installed_instance)
-            .collect::<Vec<Instance>>();
-        summaries.sort_by(|left, right| left.instance_name.cmp(&right.instance_name));
-        Ok(summaries)
+        let detected =
+            inspect_instances(&storage, self.instance_layout.clone(), &driver_refs).await?;
+        let mut instances = Vec::new();
+        let mut failures = Vec::new();
+        for result in detected {
+            match result {
+                Ok(instance) => instances.push(summarize_installed_instance(instance)),
+                Err(failure) => failures.push(InstanceInspectionFailure {
+                    instance_name: failure.instance_name,
+                    path: failure.path,
+                    error: failure.error.into(),
+                }),
+            }
+        }
+        instances.sort_by(|left, right| left.instance_name.cmp(&right.instance_name));
+        Ok(InspectReport {
+            instances,
+            failures,
+        })
     }
 
     pub async fn inspect_instance(&self, instance_name: String) -> Result<Option<Instance>> {

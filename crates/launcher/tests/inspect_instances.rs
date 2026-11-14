@@ -1,6 +1,6 @@
 use std::{
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -44,7 +44,7 @@ fn temp_root() -> PathBuf {
     std::env::temp_dir().join(format!("elemental-inspect-{}-{nonce}", std::process::id()))
 }
 
-fn write_instance(root: &PathBuf, name: &str, metadata: &str) {
+fn write_instance(root: &Path, name: &str, metadata: &str) {
     let directory = root.join("versions").join(name);
     fs::create_dir_all(&directory).unwrap();
     fs::write(directory.join(format!("{name}.json")), metadata).unwrap();

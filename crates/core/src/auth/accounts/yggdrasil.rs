@@ -8,6 +8,7 @@ use nidhogg::{
     },
 };
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::auth::accounts::offline::offline_uuid;
 use crate::auth::accounts::{Account, AccountId};
@@ -49,21 +50,24 @@ impl YggdrasilAccount {
     ///
     /// The launcher supplies a loopback auth server when one is needed.
     pub fn offline(username: String) -> Self {
-        let uuid = offline_uuid(&username).to_string();
+        let uuid = offline_uuid(&username);
         Self::offline_with_uuid(username, uuid)
     }
 
-    pub fn offline_with_uuid(username: String, uuid: String) -> Self {
-        let identity = uuid.replace('-', "").to_ascii_lowercase();
+    /// Creates an offline account with an explicit player UUID.
+    pub fn offline_with_uuid(username: String, uuid: Uuid) -> Self {
         Self {
-            account_id: AccountId::derive(YGGDRASIL_AUTHORIZER_ID, &format!("offline:{identity}")),
+            account_id: AccountId::derive(
+                YGGDRASIL_AUTHORIZER_ID,
+                &format!("offline:{}", uuid.simple()),
+            ),
             base_url: None,
             user_id: None,
             preferred_language: None,
             access_token: String::new(),
             client_token: String::new(),
             selected_profile: YggdrasilProfile {
-                id: uuid,
+                id: uuid.to_string(),
                 name: username,
             },
         }

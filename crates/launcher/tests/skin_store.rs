@@ -1,11 +1,8 @@
-use std::{
-    path::PathBuf,
-    time::{SystemTime, UNIX_EPOCH},
-};
-
 use elemental_core::auth::accounts::AccountId;
 use elemental_launcher::{SkinModel, SkinStore};
 use elemental_shared::scope::Scope;
+
+mod common;
 
 const PNG: &[u8] = &[
     0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
@@ -15,20 +12,9 @@ const PNG: &[u8] = &[
     0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
 ];
 
-fn temp_root() -> PathBuf {
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system clock is before the Unix epoch")
-        .as_nanos();
-    std::env::temp_dir().join(format!(
-        "elemental-skin-store-{}-{nonce}",
-        std::process::id()
-    ))
-}
-
 #[tokio::test]
 async fn skin_store_imports_selects_and_removes() {
-    let root = temp_root();
+    let root = common::temp_root("elemental-skin-store");
     let scope = Scope::Directory(root.clone());
     let store = SkinStore::open(scope.clone()).await.unwrap();
     let account_id = AccountId::new();
@@ -60,12 +46,12 @@ async fn skin_store_imports_selects_and_removes() {
     assert!(reopened.list().await.unwrap().is_empty());
     assert!(reopened.selected(account_id).await.unwrap().is_none());
 
-    std::fs::remove_dir_all(root).unwrap();
+    common::remove(&root);
 }
 
 #[tokio::test]
 async fn skin_store_persists_imports_and_selections() {
-    let root = temp_root();
+    let root = common::temp_root("elemental-skin-store");
     let scope = Scope::Directory(root.clone());
     let store = SkinStore::open(scope.clone()).await.unwrap();
     let account_id = AccountId::new();
@@ -88,12 +74,12 @@ async fn skin_store_persists_imports_and_selections() {
     assert_eq!(selected.asset, asset);
     assert_eq!(selected.model, SkinModel::Slim);
 
-    std::fs::remove_dir_all(root).unwrap();
+    common::remove(&root);
 }
 
 #[tokio::test]
 async fn skin_store_rejects_non_png_data() {
-    let root = temp_root();
+    let root = common::temp_root("elemental-skin-store");
     let scope = Scope::Directory(root.clone());
     let store = SkinStore::open(scope).await.unwrap();
 
@@ -107,5 +93,5 @@ async fn skin_store_rejects_non_png_data() {
     ));
     assert!(store.list().await.unwrap().is_empty());
 
-    std::fs::remove_dir_all(root).unwrap();
+    common::remove(&root);
 }

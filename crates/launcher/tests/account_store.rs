@@ -1,28 +1,14 @@
-use std::{
-    path::PathBuf,
-    time::{SystemTime, UNIX_EPOCH},
-};
-
 use elemental_core::auth::{
     accounts::Account, authorizers::offline::OfflineAuthorizer, credential::CredentialKind,
 };
 use elemental_launcher::AccountStore;
 use elemental_shared::scope::Scope;
 
-fn temp_root() -> PathBuf {
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system clock is before the Unix epoch")
-        .as_nanos();
-    std::env::temp_dir().join(format!(
-        "elemental-account-store-{}-{nonce}",
-        std::process::id()
-    ))
-}
+mod common;
 
 #[tokio::test]
 async fn account_store_persists_selects_and_removes_offline_account() {
-    let root = temp_root();
+    let root = common::temp_root("elemental-account-store");
     let scope = Scope::Directory(root.clone());
     let store = AccountStore::open(scope.clone()).await.unwrap();
 
@@ -56,5 +42,5 @@ async fn account_store_persists_selects_and_removes_offline_account() {
     assert!(reopened.list().await.unwrap().is_empty());
     assert!(reopened.selected().await.unwrap().is_none());
 
-    std::fs::remove_dir_all(root).unwrap();
+    common::remove(&root);
 }

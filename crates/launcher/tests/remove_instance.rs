@@ -1,23 +1,12 @@
-use std::{
-    fs,
-    path::PathBuf,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::fs;
 
 use elemental_launcher::{Launcher, RemoveInstanceOutcome};
 
-fn temp_root() -> PathBuf {
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system clock is before the Unix epoch")
-        .as_nanos();
-    std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
-        .join(format!("elemental-remove-{}-{nonce}", std::process::id()))
-}
+mod common;
 
 #[tokio::test]
 async fn remove_instance_removes_healthy_and_corrupt_instances() {
-    let root = temp_root();
+    let root = common::temp_root("elemental-remove");
     fs::create_dir_all(root.join("versions/healthy")).unwrap();
     fs::write(root.join("versions/healthy/healthy.json"), "{}").unwrap();
     fs::create_dir_all(root.join("versions/broken")).unwrap();
@@ -42,5 +31,5 @@ async fn remove_instance_removes_healthy_and_corrupt_instances() {
     );
     assert!(launcher.remove_instance("../outside").await.is_err());
 
-    fs::remove_dir_all(root).unwrap();
+    common::remove(&root);
 }

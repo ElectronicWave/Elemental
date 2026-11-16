@@ -1,8 +1,4 @@
-use std::{
-    future::Future,
-    path::PathBuf,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::future::Future;
 
 use elemental_core::auth::authorizers::microsoft::{
     MicrosoftAuthorizer, VerificationHandlerResult,
@@ -10,20 +6,13 @@ use elemental_core::auth::authorizers::microsoft::{
 use elemental_launcher::{AccountStore, Launcher};
 use elemental_shared::scope::Scope;
 
-fn temp_root() -> PathBuf {
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system clock is before the Unix epoch")
-        .as_nanos();
-    std::env::temp_dir().join(format!(
-        "elemental-launcher-send-{}-{nonce}",
-        std::process::id()
-    ))
-}
+mod common;
 
 #[tokio::test]
 async fn inspect_instances_future_is_send() {
-    let launcher = Launcher::builder().storage_root(temp_root()).build();
+    let launcher = Launcher::builder()
+        .storage_root(common::temp_root("elemental-launcher-send"))
+        .build();
 
     let report = tokio::spawn(async move { launcher.inspect_instances().await })
         .await
@@ -44,7 +33,7 @@ fn microsoft_sign_in_future_is_send_and_static() {
         client_id: "client-id".to_owned(),
         verification_handler: handler,
     };
-    let root = temp_root();
+    let root = common::temp_root("elemental-launcher-send");
     let future = async move {
         let store = AccountStore::open(Scope::Directory(root)).await.unwrap();
         store.sign_in(&authorizer).await.unwrap();

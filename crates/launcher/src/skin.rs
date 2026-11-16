@@ -63,14 +63,8 @@ impl SkinIndex {
     }
 
     fn select(&mut self, selection: AccountSkinSelection) {
-        match self
-            .selections
-            .iter_mut()
-            .find(|stored| stored.account_id == selection.account_id)
-        {
-            Some(stored) => *stored = selection,
-            None => self.selections.push(selection),
-        }
+        self.clear_selection(selection.account_id);
+        self.selections.push(selection);
     }
 
     fn clear_selection(&mut self, account_id: AccountId) {
@@ -242,19 +236,7 @@ impl SkinStore {
         let Some(selection) = self.selection(account_id).await else {
             return Ok(None);
         };
-        let asset = self
-            .asset(selection.skin_id)
-            .await
-            .ok_or(Error::SkinNotFound {
-                skin_id: selection.skin_id,
-            })?;
-        let path = self.path(asset.id).await?;
-        if !tokio::fs::try_exists(&path).await? {
-            return Err(Error::SkinFileNotFound {
-                skin_id: asset.id,
-                path,
-            });
-        }
+        let (asset, path) = self.existing(selection.skin_id).await?;
 
         Ok(Some(SelectedSkin {
             asset,
@@ -289,18 +271,23 @@ impl SkinStore {
             .await?)
     }
 
-    async fn upload<A>(&self, account: &A, skin_id: SkinId, model: SkinModel) -> Result<()>
-    where
-        A: Account + ?Sized,
-    {
-        self.asset(skin_id)
+    async fn existing(&self, skin_id: SkinId) -> Result<(SkinAsset, PathBuf)> {
+        let asset = self
+            .asset(skin_id)
             .await
             .ok_or(Error::SkinNotFound { skin_id })?;
         let path = self.path(skin_id).await?;
         if !tokio::fs::try_exists(&path).await? {
             return Err(Error::SkinFileNotFound { skin_id, path });
         }
+        Ok((asset, path))
+    }
 
+    async fn upload<A>(&self, account: &A, skin_id: SkinId, model: SkinModel) -> Result<()>
+    where
+        A: Account + ?Sized,
+    {
+        let (_, path) = self.existing(skin_id).await?;
         let bytes = tokio::fs::read(&path).await?;
         account.upload_skin(bytes, model).await?;
         self.select(account.account_id(), skin_id, model).await

@@ -38,6 +38,13 @@ struct DriverRegistration {
     factory: CatalogFactory,
 }
 
+/// Drivers in the order surfaced by [`DriverCatalog::supported_drivers`].
+///
+/// Actively maintained drivers come first: mainstream families, then the
+/// maintained legacy families, then the two maintained 1.12.2 drivers.
+/// Outlands precedes Cleanroom because Outlands is the actively maintained
+/// LGPL fork, while Cleanroom uses a source-available license. Archived or
+/// abandoned drivers stay last.
 const DRIVER_REGISTRATIONS: [DriverRegistration; 11] = [
     DriverRegistration {
         descriptor: VANILLA_DRIVER,
@@ -53,6 +60,23 @@ const DRIVER_REGISTRATIONS: [DriverRegistration; 11] = [
         factory: |driver| DriverCatalog::with_loader(driver, FabricFlavor::Fabric),
     },
     DriverRegistration {
+        descriptor: NEOFORGE_DRIVER,
+        factory: |driver| {
+            Ok(DriverCatalog::loader(
+                driver,
+                NeoForgeCatalog::with_defaults(),
+            ))
+        },
+    },
+    DriverRegistration {
+        descriptor: FORGE_DRIVER,
+        factory: |driver| Ok(DriverCatalog::loader(driver, ForgeCatalog::with_defaults())),
+    },
+    DriverRegistration {
+        descriptor: QUILT_DRIVER,
+        factory: |driver| Ok(DriverCatalog::loader(driver, QuiltCatalog::with_defaults())),
+    },
+    DriverRegistration {
         descriptor: LEGACY_FABRIC_DRIVER,
         factory: |driver| DriverCatalog::with_loader(driver, FabricFlavor::LegacyFabric),
     },
@@ -61,8 +85,22 @@ const DRIVER_REGISTRATIONS: [DriverRegistration; 11] = [
         factory: |driver| DriverCatalog::with_loader(driver, FabricFlavor::Babric),
     },
     DriverRegistration {
-        descriptor: QUILT_DRIVER,
-        factory: |driver| Ok(DriverCatalog::loader(driver, QuiltCatalog::with_defaults())),
+        descriptor: OUTLANDS_DRIVER,
+        factory: |driver| {
+            Ok(DriverCatalog::loader(
+                driver,
+                OutlandsCatalog::with_defaults(),
+            ))
+        },
+    },
+    DriverRegistration {
+        descriptor: CLEANROOM_DRIVER,
+        factory: |driver| {
+            Ok(DriverCatalog::loader(
+                driver,
+                CleanroomCatalog::with_defaults(),
+            ))
+        },
     },
     DriverRegistration {
         descriptor: LITELOADER_DRIVER,
@@ -76,37 +114,6 @@ const DRIVER_REGISTRATIONS: [DriverRegistration; 11] = [
     DriverRegistration {
         descriptor: RIFT_DRIVER,
         factory: |driver| Ok(DriverCatalog::loader(driver, RiftCatalog::with_defaults())),
-    },
-    DriverRegistration {
-        descriptor: FORGE_DRIVER,
-        factory: |driver| Ok(DriverCatalog::loader(driver, ForgeCatalog::with_defaults())),
-    },
-    DriverRegistration {
-        descriptor: CLEANROOM_DRIVER,
-        factory: |driver| {
-            Ok(DriverCatalog::loader(
-                driver,
-                CleanroomCatalog::with_defaults(),
-            ))
-        },
-    },
-    DriverRegistration {
-        descriptor: OUTLANDS_DRIVER,
-        factory: |driver| {
-            Ok(DriverCatalog::loader(
-                driver,
-                OutlandsCatalog::with_defaults(),
-            ))
-        },
-    },
-    DriverRegistration {
-        descriptor: NEOFORGE_DRIVER,
-        factory: |driver| {
-            Ok(DriverCatalog::loader(
-                driver,
-                NeoForgeCatalog::with_defaults(),
-            ))
-        },
     },
 ];
 

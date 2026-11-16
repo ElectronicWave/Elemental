@@ -57,7 +57,7 @@ impl Account for OfflineAccount {
     }
 }
 
-fn offline_uuid(username: &str) -> Uuid {
+pub(crate) fn offline_uuid(username: &str) -> Uuid {
     use md5::{Digest, Md5};
 
     let offline_name = format!("OfflinePlayer:{username}");

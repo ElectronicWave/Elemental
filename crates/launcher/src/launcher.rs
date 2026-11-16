@@ -48,6 +48,7 @@ use crate::{
     request::{LaunchOptions, RuntimeOptions},
     result::{
         InspectReport, Instance, InstanceInspectionFailure, LaunchedInstance, PreparedInstance,
+        RemoveInstanceOutcome,
     },
     spec::DriverSpec,
 };
@@ -146,6 +147,25 @@ where
         Ok(InstalledInstance::detect(instance, &driver_refs)
             .await?
             .map(summarize_installed_instance))
+    }
+
+    /// Removes an installed instance and its root directory.
+    ///
+    /// This does not require the instance metadata to be valid, so corrupted
+    /// installations can also be cleaned up.
+    pub async fn remove_instance(
+        &self,
+        instance_name: impl Into<String>,
+    ) -> Result<RemoveInstanceOutcome> {
+        let instance_name = instance_name.into();
+        let path = self.game_storage().instance_root(instance_name)?;
+        match tokio::fs::remove_dir_all(&path).await {
+            Ok(()) => Ok(RemoveInstanceOutcome::Removed),
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => {
+                Ok(RemoveInstanceOutcome::NotFound)
+            }
+            Err(source) => Err(source.into()),
+        }
     }
 
     /// Install or refresh an instance with a default download session.

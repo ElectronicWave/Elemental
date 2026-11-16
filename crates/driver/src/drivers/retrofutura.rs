@@ -1,10 +1,14 @@
 use std::marker::PhantomData;
 
+use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 use elemental_schema::mojang::piston::PistonMetaLibraries;
 
 use crate::{
-    catalog::{InstallerMavenCatalog, LoaderRelease},
+    catalog::{
+        GameVersion, GameVersionCatalog, InstallerMavenCatalog, LoaderRelease, LoaderVersionCatalog,
+    },
+    error::Result,
     families::installer::{
         InstallerFamily, InstallerFamilyDriver, InstallerMavenSource, MavenEndpoints, MavenSpec,
         merge_retro_futura_libraries,
@@ -58,7 +62,58 @@ where
 
 pub type RetroFuturaEndpoints<C> = MavenEndpoints<RetroFuturaMaven<C>>;
 pub type RetroFuturaSource<C> = InstallerMavenSource<RetroFuturaEndpoints<C>>;
-pub type RetroFuturaReleaseCatalog<C> = InstallerMavenCatalog<RetroFuturaEndpoints<C>>;
+
+pub struct RetroFuturaReleaseCatalog<C>
+where
+    C: RetroFuturaCatalog,
+{
+    inner: InstallerMavenCatalog<RetroFuturaEndpoints<C>>,
+}
+
+impl<C> RetroFuturaReleaseCatalog<C>
+where
+    C: RetroFuturaCatalog,
+{
+    pub fn new(source: RetroFuturaSource<C>) -> Self {
+        Self {
+            inner: InstallerMavenCatalog::new(source),
+        }
+    }
+
+    pub fn with_defaults() -> Self {
+        Self::new(RetroFuturaSource::<C>::default())
+    }
+
+    pub fn source(&self) -> &RetroFuturaSource<C> {
+        self.inner.source()
+    }
+}
+
+#[async_trait]
+impl<C> GameVersionCatalog for RetroFuturaReleaseCatalog<C>
+where
+    C: RetroFuturaCatalog,
+{
+    async fn game_versions(&self) -> Result<Vec<GameVersion>> {
+        Ok(vec![GameVersion {
+            id: MinecraftVersionId::from(C::GAME_VERSION),
+            channel: None,
+        }])
+    }
+}
+
+#[async_trait]
+impl<C> LoaderVersionCatalog for RetroFuturaReleaseCatalog<C>
+where
+    C: RetroFuturaCatalog,
+{
+    async fn loader_versions(
+        &self,
+        game_version: &MinecraftVersionId,
+    ) -> Result<Vec<LoaderRelease>> {
+        self.inner.loader_versions(game_version).await
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct RetroFuturaFamily<C>(PhantomData<C>);

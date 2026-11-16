@@ -1,7 +1,7 @@
 mod helpers;
 mod storage_impl;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use elemental_core::storage::Storage;
 
@@ -40,6 +40,8 @@ pub trait VersionJsonGameStorageExt {
     fn instance_names<VL>(&self, version_layout: &VL) -> Result<Vec<String>>
     where
         VL: VersionJsonInstanceLayout;
+
+    fn instance_root(&self, name: impl AsRef<str>) -> Result<PathBuf>;
 
     fn instances<VL>(&self, version_layout: VL) -> Result<Vec<Storage<VL, Storage<Self::Layout>>>>
     where

@@ -1,10 +1,8 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{fs, path::Path};
 
 use elemental_launcher::Launcher;
+
+mod common;
 
 const VALID_METADATA: &str = r#"{
   "assetIndex": {
@@ -36,15 +34,6 @@ const VALID_METADATA: &str = r#"{
   "type": "release"
 }"#;
 
-fn temp_root() -> PathBuf {
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system clock is before the Unix epoch")
-        .as_nanos();
-    Path::new(env!("CARGO_TARGET_TMPDIR"))
-        .join(format!("elemental-inspect-{}-{nonce}", std::process::id()))
-}
-
 fn write_instance(root: &Path, name: &str, metadata: &str) {
     let directory = root.join("versions").join(name);
     fs::create_dir_all(&directory).unwrap();
@@ -54,7 +43,7 @@ fn write_instance(root: &Path, name: &str, metadata: &str) {
 
 #[tokio::test]
 async fn inspect_instances_keeps_healthy_instances_when_one_is_corrupt() {
-    let root = temp_root();
+    let root = common::temp_root("elemental-inspect");
     write_instance(&root, "broken", "{");
     write_instance(&root, "healthy", VALID_METADATA);
     let launcher = Launcher::builder().storage_root(root.clone()).build();
@@ -70,5 +59,5 @@ async fn inspect_instances_keeps_healthy_instances_when_one_is_corrupt() {
         root.join("versions").join("broken")
     );
 
-    fs::remove_dir_all(root).unwrap();
+    common::remove(&root);
 }

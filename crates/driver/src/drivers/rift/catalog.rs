@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 
@@ -10,6 +8,8 @@ use crate::{
 };
 
 use super::source::RiftSource;
+
+const RIFT_GAME_VERSIONS: [&str; 2] = ["1.13", "1.13.2"];
 
 pub struct RiftCatalog {
     source: RiftSource,
@@ -28,15 +28,13 @@ impl RiftCatalog {
 #[async_trait]
 impl GameVersionCatalog for RiftCatalog {
     async fn game_versions(&self) -> Result<Vec<GameVersion>> {
-        let mut seen = HashSet::new();
-        let mut game_versions = Vec::new();
-        for release in self.source.releases().await? {
-            let id = rift_game_version(release.loader_version.as_str());
-            if seen.insert(id.clone()) {
-                game_versions.push(GameVersion { id, channel: None });
-            }
-        }
-        Ok(game_versions)
+        Ok(RIFT_GAME_VERSIONS
+            .into_iter()
+            .map(|id| GameVersion {
+                id: MinecraftVersionId::from(id),
+                channel: None,
+            })
+            .collect())
     }
 }
 

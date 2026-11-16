@@ -1,5 +1,7 @@
 use elemental_core::auth::accounts::AccountId;
 
+use crate::skin::SkinId;
+
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
@@ -73,6 +75,21 @@ pub enum Error {
         actual_id: AccountId,
         actual_authorizer: String,
     },
+
+    #[error("skin '{skin_id}' not found")]
+    SkinNotFound { skin_id: SkinId },
+
+    #[error("skin file for '{skin_id}' not found at '{}'", path.display())]
+    SkinFileNotFound {
+        skin_id: SkinId,
+        path: std::path::PathBuf,
+    },
+
+    #[error("skin '{name}' is not a PNG file")]
+    SkinNotPng { name: String },
+
+    #[error("skin id space exhausted")]
+    SkinIdExhausted,
 
     #[cfg(feature = "yggdrasil-auth")]
     #[error(transparent)]

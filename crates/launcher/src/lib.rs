@@ -10,6 +10,7 @@ pub mod offline_server;
 mod origin;
 mod request;
 mod result;
+pub mod skin;
 mod spec;
 
 pub use account::{AccountIndex, AccountRef, AccountRegistry, AccountStore};
@@ -28,4 +29,5 @@ pub use result::{
     InspectReport, Instance, InstanceInspectionFailure, LaunchedInstance, PreparedInstance,
     PreparedInstanceInfo, PreparedInstanceMetadata, RemoveInstanceOutcome,
 };
+pub use skin::{AccountSkinExt, LocalSkin, SelectedSkin, SkinAsset, SkinEntry, SkinId, SkinStore};
 pub use spec::{DriverSpec, LoaderSpec, VanillaSpec};

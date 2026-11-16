@@ -4,7 +4,6 @@ use elemental_core::auth::{
     accounts::{Account, AccountId},
     authorizers::Authorizer,
 };
-use elemental_infra::SafeRelativePath;
 use elemental_shared::{
     migrator::NoMigrator, persistor::json_persistor, scope::Scope, store::Store,
 };
@@ -199,51 +198,10 @@ impl AccountStore {
     }
 
     async fn account_path(&self, reference: &AccountRef) -> Result<PathBuf> {
-        let id = format!(
-            "accounts/{}/{}",
-            authorizer_path_segment(&reference.authorizer),
-            reference.account_id
-        );
+        let id = format!("accounts/{}/{}", reference.authorizer, reference.account_id);
         Ok(self
             .scope
             .get_full_path(&id, Some("json".to_owned()))
             .await?)
-    }
-}
-
-fn authorizer_path_segment(authorizer: &str) -> String {
-    if SafeRelativePath::parse(authorizer).is_ok() && !authorizer.contains('/') {
-        authorizer.to_owned()
-    } else {
-        format!("encoded/{}", encode_hex(authorizer.as_bytes()))
-    }
-}
-
-fn encode_hex(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut encoded = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        encoded.push(HEX[(byte >> 4) as usize] as char);
-        encoded.push(HEX[(byte & 0x0f) as usize] as char);
-    }
-    encoded
-}
-
-#[cfg(test)]
-mod tests {
-    use super::authorizer_path_segment;
-    use elemental_infra::SafeRelativePath;
-
-    #[test]
-    fn authorizer_ids_are_safe_path_components() {
-        assert_eq!(authorizer_path_segment("offline"), "offline");
-
-        let encoded = authorizer_path_segment("particle:yggdrasil-local");
-        assert!(encoded.starts_with("encoded/"));
-        assert!(SafeRelativePath::parse(format!("accounts/{encoded}")).is_ok());
-        assert_ne!(
-            authorizer_path_segment("a:b"),
-            authorizer_path_segment("a-b")
-        );
     }
 }

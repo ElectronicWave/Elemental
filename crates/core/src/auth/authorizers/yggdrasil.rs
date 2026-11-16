@@ -11,7 +11,7 @@ use nidhogg::{
 pub const YGGDRASIL_AUTHORIZER_ID: &str = "yggdrasil";
 
 pub struct YggdrasilAuthorizer {
-    pub base_url: String,
+    pub base_url: Option<String>,
     pub username: String,
     pub password: String,
     pub client_token: Option<String>,
@@ -19,7 +19,11 @@ pub struct YggdrasilAuthorizer {
 
 impl YggdrasilAuthorizer {
     fn client(&self) -> Result<Nidhogg> {
-        Self::client_for(&self.base_url)
+        let base_url = self
+            .base_url
+            .as_deref()
+            .ok_or(Error::YggdrasilBaseUrlMissing)?;
+        Self::client_for(base_url)
     }
 
     fn client_for(base_url: &str) -> Result<Nidhogg> {
@@ -27,7 +31,10 @@ impl YggdrasilAuthorizer {
     }
 
     pub async fn authenticate(&self) -> Result<YggdrasilAccount> {
-        let base_url = normalized_base_url(&self.base_url);
+        let Some(base_url) = self.base_url.as_deref() else {
+            return Ok(YggdrasilAccount::offline(self.username.clone()));
+        };
+        let base_url = normalized_base_url(base_url);
         let response = self
             .client()?
             .authenticate(&Authenticate::new(
@@ -50,7 +57,7 @@ impl YggdrasilAuthorizer {
             .ok_or(Error::YggdrasilProfileMissing)?;
 
         Ok(YggdrasilAccount {
-            base_url: base_url.to_owned(),
+            base_url: Some(base_url.to_owned()),
             account_id: account_id(base_url, &selected_profile.id),
             user_id: user_id(response.user.as_ref()),
             preferred_language: preferred_language(response.user.as_ref()),
@@ -61,7 +68,11 @@ impl YggdrasilAuthorizer {
     }
 
     pub async fn refresh_account(account: &YggdrasilAccount) -> Result<YggdrasilAccount> {
-        let response = Self::client_for(&account.base_url)?
+        let base_url = account
+            .base_url
+            .as_deref()
+            .ok_or(Error::YggdrasilBaseUrlMissing)?;
+        let response = Self::client_for(base_url)?
             .refresh(&Refresh::new(
                 account.access_token.clone(),
                 Some(account.client_token.clone()),

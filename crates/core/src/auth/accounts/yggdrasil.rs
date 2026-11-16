@@ -9,6 +9,7 @@ use nidhogg::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::auth::accounts::offline::offline_uuid;
 use crate::auth::accounts::{Account, AccountId};
 use crate::auth::authorizers::yggdrasil::{YGGDRASIL_AUTHORIZER_ID, YggdrasilAuthorizer};
 use crate::auth::credential::{Credential, CredentialKind};
@@ -35,7 +36,7 @@ impl From<&Profile> for YggdrasilProfile {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct YggdrasilAccount {
     pub account_id: AccountId,
-    pub base_url: String,
+    pub base_url: Option<String>,
     pub user_id: Option<String>,
     pub preferred_language: Option<String>,
     pub access_token: String,
@@ -44,9 +45,36 @@ pub struct YggdrasilAccount {
 }
 
 impl YggdrasilAccount {
+    /// Creates an offline Yggdrasil account without a persisted API root.
+    ///
+    /// The launcher supplies a loopback auth server when one is needed.
+    pub fn offline(username: String) -> Self {
+        let uuid = offline_uuid(&username).to_string();
+        Self::offline_with_uuid(username, uuid)
+    }
+
+    pub fn offline_with_uuid(username: String, uuid: String) -> Self {
+        let identity = uuid.replace('-', "").to_ascii_lowercase();
+        Self {
+            account_id: AccountId::derive(YGGDRASIL_AUTHORIZER_ID, &format!("offline:{identity}")),
+            base_url: None,
+            user_id: None,
+            preferred_language: None,
+            access_token: String::new(),
+            client_token: String::new(),
+            selected_profile: YggdrasilProfile {
+                id: uuid,
+                name: username,
+            },
+        }
+    }
+
     fn client(&self) -> Result<Nidhogg> {
-        Nidhogg::new(self.base_url.trim_end_matches('/'))
-            .map_err(|source| Error::Yggdrasil { source })
+        let base_url = self
+            .base_url
+            .as_deref()
+            .ok_or(Error::YggdrasilBaseUrlMissing)?;
+        Nidhogg::new(base_url.trim_end_matches('/')).map_err(|source| Error::Yggdrasil { source })
     }
 
     async fn upload(
@@ -96,18 +124,25 @@ impl Account for YggdrasilAccount {
     }
 
     async fn credential(&self) -> Result<Credential> {
+        let (kind, auth_server) = match &self.base_url {
+            Some(base_url) => (CredentialKind::Mojang, Some(base_url.clone())),
+            None => (CredentialKind::Legacy, None),
+        };
         Ok(Credential {
             username: self.selected_profile.name.clone(),
             uuid: self.selected_profile.id.clone(),
             access_token: self.access_token.clone(),
-            kind: CredentialKind::Mojang,
+            kind,
             xuid: None,
             client_id: None,
-            auth_server: Some(self.base_url.clone()),
+            auth_server,
         })
     }
 
     async fn refresh(&self) -> Result<Box<dyn Account>> {
+        if self.base_url.is_none() {
+            return Ok(Box::new(self.clone()));
+        }
         Ok(Box::new(YggdrasilAuthorizer::refresh_account(self).await?))
     }
 

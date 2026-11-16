@@ -122,6 +122,10 @@ pub enum Error {
     YggdrasilProfileMissing,
 
     #[cfg(feature = "yggdrasil-auth")]
+    #[error("Yggdrasil account has no base URL")]
+    YggdrasilBaseUrlMissing,
+
+    #[cfg(feature = "yggdrasil-auth")]
     #[error("parse Yggdrasil profile textures failed")]
     YggdrasilTexture {
         #[source]

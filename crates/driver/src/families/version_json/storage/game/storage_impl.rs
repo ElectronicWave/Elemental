@@ -70,6 +70,10 @@ where
         instance_names_in(self, &root, version_layout)
     }
 
+    fn instance_root(&self, name: impl AsRef<str>) -> Result<std::path::PathBuf> {
+        instance_root(self, name)
+    }
+
     fn instances<VL>(&self, version_layout: VL) -> Result<Vec<Storage<VL, Storage<Self::Layout>>>>
     where
         Self::Layout: Clone,

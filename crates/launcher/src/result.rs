@@ -22,6 +22,12 @@ pub struct LaunchedInstance {
     pub child: tokio::process::Child,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoveInstanceOutcome {
+    Removed,
+    NotFound,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Instance {
     pub instance_name: String,

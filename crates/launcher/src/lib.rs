@@ -26,6 +26,6 @@ pub use origin::DriverOrigins;
 pub use request::{LaunchOptions, LaunchResolution, QuickPlayOptions, RuntimeOptions};
 pub use result::{
     InspectReport, Instance, InstanceInspectionFailure, LaunchedInstance, PreparedInstance,
-    PreparedInstanceInfo, PreparedInstanceMetadata,
+    PreparedInstanceInfo, PreparedInstanceMetadata, RemoveInstanceOutcome,
 };
 pub use spec::{DriverSpec, LoaderSpec, VanillaSpec};

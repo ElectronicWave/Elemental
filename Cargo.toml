@@ -27,7 +27,7 @@ dirs = { version = "7" }
 erased-serde = "0.4.11"
 futures = "0.3.34"
 hex = "0.4.3"
-jiff = { version = "0.2.0", features = ["serde"] }
+jiff = { version = "1.0.0", features = ["serde"] }
 nidhogg = { version = "0.3.0" }
 reqwest = { version = "0.13.1", features = [
     "json",

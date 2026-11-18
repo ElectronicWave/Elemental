@@ -7,27 +7,16 @@ use elemental_launcher::DriverCatalog;
 
 #[cfg(feature = "driver-all")]
 #[test]
-fn supported_drivers_follow_documented_order() {
-    let ids: Vec<&str> = DriverCatalog::supported_drivers()
+fn supported_drivers_follow_registry_order() {
+    let ids = DriverCatalog::supported_drivers()
         .map(|driver| driver.id)
-        .collect();
+        .collect::<Vec<_>>();
+    let expected = ALL_DRIVERS
+        .iter()
+        .map(|driver| driver.id)
+        .collect::<Vec<_>>();
 
-    assert_eq!(
-        ids,
-        [
-            "vanilla",
-            "fabric",
-            "neoforge",
-            "forge",
-            "quilt",
-            "legacyfabric",
-            "babric",
-            "outlands",
-            "cleanroom",
-            "liteloader",
-            "rift",
-        ]
-    );
+    assert_eq!(ids, expected);
 }
 
 #[cfg(feature = "driver-all")]

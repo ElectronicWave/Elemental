@@ -13,71 +13,24 @@ use elemental_core::{
     storage::Storage,
 };
 use elemental_driver::{
-    descriptors::ALL_DRIVERS,
     driver::{Driver, DriverDescriptor, PrepareRequest},
-    drivers::vanilla::driver::VanillaDriver,
-    families::{
-        installer::InstallerFamilyDriver,
-        version_json::{
-            BaseInstanceLayout, BaseRootLayout, ProfiledVersionJsonDriver,
-            ProfiledVersionJsonFamilyExt, VersionJsonGameStorageExt, VersionJsonInstanceLayout,
-            VersionJsonRootLayout, builder::VersionJsonLaunchBuilder, inspect_instances,
-            variables::LauncherVariables,
-        },
+    families::version_json::{
+        BaseInstanceLayout, BaseRootLayout, VersionJsonGameStorageExt, VersionJsonInstanceLayout,
+        VersionJsonRootLayout, builder::VersionJsonLaunchBuilder, inspect_instances,
+        variables::LauncherVariables,
     },
     inspect::InstalledInstance,
     launch::resolve_prepared_version_runtime,
 };
-
-#[cfg(feature = "driver-babric")]
-use elemental_driver::descriptors::BABRIC_DRIVER;
-#[cfg(feature = "driver-cleanroom")]
-use elemental_driver::descriptors::CLEANROOM_DRIVER;
-#[cfg(feature = "driver-fabric")]
-use elemental_driver::descriptors::FABRIC_DRIVER;
-#[cfg(feature = "driver-forge")]
-use elemental_driver::descriptors::FORGE_DRIVER;
-#[cfg(feature = "driver-legacyfabric")]
-use elemental_driver::descriptors::LEGACY_FABRIC_DRIVER;
-#[cfg(feature = "driver-liteloader")]
-use elemental_driver::descriptors::LITELOADER_DRIVER;
-#[cfg(feature = "driver-neoforge")]
-use elemental_driver::descriptors::NEOFORGE_DRIVER;
-#[cfg(feature = "driver-outlands")]
-use elemental_driver::descriptors::OUTLANDS_DRIVER;
-#[cfg(feature = "driver-quilt")]
-use elemental_driver::descriptors::QUILT_DRIVER;
-#[cfg(feature = "driver-rift")]
-use elemental_driver::descriptors::RIFT_DRIVER;
-#[cfg(feature = "driver-vanilla")]
-use elemental_driver::descriptors::VANILLA_DRIVER;
-
-#[cfg(feature = "driver-cleanroom")]
-use elemental_driver::drivers::cleanroom::CleanroomDriverSpec;
-#[cfg(any(
-    feature = "driver-fabric",
-    feature = "driver-legacyfabric",
-    feature = "driver-babric"
-))]
-use elemental_driver::drivers::fabric::{driver::FabricDriverFamily, source::FabricFlavor};
-#[cfg(feature = "driver-forge")]
-use elemental_driver::drivers::forge::ForgeFamily;
-#[cfg(feature = "driver-liteloader")]
-use elemental_driver::drivers::liteloader::driver::LiteLoaderDriverFamily;
-#[cfg(feature = "driver-neoforge")]
-use elemental_driver::drivers::neoforge::NeoForgeFamily;
-#[cfg(feature = "driver-outlands")]
-use elemental_driver::drivers::outlands::OutlandsDriverSpec;
-#[cfg(feature = "driver-quilt")]
-use elemental_driver::drivers::quilt::driver::QuiltDriverFamily;
-#[cfg(feature = "driver-rift")]
-use elemental_driver::drivers::rift::driver::RiftDriverFamily;
 use elemental_infra::downloader::{DownloadSession, ElementalDownloader};
 
 use crate::{
     builder::LauncherBuilder,
     error::{Error, Result},
-    origin::{DriverOrigins, InstallerFamilySource, ProfiledFamilySource},
+    origin::DriverOrigins,
+    registration::{
+        DriverRegistration, builtin_registration, builtin_registrations, builtin_unsupported,
+    },
     request::{LaunchOptions, RuntimeOptions},
     result::{
         InspectReport, Instance, InstanceInspectionFailure, LaunchedInstance, PreparedInstance,
@@ -104,6 +57,7 @@ where
     instance_layout: VL,
     origins: DriverOrigins,
     runtime_resolver: RuntimeResolver,
+    custom_drivers: Vec<DriverRegistration<L, VL>>,
 }
 
 impl Launcher<BaseRootLayout, BaseInstanceLayout> {
@@ -132,7 +86,29 @@ where
             instance_layout,
             origins,
             runtime_resolver,
+            custom_drivers: Vec::new(),
         }
+    }
+
+    /// Adds a third-party driver after the launcher has been built.
+    ///
+    /// Built-in descriptors cannot be replaced. Use [`DriverSpec::custom`] to
+    /// prepare an instance for a registered third-party driver.
+    pub fn register_driver(mut self, registration: DriverRegistration<L, VL>) -> Result<Self> {
+        let descriptor = registration.descriptor();
+        if builtin_registration(descriptor).is_some()
+            || self
+                .custom_drivers
+                .iter()
+                .any(|registered| registered.descriptor() == descriptor)
+        {
+            return Err(Error::DriverAlreadyRegistered {
+                id: descriptor.id.to_string(),
+            });
+        }
+
+        self.custom_drivers.push(registration);
+        Ok(self)
     }
 
     pub fn storage_root(&self) -> &Path {
@@ -371,66 +347,20 @@ where
             .instance(instance_name, self.instance_layout.clone())?)
     }
 
-    fn vanilla_driver(&self) -> VanillaDriver {
-        VanillaDriver::new(self.origins.vanilla_source())
-    }
+    fn resolve_driver(&self, descriptor: DriverDescriptor) -> Result<Arc<dyn Driver<L, VL>>> {
+        if let Some(registration) = self
+            .custom_drivers
+            .iter()
+            .find(|registration| registration.descriptor() == descriptor)
+        {
+            return Ok(registration.driver());
+        }
 
-    fn profiled_driver<F>(&self, family: F) -> Result<ProfiledVersionJsonDriver<F>>
-    where
-        F: ProfiledFamilySource,
-    {
-        Ok(family
-            .clone()
-            .build_driver(family.source_with_origins(&self.origins)?)
-            .with_vanilla_source(self.origins.vanilla_source()))
-    }
-
-    fn installer_driver<F>(&self) -> Result<InstallerFamilyDriver<F>>
-    where
-        F: InstallerFamilySource,
-    {
-        Ok(
-            InstallerFamilyDriver::new(F::source_with_origins(&self.origins)?)
-                .with_vanilla_source(self.origins.vanilla_source()),
-        )
-    }
-
-    fn resolve_driver(&self, desc: DriverDescriptor) -> Result<Box<dyn Driver<L, VL>>> {
-        Ok(match desc {
-            #[cfg(feature = "driver-vanilla")]
-            VANILLA_DRIVER => Box::new(self.vanilla_driver()),
-            #[cfg(feature = "driver-fabric")]
-            FABRIC_DRIVER => {
-                Box::new(self.profiled_driver(FabricDriverFamily::new(FabricFlavor::Fabric))?)
-            }
-            #[cfg(feature = "driver-legacyfabric")]
-            LEGACY_FABRIC_DRIVER => {
-                Box::new(self.profiled_driver(FabricDriverFamily::new(FabricFlavor::LegacyFabric))?)
-            }
-            #[cfg(feature = "driver-babric")]
-            BABRIC_DRIVER => {
-                Box::new(self.profiled_driver(FabricDriverFamily::new(FabricFlavor::Babric))?)
-            }
-            #[cfg(feature = "driver-quilt")]
-            QUILT_DRIVER => Box::new(self.profiled_driver(QuiltDriverFamily)?),
-            #[cfg(feature = "driver-liteloader")]
-            LITELOADER_DRIVER => Box::new(self.profiled_driver(LiteLoaderDriverFamily)?),
-            #[cfg(feature = "driver-rift")]
-            RIFT_DRIVER => Box::new(self.profiled_driver(RiftDriverFamily)?),
-            #[cfg(feature = "driver-forge")]
-            FORGE_DRIVER => Box::new(self.installer_driver::<ForgeFamily>()?),
-            #[cfg(feature = "driver-cleanroom")]
-            CLEANROOM_DRIVER => Box::new(self.installer_driver::<CleanroomDriverSpec>()?),
-            #[cfg(feature = "driver-outlands")]
-            OUTLANDS_DRIVER => Box::new(self.installer_driver::<OutlandsDriverSpec>()?),
-            #[cfg(feature = "driver-neoforge")]
-            NEOFORGE_DRIVER => Box::new(self.installer_driver::<NeoForgeFamily>()?),
-            _ => {
-                return Err(Error::UnsupportedDriver {
-                    id: desc.id.to_owned(),
-                });
-            }
-        })
+        let registration =
+            builtin_registration(descriptor).ok_or_else(|| builtin_unsupported(descriptor))?;
+        Ok(Arc::from(
+            registration.driver.build(descriptor, &self.origins)?,
+        ))
     }
 }
 
@@ -482,21 +412,26 @@ where
     L: VersionJsonRootLayout + Clone,
     VL: VersionJsonInstanceLayout + Clone + Send,
 {
-    fn inspect_drivers(&self) -> Result<Vec<Box<dyn Driver<L, VL>>>> {
-        ALL_DRIVERS
+    fn inspect_drivers(&self) -> Result<Vec<Arc<dyn Driver<L, VL>>>> {
+        self.custom_drivers
             .iter()
-            .copied()
+            .map(|registration| registration.descriptor())
+            .chain(
+                builtin_registrations()
+                    .iter()
+                    .map(|registration| registration.descriptor),
+            )
             .map(|descriptor| self.resolve_driver(descriptor))
             .collect()
     }
 }
 
-fn driver_refs<L, VL>(drivers: &[Box<dyn Driver<L, VL>>]) -> Vec<&dyn Driver<L, VL>>
+fn driver_refs<L, VL>(drivers: &[Arc<dyn Driver<L, VL>>]) -> Vec<&dyn Driver<L, VL>>
 where
     L: elemental_core::storage::layout::Layout,
     VL: elemental_core::storage::layout::Layout,
 {
-    drivers.iter().map(Box::as_ref).collect()
+    drivers.iter().map(Arc::as_ref).collect()
 }
 
 fn summarize_installed_instance<L, VL>(instance: InstalledInstance<L, VL>) -> Instance
@@ -517,5 +452,42 @@ where
         instance_name,
         instance_root: instance.storage.path,
         driver: instance.driver,
+    }
+}
+
+#[cfg(all(test, feature = "driver-vanilla"))]
+mod tests {
+    use elemental_driver::{descriptors::VANILLA_DRIVER, drivers::vanilla::driver::VanillaDriver};
+
+    use super::*;
+
+    #[test]
+    fn registration_rejects_builtin_and_duplicate_descriptors() {
+        let custom = DriverDescriptor {
+            id: "third-party",
+            name: "Third Party",
+        };
+        let launcher = Launcher::builder()
+            .build()
+            .register_driver(DriverRegistration::new(
+                custom,
+                Arc::new(VanillaDriver::with_defaults()),
+            ))
+            .unwrap();
+
+        assert!(matches!(
+            launcher.clone().register_driver(DriverRegistration::new(
+                custom,
+                Arc::new(VanillaDriver::with_defaults()),
+            )),
+            Err(Error::DriverAlreadyRegistered { .. })
+        ));
+        assert!(matches!(
+            launcher.register_driver(DriverRegistration::new(
+                VANILLA_DRIVER,
+                Arc::new(VanillaDriver::with_defaults()),
+            )),
+            Err(Error::DriverAlreadyRegistered { .. })
+        ));
     }
 }

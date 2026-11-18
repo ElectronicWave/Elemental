@@ -62,6 +62,22 @@ impl DriverSpec {
         Self::from_descriptor(descriptor, game_version, Some(loader_version))
     }
 
+    /// Creates a request for a third-party driver registered on a [`crate::Launcher`].
+    ///
+    /// Built-in callers should prefer [`DriverSpec::from_descriptor`], which
+    /// validates the descriptor and its loader-version requirements eagerly.
+    pub fn custom(
+        descriptor: DriverDescriptor,
+        game_version: MinecraftVersionId,
+        loader_version: Option<LoaderVersionId>,
+    ) -> Self {
+        Self {
+            descriptor,
+            game_version,
+            loader_version,
+        }
+    }
+
     pub fn descriptor(&self) -> DriverDescriptor {
         self.descriptor
     }

@@ -88,8 +88,12 @@ pub(super) fn default_driver() -> DriverDescriptor {
 
 #[cfg(not(feature = "driver-fabric"))]
 pub(super) fn default_driver() -> DriverDescriptor {
-    DriverCatalog::supported_drivers()
-        .next()
+    let drivers = DriverCatalog::supported_drivers().collect::<Vec<_>>();
+    drivers
+        .iter()
+        .copied()
+        .find(|driver| *driver == VANILLA_DRIVER)
+        .or_else(|| drivers.first().copied())
         .unwrap_or(VANILLA_DRIVER)
 }
 

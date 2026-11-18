@@ -20,6 +20,13 @@ pub struct AccountStore {
     registry: AccountRegistry,
 }
 
+/// Loadable accounts together with index entries that reference an unregistered
+/// authorizer.
+pub struct AccountListing {
+    pub accounts: Vec<Box<dyn Account>>,
+    pub unsupported: Vec<AccountRef>,
+}
+
 impl AccountStore {
     pub async fn open(scope: Scope) -> Result<Self> {
         Self::with_registry(scope, AccountRegistry::new()).await
@@ -129,19 +136,43 @@ impl AccountStore {
         Ok(account)
     }
 
-    pub async fn list(&self) -> Result<Vec<Box<dyn Account>>> {
+    /// Lists every loadable account and reports entries whose authorizer is not
+    /// registered in the store's [`AccountRegistry`].
+    ///
+    /// Unsupported entries are kept in the index so they can be loaded again
+    /// after the missing authorizer is registered.
+    pub async fn try_list(&self) -> Result<AccountListing> {
         let references = self.index.get(|index| index.value.accounts.clone()).await;
-        let mut accounts = Vec::with_capacity(references.len());
+        let mut listing = AccountListing {
+            accounts: Vec::with_capacity(references.len()),
+            unsupported: Vec::new(),
+        };
         for reference in references {
-            accounts.push(self.load(&reference).await?);
+            match self.load(&reference).await {
+                Ok(account) => listing.accounts.push(account),
+                Err(Error::UnknownAuthorizer { .. }) => listing.unsupported.push(reference),
+                Err(source) => return Err(source),
+            }
         }
-        Ok(accounts)
+        Ok(listing)
+    }
+
+    /// Lists every loadable account.
+    ///
+    /// Entries whose authorizer is not registered are skipped instead of
+    /// failing the whole listing.
+    pub async fn list(&self) -> Result<Vec<Box<dyn Account>>> {
+        Ok(self.try_list().await?.accounts)
     }
 
     pub async fn selected(&self) -> Result<Option<Box<dyn Account>>> {
         let reference = self.index.get(|index| index.value.selected.clone()).await;
         match reference {
-            Some(reference) => Ok(Some(self.load(&reference).await?)),
+            Some(reference) => match self.load(&reference).await {
+                Ok(account) => Ok(Some(account)),
+                Err(Error::UnknownAuthorizer { .. }) => Ok(None),
+                Err(source) => Err(source),
+            },
             None => Ok(None),
         }
     }

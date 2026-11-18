@@ -13,10 +13,12 @@ use elemental_shared::{
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    texture::{PNG_SIGNATURE, validate_name},
+};
 
 const SKIN_INDEX_VERSION: usize = 1;
-const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -70,6 +72,12 @@ impl SkinIndex {
     fn clear_selection(&mut self, account_id: AccountId) {
         self.selections
             .retain(|selection| selection.account_id != account_id);
+    }
+
+    fn rename(&mut self, skin_id: SkinId, name: String) {
+        if let Some(asset) = self.skins.iter_mut().find(|asset| asset.id == skin_id) {
+            asset.name = name;
+        }
     }
 }
 
@@ -151,6 +159,7 @@ impl SkinStore {
         default_model: SkinModel,
     ) -> Result<SkinAsset> {
         let name = name.into();
+        validate_name(&name)?;
         if !bytes.starts_with(PNG_SIGNATURE) {
             return Err(Error::SkinNotPng { name });
         }
@@ -177,6 +186,20 @@ impl SkinStore {
             })
             .await?;
         Ok(asset)
+    }
+
+    /// Renames a local skin without changing its id, PNG file, or selections.
+    pub async fn rename(&self, skin_id: SkinId, name: impl Into<String>) -> Result<()> {
+        let name = name.into();
+        validate_name(&name)?;
+        if self.asset(skin_id).await.is_none() {
+            return Err(Error::SkinNotFound { skin_id });
+        }
+
+        self.index
+            .set(|index| index.value.rename(skin_id, name))
+            .await?;
+        Ok(())
     }
 
     /// Lists local skins with their PNG paths without reading the files.

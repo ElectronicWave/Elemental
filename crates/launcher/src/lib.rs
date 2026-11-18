@@ -2,6 +2,7 @@ pub mod account;
 #[cfg(feature = "yggdrasil-auth")]
 mod authlib_injector;
 mod builder;
+pub mod cape;
 mod catalog;
 pub mod error;
 mod launcher;
@@ -13,11 +14,13 @@ mod request;
 mod result;
 pub mod skin;
 mod spec;
+mod texture;
 
 pub use account::{AccountIndex, AccountListing, AccountRef, AccountRegistry, AccountStore};
 #[cfg(feature = "yggdrasil-auth")]
 pub use authlib_injector::{AuthlibInjector, AuthlibInjectorSource};
 pub use builder::LauncherBuilder;
+pub use cape::{CapeAsset, CapeEntry, CapeId, CapeStore, SelectedCape};
 pub use catalog::DriverCatalog;
 pub use elemental_core::auth::credential::Credential;
 pub use elemental_core::auth::texture::{

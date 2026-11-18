@@ -10,7 +10,7 @@ mod offline;
 
 use super::classpath::classpath_separator;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LauncherVariables {
     pub auth_player_name: String,
     pub version_name: String,
@@ -74,7 +74,7 @@ impl Default for LauncherVariables {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum UserType {
     Legacy,
@@ -101,21 +101,5 @@ impl LauncherVariables {
 
     pub fn json(&self) -> Result<String> {
         Ok(serde_json::to_string(self)?)
-    }
-
-    pub fn copy_with(&self, key: String, value: String) -> Result<Self> {
-        let mut map = self.map()?;
-        map.insert(key, Value::String(value));
-        Ok(serde_json::from_value(Value::Object(map))?)
-    }
-
-    pub fn copy_with_option(&self, key: String, value: Option<String>) -> Result<Self> {
-        if let Some(value) = value {
-            self.copy_with(key, value)
-        } else {
-            let mut map = self.map()?;
-            map.remove(&key);
-            Ok(serde_json::from_value(Value::Object(map))?)
-        }
     }
 }

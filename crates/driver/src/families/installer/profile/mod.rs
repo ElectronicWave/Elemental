@@ -12,7 +12,7 @@ pub use launch::{
 };
 pub use state::InstallerPersistedState;
 pub(crate) use state::InstallerStatePaths;
-pub use status::{installer_install_status, resolve_installer_processor_runtime};
+pub use status::installer_install_status;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstallerInstallStatus {

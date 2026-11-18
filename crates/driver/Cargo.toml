@@ -22,3 +22,29 @@ serde_json = { workspace = true }
 quick-xml = { version = "0.42.0", features = ["serialize"] }
 tokio = { workspace = true }
 thiserror = { workspace = true }
+
+[features]
+default = ["driver-all"]
+driver-all = [
+    "fabric",
+    "legacyfabric",
+    "babric",
+    "quilt",
+    "liteloader",
+    "rift",
+    "forge",
+    "cleanroom",
+    "outlands",
+    "neoforge",
+]
+fabric = []
+legacyfabric = ["fabric"]
+babric = ["fabric"]
+quilt = []
+liteloader = []
+rift = []
+forge = []
+cleanroom = ["retrofutura"]
+outlands = ["retrofutura"]
+neoforge = []
+retrofutura = []

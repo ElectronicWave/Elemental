@@ -28,19 +28,21 @@ where
         L: VersionJsonRootLayout + Clone,
         VL: VersionJsonInstanceLayout + Clone,
     {
-        if let Ok(resolved) =
-            ResolvedVersionJsonInstance::load(self.remote_resolver(), instance.clone())
-        {
-            let status = resolved.download_status().await?;
-            if status.is_downloaded()
-                && !self.family.local_metadata_needs_refresh(
-                    &resolved.metadata,
-                    &game_version,
-                    &loader_version,
-                )
-            {
-                return Ok((resolved, Some(status)));
+        match ResolvedVersionJsonInstance::load(self.remote_resolver(), instance.clone()) {
+            Ok(resolved) => {
+                let status = resolved.download_status().await?;
+                if status.is_downloaded()
+                    && !self.family.local_metadata_needs_refresh(
+                        &resolved.metadata,
+                        &game_version,
+                        &loader_version,
+                    )
+                {
+                    return Ok((resolved, Some(status)));
+                }
             }
+            Err(error) if !error.is_not_found() => return Err(error),
+            Err(_) => {}
         }
 
         let resolved = self

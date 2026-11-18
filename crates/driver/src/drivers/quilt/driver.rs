@@ -6,7 +6,10 @@ use elemental_schema::{mojang::piston::PistonMetaData, quilt::ProfileJson};
 use crate::{
     descriptors::QUILT_DRIVER,
     driver::{DriverDescriptor, InstalledDriver},
-    drivers::{quilt::source::QuiltSource, vanilla::source::VanillaSource},
+    drivers::{
+        quilt::source::{QuiltEndpoints, QuiltSource},
+        vanilla::source::VanillaSource,
+    },
     families::version_json::{
         ProfiledVersionJsonDriver, ProfiledVersionJsonFamily, VanillaFallbackRemoteResolver,
     },
@@ -23,7 +26,7 @@ pub struct QuiltDriverFamily;
 #[async_trait]
 impl ProfiledVersionJsonFamily for QuiltDriverFamily {
     type Source = QuiltSource;
-    type RemoteResolver = super::prepared::QuiltRemoteResolver;
+    type RemoteResolver = VanillaFallbackRemoteResolver<QuiltEndpoints>;
 
     fn descriptor(&self) -> DriverDescriptor {
         QUILT_DRIVER

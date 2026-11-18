@@ -48,7 +48,7 @@ impl FabricDriverFamily {
 #[async_trait]
 impl ProfiledVersionJsonFamily for FabricDriverFamily {
     type Source = FabricSource;
-    type RemoteResolver = super::prepared::FabricRemoteResolver;
+    type RemoteResolver = VanillaFallbackRemoteResolver<FabricEndpoints>;
 
     fn descriptor(&self) -> DriverDescriptor {
         flavor_spec(self.flavor()).descriptor()

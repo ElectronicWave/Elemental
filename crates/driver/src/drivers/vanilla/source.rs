@@ -4,7 +4,7 @@ use elemental_schema::mojang::{
 };
 
 use crate::{
-    drivers::vanilla::prepared::ResolvedVanillaMetadata,
+    drivers::vanilla::ResolvedVanillaMetadata,
     error::{Error, Result},
     http::{HttpSource, fetch_json},
 };

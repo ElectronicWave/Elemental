@@ -1,3 +1,5 @@
+#![cfg_attr(not(feature = "driver-all"), allow(dead_code))]
+
 use elemental_schema::maven::MavenMetadataBody;
 use quick_xml::de::from_str;
 use serde::Deserialize;

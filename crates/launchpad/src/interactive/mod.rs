@@ -48,12 +48,9 @@ impl LaunchpadAction {
         launcher: &Launcher,
     ) -> Result<Option<LaunchpadCommand>> {
         match self {
-            Self::NewInstance => Ok(new_instance::prompt(
-                storage_root,
-                launcher.runtime_resolver().clone(),
-            )
-            .await?
-            .map(LaunchpadCommand::Launch)),
+            Self::NewInstance => Ok(new_instance::prompt(storage_root, launcher)
+                .await?
+                .map(LaunchpadCommand::Launch)),
             Self::InstalledInstance => installed::prompt(launcher).await,
             Self::ListInstances => Ok(Some(LaunchpadCommand::ListInstances { storage_root })),
         }

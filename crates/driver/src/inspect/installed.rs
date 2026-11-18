@@ -30,7 +30,7 @@ impl<L: Layout + Clone, VL: VersionJsonInstanceLayout + Clone> InstalledInstance
         storage: Storage<VL, Storage<L>>,
         drivers: &[&dyn Driver<L, VL>],
     ) -> Result<Option<Self>> {
-        let probe = InstanceProbe::collect(&storage)?;
+        let probe = InstanceProbe::collect(&storage).await?;
         for driver in drivers {
             if let Some(installed) = driver.inspect(&probe).await? {
                 return Ok(Some(Self {

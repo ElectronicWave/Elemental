@@ -13,7 +13,7 @@ license.workspace = true
 thiserror = { workspace = true }
 tokio = { workspace = true }
 elemental-core = { path = "../core", version = "0.3.0" }
-elemental-driver = { path = "../driver", version = "0.3.0" }
+elemental-driver = { path = "../driver", version = "0.3.0", default-features = false }
 elemental-infra = { path = "../infra", version = "0.3.0" }
 elemental-shared = { path = "../shared", version = "0.3.0" }
 erased-serde = { workspace = true }
@@ -23,8 +23,33 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true, optional = true }
 
+[dev-dependencies]
+async-trait = { workspace = true }
+
 [features]
-default = []
+default = ["driver-all"]
+driver-all = [
+    "driver-fabric",
+    "driver-legacyfabric",
+    "driver-babric",
+    "driver-quilt",
+    "driver-liteloader",
+    "driver-rift",
+    "driver-forge",
+    "driver-cleanroom",
+    "driver-outlands",
+    "driver-neoforge",
+]
+driver-fabric = ["elemental-driver/fabric"]
+driver-legacyfabric = ["driver-fabric", "elemental-driver/legacyfabric"]
+driver-babric = ["driver-fabric", "elemental-driver/babric"]
+driver-quilt = ["elemental-driver/quilt"]
+driver-liteloader = ["elemental-driver/liteloader"]
+driver-rift = ["elemental-driver/rift"]
+driver-forge = ["elemental-driver/forge"]
+driver-cleanroom = ["elemental-driver/cleanroom"]
+driver-outlands = ["elemental-driver/outlands"]
+driver-neoforge = ["elemental-driver/neoforge"]
 yggdrasil-auth = [
     "elemental-core/yggdrasil-auth",
     "dep:hex",

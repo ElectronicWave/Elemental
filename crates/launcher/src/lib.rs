@@ -8,6 +8,7 @@ mod launcher;
 #[cfg(feature = "offline-server")]
 pub mod offline_server;
 mod origin;
+mod registration;
 mod request;
 mod result;
 pub mod skin;
@@ -24,10 +25,11 @@ pub use elemental_core::launcher::command::LaunchCommand;
 pub use elemental_infra::downloader::{DownloadProgress, DownloadSession};
 pub use launcher::Launcher;
 pub use origin::DriverOrigins;
+pub use registration::{DriverRegistration, DriverRegistry};
 pub use request::{LaunchOptions, LaunchResolution, QuickPlayOptions, RuntimeOptions};
 pub use result::{
     InspectReport, Instance, InstanceInspectionFailure, LaunchedInstance, PreparedInstance,
     PreparedInstanceInfo, PreparedInstanceMetadata, RemoveInstanceOutcome,
 };
 pub use skin::{AccountSkinExt, LocalSkin, SelectedSkin, SkinAsset, SkinEntry, SkinId, SkinStore};
-pub use spec::{DriverSpec, LoaderSpec, VanillaSpec};
+pub use spec::DriverSpec;

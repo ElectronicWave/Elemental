@@ -1,3 +1,5 @@
+#![cfg_attr(not(feature = "driver-all"), allow(dead_code))]
+
 use std::time::Duration;
 
 use serde::de::DeserializeOwned;

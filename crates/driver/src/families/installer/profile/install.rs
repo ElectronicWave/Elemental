@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use elemental_infra::downloader::{DownloadBatch, DownloadSession};
 use elemental_schema::forge::ForgeInstallerProfile;
@@ -21,6 +21,28 @@ pub async fn prepare_installer_state<V>(
 where
     V: Fn(&ForgeInstallerProfile) -> Result<()>,
 {
+    download_installer(session, installer_artifact, family_name).await?;
+
+    let archive = InstallerArchive::new(installer_artifact.path.clone());
+    let state_paths = InstallerStatePaths::new(instance_root, family_name)?;
+    let install_profile = read_install_profile(&archive, family_name).await?;
+    validate_profile(&install_profile)?;
+
+    finish_installer_state(
+        &archive,
+        &state_paths,
+        install_profile,
+        libraries_root,
+        family_name,
+    )
+    .await
+}
+
+async fn download_installer(
+    session: &DownloadSession,
+    installer_artifact: &InstallerArtifact,
+    family_name: &str,
+) -> Result<()> {
     session
         .submit(DownloadBatch::new(vec![installer_artifact.download_task()]).group("installer"))
         .await
@@ -34,45 +56,33 @@ where
         .map_err(|source| Error::DownloadInstaller {
             family_name: family_name.to_owned(),
             source,
-        })?;
-
-    read_installer_state(
-        installer_artifact,
-        instance_root,
-        libraries_root,
-        family_name,
-        validate_profile,
-    )
-    .await
+        })
 }
 
-pub async fn read_installer_state<V>(
-    installer_artifact: &InstallerArtifact,
-    instance_root: &Path,
+async fn read_install_profile(
+    archive: &InstallerArchive<PathBuf>,
+    family_name: &str,
+) -> Result<ForgeInstallerProfile> {
+    let archive = archive.clone();
+    let family_name = family_name.to_owned();
+    tokio::task::spawn_blocking(move || {
+        archive
+            .read_json::<ForgeInstallerProfile>("install_profile.json")
+            .map_err(|source| Error::ReadInstallerProfile {
+                family_name,
+                source: Box::new(source),
+            })
+    })
+    .await?
+}
+
+async fn finish_installer_state(
+    archive: &InstallerArchive<PathBuf>,
+    state_paths: &InstallerStatePaths<'_>,
+    install_profile: ForgeInstallerProfile,
     libraries_root: &Path,
     family_name: &str,
-    validate_profile: V,
-) -> Result<InstallerPersistedState>
-where
-    V: Fn(&ForgeInstallerProfile) -> Result<()>,
-{
-    let archive = InstallerArchive::new(installer_artifact.path.clone());
-    let state_paths = InstallerStatePaths::new(instance_root, family_name)?;
-    let install_profile = {
-        let archive = archive.clone();
-        let family_name = family_name.to_owned();
-        tokio::task::spawn_blocking(move || {
-            archive
-                .read_json::<ForgeInstallerProfile>("install_profile.json")
-                .map_err(|source| Error::ReadInstallerProfile {
-                    family_name,
-                    source: Box::new(source),
-                })
-        })
-        .await??
-    };
-    validate_profile(&install_profile)?;
-
+) -> Result<InstallerPersistedState> {
     let embedded_version = {
         let archive = archive.clone();
         let install_profile = install_profile.clone();

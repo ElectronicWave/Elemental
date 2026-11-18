@@ -19,18 +19,23 @@ where
 
 impl<E> InstallerMavenCatalog<E>
 where
-    E: InstallerMavenEndpoints + Default,
+    E: InstallerMavenEndpoints,
 {
     pub fn new(source: InstallerMavenSource<E>) -> Self {
         Self { source }
     }
 
-    pub fn with_defaults() -> Self {
-        Self::new(InstallerMavenSource::default())
-    }
-
     pub fn source(&self) -> &InstallerMavenSource<E> {
         &self.source
+    }
+}
+
+impl<E> InstallerMavenCatalog<E>
+where
+    E: InstallerMavenEndpoints + Default,
+{
+    pub fn with_defaults() -> Self {
+        Self::new(InstallerMavenSource::default())
     }
 }
 

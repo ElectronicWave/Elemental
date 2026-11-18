@@ -1,7 +1,4 @@
-use elemental_core::{
-    runtime::{RuntimeResolver, distribution::Distribution},
-    storage::Storage,
-};
+use elemental_core::storage::Storage;
 use elemental_infra::SafeRelativePath;
 use elemental_schema::forge::ForgeInstallerProfile;
 
@@ -13,11 +10,9 @@ use crate::{
             libraries::installer_library_artifacts,
         },
         version_json::{
-            PreparedVersionJsonInstance, VersionJsonInstanceLayout, VersionJsonRootLayout,
-            storage::library_artifacts_present,
+            VersionJsonInstanceLayout, VersionJsonRootLayout, storage::library_artifacts_present,
         },
     },
-    launch::{RuntimeOptions, resolve_prepared_version_runtime},
 };
 
 use super::{InstallerInstallStatus, InstallerStatePaths};
@@ -37,18 +32,6 @@ where
         }
     }
     library_artifacts_present(&instance.parent, artifact_paths)
-}
-
-pub async fn resolve_installer_processor_runtime<L, VL>(
-    launch_version: &PreparedVersionJsonInstance<L, VL>,
-    runtime_options: &RuntimeOptions,
-    runtime_resolver: &RuntimeResolver,
-) -> Result<Distribution>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
-    resolve_prepared_version_runtime(launch_version, runtime_options, runtime_resolver).await
 }
 
 pub async fn installer_install_status<L, VL>(

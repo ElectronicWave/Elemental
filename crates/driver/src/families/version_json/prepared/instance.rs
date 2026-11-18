@@ -16,6 +16,8 @@ use super::VersionJsonInstallStatus;
 mod metadata;
 mod prepare;
 
+pub(crate) use prepare::prepare_with_extra_downloads;
+
 #[derive(Debug, Clone)]
 pub struct ResolvedVersionJsonMetadata<R: VersionJsonRemoteResolver> {
     pub(super) remote_resolver: R,

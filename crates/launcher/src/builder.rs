@@ -9,7 +9,9 @@ use elemental_driver::families::version_json::{
 };
 use elemental_infra::downloader::ElementalDownloader;
 
-use crate::{error::Result, launcher::Launcher, origin::DriverOrigins};
+use crate::{
+    error::Result, launcher::Launcher, origin::DriverOrigins, registration::DriverRegistration,
+};
 
 pub struct LauncherBuilder<L = BaseRootLayout, VL = BaseInstanceLayout> {
     storage_root: PathBuf,
@@ -123,5 +125,17 @@ where
             self.origins,
             RuntimeResolver::new(self.runtime_providers),
         )
+    }
+
+    /// Builds a launcher and registers third-party drivers.
+    pub fn build_with_drivers(
+        self,
+        registrations: Vec<DriverRegistration<L, VL>>,
+    ) -> Result<Launcher<L, VL>> {
+        registrations
+            .into_iter()
+            .try_fold(self.build(), |launcher, registration| {
+                launcher.register_driver(registration)
+            })
     }
 }

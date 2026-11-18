@@ -47,17 +47,16 @@ struct EmbeddedVersionData {
     release_time: Option<String>,
 }
 
-pub(super) fn merge_embedded_version<F, M>(
+pub(super) fn merge_embedded_version(
     base_metadata: PistonMetaData,
     embedded_version: &serde_json::Value,
-    normalize_libraries: F,
-    merge_libraries: M,
+    normalize_libraries: &dyn Fn(Vec<PistonMetaLibraries>) -> Result<Vec<PistonMetaLibraries>>,
+    merge_libraries: &dyn Fn(
+        Vec<PistonMetaLibraries>,
+        Vec<PistonMetaLibraries>,
+    ) -> Vec<PistonMetaLibraries>,
     family_name: &str,
-) -> Result<PistonMetaData>
-where
-    F: Fn(Vec<PistonMetaLibraries>) -> Result<Vec<PistonMetaLibraries>>,
-    M: Fn(Vec<PistonMetaLibraries>, Vec<PistonMetaLibraries>) -> Vec<PistonMetaLibraries>,
-{
+) -> Result<PistonMetaData> {
     let mut embedded = serde_json::from_value::<EmbeddedVersionData>(embedded_version.clone())
         .map_err(|source| Error::DecodeEmbeddedVersion {
             family_name: family_name.to_owned(),

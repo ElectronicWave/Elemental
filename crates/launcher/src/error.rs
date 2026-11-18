@@ -14,6 +14,9 @@ pub enum Error {
     #[error("unsupported driver '{id}'")]
     UnsupportedDriver { id: String },
 
+    #[error("driver '{id}' is already registered")]
+    DriverAlreadyRegistered { id: String },
+
     #[error("driver '{id}' does not support loader versions")]
     LoaderVersionsUnsupported { id: String },
 

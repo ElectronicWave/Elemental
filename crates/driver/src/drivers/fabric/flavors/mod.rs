@@ -1,6 +1,5 @@
 mod babric;
 mod common;
-mod passthrough;
 mod version;
 
 use crate::error::Result;
@@ -8,7 +7,7 @@ use elemental_core::minecraft::MinecraftVersionId;
 use elemental_schema::fabric::ProfileJson;
 use elemental_schema::mojang::piston::PistonMetaData;
 
-use crate::families::version_json::PistonMetaDataExt;
+use crate::families::version_json::{PassthroughProfileBehavior, PistonMetaDataExt};
 use crate::inspect::LibraryPrefixSet;
 use crate::loader_version::LoaderVersionId;
 use crate::{
@@ -21,6 +20,8 @@ use self::common::FlavorBehavior;
 use self::version::{
     is_legacy_fabric_game_version, is_modern_fabric_game_version, metadata_has_babric_markers,
 };
+
+static PASSTHROUGH_BEHAVIOR: PassthroughProfileBehavior = PassthroughProfileBehavior;
 
 const FABRIC_META_ORIGIN: &str = "https://meta.fabricmc.net";
 const FABRIC_MAVEN_ORIGIN: &str = "https://maven.fabricmc.net";
@@ -60,7 +61,7 @@ const FABRIC_SPEC: FabricFlavorSpec = FabricFlavorSpec {
     meta_origin: FABRIC_META_ORIGIN,
     maven_origin: FABRIC_MAVEN_ORIGIN,
     loader_prefixes: FABRIC_LOADER_PREFIXES,
-    behavior: &passthrough::BEHAVIOR,
+    behavior: &PASSTHROUGH_BEHAVIOR,
 };
 
 const LEGACY_FABRIC_SPEC: FabricFlavorSpec = FabricFlavorSpec {
@@ -69,7 +70,7 @@ const LEGACY_FABRIC_SPEC: FabricFlavorSpec = FabricFlavorSpec {
     meta_origin: LEGACY_FABRIC_META_ORIGIN,
     maven_origin: LEGACY_FABRIC_MAVEN_ORIGIN,
     loader_prefixes: LEGACY_FABRIC_LOADER_PREFIXES,
-    behavior: &passthrough::BEHAVIOR,
+    behavior: &PASSTHROUGH_BEHAVIOR,
 };
 
 const BABRIC_SPEC: FabricFlavorSpec = FabricFlavorSpec {

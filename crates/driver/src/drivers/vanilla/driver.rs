@@ -3,7 +3,7 @@ use crate::{
     descriptors::VANILLA_DRIVER,
     driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest},
     drivers::vanilla::{
-        prepared::ResolvedVanillaVersion,
+        ResolvedVanillaVersion,
         source::{VanillaSource, resolve_vanilla_metadata},
     },
     families::version_json::{
@@ -45,10 +45,10 @@ impl VanillaDriver {
         instance: &Storage<VL, Storage<L>>,
         version_id: MinecraftVersionId,
     ) -> Result<ResolvedVanillaVersion<L, VL>> {
-        if let Ok(resolved) =
-            ResolvedVanillaVersion::load(self.source.endpoints().clone(), instance.clone())
-        {
-            return Ok(resolved);
+        match ResolvedVanillaVersion::load(self.source.endpoints().clone(), instance.clone()) {
+            Ok(resolved) => return Ok(resolved),
+            Err(error) if error.is_not_found() => {}
+            Err(error) => return Err(error),
         }
 
         resolve_vanilla_metadata(&self.source, version_id.as_str())

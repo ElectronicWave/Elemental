@@ -1,3 +1,5 @@
+#![cfg_attr(not(feature = "driver-all"), allow(dead_code))]
+
 use elemental_infra::SafeRelativePath;
 use reqwest::Url;
 

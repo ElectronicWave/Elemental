@@ -1,10 +1,12 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use elemental::{
-    core::runtime::RuntimeValidationMode,
-    driver::{descriptors::FABRIC_DRIVER, driver::DriverDescriptor},
-};
+use elemental::{core::runtime::RuntimeValidationMode, driver::driver::DriverDescriptor};
+
+#[cfg(feature = "driver-fabric")]
+use elemental::driver::descriptors::FABRIC_DRIVER;
+#[cfg(not(feature = "driver-fabric"))]
+use elemental::driver::descriptors::VANILLA_DRIVER;
 
 #[derive(Debug, Parser)]
 #[command(name = "launchpad", about = "Elemental launchpad CLI")]
@@ -79,8 +81,14 @@ impl RuntimeValidationArg {
     }
 }
 
+#[cfg(feature = "driver-fabric")]
 pub(super) fn default_driver() -> DriverDescriptor {
     FABRIC_DRIVER
+}
+
+#[cfg(not(feature = "driver-fabric"))]
+pub(super) fn default_driver() -> DriverDescriptor {
+    VANILLA_DRIVER
 }
 
 fn parse_driver(value: &str) -> std::result::Result<DriverDescriptor, String> {

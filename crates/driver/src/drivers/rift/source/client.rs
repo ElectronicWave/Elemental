@@ -9,7 +9,6 @@ use crate::{
 
 use super::endpoints::RiftEndpoints;
 use super::profile_normalize::normalize_profile_json;
-use super::profile_parse::parse_profile_json;
 use super::release::{GitHubRelease, RiftRelease, build_rift_release, release_for_loader_version};
 
 #[derive(Debug, Clone)]
@@ -63,7 +62,8 @@ impl RiftSource {
             .release_asset_url(release.tag_name.as_str(), release.asset_name.as_str())?;
         let jar_bytes = fetch_bytes(self.inner.client()?, url.as_str(), "rift source").await?;
         let raw_profile = read_release_profile_json(release, jar_bytes)?;
-        let profile = parse_profile_json(raw_profile.as_str())?;
+        let profile = serde_json::from_str(raw_profile.as_str())
+            .map_err(|source| Error::DecodeRiftProfile { source })?;
 
         normalize_profile_json(profile, release, self.endpoints())
     }

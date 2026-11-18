@@ -4,11 +4,11 @@ use anyhow::{Context, Result};
 use elemental::{
     core::minecraft::MinecraftVersionId,
     driver::{driver::DriverDescriptor, loader_version::LoaderVersionId},
-    launcher::{LaunchOptions, RuntimeOptions},
+    launcher::{DriverSpec, LaunchOptions, RuntimeOptions},
 };
 
 use crate::{
-    config::{LaunchpadConfig, build_spec},
+    config::LaunchpadConfig,
     defaults::{DriverDefaults, default_instance_name, driver_defaults},
 };
 
@@ -37,7 +37,7 @@ impl LaunchInput {
         let loader_version = self
             .loader_version
             .or_else(|| defaults.loader_version.map(LoaderVersionId::from));
-        let spec = build_spec(self.driver, game_version, loader_version)?;
+        let spec = DriverSpec::from_descriptor(self.driver, game_version, loader_version)?;
         let runtime = RuntimeOptions {
             runtime_major_version: self
                 .runtime_major_version

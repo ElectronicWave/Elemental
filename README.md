@@ -285,6 +285,7 @@ Forwarded features:
 - [MultiMC](https://multimc.org/)
 - [Prism Launcher](https://prismlauncher.org/)
 - [XMCL](https://xmcl.app/)
+- [LightyLauncherLib](https://github.com/Lighty-Launcher/LightyLauncherLib) — architectural inspiration for loader extension and compile-time feature organization; no source code copied
 
 <!-- LINKS -->
 [contributors-shield]: https://img.shields.io/github/contributors/ElectronicWave/Elemental.svg?style=for-the-badge

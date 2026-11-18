@@ -276,33 +276,40 @@ impl BuiltinDriver {
         L: VersionJsonRootLayout + Clone,
         VL: VersionJsonInstanceLayout + Clone + Send,
     {
-        Ok(match self {
-            Self::Vanilla => Box::new(VanillaDriver::new(origins.vanilla_source())),
+        match self {
+            Self::Vanilla => Ok(Box::new(VanillaDriver::new(origins.vanilla_source()))),
             #[cfg(any(
                 feature = "driver-fabric",
                 feature = "driver-legacyfabric",
                 feature = "driver-babric"
             ))]
-            Self::Fabric(flavor) => Box::new(profiled_driver(
-                origins,
-                FabricDriverFamily::new(flavor.clone()),
-            )?),
+            Self::Fabric(flavor) => {
+                profiled_driver(origins, FabricDriverFamily::new(flavor.clone()))
+                    .map(|driver| Box::new(driver) as Box<dyn Driver<L, VL>>)
+            }
             #[cfg(feature = "driver-quilt")]
-            Self::Quilt => Box::new(profiled_driver(origins, QuiltDriverFamily)?),
+            Self::Quilt => profiled_driver(origins, QuiltDriverFamily)
+                .map(|driver| Box::new(driver) as Box<dyn Driver<L, VL>>),
             #[cfg(feature = "driver-liteloader")]
-            Self::LiteLoader => Box::new(profiled_driver(origins, LiteLoaderDriverFamily)?),
+            Self::LiteLoader => profiled_driver(origins, LiteLoaderDriverFamily)
+                .map(|driver| Box::new(driver) as Box<dyn Driver<L, VL>>),
             #[cfg(feature = "driver-rift")]
-            Self::Rift => Box::new(profiled_driver(origins, RiftDriverFamily)?),
+            Self::Rift => profiled_driver(origins, RiftDriverFamily)
+                .map(|driver| Box::new(driver) as Box<dyn Driver<L, VL>>),
             #[cfg(feature = "driver-forge")]
-            Self::Forge => Box::new(installer_driver::<ForgeFamily>(origins)?),
+            Self::Forge => installer_driver::<ForgeFamily>(origins)
+                .map(|driver| Box::new(driver) as Box<dyn Driver<L, VL>>),
             #[cfg(feature = "driver-cleanroom")]
-            Self::Cleanroom => Box::new(installer_driver::<CleanroomDriverSpec>(origins)?),
+            Self::Cleanroom => installer_driver::<CleanroomDriverSpec>(origins)
+                .map(|driver| Box::new(driver) as Box<dyn Driver<L, VL>>),
             #[cfg(feature = "driver-outlands")]
-            Self::Outlands => Box::new(installer_driver::<OutlandsDriverSpec>(origins)?),
+            Self::Outlands => installer_driver::<OutlandsDriverSpec>(origins)
+                .map(|driver| Box::new(driver) as Box<dyn Driver<L, VL>>),
             #[cfg(feature = "driver-neoforge")]
-            Self::NeoForge => Box::new(installer_driver::<NeoForgeFamily>(origins)?),
-            _ => return Err(builtin_unsupported(descriptor)),
-        })
+            Self::NeoForge => installer_driver::<NeoForgeFamily>(origins)
+                .map(|driver| Box::new(driver) as Box<dyn Driver<L, VL>>),
+            _ => Err(builtin_unsupported(descriptor)),
+        }
     }
 }
 

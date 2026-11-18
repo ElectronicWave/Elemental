@@ -38,7 +38,7 @@ driver-all = [
     "driver-outlands",
     "driver-neoforge",
 ]
-driver-vanilla = []
+driver-vanilla = ["elemental-driver/vanilla"]
 driver-fabric = ["elemental-driver/fabric"]
 driver-legacyfabric = ["driver-fabric", "elemental-driver/legacyfabric"]
 driver-babric = ["driver-fabric", "elemental-driver/babric"]

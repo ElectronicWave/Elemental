@@ -41,6 +41,6 @@ fn supported_drivers_cover_all_built_in_descriptors() {
     assert_eq!(supported, built_in);
 
     for driver in ALL_DRIVERS {
-        assert_eq!(from_id(driver.id), Some(driver));
+        assert_eq!(from_id(driver.id), Some(*driver));
     }
 }

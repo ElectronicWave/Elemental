@@ -11,14 +11,14 @@ use crate::{
     error::Result,
     families::{
         installer::{
-            InstallerArtifact, InstallerLaunchVersionRequest, installer_has_client_processors,
-            persist_installer_launch_version, prepare_installer_state,
-            run_installer_client_processors, submit_installer_profile_libraries,
-            validate_installer_profile_identity,
+            InstallerArtifact, InstallerLaunchVersionRequest, InstallerPersistedState,
+            installer_has_client_processors, persist_installer_launch_version,
+            prepare_installer_state, run_installer_client_processors,
+            submit_installer_profile_libraries, validate_installer_profile_identity,
         },
         version_json::{
-            PreparedVersionJsonInstance, VersionJsonInstanceLayout, VersionJsonRootLayout,
-            VersionJsonRootResource,
+            PreparedVersionJsonInstance, ResolvedVersionJsonInstance, VersionJsonInstanceLayout,
+            VersionJsonRootLayout, VersionJsonRootResource, prepared::prepare_with_extra_downloads,
         },
     },
     launch::{RuntimeOptions, resolve_prepared_version_runtime},
@@ -94,11 +94,41 @@ where
         runtime_options: &RuntimeOptions,
         runtime_resolver: &RuntimeResolver,
     ) -> Result<PreparedVersionJsonInstance<L, VL>> {
+        let installer_state = self.load_installer_state(session).await?;
+        let launch_version = self
+            .persist_launch_version(&installer_state, vanilla_source, remote_resolver)
+            .await?;
+
+        let extra_downloads = submit_installer_profile_libraries(
+            session,
+            &self.instance,
+            &installer_state.install_profile,
+            F::FAMILY_NAME,
+            |raw_url, artifact_path| remote_resolver.artifact_url(raw_url, artifact_path),
+        );
+
+        let launch_version =
+            prepare_with_extra_downloads(launch_version, session, None, extra_downloads).await?;
+        self.run_processors_if_needed(
+            &launch_version,
+            &installer_state,
+            runtime_options,
+            runtime_resolver,
+        )
+        .await?;
+
+        Ok(launch_version)
+    }
+
+    async fn load_installer_state(
+        &self,
+        session: &DownloadSession,
+    ) -> Result<InstallerPersistedState> {
         let libraries_root = self
             .instance
             .parent
             .try_get_resource(VersionJsonRootResource::Libraries(None))?;
-        let installer_state = prepare_installer_state(
+        prepare_installer_state(
             session,
             &self.installer_artifact,
             &self.instance.path,
@@ -106,10 +136,17 @@ where
             F::FAMILY_NAME,
             |install_profile| self.validate_profile_identity(install_profile),
         )
-        .await?;
+        .await
+    }
 
+    async fn persist_launch_version(
+        &self,
+        installer_state: &InstallerPersistedState,
+        vanilla_source: &VanillaSource,
+        remote_resolver: &InstallerFamilyRemoteResolver<F>,
+    ) -> Result<ResolvedVersionJsonInstance<InstallerFamilyRemoteResolver<F>, L, VL>> {
         let endpoints = F::source_endpoints(&self.source);
-        let launch_version = persist_installer_launch_version(InstallerLaunchVersionRequest {
+        persist_installer_launch_version(InstallerLaunchVersionRequest {
             instance: &self.instance,
             game_version: &self.game_version,
             remote_resolver,
@@ -119,31 +156,20 @@ where
             merge_libraries: F::merge_libraries,
             family_name: F::FAMILY_NAME,
         })
-        .await?;
+        .await
+    }
 
-        launch_version.submit_install_batches(session).await?;
-
-        submit_installer_profile_libraries(
-            session,
-            &self.instance,
-            &installer_state.install_profile,
-            F::FAMILY_NAME,
-            |raw_url, artifact_path| remote_resolver.artifact_url(raw_url, artifact_path),
-        )
-        .await?;
-
-        session.success().await?;
-
-        let launch_version: PreparedVersionJsonInstance<L, VL> =
-            launch_version.finish_preparation().await?;
-
+    async fn run_processors_if_needed(
+        &self,
+        launch_version: &PreparedVersionJsonInstance<L, VL>,
+        installer_state: &InstallerPersistedState,
+        runtime_options: &RuntimeOptions,
+        runtime_resolver: &RuntimeResolver,
+    ) -> Result<()> {
         if installer_has_client_processors(&installer_state.install_profile) {
-            let runtime = resolve_prepared_version_runtime(
-                &launch_version,
-                runtime_options,
-                runtime_resolver,
-            )
-            .await?;
+            let runtime =
+                resolve_prepared_version_runtime(launch_version, runtime_options, runtime_resolver)
+                    .await?;
             run_installer_client_processors(
                 &runtime,
                 &self.instance,
@@ -154,6 +180,6 @@ where
             .await?;
         }
 
-        Ok(launch_version)
+        Ok(())
     }
 }

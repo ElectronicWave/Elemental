@@ -59,23 +59,35 @@ pub const NEOFORGE_DRIVER: DriverDescriptor = DriverDescriptor {
 ///
 /// More specific drivers come before `Vanilla`, so a modded instance is not
 /// claimed by the vanilla fallback first.
-pub const ALL_DRIVERS: [DriverDescriptor; 11] = [
+pub const ALL_DRIVERS: &[DriverDescriptor] = &[
+    #[cfg(feature = "fabric")]
     FABRIC_DRIVER,
+    #[cfg(feature = "legacyfabric")]
     LEGACY_FABRIC_DRIVER,
+    #[cfg(feature = "babric")]
     BABRIC_DRIVER,
+    #[cfg(feature = "quilt")]
     QUILT_DRIVER,
+    #[cfg(feature = "liteloader")]
     LITELOADER_DRIVER,
+    #[cfg(feature = "rift")]
     RIFT_DRIVER,
+    #[cfg(feature = "forge")]
     FORGE_DRIVER,
+    #[cfg(feature = "cleanroom")]
     CLEANROOM_DRIVER,
+    #[cfg(feature = "outlands")]
     OUTLANDS_DRIVER,
+    #[cfg(feature = "neoforge")]
     NEOFORGE_DRIVER,
+    #[cfg(feature = "vanilla")]
     VANILLA_DRIVER,
 ];
 
 /// Resolves a known driver descriptor by its stable id.
 pub fn from_id(id: &str) -> Option<DriverDescriptor> {
     ALL_DRIVERS
-        .into_iter()
+        .iter()
+        .copied()
         .find(|descriptor| descriptor.id == id)
 }

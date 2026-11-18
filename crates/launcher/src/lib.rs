@@ -30,4 +30,4 @@ pub use result::{
     PreparedInstanceInfo, PreparedInstanceMetadata, RemoveInstanceOutcome,
 };
 pub use skin::{AccountSkinExt, LocalSkin, SelectedSkin, SkinAsset, SkinEntry, SkinId, SkinStore};
-pub use spec::{DriverSpec, LoaderSpec, VanillaSpec};
+pub use spec::DriverSpec;

@@ -42,7 +42,11 @@ driver-all = [
     "driver-outlands",
     "driver-neoforge",
 ]
-driver-vanilla = ["launcher", "elemental-launcher/driver-vanilla"]
+driver-vanilla = [
+    "launcher",
+    "elemental-launcher/driver-vanilla",
+    "elemental-driver/vanilla",
+]
 driver-fabric = ["launcher", "elemental-launcher/driver-fabric", "elemental-driver/fabric"]
 driver-legacyfabric = [
     "launcher",

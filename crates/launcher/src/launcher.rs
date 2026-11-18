@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "driver-all"), allow(dead_code, unreachable_code))]
+#![allow(unreachable_patterns)]
 
 use std::{
     path::{Path, PathBuf},
@@ -12,6 +13,7 @@ use elemental_core::{
     storage::Storage,
 };
 use elemental_driver::{
+    descriptors::ALL_DRIVERS,
     driver::{Driver, DriverDescriptor, PrepareRequest},
     drivers::vanilla::driver::VanillaDriver,
     families::{
@@ -29,34 +31,47 @@ use elemental_driver::{
 
 #[cfg(feature = "driver-babric")]
 use elemental_driver::descriptors::BABRIC_DRIVER;
+#[cfg(feature = "driver-cleanroom")]
+use elemental_driver::descriptors::CLEANROOM_DRIVER;
 #[cfg(feature = "driver-fabric")]
 use elemental_driver::descriptors::FABRIC_DRIVER;
+#[cfg(feature = "driver-forge")]
+use elemental_driver::descriptors::FORGE_DRIVER;
 #[cfg(feature = "driver-legacyfabric")]
 use elemental_driver::descriptors::LEGACY_FABRIC_DRIVER;
+#[cfg(feature = "driver-liteloader")]
+use elemental_driver::descriptors::LITELOADER_DRIVER;
+#[cfg(feature = "driver-neoforge")]
+use elemental_driver::descriptors::NEOFORGE_DRIVER;
+#[cfg(feature = "driver-outlands")]
+use elemental_driver::descriptors::OUTLANDS_DRIVER;
+#[cfg(feature = "driver-quilt")]
+use elemental_driver::descriptors::QUILT_DRIVER;
+#[cfg(feature = "driver-rift")]
+use elemental_driver::descriptors::RIFT_DRIVER;
 #[cfg(feature = "driver-vanilla")]
 use elemental_driver::descriptors::VANILLA_DRIVER;
+
+#[cfg(feature = "driver-cleanroom")]
+use elemental_driver::drivers::cleanroom::CleanroomDriverSpec;
 #[cfg(any(
     feature = "driver-fabric",
     feature = "driver-legacyfabric",
     feature = "driver-babric"
 ))]
 use elemental_driver::drivers::fabric::{driver::FabricDriverFamily, source::FabricFlavor};
-#[cfg(feature = "driver-cleanroom")]
-use elemental_driver::{descriptors::CLEANROOM_DRIVER, drivers::cleanroom::CleanroomDriverSpec};
 #[cfg(feature = "driver-forge")]
-use elemental_driver::{descriptors::FORGE_DRIVER, drivers::forge::ForgeFamily};
+use elemental_driver::drivers::forge::ForgeFamily;
 #[cfg(feature = "driver-liteloader")]
-use elemental_driver::{
-    descriptors::LITELOADER_DRIVER, drivers::liteloader::driver::LiteLoaderDriverFamily,
-};
+use elemental_driver::drivers::liteloader::driver::LiteLoaderDriverFamily;
 #[cfg(feature = "driver-neoforge")]
-use elemental_driver::{descriptors::NEOFORGE_DRIVER, drivers::neoforge::NeoForgeFamily};
+use elemental_driver::drivers::neoforge::NeoForgeFamily;
 #[cfg(feature = "driver-outlands")]
-use elemental_driver::{descriptors::OUTLANDS_DRIVER, drivers::outlands::OutlandsDriverSpec};
+use elemental_driver::drivers::outlands::OutlandsDriverSpec;
 #[cfg(feature = "driver-quilt")]
-use elemental_driver::{descriptors::QUILT_DRIVER, drivers::quilt::driver::QuiltDriverFamily};
+use elemental_driver::drivers::quilt::driver::QuiltDriverFamily;
 #[cfg(feature = "driver-rift")]
-use elemental_driver::{descriptors::RIFT_DRIVER, drivers::rift::driver::RiftDriverFamily};
+use elemental_driver::drivers::rift::driver::RiftDriverFamily;
 use elemental_infra::downloader::{DownloadSession, ElementalDownloader};
 
 use crate::{
@@ -76,31 +91,6 @@ use crate::authlib_injector::{self, AuthlibInjector};
 
 type LauncherGameStorage<L> = Storage<L>;
 type LauncherInstanceStorage<L, VL> = Storage<VL, LauncherGameStorage<L>>;
-
-const BUILT_IN_DRIVERS: &[DriverDescriptor] = &[
-    #[cfg(feature = "driver-fabric")]
-    FABRIC_DRIVER,
-    #[cfg(feature = "driver-legacyfabric")]
-    LEGACY_FABRIC_DRIVER,
-    #[cfg(feature = "driver-babric")]
-    BABRIC_DRIVER,
-    #[cfg(feature = "driver-quilt")]
-    QUILT_DRIVER,
-    #[cfg(feature = "driver-liteloader")]
-    LITELOADER_DRIVER,
-    #[cfg(feature = "driver-rift")]
-    RIFT_DRIVER,
-    #[cfg(feature = "driver-forge")]
-    FORGE_DRIVER,
-    #[cfg(feature = "driver-cleanroom")]
-    CLEANROOM_DRIVER,
-    #[cfg(feature = "driver-outlands")]
-    OUTLANDS_DRIVER,
-    #[cfg(feature = "driver-neoforge")]
-    NEOFORGE_DRIVER,
-    #[cfg(feature = "driver-vanilla")]
-    VANILLA_DRIVER,
-];
 
 #[derive(Debug, Clone)]
 pub struct Launcher<L = BaseRootLayout, VL = BaseInstanceLayout>
@@ -493,7 +483,7 @@ where
     VL: VersionJsonInstanceLayout + Clone + Send,
 {
     fn inspect_drivers(&self) -> Result<Vec<Box<dyn Driver<L, VL>>>> {
-        BUILT_IN_DRIVERS
+        ALL_DRIVERS
             .iter()
             .copied()
             .map(|descriptor| self.resolve_driver(descriptor))

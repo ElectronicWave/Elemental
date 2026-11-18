@@ -8,8 +8,8 @@ use crate::{
     error::Result,
     families::{
         installer::{
-            InstallerArtifact, InstallerInstallStatus, merge_libraries_prefer_embedded,
-            normalize_library_urls, profile_game_and_raw_loader_version,
+            InstallerArtifact, merge_libraries_prefer_embedded, normalize_library_urls,
+            profile_game_and_raw_loader_version,
         },
         version_json::VersionJsonRootLayout,
     },
@@ -26,8 +26,6 @@ pub use resolver::{
     InstallerFamilyRemoteResolver, ResolvedInstallerFamilyLaunchVersion,
     ResolvedInstallerFamilyMetadata,
 };
-
-pub type InstallerFamilyInstallStatus = InstallerInstallStatus;
 
 pub trait InstallerArtifactEndpoints: Clone + Debug + Send + Sync + 'static {
     fn artifact_url(&self, artifact_path: &str) -> Result<String>;

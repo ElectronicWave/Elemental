@@ -9,12 +9,12 @@ use elemental::{
         driver::DriverDescriptor,
         loader_version::LoaderVersionId,
     },
-    launcher::{DriverCatalog, LaunchOptions, RuntimeOptions},
+    launcher::{DriverCatalog, DriverSpec, LaunchOptions, RuntimeOptions},
 };
 use inquire::{Select, Text};
 
 use crate::{
-    config::{LaunchpadConfig, build_spec},
+    config::LaunchpadConfig,
     defaults::{DriverDefaults, default_instance_name, driver_defaults},
     progress,
 };
@@ -293,7 +293,8 @@ impl NewInstanceWizard {
             .game_version
             .take()
             .context("Minecraft version is missing from the wizard state")?;
-        let spec = build_spec(descriptor, game_version, self.loader_version.take())?;
+        let spec =
+            DriverSpec::from_descriptor(descriptor, game_version, self.loader_version.take())?;
         let instance_name = self
             .instance_name
             .take()

@@ -36,24 +36,11 @@ pub struct VersionJsonInstallStatus {
 }
 
 impl VersionJsonInstallStatus {
-    pub fn download_status(&self) -> VersionJsonDownloadStatus {
-        VersionJsonDownloadStatus {
-            metadata_persisted: self.metadata_persisted,
-            asset_index_persisted: self.asset_index_persisted,
-            version_artifacts_ready: self.version_artifacts_ready,
-            assets_ready: self.assets_ready,
-        }
-    }
-
-    pub fn is_persisted(&self) -> bool {
-        self.download_status().is_persisted()
-    }
-
-    pub fn is_downloaded(&self) -> bool {
-        self.download_status().is_downloaded()
-    }
-
     pub fn is_ready(&self) -> bool {
-        self.is_downloaded() && self.natives_extracted
+        self.metadata_persisted
+            && self.asset_index_persisted
+            && self.version_artifacts_ready
+            && self.assets_ready
+            && self.natives_extracted
     }
 }

@@ -4,12 +4,12 @@ use anyhow::{Context, Result, bail};
 use elemental::{
     core::minecraft::MinecraftVersionId,
     driver::loader_version::LoaderVersionId,
-    launcher::{Instance, LaunchOptions, Launcher, RuntimeOptions},
+    launcher::{DriverSpec, Instance, LaunchOptions, Launcher, RuntimeOptions},
 };
 use inquire::Select;
 
 use crate::{
-    config::{LaunchpadCommand, LaunchpadConfig, build_spec},
+    config::{LaunchpadCommand, LaunchpadConfig},
     defaults::{DriverDefaults, driver_defaults},
 };
 
@@ -38,7 +38,8 @@ impl InstalledSelection {
             .as_deref()
             .map(LoaderVersionId::from)
             .or_else(|| self.defaults.loader_version.map(LoaderVersionId::from));
-        let spec = build_spec(self.instance.driver.driver, game_version, loader_version)?;
+        let spec =
+            DriverSpec::from_descriptor(self.instance.driver.driver, game_version, loader_version)?;
         let runtime = RuntimeOptions {
             runtime_major_version: self.runtime.major_version,
             runtime_override: self.runtime.distribution,

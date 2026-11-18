@@ -108,10 +108,6 @@ impl DriverSpec {
         }
     }
 
-    pub fn id(&self) -> &'static str {
-        self.descriptor().id
-    }
-
     pub fn name(&self) -> &'static str {
         self.descriptor().name
     }

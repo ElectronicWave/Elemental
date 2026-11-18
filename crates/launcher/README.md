@@ -134,6 +134,11 @@ Accounts are serializable domain models; the launcher owns when and where they
 are persisted. Third-party authorizers register their account type through
 `AccountRegistry`, then open the store with `AccountStore::with_registry()`.
 
+Index entries whose authorizer is not registered are preserved but skipped:
+`AccountStore::list()` returns the loadable accounts, `AccountStore::selected()`
+returns `None` for such a selected entry, and `AccountStore::try_list()` reports
+the skipped entries through `AccountListing::unsupported`.
+
 ### Textures
 
 `AccountStore` refreshes an account when needed before texture operations:

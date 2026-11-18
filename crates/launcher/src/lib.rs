@@ -14,7 +14,7 @@ mod result;
 pub mod skin;
 mod spec;
 
-pub use account::{AccountIndex, AccountRef, AccountRegistry, AccountStore};
+pub use account::{AccountIndex, AccountListing, AccountRef, AccountRegistry, AccountStore};
 #[cfg(feature = "yggdrasil-auth")]
 pub use authlib_injector::{AuthlibInjector, AuthlibInjectorSource};
 pub use builder::LauncherBuilder;

@@ -17,8 +17,8 @@ use elemental_driver::{
     families::{
         installer::InstallerFamilyDriver,
         version_json::{
-            ProfiledVersionJsonDriver, ProfiledVersionJsonFamilyExt, VersionJsonInstanceLayout,
-            VersionJsonRootLayout,
+            BaseInstanceLayout, BaseRootLayout, ProfiledVersionJsonDriver,
+            ProfiledVersionJsonFamilyExt, VersionJsonInstanceLayout, VersionJsonRootLayout,
         },
     },
 };
@@ -51,7 +51,6 @@ use elemental_driver::drivers::outlands::{OutlandsCatalog, OutlandsDriverSpec};
 use elemental_driver::drivers::quilt::{QuiltCatalog, driver::QuiltDriverFamily};
 #[cfg(feature = "driver-rift")]
 use elemental_driver::drivers::rift::{catalog::RiftCatalog, driver::RiftDriverFamily};
-#[cfg(feature = "driver-vanilla")]
 use elemental_driver::drivers::vanilla::{catalog::VanillaCatalog, driver::VanillaDriver};
 
 /// A third-party driver added to a [`crate::Launcher`].
@@ -65,6 +64,7 @@ where
 {
     descriptor: DriverDescriptor,
     driver: Arc<dyn Driver<L, VL>>,
+    catalog: DriverCatalog,
 }
 
 impl<L, VL> DriverRegistration<L, VL>
@@ -73,8 +73,16 @@ where
     VL: Layout,
 {
     /// Creates a registration for a driver that is not built into Elemental.
-    pub fn new(descriptor: DriverDescriptor, driver: Arc<dyn Driver<L, VL>>) -> Self {
-        Self { descriptor, driver }
+    pub fn new(
+        descriptor: DriverDescriptor,
+        driver: Arc<dyn Driver<L, VL>>,
+        catalog: DriverCatalog,
+    ) -> Self {
+        Self {
+            descriptor,
+            driver,
+            catalog,
+        }
     }
 
     pub fn descriptor(&self) -> DriverDescriptor {
@@ -95,6 +103,7 @@ where
         Self {
             descriptor: self.descriptor,
             driver: Arc::clone(&self.driver),
+            catalog: self.catalog.clone(),
         }
     }
 }
@@ -111,6 +120,93 @@ where
     }
 }
 
+/// Built-in and third-party drivers known to a [`crate::Launcher`].
+#[derive(Clone, Debug)]
+pub struct DriverRegistry<L = BaseRootLayout, VL = BaseInstanceLayout>
+where
+    L: Layout,
+    VL: Layout,
+{
+    custom: Vec<DriverRegistration<L, VL>>,
+}
+
+impl<L, VL> DriverRegistry<L, VL>
+where
+    L: Layout,
+    VL: Layout,
+{
+    pub(crate) fn new() -> Self {
+        Self { custom: Vec::new() }
+    }
+
+    /// Returns third-party drivers first, then built-in drivers in detection order.
+    pub fn descriptors(&self) -> impl Iterator<Item = DriverDescriptor> + '_ {
+        self.custom
+            .iter()
+            .map(DriverRegistration::descriptor)
+            .chain(
+                BUILTIN_DRIVERS
+                    .iter()
+                    .map(|registration| registration.descriptor),
+            )
+    }
+
+    /// Returns the version catalog for a built-in or registered driver.
+    pub fn catalog(&self, descriptor: DriverDescriptor) -> Result<DriverCatalog> {
+        if let Some(registration) = self
+            .custom
+            .iter()
+            .find(|registration| registration.descriptor() == descriptor)
+        {
+            return Ok(registration.catalog.clone());
+        }
+
+        builtin_registration(descriptor)
+            .ok_or_else(|| builtin_unsupported(descriptor))?
+            .driver
+            .catalog(descriptor)
+    }
+
+    pub(crate) fn driver(
+        &self,
+        descriptor: DriverDescriptor,
+        origins: &DriverOrigins,
+    ) -> Result<Arc<dyn Driver<L, VL>>>
+    where
+        L: VersionJsonRootLayout + Clone,
+        VL: VersionJsonInstanceLayout + Clone + Send,
+    {
+        if let Some(registration) = self
+            .custom
+            .iter()
+            .find(|registration| registration.descriptor() == descriptor)
+        {
+            return Ok(registration.driver());
+        }
+
+        let registration =
+            builtin_registration(descriptor).ok_or_else(|| builtin_unsupported(descriptor))?;
+        Ok(Arc::from(registration.driver.build(descriptor, origins)?))
+    }
+
+    pub(crate) fn register(&mut self, registration: DriverRegistration<L, VL>) -> Result<()> {
+        let descriptor = registration.descriptor();
+        if builtin_registration(descriptor).is_some()
+            || self
+                .custom
+                .iter()
+                .any(|registered| registered.descriptor() == descriptor)
+        {
+            return Err(Error::DriverAlreadyRegistered {
+                id: descriptor.id.to_string(),
+            });
+        }
+
+        self.custom.push(registration);
+        Ok(())
+    }
+}
+
 pub(crate) struct BuiltinDriverRegistration {
     pub(crate) descriptor: DriverDescriptor,
     pub(crate) driver: BuiltinDriver,
@@ -118,7 +214,6 @@ pub(crate) struct BuiltinDriverRegistration {
 
 #[derive(Clone)]
 pub(crate) enum BuiltinDriver {
-    #[cfg(feature = "driver-vanilla")]
     Vanilla,
     #[cfg(any(
         feature = "driver-fabric",
@@ -145,7 +240,6 @@ pub(crate) enum BuiltinDriver {
 impl BuiltinDriver {
     pub(crate) fn catalog(&self, descriptor: DriverDescriptor) -> Result<DriverCatalog> {
         Ok(match self {
-            #[cfg(feature = "driver-vanilla")]
             Self::Vanilla => DriverCatalog::game_only(descriptor, VanillaCatalog::with_defaults()),
             #[cfg(any(
                 feature = "driver-fabric",
@@ -183,7 +277,6 @@ impl BuiltinDriver {
         VL: VersionJsonInstanceLayout + Clone + Send,
     {
         Ok(match self {
-            #[cfg(feature = "driver-vanilla")]
             Self::Vanilla => Box::new(VanillaDriver::new(origins.vanilla_source())),
             #[cfg(any(
                 feature = "driver-fabric",
@@ -283,7 +376,6 @@ pub(crate) const BUILTIN_DRIVERS: &[BuiltinDriverRegistration] = &[
         descriptor: NEOFORGE_DRIVER,
         driver: BuiltinDriver::NeoForge,
     },
-    #[cfg(feature = "driver-vanilla")]
     BuiltinDriverRegistration {
         descriptor: VANILLA_DRIVER,
         driver: BuiltinDriver::Vanilla,
@@ -296,10 +388,6 @@ pub(crate) fn builtin_registration(
     BUILTIN_DRIVERS
         .iter()
         .find(|registration| registration.descriptor == descriptor)
-}
-
-pub(crate) fn builtin_registrations() -> &'static [BuiltinDriverRegistration] {
-    BUILTIN_DRIVERS
 }
 
 pub(crate) fn builtin_unsupported(descriptor: DriverDescriptor) -> Error {

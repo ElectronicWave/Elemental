@@ -6,7 +6,7 @@ use elemental::{core::runtime::RuntimeValidationMode, driver::driver::DriverDesc
 #[cfg(feature = "driver-fabric")]
 use elemental::driver::descriptors::FABRIC_DRIVER;
 #[cfg(not(feature = "driver-fabric"))]
-use elemental::{driver::descriptors::VANILLA_DRIVER, launcher::DriverCatalog};
+use elemental::driver::descriptors::VANILLA_DRIVER;
 
 #[derive(Debug, Parser)]
 #[command(name = "launchpad", about = "Elemental launchpad CLI")]
@@ -88,13 +88,7 @@ pub(super) fn default_driver() -> DriverDescriptor {
 
 #[cfg(not(feature = "driver-fabric"))]
 pub(super) fn default_driver() -> DriverDescriptor {
-    let drivers = DriverCatalog::supported_drivers().collect::<Vec<_>>();
-    drivers
-        .iter()
-        .copied()
-        .find(|driver| *driver == VANILLA_DRIVER)
-        .or_else(|| drivers.first().copied())
-        .unwrap_or(VANILLA_DRIVER)
+    VANILLA_DRIVER
 }
 
 fn parse_driver(value: &str) -> std::result::Result<DriverDescriptor, String> {

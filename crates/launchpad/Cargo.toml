@@ -6,7 +6,6 @@ edition = "2024"
 [features]
 default = ["driver-all"]
 driver-all = [
-    "driver-vanilla",
     "driver-fabric",
     "driver-legacyfabric",
     "driver-babric",
@@ -18,7 +17,6 @@ driver-all = [
     "driver-outlands",
     "driver-neoforge",
 ]
-driver-vanilla = ["elemental/driver-vanilla"]
 driver-fabric = ["elemental/driver-fabric"]
 driver-legacyfabric = ["elemental/driver-legacyfabric"]
 driver-babric = ["elemental/driver-babric"]

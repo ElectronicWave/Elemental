@@ -673,6 +673,7 @@ dependencies = [
 name = "elemental-launcher"
 version = "0.3.0"
 dependencies = [
+ "async-trait",
  "elemental-core",
  "elemental-driver",
  "elemental-infra",

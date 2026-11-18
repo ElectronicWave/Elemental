@@ -28,9 +28,7 @@ use crate::{
     builder::LauncherBuilder,
     error::{Error, Result},
     origin::DriverOrigins,
-    registration::{
-        DriverRegistration, builtin_registration, builtin_registrations, builtin_unsupported,
-    },
+    registration::{DriverRegistration, DriverRegistry},
     request::{LaunchOptions, RuntimeOptions},
     result::{
         InspectReport, Instance, InstanceInspectionFailure, LaunchedInstance, PreparedInstance,
@@ -57,7 +55,7 @@ where
     instance_layout: VL,
     origins: DriverOrigins,
     runtime_resolver: RuntimeResolver,
-    custom_drivers: Vec<DriverRegistration<L, VL>>,
+    drivers: DriverRegistry<L, VL>,
 }
 
 impl Launcher<BaseRootLayout, BaseInstanceLayout> {
@@ -86,7 +84,7 @@ where
             instance_layout,
             origins,
             runtime_resolver,
-            custom_drivers: Vec::new(),
+            drivers: DriverRegistry::new(),
         }
     }
 
@@ -95,20 +93,12 @@ where
     /// Built-in descriptors cannot be replaced. Use [`DriverSpec::custom`] to
     /// prepare an instance for a registered third-party driver.
     pub fn register_driver(mut self, registration: DriverRegistration<L, VL>) -> Result<Self> {
-        let descriptor = registration.descriptor();
-        if builtin_registration(descriptor).is_some()
-            || self
-                .custom_drivers
-                .iter()
-                .any(|registered| registered.descriptor() == descriptor)
-        {
-            return Err(Error::DriverAlreadyRegistered {
-                id: descriptor.id.to_string(),
-            });
-        }
-
-        self.custom_drivers.push(registration);
+        self.drivers.register(registration)?;
         Ok(self)
+    }
+
+    pub fn drivers(&self) -> &DriverRegistry<L, VL> {
+        &self.drivers
     }
 
     pub fn storage_root(&self) -> &Path {
@@ -348,19 +338,7 @@ where
     }
 
     fn resolve_driver(&self, descriptor: DriverDescriptor) -> Result<Arc<dyn Driver<L, VL>>> {
-        if let Some(registration) = self
-            .custom_drivers
-            .iter()
-            .find(|registration| registration.descriptor() == descriptor)
-        {
-            return Ok(registration.driver());
-        }
-
-        let registration =
-            builtin_registration(descriptor).ok_or_else(|| builtin_unsupported(descriptor))?;
-        Ok(Arc::from(
-            registration.driver.build(descriptor, &self.origins)?,
-        ))
+        self.drivers.driver(descriptor, &self.origins)
     }
 }
 
@@ -413,14 +391,8 @@ where
     VL: VersionJsonInstanceLayout + Clone + Send,
 {
     fn inspect_drivers(&self) -> Result<Vec<Arc<dyn Driver<L, VL>>>> {
-        self.custom_drivers
-            .iter()
-            .map(|registration| registration.descriptor())
-            .chain(
-                builtin_registrations()
-                    .iter()
-                    .map(|registration| registration.descriptor),
-            )
+        self.drivers
+            .descriptors()
             .map(|descriptor| self.resolve_driver(descriptor))
             .collect()
     }
@@ -455,9 +427,14 @@ where
     }
 }
 
-#[cfg(all(test, feature = "driver-vanilla"))]
+#[cfg(test)]
 mod tests {
-    use elemental_driver::{descriptors::VANILLA_DRIVER, drivers::vanilla::driver::VanillaDriver};
+    use elemental_driver::{
+        descriptors::VANILLA_DRIVER,
+        drivers::vanilla::{catalog::VanillaCatalog, driver::VanillaDriver},
+    };
+
+    use crate::DriverCatalog;
 
     use super::*;
 
@@ -472,6 +449,7 @@ mod tests {
             .register_driver(DriverRegistration::new(
                 custom,
                 Arc::new(VanillaDriver::with_defaults()),
+                DriverCatalog::game_only(custom, VanillaCatalog::with_defaults()),
             ))
             .unwrap();
 
@@ -479,14 +457,16 @@ mod tests {
             launcher.clone().register_driver(DriverRegistration::new(
                 custom,
                 Arc::new(VanillaDriver::with_defaults()),
-            )),
+                DriverCatalog::game_only(custom, VanillaCatalog::with_defaults()),
+            ),),
             Err(Error::DriverAlreadyRegistered { .. })
         ));
         assert!(matches!(
             launcher.register_driver(DriverRegistration::new(
                 VANILLA_DRIVER,
                 Arc::new(VanillaDriver::with_defaults()),
-            )),
+                DriverCatalog::game_only(VANILLA_DRIVER, VanillaCatalog::with_defaults()),
+            ),),
             Err(Error::DriverAlreadyRegistered { .. })
         ));
     }

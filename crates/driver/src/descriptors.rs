@@ -80,7 +80,6 @@ pub const ALL_DRIVERS: &[DriverDescriptor] = &[
     OUTLANDS_DRIVER,
     #[cfg(feature = "neoforge")]
     NEOFORGE_DRIVER,
-    #[cfg(feature = "vanilla")]
     VANILLA_DRIVER,
 ];
 

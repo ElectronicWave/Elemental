@@ -10,7 +10,6 @@ use elemental_driver::{
 };
 
 use crate::error::{Error, Result};
-use crate::registration::{builtin_registration, builtin_registrations, builtin_unsupported};
 
 #[cfg(any(
     feature = "driver-fabric",
@@ -29,6 +28,7 @@ trait LoaderCatalog: GameVersionCatalog + LoaderVersionCatalog {}
 
 impl<T> LoaderCatalog for T where T: GameVersionCatalog + LoaderVersionCatalog {}
 
+#[derive(Clone)]
 pub struct DriverCatalog {
     driver: DriverDescriptor,
     game_versions: Arc<dyn GameVersionCatalog + Send + Sync>,
@@ -36,18 +36,6 @@ pub struct DriverCatalog {
 }
 
 impl DriverCatalog {
-    pub fn supported_drivers() -> impl Iterator<Item = DriverDescriptor> {
-        builtin_registrations()
-            .iter()
-            .map(|registration| registration.descriptor)
-    }
-
-    pub fn for_driver(driver: DriverDescriptor) -> Result<Self> {
-        let registration =
-            builtin_registration(driver).ok_or_else(|| builtin_unsupported(driver))?;
-        registration.driver.catalog(driver)
-    }
-
     pub async fn game_versions(&self) -> Result<Vec<GameVersion>> {
         Ok(self.game_versions.game_versions().await?)
     }
@@ -83,11 +71,6 @@ impl DriverCatalog {
         }
     }
 
-    #[cfg(any(
-        feature = "driver-fabric",
-        feature = "driver-legacyfabric",
-        feature = "driver-babric"
-    ))]
     #[cfg(any(
         feature = "driver-fabric",
         feature = "driver-legacyfabric",

@@ -8,7 +8,7 @@ use elemental::{
         descriptors::FABRIC_DRIVER,
         driver::DriverDescriptor,
     },
-    launcher::{DriverCatalog, Instance},
+    launcher::{DriverRegistry, Instance},
 };
 use inquire::{InquireError, Select};
 
@@ -168,20 +168,23 @@ where
     )
 }
 
-pub(super) fn driver_choices() -> Vec<DriverChoice> {
-    DriverCatalog::supported_drivers()
+pub(super) fn driver_choices(drivers: &DriverRegistry) -> Vec<DriverChoice> {
+    drivers
+        .descriptors()
         .map(|descriptor| DriverChoice { descriptor })
         .collect()
 }
 
-pub(super) fn fabric_starting_cursor() -> usize {
-    DriverCatalog::supported_drivers()
+pub(super) fn fabric_starting_cursor(drivers: &DriverRegistry) -> usize {
+    drivers
+        .descriptors()
         .position(|descriptor| descriptor == FABRIC_DRIVER)
         .unwrap_or(0)
 }
 
-pub(super) fn driver_starting_cursor(driver: DriverDescriptor) -> usize {
-    DriverCatalog::supported_drivers()
+pub(super) fn driver_starting_cursor(drivers: &DriverRegistry, driver: DriverDescriptor) -> usize {
+    drivers
+        .descriptors()
         .position(|descriptor| descriptor == driver)
-        .unwrap_or_else(fabric_starting_cursor)
+        .unwrap_or_else(|| fabric_starting_cursor(drivers))
 }

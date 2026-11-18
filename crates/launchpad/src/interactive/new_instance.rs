@@ -9,7 +9,9 @@ use elemental::{
         driver::DriverDescriptor,
         loader_version::LoaderVersionId,
     },
-    launcher::{DriverCatalog, DriverSpec, LaunchOptions, RuntimeOptions},
+    launcher::{
+        DriverCatalog, DriverRegistry, DriverSpec, LaunchOptions, Launcher, RuntimeOptions,
+    },
 };
 use inquire::{Select, Text};
 
@@ -50,10 +52,10 @@ struct DriverContext {
 }
 
 impl DriverContext {
-    fn new(descriptor: DriverDescriptor) -> Result<Self> {
+    fn new(drivers: &DriverRegistry, descriptor: DriverDescriptor) -> Result<Self> {
         let defaults = driver_defaults(descriptor)
             .with_context(|| format!("{} launchpad defaults are missing", descriptor.name))?;
-        let catalog = DriverCatalog::for_driver(descriptor)?;
+        let catalog = drivers.catalog(descriptor)?;
 
         Ok(Self {
             descriptor,
@@ -99,6 +101,7 @@ impl DriverContext {
 
 struct NewInstanceWizard {
     storage_root: PathBuf,
+    drivers: DriverRegistry,
     runtime_resolver: RuntimeResolver,
     driver: Option<DriverContext>,
     game_version: Option<MinecraftVersionId>,
@@ -108,10 +111,11 @@ struct NewInstanceWizard {
 }
 
 impl NewInstanceWizard {
-    fn new(storage_root: PathBuf, runtime_resolver: RuntimeResolver) -> Self {
+    fn new(storage_root: PathBuf, launcher: &Launcher) -> Self {
         Self {
             storage_root,
-            runtime_resolver,
+            drivers: launcher.drivers().clone(),
+            runtime_resolver: launcher.runtime_resolver().clone(),
             driver: None,
             game_version: None,
             loader_version: None,
@@ -132,13 +136,11 @@ impl NewInstanceWizard {
     }
 
     fn prompt_driver(&mut self) -> Result<StepOutcome> {
-        let starting_cursor = self
-            .driver
-            .as_ref()
-            .map_or_else(fabric_starting_cursor, |driver| {
-                driver_starting_cursor(driver.descriptor)
-            });
-        let result = Select::new("Choose a driver", driver_choices())
+        let starting_cursor = self.driver.as_ref().map_or_else(
+            || fabric_starting_cursor(&self.drivers),
+            |driver| driver_starting_cursor(&self.drivers, driver.descriptor),
+        );
+        let result = Select::new("Choose a driver", driver_choices(&self.drivers))
             .with_starting_cursor(starting_cursor)
             .with_help_message("Esc goes back to the main menu")
             .prompt();
@@ -159,7 +161,7 @@ impl NewInstanceWizard {
             return Ok(());
         }
 
-        self.driver = Some(DriverContext::new(choice.descriptor)?);
+        self.driver = Some(DriverContext::new(&self.drivers, choice.descriptor)?);
         self.game_version = None;
         self.loader_version = None;
         self.instance_name = None;
@@ -351,9 +353,7 @@ impl NewInstanceStep {
 
 pub(super) async fn prompt(
     storage_root: PathBuf,
-    runtime_resolver: RuntimeResolver,
+    launcher: &Launcher,
 ) -> Result<Option<Box<LaunchpadConfig>>> {
-    NewInstanceWizard::new(storage_root, runtime_resolver)
-        .run()
-        .await
+    NewInstanceWizard::new(storage_root, launcher).run().await
 }

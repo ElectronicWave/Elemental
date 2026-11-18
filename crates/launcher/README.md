@@ -281,9 +281,9 @@ before launch.
 | Build and spawn in one call | `launch_prepared_instance(...)` |
 | Launch an installed instance by name | `launch_instance(...)` |
 
-Catalogs are not wrapped by the launcher. Use
-`DriverCatalog::for_driver(driver)?.game_versions()` and
-`DriverCatalog::for_driver(driver)?.loader_versions(&game_version)` directly.
+Catalogs are resolved through the launcher registry. Use
+`launcher.drivers().catalog(driver)?.game_versions()` and
+`launcher.drivers().catalog(driver)?.loader_versions(&game_version)` directly.
 
 Reopen an instance without preparing it again:
 

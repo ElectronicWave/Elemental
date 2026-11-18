@@ -2,13 +2,12 @@ use elemental_schema::fabric::{
     ProfileJson, ProfileLibrary, ProfileLibraryArtifact, ProfileLibraryDownloads,
 };
 
-use crate::{error::Result, inspect::ProfileIdPattern, maven::MavenCoordinate};
+use crate::{error::Result, maven::MavenCoordinate};
 
+use super::super::{RIFT_LIBRARY_MARKERS, RIFT_PROFILE_ID};
 use super::endpoints::RiftEndpoints;
 use super::release::RiftRelease;
 use super::with_trailing_slash;
-
-const RIFT_PROFILE_ID: ProfileIdPattern = ProfileIdPattern::new("-rift-");
 
 pub(super) fn normalize_profile_json(
     mut profile: ProfileJson,
@@ -124,6 +123,5 @@ fn build_rift_mixin_library(endpoints: &RiftEndpoints) -> Result<ProfileLibrary>
 }
 
 fn is_rift_loader_library(library_name: &str) -> bool {
-    library_name.starts_with("org.dimdev:rift:")
-        || library_name.starts_with("com.github.Chocohead:Rift:")
+    RIFT_LIBRARY_MARKERS.matches_name(library_name)
 }

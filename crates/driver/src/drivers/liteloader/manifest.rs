@@ -44,11 +44,7 @@ pub(super) struct LiteLoaderManifestGameVersion {
 #[derive(Debug, Clone, Deserialize)]
 pub(super) struct LiteLoaderManifestRepository {
     pub(super) stream: LiteLoaderRepositoryStream,
-    #[serde(rename = "type")]
-    _repository_type: String,
     pub(super) url: String,
-    #[serde(rename = "classifier")]
-    _classifier: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -76,13 +72,7 @@ pub(super) struct LiteLoaderManifestBuild {
     pub(super) stream: String,
     pub(super) file: String,
     pub(super) version: String,
-    #[serde(rename = "build")]
-    _build: Option<String>,
-    #[serde(rename = "md5")]
-    _md5: Option<String>,
     pub(super) timestamp: Option<String>,
-    #[serde(rename = "lastSuccessfulBuild")]
-    _last_successful_build: Option<usize>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

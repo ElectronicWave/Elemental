@@ -5,18 +5,20 @@ use elemental_schema::fabric::ProfileJson;
 use crate::{
     descriptors::RIFT_DRIVER,
     driver::DriverDescriptor,
-    drivers::{rift::source::RiftSource, vanilla::source::VanillaSource},
+    drivers::{
+        rift::source::{RiftEndpoints, RiftSource},
+        vanilla::source::VanillaSource,
+    },
     error::{Error, Result},
-    families::version_json::{ProfiledVersionJsonDriver, ProfiledVersionJsonFamily},
-    inspect::{LibraryPrefixSet, ProfileIdPattern, ProfiledDriverIdentity},
+    families::version_json::{
+        ProfiledVersionJsonDriver, ProfiledVersionJsonFamily, VanillaFallbackRemoteResolver,
+    },
+    inspect::ProfiledDriverIdentity,
     loader_version::LoaderVersionId,
 };
 
-const RIFT_PROFILE_ID: ProfileIdPattern = ProfileIdPattern::new("-rift-");
-const RIFT_LIBRARY_MARKERS: LibraryPrefixSet =
-    LibraryPrefixSet::new(&["org.dimdev:rift:", "com.github.Chocohead:Rift:"]);
-const RIFT_VERSION_LIBRARIES: LibraryPrefixSet = LibraryPrefixSet::new(&["org.dimdev:rift:"]);
-const RIFT_STALE_MARKERS: LibraryPrefixSet = LibraryPrefixSet::new(&["com.github.Chocohead:Rift:"]);
+use super::{RIFT_LIBRARY_MARKERS, RIFT_PROFILE_ID, RIFT_STALE_MARKERS, RIFT_VERSION_LIBRARIES};
+
 const RIFT_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(
     RIFT_DRIVER,
     RIFT_LIBRARY_MARKERS,
@@ -30,7 +32,7 @@ pub struct RiftDriverFamily;
 #[async_trait]
 impl ProfiledVersionJsonFamily for RiftDriverFamily {
     type Source = RiftSource;
-    type RemoteResolver = super::prepared::RiftRemoteResolver;
+    type RemoteResolver = VanillaFallbackRemoteResolver<RiftEndpoints>;
 
     fn descriptor(&self) -> DriverDescriptor {
         RIFT_DRIVER
@@ -45,7 +47,7 @@ impl ProfiledVersionJsonFamily for RiftDriverFamily {
         vanilla_source: &VanillaSource,
         source: &Self::Source,
     ) -> Self::RemoteResolver {
-        crate::families::version_json::VanillaFallbackRemoteResolver::new(
+        VanillaFallbackRemoteResolver::new(
             "rift",
             vanilla_source.endpoints().clone(),
             source.endpoints().clone(),

@@ -38,8 +38,8 @@ where
     let merged_metadata = merge_embedded_version(
         base_metadata.metadata,
         embedded_version,
-        request.normalize_libraries,
-        request.merge_libraries,
+        &request.normalize_libraries,
+        &request.merge_libraries,
         request.family_name,
     )?;
     ResolvedVersionJsonMetadata::new(

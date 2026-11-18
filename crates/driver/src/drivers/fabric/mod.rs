@@ -1,5 +1,9 @@
-pub mod catalog;
+use crate::catalog::LoaderMetaCatalog;
+
+use self::source::FabricEndpoints;
+
 pub mod driver;
 mod flavors;
-pub mod prepared;
 pub mod source;
+
+pub type FabricCatalog = LoaderMetaCatalog<FabricEndpoints>;

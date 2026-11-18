@@ -16,13 +16,6 @@ use elemental_driver::{
 
 use crate::error::{Error, Result};
 
-#[cfg(any(
-    feature = "driver-fabric",
-    feature = "driver-legacyfabric",
-    feature = "driver-babric"
-))]
-use elemental_driver::catalog::LoaderMetaCatalog;
-
 #[cfg(feature = "driver-cleanroom")]
 use elemental_driver::drivers::cleanroom::CleanroomCatalog;
 #[cfg(feature = "driver-forge")]
@@ -34,7 +27,7 @@ use elemental_driver::drivers::neoforge::NeoForgeCatalog;
 #[cfg(feature = "driver-outlands")]
 use elemental_driver::drivers::outlands::OutlandsCatalog;
 #[cfg(feature = "driver-quilt")]
-use elemental_driver::drivers::quilt::catalog::QuiltCatalog;
+use elemental_driver::drivers::quilt::QuiltCatalog;
 #[cfg(feature = "driver-rift")]
 use elemental_driver::drivers::rift::catalog::RiftCatalog;
 #[cfg(feature = "driver-vanilla")]
@@ -45,7 +38,10 @@ use elemental_driver::drivers::vanilla::catalog::VanillaCatalog;
     feature = "driver-babric"
 ))]
 use elemental_driver::{
-    drivers::fabric::source::{FabricEndpoints, FabricFlavor},
+    drivers::fabric::{
+        FabricCatalog,
+        source::{FabricEndpoints, FabricFlavor},
+    },
     families::version_json::LoaderMetaSource,
 };
 
@@ -109,7 +105,7 @@ impl DriverCatalog {
     ))]
     fn with_loader(driver: DriverDescriptor, flavor: FabricFlavor) -> Result<Self> {
         let source = LoaderMetaSource::new(FabricEndpoints::for_flavor(flavor)?);
-        Ok(Self::loader(driver, LoaderMetaCatalog::new(source)))
+        Ok(Self::loader(driver, FabricCatalog::new(source)))
     }
 
     fn loader<C>(driver: DriverDescriptor, catalog: C) -> Self

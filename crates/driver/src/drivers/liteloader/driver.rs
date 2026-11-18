@@ -6,8 +6,13 @@ use elemental_schema::fabric::ProfileJson;
 use crate::{
     descriptors::LITELOADER_DRIVER,
     driver::DriverDescriptor,
-    drivers::{liteloader::source::LiteLoaderSource, vanilla::source::VanillaSource},
-    families::version_json::{ProfiledVersionJsonDriver, ProfiledVersionJsonFamily},
+    drivers::{
+        liteloader::source::{LiteLoaderEndpoints, LiteLoaderSource},
+        vanilla::source::VanillaSource,
+    },
+    families::version_json::{
+        ProfiledVersionJsonDriver, ProfiledVersionJsonFamily, VanillaFallbackRemoteResolver,
+    },
     inspect::{LibraryPrefixSet, ProfileIdPattern, ProfiledDriverIdentity},
     loader_version::LoaderVersionId,
 };
@@ -26,7 +31,7 @@ pub struct LiteLoaderDriverFamily;
 #[async_trait]
 impl ProfiledVersionJsonFamily for LiteLoaderDriverFamily {
     type Source = LiteLoaderSource;
-    type RemoteResolver = super::prepared::LiteLoaderRemoteResolver;
+    type RemoteResolver = VanillaFallbackRemoteResolver<LiteLoaderEndpoints>;
 
     fn descriptor(&self) -> DriverDescriptor {
         LITELOADER_DRIVER
@@ -41,7 +46,7 @@ impl ProfiledVersionJsonFamily for LiteLoaderDriverFamily {
         vanilla_source: &VanillaSource,
         source: &Self::Source,
     ) -> Self::RemoteResolver {
-        crate::families::version_json::VanillaFallbackRemoteResolver::new(
+        VanillaFallbackRemoteResolver::new(
             "liteloader",
             vanilla_source.endpoints().clone(),
             source.endpoints().clone(),

@@ -52,7 +52,7 @@ impl LibraryPrefixSet {
         })
     }
 
-    fn matches_name(self, library_name: &str) -> bool {
+    pub(crate) fn matches_name(self, library_name: &str) -> bool {
         self.prefixes
             .iter()
             .any(|prefix| library_name.starts_with(prefix))

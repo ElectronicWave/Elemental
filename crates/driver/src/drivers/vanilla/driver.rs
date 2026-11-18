@@ -3,7 +3,7 @@ use crate::{
     descriptors::VANILLA_DRIVER,
     driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest},
     drivers::vanilla::{
-        prepared::ResolvedVanillaVersion,
+        ResolvedVanillaVersion,
         source::{VanillaSource, resolve_vanilla_metadata},
     },
     families::version_json::{

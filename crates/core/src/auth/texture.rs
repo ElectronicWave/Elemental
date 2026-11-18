@@ -1,3 +1,8 @@
+// Skin model inference is adapted from skinview-utils:
+// https://github.com/bs-community/skinview-utils/blob/master/src/process.ts
+// and HMCL:
+// https://github.com/HMCL-dev/HMCL/blob/main/HMCLCore/src/main/java/org/jackhuang/hmcl/util/skin/NormalizedSkin.java
+
 use serde::{Deserialize, Serialize};
 
 /// Texture kinds that can be read from or changed on a Minecraft profile.

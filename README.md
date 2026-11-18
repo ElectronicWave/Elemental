@@ -286,8 +286,6 @@ Forwarded features:
 - [Prism Launcher](https://prismlauncher.org/)
 - [XMCL](https://xmcl.app/)
 - [LightyLauncherLib](https://github.com/Lighty-Launcher/LightyLauncherLib) — architectural inspiration for loader extension and compile-time feature organization; no source code copied
-- [skinview-utils](https://github.com/bs-community/skinview-utils) — skin model inference heuristic used by `SkinModel::infer`
-- [HMCL](https://github.com/HMCL-dev/HMCL) — skin model inference reference
 
 <!-- LINKS -->
 [contributors-shield]: https://img.shields.io/github/contributors/ElectronicWave/Elemental.svg?style=for-the-badge

@@ -1,3 +1,5 @@
+#![cfg_attr(not(feature = "driver-all"), allow(dead_code, unreachable_code))]
+
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -10,23 +12,8 @@ use elemental_core::{
     storage::Storage,
 };
 use elemental_driver::{
-    descriptors::{
-        ALL_DRIVERS, BABRIC_DRIVER, CLEANROOM_DRIVER, FABRIC_DRIVER, FORGE_DRIVER,
-        LEGACY_FABRIC_DRIVER, LITELOADER_DRIVER, NEOFORGE_DRIVER, OUTLANDS_DRIVER, QUILT_DRIVER,
-        RIFT_DRIVER, VANILLA_DRIVER,
-    },
     driver::{Driver, DriverDescriptor, PrepareRequest},
-    drivers::{
-        cleanroom::CleanroomDriverSpec,
-        fabric::{driver::FabricDriverFamily, source::FabricFlavor},
-        forge::ForgeFamily,
-        liteloader::driver::LiteLoaderDriverFamily,
-        neoforge::NeoForgeFamily,
-        outlands::OutlandsDriverSpec,
-        quilt::driver::QuiltDriverFamily,
-        rift::driver::RiftDriverFamily,
-        vanilla::driver::VanillaDriver,
-    },
+    drivers::vanilla::driver::VanillaDriver,
     families::{
         installer::InstallerFamilyDriver,
         version_json::{
@@ -39,6 +26,37 @@ use elemental_driver::{
     inspect::InstalledInstance,
     launch::resolve_prepared_version_runtime,
 };
+
+#[cfg(feature = "driver-babric")]
+use elemental_driver::descriptors::BABRIC_DRIVER;
+#[cfg(feature = "driver-fabric")]
+use elemental_driver::descriptors::FABRIC_DRIVER;
+#[cfg(feature = "driver-legacyfabric")]
+use elemental_driver::descriptors::LEGACY_FABRIC_DRIVER;
+#[cfg(feature = "driver-vanilla")]
+use elemental_driver::descriptors::VANILLA_DRIVER;
+#[cfg(any(
+    feature = "driver-fabric",
+    feature = "driver-legacyfabric",
+    feature = "driver-babric"
+))]
+use elemental_driver::drivers::fabric::{driver::FabricDriverFamily, source::FabricFlavor};
+#[cfg(feature = "driver-cleanroom")]
+use elemental_driver::{descriptors::CLEANROOM_DRIVER, drivers::cleanroom::CleanroomDriverSpec};
+#[cfg(feature = "driver-forge")]
+use elemental_driver::{descriptors::FORGE_DRIVER, drivers::forge::ForgeFamily};
+#[cfg(feature = "driver-liteloader")]
+use elemental_driver::{
+    descriptors::LITELOADER_DRIVER, drivers::liteloader::driver::LiteLoaderDriverFamily,
+};
+#[cfg(feature = "driver-neoforge")]
+use elemental_driver::{descriptors::NEOFORGE_DRIVER, drivers::neoforge::NeoForgeFamily};
+#[cfg(feature = "driver-outlands")]
+use elemental_driver::{descriptors::OUTLANDS_DRIVER, drivers::outlands::OutlandsDriverSpec};
+#[cfg(feature = "driver-quilt")]
+use elemental_driver::{descriptors::QUILT_DRIVER, drivers::quilt::driver::QuiltDriverFamily};
+#[cfg(feature = "driver-rift")]
+use elemental_driver::{descriptors::RIFT_DRIVER, drivers::rift::driver::RiftDriverFamily};
 use elemental_infra::downloader::{DownloadSession, ElementalDownloader};
 
 use crate::{
@@ -58,6 +76,31 @@ use crate::authlib_injector::{self, AuthlibInjector};
 
 type LauncherGameStorage<L> = Storage<L>;
 type LauncherInstanceStorage<L, VL> = Storage<VL, LauncherGameStorage<L>>;
+
+const BUILT_IN_DRIVERS: &[DriverDescriptor] = &[
+    #[cfg(feature = "driver-fabric")]
+    FABRIC_DRIVER,
+    #[cfg(feature = "driver-legacyfabric")]
+    LEGACY_FABRIC_DRIVER,
+    #[cfg(feature = "driver-babric")]
+    BABRIC_DRIVER,
+    #[cfg(feature = "driver-quilt")]
+    QUILT_DRIVER,
+    #[cfg(feature = "driver-liteloader")]
+    LITELOADER_DRIVER,
+    #[cfg(feature = "driver-rift")]
+    RIFT_DRIVER,
+    #[cfg(feature = "driver-forge")]
+    FORGE_DRIVER,
+    #[cfg(feature = "driver-cleanroom")]
+    CLEANROOM_DRIVER,
+    #[cfg(feature = "driver-outlands")]
+    OUTLANDS_DRIVER,
+    #[cfg(feature = "driver-neoforge")]
+    NEOFORGE_DRIVER,
+    #[cfg(feature = "driver-vanilla")]
+    VANILLA_DRIVER,
+];
 
 #[derive(Debug, Clone)]
 pub struct Launcher<L = BaseRootLayout, VL = BaseInstanceLayout>
@@ -364,22 +407,33 @@ where
 
     fn resolve_driver(&self, desc: DriverDescriptor) -> Result<Box<dyn Driver<L, VL>>> {
         Ok(match desc {
+            #[cfg(feature = "driver-vanilla")]
             VANILLA_DRIVER => Box::new(self.vanilla_driver()),
+            #[cfg(feature = "driver-fabric")]
             FABRIC_DRIVER => {
                 Box::new(self.profiled_driver(FabricDriverFamily::new(FabricFlavor::Fabric))?)
             }
+            #[cfg(feature = "driver-legacyfabric")]
             LEGACY_FABRIC_DRIVER => {
                 Box::new(self.profiled_driver(FabricDriverFamily::new(FabricFlavor::LegacyFabric))?)
             }
+            #[cfg(feature = "driver-babric")]
             BABRIC_DRIVER => {
                 Box::new(self.profiled_driver(FabricDriverFamily::new(FabricFlavor::Babric))?)
             }
+            #[cfg(feature = "driver-quilt")]
             QUILT_DRIVER => Box::new(self.profiled_driver(QuiltDriverFamily)?),
+            #[cfg(feature = "driver-liteloader")]
             LITELOADER_DRIVER => Box::new(self.profiled_driver(LiteLoaderDriverFamily)?),
+            #[cfg(feature = "driver-rift")]
             RIFT_DRIVER => Box::new(self.profiled_driver(RiftDriverFamily)?),
+            #[cfg(feature = "driver-forge")]
             FORGE_DRIVER => Box::new(self.installer_driver::<ForgeFamily>()?),
+            #[cfg(feature = "driver-cleanroom")]
             CLEANROOM_DRIVER => Box::new(self.installer_driver::<CleanroomDriverSpec>()?),
+            #[cfg(feature = "driver-outlands")]
             OUTLANDS_DRIVER => Box::new(self.installer_driver::<OutlandsDriverSpec>()?),
+            #[cfg(feature = "driver-neoforge")]
             NEOFORGE_DRIVER => Box::new(self.installer_driver::<NeoForgeFamily>()?),
             _ => {
                 return Err(Error::UnsupportedDriver {
@@ -439,8 +493,9 @@ where
     VL: VersionJsonInstanceLayout + Clone + Send,
 {
     fn inspect_drivers(&self) -> Result<Vec<Box<dyn Driver<L, VL>>>> {
-        ALL_DRIVERS
-            .into_iter()
+        BUILT_IN_DRIVERS
+            .iter()
+            .copied()
             .map(|descriptor| self.resolve_driver(descriptor))
             .collect()
     }

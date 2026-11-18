@@ -28,6 +28,56 @@ shared-toml = ["shared", "elemental-shared/toml"]
 
 driver = ["dep:elemental-driver", "core", "infra", "schema", "shared"]
 launcher = ["dep:elemental-launcher", "core", "driver", "infra"]
+
+driver-all = [
+    "driver-vanilla",
+    "driver-fabric",
+    "driver-legacyfabric",
+    "driver-babric",
+    "driver-quilt",
+    "driver-liteloader",
+    "driver-rift",
+    "driver-forge",
+    "driver-cleanroom",
+    "driver-outlands",
+    "driver-neoforge",
+]
+driver-vanilla = ["launcher", "elemental-launcher/driver-vanilla"]
+driver-fabric = ["launcher", "elemental-launcher/driver-fabric", "elemental-driver/fabric"]
+driver-legacyfabric = [
+    "launcher",
+    "elemental-launcher/driver-legacyfabric",
+    "elemental-driver/legacyfabric",
+]
+driver-babric = [
+    "launcher",
+    "elemental-launcher/driver-babric",
+    "elemental-driver/babric",
+]
+driver-quilt = ["launcher", "elemental-launcher/driver-quilt", "elemental-driver/quilt"]
+driver-liteloader = [
+    "launcher",
+    "elemental-launcher/driver-liteloader",
+    "elemental-driver/liteloader",
+]
+driver-rift = ["launcher", "elemental-launcher/driver-rift", "elemental-driver/rift"]
+driver-forge = ["launcher", "elemental-launcher/driver-forge", "elemental-driver/forge"]
+driver-cleanroom = [
+    "launcher",
+    "elemental-launcher/driver-cleanroom",
+    "elemental-driver/cleanroom",
+]
+driver-outlands = [
+    "launcher",
+    "elemental-launcher/driver-outlands",
+    "elemental-driver/outlands",
+]
+driver-neoforge = [
+    "launcher",
+    "elemental-launcher/driver-neoforge",
+    "elemental-driver/neoforge",
+]
+
 yggdrasil-auth = ["core", "launcher", "elemental-core/yggdrasil-auth", "elemental-launcher/yggdrasil-auth"]
 authlib-injector-embed = ["yggdrasil-auth", "elemental-launcher/authlib-injector-embed"]
 offline-server = ["yggdrasil-auth", "elemental-launcher/offline-server"]
@@ -40,6 +90,6 @@ infra-serde = ["infra", "elemental-infra/serde"]
 
 schema = ["dep:elemental-schema"]
 
-full = ["driver", "launcher", "object", "shared", "core", "infra", "schema"]
+full = ["driver", "launcher", "driver-all", "object", "shared", "core", "infra", "schema"]
 
 default = ["full", "shared-json", "object-notify"]

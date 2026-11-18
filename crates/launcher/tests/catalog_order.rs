@@ -1,8 +1,11 @@
+#[cfg(feature = "driver-all")]
 use std::collections::HashSet;
 
+#[cfg(feature = "driver-all")]
 use elemental_driver::descriptors::{ALL_DRIVERS, from_id};
 use elemental_launcher::DriverCatalog;
 
+#[cfg(feature = "driver-all")]
 #[test]
 fn supported_drivers_follow_documented_order() {
     let ids: Vec<&str> = DriverCatalog::supported_drivers()
@@ -27,6 +30,7 @@ fn supported_drivers_follow_documented_order() {
     );
 }
 
+#[cfg(feature = "driver-all")]
 #[test]
 fn supported_drivers_cover_all_built_in_descriptors() {
     let supported: HashSet<&str> = DriverCatalog::supported_drivers()

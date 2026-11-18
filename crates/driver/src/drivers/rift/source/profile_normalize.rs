@@ -44,6 +44,12 @@ fn normalize_profile_library(
     library: ProfileLibrary,
     endpoints: &RiftEndpoints,
 ) -> Result<ProfileLibrary> {
+    // Legacy Rift profiles omit the launcher libraries base for Mojang-hosted artifacts.
+    let library = ProfileLibrary {
+        url: with_trailing_slash(library.url.as_str()),
+        ..library
+    };
+
     if library.name == "org.dimdev:mixin:0.7.11-SNAPSHOT" {
         // The historical DimDev Maven endpoint is no longer a reliable source for this snapshot.
         return build_rift_mixin_library(endpoints);

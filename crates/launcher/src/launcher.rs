@@ -11,9 +11,9 @@ use elemental_core::{
 };
 use elemental_driver::{
     descriptors::{
-        BABRIC_DRIVER, CLEANROOM_DRIVER, FABRIC_DRIVER, FORGE_DRIVER, LEGACY_FABRIC_DRIVER,
-        LITELOADER_DRIVER, NEOFORGE_DRIVER, OUTLANDS_DRIVER, QUILT_DRIVER, RIFT_DRIVER,
-        VANILLA_DRIVER,
+        ALL_DRIVERS, BABRIC_DRIVER, CLEANROOM_DRIVER, FABRIC_DRIVER, FORGE_DRIVER,
+        LEGACY_FABRIC_DRIVER, LITELOADER_DRIVER, NEOFORGE_DRIVER, OUTLANDS_DRIVER, QUILT_DRIVER,
+        RIFT_DRIVER, VANILLA_DRIVER,
     },
     driver::{Driver, DriverDescriptor, PrepareRequest},
     drivers::{
@@ -348,38 +348,23 @@ where
     {
         Ok(family
             .clone()
-            .build_driver(family.source_with_origins(&self.origins)?))
+            .build_driver(family.source_with_origins(&self.origins)?)
+            .with_vanilla_source(self.origins.vanilla_source()))
     }
 
     fn installer_driver<F>(&self) -> Result<InstallerFamilyDriver<F>>
     where
         F: InstallerFamilySource,
     {
-        Ok(InstallerFamilyDriver::new(F::source_with_origins(
-            &self.origins,
-        )?))
+        Ok(
+            InstallerFamilyDriver::new(F::source_with_origins(&self.origins)?)
+                .with_vanilla_source(self.origins.vanilla_source()),
+        )
     }
 
     fn resolve_driver(&self, desc: DriverDescriptor) -> Result<Box<dyn Driver<L, VL>>> {
-        if desc == VANILLA_DRIVER {
-            return Ok(Box::new(self.vanilla_driver()));
-        }
-        if let Some(driver) = self.resolve_profiled_driver(desc)? {
-            return Ok(driver);
-        }
-        if let Some(driver) = self.resolve_installer_driver(desc)? {
-            return Ok(driver);
-        }
-        Err(Error::UnsupportedDriver {
-            id: desc.id.to_owned(),
-        })
-    }
-
-    fn resolve_profiled_driver(
-        &self,
-        desc: DriverDescriptor,
-    ) -> Result<Option<Box<dyn Driver<L, VL>>>> {
-        Ok(Some(match desc {
+        Ok(match desc {
+            VANILLA_DRIVER => Box::new(self.vanilla_driver()),
             FABRIC_DRIVER => {
                 Box::new(self.profiled_driver(FabricDriverFamily::new(FabricFlavor::Fabric))?)
             }
@@ -392,21 +377,16 @@ where
             QUILT_DRIVER => Box::new(self.profiled_driver(QuiltDriverFamily)?),
             LITELOADER_DRIVER => Box::new(self.profiled_driver(LiteLoaderDriverFamily)?),
             RIFT_DRIVER => Box::new(self.profiled_driver(RiftDriverFamily)?),
-            _ => return Ok(None),
-        }))
-    }
-
-    fn resolve_installer_driver(
-        &self,
-        desc: DriverDescriptor,
-    ) -> Result<Option<Box<dyn Driver<L, VL>>>> {
-        Ok(Some(match desc {
             FORGE_DRIVER => Box::new(self.installer_driver::<ForgeFamily>()?),
             CLEANROOM_DRIVER => Box::new(self.installer_driver::<CleanroomDriverSpec>()?),
             OUTLANDS_DRIVER => Box::new(self.installer_driver::<OutlandsDriverSpec>()?),
             NEOFORGE_DRIVER => Box::new(self.installer_driver::<NeoForgeFamily>()?),
-            _ => return Ok(None),
-        }))
+            _ => {
+                return Err(Error::UnsupportedDriver {
+                    id: desc.id.to_owned(),
+                });
+            }
+        })
     }
 }
 
@@ -459,23 +439,10 @@ where
     VL: VersionJsonInstanceLayout + Clone + Send,
 {
     fn inspect_drivers(&self) -> Result<Vec<Box<dyn Driver<L, VL>>>> {
-        [
-            FABRIC_DRIVER,
-            LEGACY_FABRIC_DRIVER,
-            BABRIC_DRIVER,
-            QUILT_DRIVER,
-            LITELOADER_DRIVER,
-            RIFT_DRIVER,
-            FORGE_DRIVER,
-            CLEANROOM_DRIVER,
-            OUTLANDS_DRIVER,
-            NEOFORGE_DRIVER,
-            // Vanilla is last so more specific drivers take precedence.
-            VANILLA_DRIVER,
-        ]
-        .into_iter()
-        .map(|descriptor| self.resolve_driver(descriptor))
-        .collect()
+        ALL_DRIVERS
+            .into_iter()
+            .map(|descriptor| self.resolve_driver(descriptor))
+            .collect()
     }
 }
 

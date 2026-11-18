@@ -70,6 +70,7 @@ pub struct LoaderProfile {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ProfileLibrary {
     pub name: String,
+    #[serde(default)]
     pub url: String,
     pub downloads: Option<ProfileLibraryDownloads>,
     pub natives: Option<HashMap<String, String>>,

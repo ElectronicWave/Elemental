@@ -33,7 +33,7 @@ pub use profile::{
 };
 pub(crate) use profile::{
     installer_install_status, profile_game_and_raw_loader_version,
-    resolve_installer_processor_runtime, validate_installer_profile_identity,
+    validate_installer_profile_identity,
 };
 pub use source::{
     InstallerMavenArtifactSpec, InstallerMavenEndpoints, InstallerMavenSource, MavenEndpoints,

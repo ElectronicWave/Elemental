@@ -55,20 +55,27 @@ pub const NEOFORGE_DRIVER: DriverDescriptor = DriverDescriptor {
     name: "NeoForge",
 };
 
+/// All supported drivers in instance-detection order.
+///
+/// More specific drivers come before `Vanilla`, so a modded instance is not
+/// claimed by the vanilla fallback first.
+pub const ALL_DRIVERS: [DriverDescriptor; 11] = [
+    FABRIC_DRIVER,
+    LEGACY_FABRIC_DRIVER,
+    BABRIC_DRIVER,
+    QUILT_DRIVER,
+    LITELOADER_DRIVER,
+    RIFT_DRIVER,
+    FORGE_DRIVER,
+    CLEANROOM_DRIVER,
+    OUTLANDS_DRIVER,
+    NEOFORGE_DRIVER,
+    VANILLA_DRIVER,
+];
+
 /// Resolves a known driver descriptor by its stable id.
 pub fn from_id(id: &str) -> Option<DriverDescriptor> {
-    Some(match id {
-        "vanilla" => VANILLA_DRIVER,
-        "fabric" => FABRIC_DRIVER,
-        "legacyfabric" => LEGACY_FABRIC_DRIVER,
-        "babric" => BABRIC_DRIVER,
-        "quilt" => QUILT_DRIVER,
-        "liteloader" => LITELOADER_DRIVER,
-        "rift" => RIFT_DRIVER,
-        "forge" => FORGE_DRIVER,
-        "cleanroom" => CLEANROOM_DRIVER,
-        "outlands" => OUTLANDS_DRIVER,
-        "neoforge" => NEOFORGE_DRIVER,
-        _ => return None,
-    })
+    ALL_DRIVERS
+        .into_iter()
+        .find(|descriptor| descriptor.id == id)
 }

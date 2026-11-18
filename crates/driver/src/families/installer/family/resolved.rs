@@ -13,15 +13,15 @@ use crate::{
         installer::{
             InstallerArtifact, InstallerLaunchVersionRequest, installer_has_client_processors,
             persist_installer_launch_version, prepare_installer_state,
-            resolve_installer_processor_runtime, run_installer_client_processors,
-            submit_installer_profile_libraries, validate_installer_profile_identity,
+            run_installer_client_processors, submit_installer_profile_libraries,
+            validate_installer_profile_identity,
         },
         version_json::{
             PreparedVersionJsonInstance, VersionJsonInstanceLayout, VersionJsonRootLayout,
             VersionJsonRootResource,
         },
     },
-    launch::RuntimeOptions,
+    launch::{RuntimeOptions, resolve_prepared_version_runtime},
     loader_version::LoaderVersionId,
 };
 
@@ -138,7 +138,7 @@ where
             launch_version.finish_preparation().await?;
 
         if installer_has_client_processors(&installer_state.install_profile) {
-            let runtime = resolve_installer_processor_runtime(
+            let runtime = resolve_prepared_version_runtime(
                 &launch_version,
                 runtime_options,
                 runtime_resolver,

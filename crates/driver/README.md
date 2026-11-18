@@ -249,12 +249,12 @@ impl ProfiledVersionJsonFamily for MyFamily {
     }
 }
 
-let driver = MyFamily.build_driver_with_defaults()?;
+let driver = MyFamily.build_driver(source);
 ```
 
 `MyEndpoints` must implement `LoaderMetaEndpoints` and `UpstreamUrlRewriter`.
-`build_driver_with_defaults()` also requires `Default`; otherwise construct the
-source explicitly and call `build_driver(source).with_vanilla_source(...)`. Use
+Construct the source explicitly and call
+`build_driver(source).with_vanilla_source(...)`. Use
 `ProfileIdPattern::loader_prefixed(...)` when the installed profile id is
 `<loader-prefix><version>` instead of `<game>-<loader>-<version>`.
 

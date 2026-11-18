@@ -354,6 +354,20 @@ pub enum Error {
     UnterminatedArgumentQuote { quote: char },
 }
 
+impl Error {
+    pub fn is_not_found(&self) -> bool {
+        match self {
+            Self::Io(source) => source.kind() == io::ErrorKind::NotFound,
+            Self::Storage(elemental_core::storage::Error::ResourceNotFound { .. }) => true,
+            Self::Storage(elemental_core::storage::Error::Io { source, .. }) => {
+                source.kind() == io::ErrorKind::NotFound
+            }
+            Self::Storage(_) => false,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 #[error(

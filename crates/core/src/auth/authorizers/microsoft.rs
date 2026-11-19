@@ -203,10 +203,16 @@ async fn account_from_microsoft_token(
         .await
         .map_err(|source| Error::MinecraftExchange { source })?;
     let profile = minecraft_profile(mc_token.access_token().as_ref()).await?;
-    let xuid = match existing_xuid {
-        Some(xuid) => xuid,
-        None => xuid_from_access_token(mc_token.access_token().as_ref())?,
-    };
+    let xuid =
+        existing_xuid.filter(|xuid| !xuid.is_empty()).or_else(|| {
+            match xuid_from_access_token(mc_token.access_token().as_ref()) {
+                Ok(xuid) => Some(xuid),
+                Err(error) => {
+                    tracing::warn!(%error, "failed to extract XUID from Minecraft access token");
+                    None
+                }
+            }
+        });
 
     Ok(MicrosoftAccount {
         account_id: crate::auth::accounts::AccountId::derive(MICROSOFT_AUTHORIZER_ID, &profile.id),
@@ -215,7 +221,7 @@ async fn account_from_microsoft_token(
         access_token: mc_token.access_token().clone().into_inner(),
         refresh_token,
         client_id: client_id.to_owned(),
-        xuid: Some(xuid),
+        xuid,
         expires_at: unix_now().saturating_add(u64::from(mc_token.expires_in())),
     })
 }

@@ -4,18 +4,12 @@ use elemental_core::auth::{
     accounts::{Account, AccountId},
     texture::SkinModel,
 };
-use elemental_shared::{
-    migrator::NoMigrator,
-    persistor::{JsonFilePersistor, json_persistor},
-    scope::Scope,
-    store::{Store, StoreLoader},
-};
+use elemental_shared::scope::Scope;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
 
 use crate::{
     error::{Error, Result},
-    texture::{PNG_SIGNATURE, validate_name},
+    texture::{TextureAsset, TextureId, TextureIndex, TextureSelection, TextureStore},
 };
 
 const SKIN_INDEX_VERSION: usize = 1;
@@ -30,11 +24,29 @@ impl fmt::Display for SkinId {
     }
 }
 
+impl TextureId for SkinId {
+    fn from_u64(value: u64) -> Self {
+        Self(value)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkinAsset {
     pub id: SkinId,
     pub name: String,
     pub default_model: SkinModel,
+}
+
+impl TextureAsset for SkinAsset {
+    type Id = SkinId;
+
+    fn id(&self) -> Self::Id {
+        self.id
+    }
+
+    fn rename(&mut self, name: String) {
+        self.name = name;
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,6 +56,18 @@ struct AccountSkinSelection {
     model: SkinModel,
 }
 
+impl TextureSelection for AccountSkinSelection {
+    type Id = SkinId;
+
+    fn account_id(&self) -> AccountId {
+        self.account_id
+    }
+
+    fn texture_id(&self) -> Self::Id {
+        self.skin_id
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 struct SkinIndex {
     next_id: u64,
@@ -51,38 +75,51 @@ struct SkinIndex {
     selections: Vec<AccountSkinSelection>,
 }
 
-impl SkinIndex {
-    fn remove(&mut self, skin_id: SkinId) {
-        self.skins.retain(|asset| asset.id != skin_id);
-        self.selections
-            .retain(|selection| selection.skin_id != skin_id);
+impl TextureIndex for SkinIndex {
+    type Id = SkinId;
+    type Asset = SkinAsset;
+    type Selection = AccountSkinSelection;
+
+    fn next_id(&self) -> u64 {
+        self.next_id
     }
 
-    fn selected_by(&self, account_id: AccountId) -> Option<&AccountSkinSelection> {
-        self.selections
-            .iter()
-            .find(|selection| selection.account_id == account_id)
+    fn set_next_id(&mut self, next_id: u64) {
+        self.next_id = next_id;
     }
 
-    fn select(&mut self, selection: AccountSkinSelection) {
-        self.clear_selection(selection.account_id);
-        self.selections.push(selection);
+    fn assets(&self) -> &[Self::Asset] {
+        &self.skins
     }
 
-    fn clear_selection(&mut self, account_id: AccountId) {
-        self.selections
-            .retain(|selection| selection.account_id != account_id);
+    fn assets_mut(&mut self) -> &mut Vec<Self::Asset> {
+        &mut self.skins
     }
 
-    fn rename(&mut self, skin_id: SkinId, name: String) {
-        if let Some(asset) = self.skins.iter_mut().find(|asset| asset.id == skin_id) {
-            asset.name = name;
-        }
+    fn selections(&self) -> &[Self::Selection] {
+        &self.selections
+    }
+
+    fn selections_mut(&mut self) -> &mut Vec<Self::Selection> {
+        &mut self.selections
+    }
+
+    fn not_found(skin_id: SkinId) -> Error {
+        Error::SkinNotFound { skin_id }
+    }
+
+    fn file_not_found(skin_id: SkinId, path: PathBuf) -> Error {
+        Error::SkinFileNotFound { skin_id, path }
+    }
+
+    fn not_png(name: String) -> Error {
+        Error::SkinNotPng { name }
+    }
+
+    fn id_exhausted() -> Error {
+        Error::SkinIdExhausted
     }
 }
-
-type SkinIndexStore =
-    StoreLoader<NoMigrator, Store<SkinIndex>, SkinIndex, JsonFilePersistor<Store<SkinIndex>>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SelectedSkin {
@@ -121,24 +158,13 @@ where
 
 /// Stores skin PNG files locally and tracks per-account selections.
 pub struct SkinStore {
-    scope: Scope,
-    index: SkinIndexStore,
-    import_lock: Mutex<()>,
+    inner: TextureStore<SkinIndex>,
 }
 
 impl SkinStore {
     pub async fn open(scope: Scope) -> Result<Self> {
-        let index = Store::load(
-            NoMigrator,
-            json_persistor("skins/index".to_owned(), scope.clone()),
-            SKIN_INDEX_VERSION,
-        )
-        .await?;
-
         Ok(Self {
-            scope,
-            index,
-            import_lock: Mutex::new(()),
+            inner: TextureStore::open(scope, "skins", SKIN_INDEX_VERSION).await?,
         })
     }
 
@@ -158,71 +184,33 @@ impl SkinStore {
         bytes: Vec<u8>,
         default_model: SkinModel,
     ) -> Result<SkinAsset> {
-        let name = name.into();
-        validate_name(&name)?;
-        if !bytes.starts_with(PNG_SIGNATURE) {
-            return Err(Error::SkinNotPng { name });
-        }
-
-        let _guard = self.import_lock.lock().await;
-        let next_id = self
-            .index
-            .get(|index| index.value.next_id.checked_add(1))
-            .await
-            .ok_or(Error::SkinIdExhausted)?;
-        let asset = SkinAsset {
-            id: SkinId(next_id),
-            name,
-            default_model,
-        };
-
-        let path = self.path(asset.id).await?;
-        tokio::fs::write(&path, bytes).await?;
-
-        self.index
-            .set(|index| {
-                index.value.next_id = next_id;
-                index.value.skins.push(asset.clone());
+        self.inner
+            .import(name, bytes, |id, name| SkinAsset {
+                id,
+                name,
+                default_model,
             })
-            .await?;
-        Ok(asset)
+            .await
     }
 
     /// Renames a local skin without changing its id, PNG file, or selections.
     pub async fn rename(&self, skin_id: SkinId, name: impl Into<String>) -> Result<()> {
-        let name = name.into();
-        validate_name(&name)?;
-        if self.asset(skin_id).await.is_none() {
-            return Err(Error::SkinNotFound { skin_id });
-        }
-
-        self.index
-            .set(|index| index.value.rename(skin_id, name))
-            .await?;
-        Ok(())
+        self.inner.rename(skin_id, name).await
     }
 
     /// Lists local skins with their PNG paths without reading the files.
     pub async fn list(&self) -> Result<Vec<SkinEntry>> {
-        let assets = self.index.get(|index| index.value.skins.clone()).await;
-        let mut entries = Vec::with_capacity(assets.len());
-        for asset in assets {
-            let path = self.path(asset.id).await?;
-            entries.push(SkinEntry { asset, path });
-        }
-        Ok(entries)
+        Ok(self
+            .inner
+            .list()
+            .await?
+            .into_iter()
+            .map(|(asset, path)| SkinEntry { asset, path })
+            .collect())
     }
 
     pub async fn remove(&self, skin_id: SkinId) -> Result<()> {
-        let asset = self
-            .asset(skin_id)
-            .await
-            .ok_or(Error::SkinNotFound { skin_id })?;
-
-        let path = self.path(asset.id).await?;
-        self.index.set(|index| index.value.remove(skin_id)).await?;
-        tokio::fs::remove_file(path).await?;
-        Ok(())
+        self.inner.remove(skin_id).await
     }
 
     /// Selects a local skin for an account without uploading it.
@@ -232,85 +220,36 @@ impl SkinStore {
         skin_id: SkinId,
         model: SkinModel,
     ) -> Result<()> {
-        if self.asset(skin_id).await.is_none() {
-            return Err(Error::SkinNotFound { skin_id });
-        }
-
-        self.index
-            .set(|index| {
-                index.value.select(AccountSkinSelection {
-                    account_id,
-                    skin_id,
-                    model,
-                });
+        self.inner
+            .select(AccountSkinSelection {
+                account_id,
+                skin_id,
+                model,
             })
-            .await?;
-        Ok(())
+            .await
     }
 
     pub async fn clear_selection(&self, account_id: AccountId) -> Result<()> {
-        self.index
-            .set(|index| index.value.clear_selection(account_id))
-            .await?;
-        Ok(())
+        self.inner.clear_selection(account_id).await
     }
 
     pub async fn selected(&self, account_id: AccountId) -> Result<Option<SelectedSkin>> {
-        let Some(selection) = self.selection(account_id).await else {
-            return Ok(None);
-        };
-        let (asset, path) = self.existing(selection.skin_id).await?;
-
-        Ok(Some(SelectedSkin {
-            asset,
-            model: selection.model,
-            path,
-        }))
-    }
-
-    async fn asset(&self, skin_id: SkinId) -> Option<SkinAsset> {
-        self.index
-            .get(|index| {
-                index
-                    .value
-                    .skins
-                    .iter()
-                    .find(|asset| asset.id == skin_id)
-                    .cloned()
-            })
-            .await
-    }
-
-    async fn selection(&self, account_id: AccountId) -> Option<AccountSkinSelection> {
-        self.index
-            .get(|index| index.value.selected_by(account_id).cloned())
-            .await
-    }
-
-    async fn path(&self, skin_id: SkinId) -> Result<PathBuf> {
         Ok(self
-            .scope
-            .get_full_path(&format!("skins/files/{skin_id}"), Some("png".to_owned()))
-            .await?)
-    }
-
-    async fn existing(&self, skin_id: SkinId) -> Result<(SkinAsset, PathBuf)> {
-        let asset = self
-            .asset(skin_id)
-            .await
-            .ok_or(Error::SkinNotFound { skin_id })?;
-        let path = self.path(skin_id).await?;
-        if !tokio::fs::try_exists(&path).await? {
-            return Err(Error::SkinFileNotFound { skin_id, path });
-        }
-        Ok((asset, path))
+            .inner
+            .selected(account_id)
+            .await?
+            .map(|(selection, asset, path)| SelectedSkin {
+                asset,
+                model: selection.model,
+                path,
+            }))
     }
 
     async fn upload<A>(&self, account: &A, skin_id: SkinId, model: SkinModel) -> Result<()>
     where
         A: Account + ?Sized,
     {
-        let (_, path) = self.existing(skin_id).await?;
+        let (_, path) = self.inner.existing(skin_id).await?;
         let bytes = tokio::fs::read(&path).await?;
         account.upload_skin(bytes, model).await?;
         self.select(account.account_id(), skin_id, model).await

@@ -80,28 +80,12 @@ impl TextureIndex for SkinIndex {
     type Asset = SkinAsset;
     type Selection = AccountSkinSelection;
 
-    fn next_id(&self) -> u64 {
-        self.next_id
+    fn parts(&self) -> (&u64, &Vec<Self::Asset>, &Vec<Self::Selection>) {
+        (&self.next_id, &self.skins, &self.selections)
     }
 
-    fn set_next_id(&mut self, next_id: u64) {
-        self.next_id = next_id;
-    }
-
-    fn assets(&self) -> &[Self::Asset] {
-        &self.skins
-    }
-
-    fn assets_mut(&mut self) -> &mut Vec<Self::Asset> {
-        &mut self.skins
-    }
-
-    fn selections(&self) -> &[Self::Selection] {
-        &self.selections
-    }
-
-    fn selections_mut(&mut self) -> &mut Vec<Self::Selection> {
-        &mut self.selections
+    fn parts_mut(&mut self) -> (&mut u64, &mut Vec<Self::Asset>, &mut Vec<Self::Selection>) {
+        (&mut self.next_id, &mut self.skins, &mut self.selections)
     }
 
     fn not_found(skin_id: SkinId) -> Error {

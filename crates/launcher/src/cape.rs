@@ -75,28 +75,12 @@ impl TextureIndex for CapeIndex {
     type Asset = CapeAsset;
     type Selection = AccountCapeSelection;
 
-    fn next_id(&self) -> u64 {
-        self.next_id
+    fn parts(&self) -> (&u64, &Vec<Self::Asset>, &Vec<Self::Selection>) {
+        (&self.next_id, &self.capes, &self.selections)
     }
 
-    fn set_next_id(&mut self, next_id: u64) {
-        self.next_id = next_id;
-    }
-
-    fn assets(&self) -> &[Self::Asset] {
-        &self.capes
-    }
-
-    fn assets_mut(&mut self) -> &mut Vec<Self::Asset> {
-        &mut self.capes
-    }
-
-    fn selections(&self) -> &[Self::Selection] {
-        &self.selections
-    }
-
-    fn selections_mut(&mut self) -> &mut Vec<Self::Selection> {
-        &mut self.selections
+    fn parts_mut(&mut self) -> (&mut u64, &mut Vec<Self::Asset>, &mut Vec<Self::Selection>) {
+        (&mut self.next_id, &mut self.capes, &mut self.selections)
     }
 
     fn not_found(cape_id: CapeId) -> Error {

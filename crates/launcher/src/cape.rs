@@ -1,12 +1,18 @@
 use std::{fmt, path::PathBuf};
 
 use elemental_core::auth::accounts::AccountId;
-use elemental_shared::scope::Scope;
+use elemental_shared::{
+    migrator::NoMigrator,
+    persistor::{JsonFilePersistor, json_persistor},
+    scope::Scope,
+    store::{Store, StoreLoader},
+};
 use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
 
 use crate::{
     error::{Error, Result},
-    texture::{TextureAsset, TextureId, TextureIndex, TextureSelection, TextureStore},
+    texture::{PNG_SIGNATURE, validate_name},
 };
 
 const CAPE_INDEX_VERSION: usize = 1;
@@ -21,46 +27,16 @@ impl fmt::Display for CapeId {
     }
 }
 
-impl TextureId for CapeId {
-    fn from_u64(value: u64) -> Self {
-        Self(value)
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CapeAsset {
     pub id: CapeId,
     pub name: String,
 }
 
-impl TextureAsset for CapeAsset {
-    type Id = CapeId;
-
-    fn id(&self) -> Self::Id {
-        self.id
-    }
-
-    fn rename(&mut self, name: String) {
-        self.name = name;
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct AccountCapeSelection {
     account_id: AccountId,
     cape_id: CapeId,
-}
-
-impl TextureSelection for AccountCapeSelection {
-    type Id = CapeId;
-
-    fn account_id(&self) -> AccountId {
-        self.account_id
-    }
-
-    fn texture_id(&self) -> Self::Id {
-        self.cape_id
-    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -70,35 +46,38 @@ struct CapeIndex {
     selections: Vec<AccountCapeSelection>,
 }
 
-impl TextureIndex for CapeIndex {
-    type Id = CapeId;
-    type Asset = CapeAsset;
-    type Selection = AccountCapeSelection;
-
-    fn parts(&self) -> (&u64, &Vec<Self::Asset>, &Vec<Self::Selection>) {
-        (&self.next_id, &self.capes, &self.selections)
+impl CapeIndex {
+    fn remove(&mut self, cape_id: CapeId) {
+        self.capes.retain(|asset| asset.id != cape_id);
+        self.selections
+            .retain(|selection| selection.cape_id != cape_id);
     }
 
-    fn parts_mut(&mut self) -> (&mut u64, &mut Vec<Self::Asset>, &mut Vec<Self::Selection>) {
-        (&mut self.next_id, &mut self.capes, &mut self.selections)
+    fn selected_by(&self, account_id: AccountId) -> Option<&AccountCapeSelection> {
+        self.selections
+            .iter()
+            .find(|selection| selection.account_id == account_id)
     }
 
-    fn not_found(cape_id: CapeId) -> Error {
-        Error::CapeNotFound { cape_id }
+    fn select(&mut self, selection: AccountCapeSelection) {
+        self.clear_selection(selection.account_id);
+        self.selections.push(selection);
     }
 
-    fn file_not_found(cape_id: CapeId, path: PathBuf) -> Error {
-        Error::CapeFileNotFound { cape_id, path }
+    fn clear_selection(&mut self, account_id: AccountId) {
+        self.selections
+            .retain(|selection| selection.account_id != account_id);
     }
 
-    fn not_png(name: String) -> Error {
-        Error::CapeNotPng { name }
-    }
-
-    fn id_exhausted() -> Error {
-        Error::CapeIdExhausted
+    fn rename(&mut self, cape_id: CapeId, name: String) {
+        if let Some(asset) = self.capes.iter_mut().find(|asset| asset.id == cape_id) {
+            asset.name = name;
+        }
     }
 }
+
+type CapeIndexStore =
+    StoreLoader<NoMigrator, Store<CapeIndex>, CapeIndex, JsonFilePersistor<Store<CapeIndex>>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SelectedCape {
@@ -118,62 +97,163 @@ pub struct CapeEntry {
 /// Selections are intended for offline profiles; online cape inventories and
 /// selection remain part of the account API.
 pub struct CapeStore {
-    inner: TextureStore<CapeIndex>,
+    scope: Scope,
+    index: CapeIndexStore,
+    import_lock: Mutex<()>,
 }
 
 impl CapeStore {
     pub async fn open(scope: Scope) -> Result<Self> {
+        let index = Store::load(
+            NoMigrator,
+            json_persistor("capes/index".to_string(), scope.clone()),
+            CAPE_INDEX_VERSION,
+        )
+        .await?;
+
         Ok(Self {
-            inner: TextureStore::open(scope, "capes", CAPE_INDEX_VERSION).await?,
+            scope,
+            index,
+            import_lock: Mutex::new(()),
         })
     }
 
     /// Imports PNG bytes into the local library.
     pub async fn import(&self, name: impl Into<String>, bytes: Vec<u8>) -> Result<CapeAsset> {
-        self.inner
-            .import(name, bytes, |id, name| CapeAsset { id, name })
+        let name = name.into();
+        validate_name(&name)?;
+        if !bytes.starts_with(PNG_SIGNATURE) {
+            return Err(Error::CapeNotPng { name });
+        }
+
+        let _guard = self.import_lock.lock().await;
+        let next_id = self
+            .index
+            .get(|index| index.value.next_id.checked_add(1))
             .await
+            .ok_or(Error::CapeIdExhausted)?;
+        let asset = CapeAsset {
+            id: CapeId(next_id),
+            name,
+        };
+
+        let path = self.path(asset.id).await?;
+        tokio::fs::write(&path, bytes).await?;
+
+        self.index
+            .set(|index| {
+                index.value.next_id = next_id;
+                index.value.capes.push(asset.clone());
+            })
+            .await?;
+        Ok(asset)
     }
 
     /// Renames a local cape without changing its id, PNG file, or selections.
     pub async fn rename(&self, cape_id: CapeId, name: impl Into<String>) -> Result<()> {
-        self.inner.rename(cape_id, name).await
+        let name = name.into();
+        validate_name(&name)?;
+        if self.asset(cape_id).await.is_none() {
+            return Err(Error::CapeNotFound { cape_id });
+        }
+
+        self.index
+            .set(|index| index.value.rename(cape_id, name))
+            .await?;
+        Ok(())
     }
 
     /// Lists local capes with their PNG paths without reading the files.
     pub async fn list(&self) -> Result<Vec<CapeEntry>> {
-        Ok(self
-            .inner
-            .list()
-            .await?
-            .into_iter()
-            .map(|(asset, path)| CapeEntry { asset, path })
-            .collect())
+        let assets = self.index.get(|index| index.value.capes.clone()).await;
+        let mut entries = Vec::with_capacity(assets.len());
+        for asset in assets {
+            let path = self.path(asset.id).await?;
+            entries.push(CapeEntry { asset, path });
+        }
+        Ok(entries)
     }
 
     pub async fn remove(&self, cape_id: CapeId) -> Result<()> {
-        self.inner.remove(cape_id).await
+        let asset = self
+            .asset(cape_id)
+            .await
+            .ok_or(Error::CapeNotFound { cape_id })?;
+
+        let path = self.path(asset.id).await?;
+        self.index.set(|index| index.value.remove(cape_id)).await?;
+        tokio::fs::remove_file(path).await?;
+        Ok(())
     }
 
     /// Selects a local cape for an account without uploading it.
     pub async fn select(&self, account_id: AccountId, cape_id: CapeId) -> Result<()> {
-        self.inner
-            .select(AccountCapeSelection {
-                account_id,
-                cape_id,
+        if self.asset(cape_id).await.is_none() {
+            return Err(Error::CapeNotFound { cape_id });
+        }
+
+        self.index
+            .set(|index| {
+                index.value.select(AccountCapeSelection {
+                    account_id,
+                    cape_id,
+                });
+            })
+            .await?;
+        Ok(())
+    }
+
+    pub async fn clear_selection(&self, account_id: AccountId) -> Result<()> {
+        self.index
+            .set(|index| index.value.clear_selection(account_id))
+            .await?;
+        Ok(())
+    }
+
+    pub async fn selected(&self, account_id: AccountId) -> Result<Option<SelectedCape>> {
+        let Some(selection) = self.selection(account_id).await else {
+            return Ok(None);
+        };
+        let (asset, path) = self.existing(selection.cape_id).await?;
+
+        Ok(Some(SelectedCape { asset, path }))
+    }
+
+    async fn asset(&self, cape_id: CapeId) -> Option<CapeAsset> {
+        self.index
+            .get(|index| {
+                index
+                    .value
+                    .capes
+                    .iter()
+                    .find(|asset| asset.id == cape_id)
+                    .cloned()
             })
             .await
     }
 
-    pub async fn clear_selection(&self, account_id: AccountId) -> Result<()> {
-        self.inner.clear_selection(account_id).await
+    async fn selection(&self, account_id: AccountId) -> Option<AccountCapeSelection> {
+        self.index
+            .get(|index| index.value.selected_by(account_id).cloned())
+            .await
     }
 
-    pub async fn selected(&self, account_id: AccountId) -> Result<Option<SelectedCape>> {
+    async fn path(&self, cape_id: CapeId) -> Result<PathBuf> {
         Ok(self
-            .inner
-            .selected(account_id)
-            .await?
-            .map(|(_, asset, path)| SelectedCape { asset, path }))
+            .scope
+            .get_full_path(&format!("capes/files/{cape_id}"), Some("png".to_string()))
+            .await?)
+    }
+
+    async fn existing(&self, cape_id: CapeId) -> Result<(CapeAsset, PathBuf)> {
+        let asset = self
+            .asset(cape_id)
+            .await
+            .ok_or(Error::CapeNotFound { cape_id })?;
+        let path = self.path(cape_id).await?;
+        if !tokio::fs::try_exists(&path).await? {
+            return Err(Error::CapeFileNotFound { cape_id, path });
+        }
+        Ok((asset, path))
     }
 }

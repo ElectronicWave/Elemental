@@ -16,6 +16,7 @@ offline-server = ["yggdrasil-auth", "nidhogg/server"]
 
 [dependencies]
 async-trait = { workspace = true }
+base64 = { workspace = true }
 dirs = { workspace = true }
 elemental-schema = { path = "../schema", version = "0.3.0" }
 erased-serde = { workspace = true }

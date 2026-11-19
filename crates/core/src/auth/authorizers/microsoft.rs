@@ -1,7 +1,9 @@
 use crate::auth::accounts::microsoft::{MicrosoftAccount, unix_now};
 use crate::auth::authorizers::Authorizer;
-use crate::auth::error::{Error, Result};
+use crate::auth::error::{Error, Result, XuidDecodeError};
 use crate::auth::texture::SkinModel;
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use minecraft_msa_auth::MinecraftAuthorizationFlow;
 use oauth2::basic::BasicClient;
 use oauth2::{
@@ -24,7 +26,6 @@ const MINECRAFT_ACTIVE_SKIN_URL: &str =
     "https://api.minecraftservices.com/minecraft/profile/skins/active";
 const MINECRAFT_ACTIVE_CAPE_URL: &str =
     "https://api.minecraftservices.com/minecraft/profile/capes/active";
-const XBOX_USER_AUTHENTICATE_URL: &str = "https://user.auth.xboxlive.com/user/authenticate";
 
 pub const MICROSOFT_AUTHORIZER_ID: &str = "microsoft";
 
@@ -48,19 +49,8 @@ pub(crate) struct MinecraftTexture {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
-struct XboxUserAuthenticateResponse {
-    display_claims: XboxDisplayClaims,
-}
-
-#[derive(Debug, Deserialize)]
-struct XboxDisplayClaims {
-    xui: Vec<XboxUserClaim>,
-}
-
-#[derive(Debug, Deserialize)]
-struct XboxUserClaim {
-    xid: String,
+struct MinecraftAccessTokenClaims {
+    xuid: String,
 }
 
 type RefreshClient =
@@ -140,6 +130,7 @@ impl Authorizer for MicrosoftAuthorizer {
             &self.client_id,
             token.access_token().secret(),
             refresh_token,
+            None,
         )
         .await
     }
@@ -170,6 +161,7 @@ pub(crate) async fn refresh(account: &MicrosoftAccount) -> Result<MicrosoftAccou
         &account.client_id,
         token.access_token().secret(),
         refresh_token,
+        account.xuid.clone(),
     )
     .await
 }
@@ -203,6 +195,7 @@ async fn account_from_microsoft_token(
     client_id: &str,
     microsoft_access_token: &str,
     refresh_token: String,
+    existing_xuid: Option<String>,
 ) -> Result<MicrosoftAccount> {
     let mc_flow = MinecraftAuthorizationFlow::new(Client::new());
     let mc_token = mc_flow
@@ -210,7 +203,10 @@ async fn account_from_microsoft_token(
         .await
         .map_err(|source| Error::MinecraftExchange { source })?;
     let profile = minecraft_profile(mc_token.access_token().as_ref()).await?;
-    let xuid = fetch_xuid(microsoft_access_token).await?;
+    let xuid = match existing_xuid {
+        Some(xuid) => xuid,
+        None => xuid_from_access_token(mc_token.access_token().as_ref())?,
+    };
 
     Ok(MicrosoftAccount {
         account_id: crate::auth::accounts::AccountId::derive(MICROSOFT_AUTHORIZER_ID, &profile.id),
@@ -309,32 +305,56 @@ async fn send_texture_request(
     })
 }
 
-async fn fetch_xuid(microsoft_access_token: &str) -> Result<String> {
-    let response = Client::new()
-        .post(XBOX_USER_AUTHENTICATE_URL)
-        .json(&serde_json::json!({
-            "Properties": {
-                "AuthMethod": "RPS",
-                "SiteName": "user.auth.xboxlive.com",
-                "RpsTicket": format!("d={microsoft_access_token}"),
-            },
-            "RelyingParty": "http://auth.xboxlive.com",
-            "TokenType": "JWT",
-        }))
-        .send()
-        .await
-        .map_err(|source| Error::XuidRequest { source })?
-        .error_for_status()
-        .map_err(|source| Error::XuidRequest { source })?
-        .json::<XboxUserAuthenticateResponse>()
-        .await
-        .map_err(|source| Error::XuidDecode { source })?;
+fn xuid_from_access_token(access_token: &str) -> Result<String> {
+    let mut parts = access_token.split('.');
+    let (Some(_header), Some(payload), Some(_signature), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return Err(Error::XuidDecode {
+            source: XuidDecodeError::MalformedToken,
+        });
+    };
 
-    response
-        .display_claims
-        .xui
-        .into_iter()
-        .next()
-        .map(|claim| claim.xid)
-        .ok_or(Error::XuidMissing)
+    let payload = URL_SAFE_NO_PAD
+        .decode(payload)
+        .map_err(|source| Error::XuidDecode {
+            source: XuidDecodeError::Payload(source),
+        })?;
+    let claims: MinecraftAccessTokenClaims =
+        serde_json::from_slice(&payload).map_err(|source| Error::XuidDecode {
+            source: XuidDecodeError::Claims(source),
+        })?;
+
+    if claims.xuid.is_empty() {
+        return Err(Error::XuidMissing);
+    }
+    Ok(claims.xuid)
+}
+
+#[cfg(test)]
+mod tests {
+    use base64::Engine;
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+
+    use super::xuid_from_access_token;
+
+    fn access_token(claims: &str) -> String {
+        format!(
+            "{}.{}.{}",
+            URL_SAFE_NO_PAD.encode(r#"{"alg":"none"}"#),
+            URL_SAFE_NO_PAD.encode(claims),
+            URL_SAFE_NO_PAD.encode("signature"),
+        )
+    }
+
+    #[test]
+    fn decodes_xuid_from_minecraft_access_token() {
+        let token = access_token(r#"{"xuid":"2535"}"#);
+        assert_eq!(xuid_from_access_token(&token).unwrap(), "2535");
+    }
+
+    #[test]
+    fn rejects_malformed_minecraft_access_token() {
+        assert!(xuid_from_access_token("not-a-jwt").is_err());
+    }
 }

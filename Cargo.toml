@@ -23,7 +23,7 @@ license = "AGPL-3.0-only"
 # Just for dev test and cli use
 anyhow = { version = "1.0.104" }
 async-trait = "0.1.92"
-base64 = "0.22.1"
+base64 = "0.23.0"
 dirs = { version = "7" }
 erased-serde = "0.4.11"
 futures = "0.3.34"

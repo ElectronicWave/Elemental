@@ -1,5 +1,5 @@
 use elemental_core::auth::accounts::AccountId;
-use elemental_launcher::{SkinModel, SkinStore};
+use elemental_launcher::{SkinModel, SkinStore, error::Error};
 use elemental_shared::scope::Scope;
 
 mod common;
@@ -92,6 +92,45 @@ async fn skin_store_rejects_non_png_data() {
         elemental_launcher::error::Error::SkinNotPng { .. }
     ));
     assert!(store.list().await.unwrap().is_empty());
+
+    common::remove(&root);
+}
+
+#[tokio::test]
+async fn skin_store_renames_without_changing_identity() {
+    let root = common::temp_root("elemental-skin-store");
+    let scope = Scope::Directory(root.clone());
+    let store = SkinStore::open(scope.clone()).await.unwrap();
+    let account_id = AccountId::new();
+
+    let asset = store
+        .import("Steve", PNG.to_vec(), SkinModel::Classic)
+        .await
+        .unwrap();
+    store
+        .select(account_id, asset.id, SkinModel::Classic)
+        .await
+        .unwrap();
+
+    store.rename(asset.id, "Alex").await.unwrap();
+    let entries = store.list().await.unwrap();
+    assert_eq!(entries[0].asset.id, asset.id);
+    assert_eq!(entries[0].asset.name, "Alex");
+
+    let selected = store.selected(account_id).await.unwrap().unwrap();
+    assert_eq!(selected.asset.id, asset.id);
+    assert_eq!(selected.asset.name, "Alex");
+
+    let reopened = SkinStore::open(scope).await.unwrap();
+    let entries = reopened.list().await.unwrap();
+    assert_eq!(entries[0].asset.name, "Alex");
+
+    let error = store.rename(asset.id, "   ").await.unwrap_err();
+    assert!(matches!(error, Error::TextureNameEmpty));
+
+    store.remove(asset.id).await.unwrap();
+    let error = store.rename(asset.id, "Gone").await.unwrap_err();
+    assert!(matches!(error, Error::SkinNotFound { .. }));
 
     common::remove(&root);
 }

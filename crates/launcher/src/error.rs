@@ -1,6 +1,6 @@
 use elemental_core::auth::accounts::AccountId;
 
-use crate::skin::SkinId;
+use crate::{cape::CapeId, skin::SkinId};
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -93,6 +93,24 @@ pub enum Error {
 
     #[error("skin id space exhausted")]
     SkinIdExhausted,
+
+    #[error("cape '{cape_id}' not found")]
+    CapeNotFound { cape_id: CapeId },
+
+    #[error("cape file for '{cape_id}' not found at '{}'", path.display())]
+    CapeFileNotFound {
+        cape_id: CapeId,
+        path: std::path::PathBuf,
+    },
+
+    #[error("cape '{name}' is not a PNG file")]
+    CapeNotPng { name: String },
+
+    #[error("cape id space exhausted")]
+    CapeIdExhausted,
+
+    #[error("texture name cannot be empty")]
+    TextureNameEmpty,
 
     #[cfg(feature = "yggdrasil-auth")]
     #[error(transparent)]

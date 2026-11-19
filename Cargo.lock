@@ -600,7 +600,7 @@ name = "elemental-core"
 version = "0.3.0"
 dependencies = [
  "async-trait",
- "base64 0.22.1",
+ "base64 0.23.1",
  "dirs",
  "elemental-schema",
  "erased-serde",

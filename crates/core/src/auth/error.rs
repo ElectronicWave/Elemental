@@ -9,6 +9,18 @@ pub type DeviceTokenRequestError = oauth2::RequestTokenError<
 >;
 
 #[derive(Debug, thiserror::Error)]
+pub enum XuidDecodeError {
+    #[error("Minecraft access token is not a three-part JWT")]
+    MalformedToken,
+
+    #[error("decode Minecraft access token payload failed")]
+    Payload(#[from] base64::DecodeError),
+
+    #[error("parse Minecraft access token claims failed")]
+    Claims(#[from] serde_json::Error),
+}
+
+#[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
     #[error("build HTTP client failed")]
@@ -63,19 +75,13 @@ pub enum Error {
     #[error("Microsoft OAuth response contains no refresh token")]
     MicrosoftRefreshTokenMissing,
 
-    #[error("request Xbox XUID failed")]
-    XuidRequest {
-        #[source]
-        source: reqwest::Error,
-    },
-
-    #[error("decode Xbox XUID response failed")]
+    #[error("decode XUID from Minecraft access token failed")]
     XuidDecode {
         #[source]
-        source: reqwest::Error,
+        source: XuidDecodeError,
     },
 
-    #[error("Xbox XUID response contains no XUID")]
+    #[error("Minecraft access token contains no XUID")]
     XuidMissing,
 
     #[error("decode Minecraft profile response failed")]

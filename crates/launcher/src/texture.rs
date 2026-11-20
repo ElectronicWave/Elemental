@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fmt, io, path::Path, str::FromStr};
+use std::{collections::HashSet, ffi::OsStr, fmt, io, path::Path, str::FromStr};
 
 use elemental_shared::scope::Scope;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -109,21 +109,24 @@ pub(crate) async fn gc_content(
                 continue;
             }
 
-            let path = file.path();
-            let Some(name) = file.file_name().to_str().map(str::to_owned) else {
-                continue;
-            };
-            let Some(stem) = name.strip_suffix(".png") else {
-                continue;
-            };
-            let Ok(hash) = TextureHash::from_str(stem) else {
-                continue;
-            };
-            if !referenced.contains(&hash) {
-                remove_if_present(&path).await?;
-            }
+            gc_file(&file, referenced).await?;
         }
     }
 
     Ok(())
+}
+
+async fn gc_file(file: &tokio::fs::DirEntry, referenced: &HashSet<TextureHash>) -> Result<()> {
+    let Some(hash) = content_hash(&file.file_name()) else {
+        return Ok(());
+    };
+    if !referenced.contains(&hash) {
+        remove_if_present(&file.path()).await?;
+    }
+    Ok(())
+}
+
+fn content_hash(file_name: &OsStr) -> Option<TextureHash> {
+    let stem = file_name.to_str()?.strip_suffix(".png")?;
+    TextureHash::from_str(stem).ok()
 }

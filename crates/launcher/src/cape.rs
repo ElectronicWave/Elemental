@@ -1,4 +1,4 @@
-use std::{fmt, path::PathBuf};
+use std::{collections::HashSet, fmt, path::PathBuf};
 
 use elemental_core::auth::accounts::AccountId;
 use elemental_shared::{
@@ -8,18 +8,17 @@ use elemental_shared::{
     store::{Store, StoreLoader},
 };
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
 
 use crate::{
     error::{Error, Result},
-    texture::{PNG_SIGNATURE, validate_name},
+    texture::{PNG_SIGNATURE, TextureHash, gc_content, validate_name},
 };
 
 const CAPE_INDEX_VERSION: usize = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct CapeId(u64);
+pub struct CapeId(TextureHash);
 
 impl fmt::Display for CapeId {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -27,8 +26,15 @@ impl fmt::Display for CapeId {
     }
 }
 
+impl CapeId {
+    pub(crate) fn hash(self) -> TextureHash {
+        self.0
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CapeAsset {
+    /// SHA-256 content hash of the PNG bytes.
     pub id: CapeId,
     pub name: String,
 }
@@ -41,7 +47,6 @@ struct AccountCapeSelection {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 struct CapeIndex {
-    next_id: u64,
     capes: Vec<CapeAsset>,
     selections: Vec<AccountCapeSelection>,
 }
@@ -92,14 +97,14 @@ pub struct CapeEntry {
     pub path: PathBuf,
 }
 
-/// Stores cape PNG files locally and tracks per-account selections.
+/// Stores cape PNG files locally by SHA-256 content hash and tracks
+/// per-account selections.
 ///
 /// Selections are intended for offline profiles; online cape inventories and
 /// selection remain part of the account API.
 pub struct CapeStore {
     scope: Scope,
     index: CapeIndexStore,
-    import_lock: Mutex<()>,
 }
 
 impl CapeStore {
@@ -111,11 +116,9 @@ impl CapeStore {
         )
         .await?;
 
-        Ok(Self {
-            scope,
-            index,
-            import_lock: Mutex::new(()),
-        })
+        let store = Self { scope, index };
+        store.gc().await?;
+        Ok(store)
     }
 
     /// Imports PNG bytes into the local library.
@@ -126,27 +129,23 @@ impl CapeStore {
             return Err(Error::CapeNotPng { name });
         }
 
-        let _guard = self.import_lock.lock().await;
-        let next_id = self
-            .index
-            .get(|index| index.value.next_id.checked_add(1))
-            .await
-            .ok_or(Error::CapeIdExhausted)?;
-        let asset = CapeAsset {
-            id: CapeId(next_id),
-            name,
-        };
+        let hash = TextureHash::of(&bytes);
+        let id = CapeId(hash);
+        let path = self.path(id).await?;
+        tokio::fs::write(&path, &bytes).await?;
 
-        let path = self.path(asset.id).await?;
-        tokio::fs::write(&path, bytes).await?;
+        let inserted = CapeAsset { id, name };
 
         self.index
-            .set(|index| {
-                index.value.next_id = next_id;
-                index.value.capes.push(asset.clone());
+            .set(move |index| {
+                if !index.value.capes.iter().any(|asset| asset.id == id) {
+                    index.value.capes.push(inserted);
+                }
             })
             .await?;
-        Ok(asset)
+        self.asset(id)
+            .await
+            .ok_or(Error::CapeNotFound { cape_id: id })
     }
 
     /// Renames a local cape without changing its id, PNG file, or selections.
@@ -182,8 +181,28 @@ impl CapeStore {
 
         let path = self.path(asset.id).await?;
         self.index.set(|index| index.value.remove(cape_id)).await?;
-        tokio::fs::remove_file(path).await?;
+        match tokio::fs::remove_file(path).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
         Ok(())
+    }
+
+    /// Removes unreferenced content files left behind by interrupted imports.
+    async fn gc(&self) -> Result<()> {
+        let referenced = self
+            .index
+            .get(|index| {
+                index
+                    .value
+                    .capes
+                    .iter()
+                    .map(|asset| asset.id.hash())
+                    .collect::<HashSet<_>>()
+            })
+            .await;
+        gc_content(&self.scope, "capes", &referenced).await
     }
 
     /// Selects a local cape for an account without uploading it.
@@ -239,9 +258,11 @@ impl CapeStore {
     }
 
     async fn path(&self, cape_id: CapeId) -> Result<PathBuf> {
+        let hash = cape_id.0.hex();
+        let prefix = &hash[..2];
         Ok(self
             .scope
-            .get_full_path(&format!("capes/files/{cape_id}"), Some("png".to_string()))
+            .get_full_path(&format!("capes/{prefix}/{hash}"), Some("png".to_string()))
             .await?)
     }
 

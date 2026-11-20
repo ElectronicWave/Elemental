@@ -17,11 +17,11 @@ elemental-driver = { path = "../driver", version = "0.3.0", default-features = f
 elemental-infra = { path = "../infra", version = "0.3.0" }
 elemental-shared = { path = "../shared", version = "0.3.0" }
 erased-serde = { workspace = true }
-hex = { workspace = true, optional = true }
+hex = { workspace = true }
 nidhogg = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha2 = { workspace = true, optional = true }
+sha2 = { workspace = true }
 
 [dev-dependencies]
 async-trait = { workspace = true }
@@ -52,9 +52,7 @@ driver-outlands = ["elemental-driver/outlands"]
 driver-neoforge = ["elemental-driver/neoforge"]
 yggdrasil-auth = [
     "elemental-core/yggdrasil-auth",
-    "dep:hex",
     "dep:nidhogg",
-    "dep:sha2",
     "nidhogg/authlib-injector",
 ]
 authlib-injector-embed = ["yggdrasil-auth", "nidhogg/authlib-injector-embed"]

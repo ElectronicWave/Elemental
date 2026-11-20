@@ -91,9 +91,6 @@ pub enum Error {
     #[error("skin '{name}' is not a PNG file")]
     SkinNotPng { name: String },
 
-    #[error("skin id space exhausted")]
-    SkinIdExhausted,
-
     #[error("cape '{cape_id}' not found")]
     CapeNotFound { cape_id: CapeId },
 
@@ -106,11 +103,11 @@ pub enum Error {
     #[error("cape '{name}' is not a PNG file")]
     CapeNotPng { name: String },
 
-    #[error("cape id space exhausted")]
-    CapeIdExhausted,
-
     #[error("texture name cannot be empty")]
     TextureNameEmpty,
+
+    #[error("invalid texture hash '{value}'")]
+    InvalidTextureHash { value: String },
 
     #[cfg(feature = "yggdrasil-auth")]
     #[error(transparent)]

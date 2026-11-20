@@ -1,6 +1,7 @@
 use elemental_core::auth::accounts::AccountId;
 use elemental_launcher::{SkinModel, SkinStore, error::Error};
 use elemental_shared::scope::Scope;
+use sha2::{Digest, Sha256};
 
 mod common;
 
@@ -11,6 +12,10 @@ const PNG: &[u8] = &[
     0x0F, 0x00, 0x04, 0x85, 0x01, 0x80, 0x84, 0xA9, 0x8C, 0x21, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45,
     0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
 ];
+
+fn png_hash() -> String {
+    hex::encode(Sha256::digest(PNG))
+}
 
 #[tokio::test]
 async fn skin_store_imports_selects_and_removes() {
@@ -26,6 +31,14 @@ async fn skin_store_imports_selects_and_removes() {
     let entries = store.list().await.unwrap();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].asset, asset);
+    assert_eq!(asset.id.to_string(), png_hash());
+    assert_eq!(
+        entries[0].path,
+        root.join(".elemental")
+            .join("skins")
+            .join(&png_hash()[..2])
+            .join(format!("{}.png", png_hash()))
+    );
     assert_eq!(std::fs::read(&entries[0].path).unwrap(), PNG);
     assert!(store.selected(account_id).await.unwrap().is_none());
 
@@ -45,6 +58,112 @@ async fn skin_store_imports_selects_and_removes() {
     let reopened = SkinStore::open(scope).await.unwrap();
     assert!(reopened.list().await.unwrap().is_empty());
     assert!(reopened.selected(account_id).await.unwrap().is_none());
+
+    common::remove(&root);
+}
+
+#[tokio::test]
+async fn skin_store_dedupes_identical_content() {
+    let root = common::temp_root("elemental-skin-store");
+    let scope = Scope::Directory(root.clone());
+    let store = SkinStore::open(scope.clone()).await.unwrap();
+
+    let first = store
+        .import("Steve", PNG.to_vec(), SkinModel::Classic)
+        .await
+        .unwrap();
+    let second = store
+        .import("Duplicate", PNG.to_vec(), SkinModel::Slim)
+        .await
+        .unwrap();
+
+    assert_eq!(first.id, second.id);
+    assert_eq!(second.name, "Steve");
+    assert_eq!(second.default_model, SkinModel::Classic);
+    assert_eq!(store.list().await.unwrap().len(), 1);
+
+    common::remove(&root);
+}
+
+#[tokio::test]
+async fn skin_store_updates_model_without_changing_content() {
+    let root = common::temp_root("elemental-skin-store");
+    let scope = Scope::Directory(root.clone());
+    let store = SkinStore::open(scope.clone()).await.unwrap();
+    let account_id = AccountId::new();
+
+    let asset = store
+        .import("Steve", PNG.to_vec(), SkinModel::Classic)
+        .await
+        .unwrap();
+    let path = store.list().await.unwrap()[0].path.clone();
+    store
+        .select(account_id, asset.id, SkinModel::Classic)
+        .await
+        .unwrap();
+
+    store.set_model(asset.id, SkinModel::Slim).await.unwrap();
+
+    let reopened = SkinStore::open(scope).await.unwrap();
+    let entry = &reopened.list().await.unwrap()[0];
+    assert_eq!(entry.asset.id, asset.id);
+    assert_eq!(entry.asset.default_model, SkinModel::Slim);
+    assert_eq!(entry.path, path);
+    assert_eq!(std::fs::read(&entry.path).unwrap(), PNG);
+    assert_eq!(
+        reopened.selected(account_id).await.unwrap().unwrap().model,
+        SkinModel::Classic
+    );
+
+    common::remove(&root);
+}
+
+#[tokio::test]
+async fn skin_store_repairs_corrupt_content() {
+    let root = common::temp_root("elemental-skin-store");
+    let scope = Scope::Directory(root.clone());
+    let store = SkinStore::open(scope).await.unwrap();
+
+    let asset = store
+        .import("Steve", PNG.to_vec(), SkinModel::Classic)
+        .await
+        .unwrap();
+    let path = store.list().await.unwrap()[0].path.clone();
+    std::fs::write(&path, b"corrupt").unwrap();
+
+    let imported = store
+        .import("Steve", PNG.to_vec(), SkinModel::Classic)
+        .await
+        .unwrap();
+    assert_eq!(imported.id, asset.id);
+    assert_eq!(std::fs::read(&path).unwrap(), PNG);
+    assert_eq!(store.list().await.unwrap().len(), 1);
+
+    common::remove(&root);
+}
+
+#[tokio::test]
+async fn skin_store_gc_removes_unreferenced_content() {
+    let root = common::temp_root("elemental-skin-store");
+    let scope = Scope::Directory(root.clone());
+    let store = SkinStore::open(scope.clone()).await.unwrap();
+
+    store
+        .import("Steve", PNG.to_vec(), SkinModel::Classic)
+        .await
+        .unwrap();
+    let referenced = store.list().await.unwrap()[0].path.clone();
+    drop(store);
+
+    let orphan_dir = root.join(".elemental").join("skins").join("aa");
+    std::fs::create_dir_all(&orphan_dir).unwrap();
+    let orphan = orphan_dir.join(format!("{}.png", "a".repeat(64)));
+    std::fs::write(&orphan, b"orphan").unwrap();
+
+    SkinStore::open(scope).await.unwrap();
+
+    assert!(!orphan.exists());
+    assert!(referenced.exists());
 
     common::remove(&root);
 }

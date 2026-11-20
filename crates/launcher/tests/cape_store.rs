@@ -21,8 +21,17 @@ async fn cape_store_imports_selects_and_removes() {
 
     let asset = store.import("Test", PNG.to_vec()).await.unwrap();
     let entries = store.list().await.unwrap();
+    let hash = common::texture_hash(PNG);
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].asset, asset);
+    assert_eq!(asset.id.to_string(), hash);
+    assert_eq!(
+        entries[0].path,
+        root.join(".elemental")
+            .join("capes")
+            .join(&hash[..2])
+            .join(format!("{hash}.png"))
+    );
     assert_eq!(std::fs::read(&entries[0].path).unwrap(), PNG);
     assert!(store.selected(account_id).await.unwrap().is_none());
 
@@ -38,6 +47,22 @@ async fn cape_store_imports_selects_and_removes() {
     let reopened = CapeStore::open(scope).await.unwrap();
     assert!(reopened.list().await.unwrap().is_empty());
     assert!(reopened.selected(account_id).await.unwrap().is_none());
+
+    common::remove(&root);
+}
+
+#[tokio::test]
+async fn cape_store_dedupes_identical_content() {
+    let root = common::temp_root("elemental-cape-store");
+    let scope = Scope::Directory(root.clone());
+    let store = CapeStore::open(scope).await.unwrap();
+
+    let first = store.import("Mojang", PNG.to_vec()).await.unwrap();
+    let second = store.import("Duplicate", PNG.to_vec()).await.unwrap();
+
+    assert_eq!(first.id, second.id);
+    assert_eq!(second.name, "Mojang");
+    assert_eq!(store.list().await.unwrap().len(), 1);
 
     common::remove(&root);
 }

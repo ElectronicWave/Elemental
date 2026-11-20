@@ -1,4 +1,4 @@
-use std::{fmt, future::Future, path::PathBuf};
+use std::{collections::HashSet, fmt, future::Future, path::PathBuf};
 
 use elemental_core::auth::{
     accounts::{Account, AccountId},
@@ -11,18 +11,17 @@ use elemental_shared::{
     store::{Store, StoreLoader},
 };
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
 
 use crate::{
     error::{Error, Result},
-    texture::{PNG_SIGNATURE, validate_name},
+    texture::{PNG_SIGNATURE, TextureHash, gc_content, remove_if_present, validate_name},
 };
 
 const SKIN_INDEX_VERSION: usize = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct SkinId(u64);
+pub struct SkinId(TextureHash);
 
 impl fmt::Display for SkinId {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -30,8 +29,15 @@ impl fmt::Display for SkinId {
     }
 }
 
+impl SkinId {
+    pub(crate) fn hash(self) -> TextureHash {
+        self.0
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkinAsset {
+    /// SHA-256 content hash of the PNG bytes.
     pub id: SkinId,
     pub name: String,
     pub default_model: SkinModel,
@@ -46,7 +52,6 @@ struct AccountSkinSelection {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 struct SkinIndex {
-    next_id: u64,
     skins: Vec<SkinAsset>,
     selections: Vec<AccountSkinSelection>,
 }
@@ -119,11 +124,11 @@ where
     }
 }
 
-/// Stores skin PNG files locally and tracks per-account selections.
+/// Stores skin PNG files locally by SHA-256 content hash and tracks
+/// per-account selections.
 pub struct SkinStore {
     scope: Scope,
     index: SkinIndexStore,
-    import_lock: Mutex<()>,
 }
 
 impl SkinStore {
@@ -135,11 +140,9 @@ impl SkinStore {
         )
         .await?;
 
-        Ok(Self {
-            scope,
-            index,
-            import_lock: Mutex::new(()),
-        })
+        let store = Self { scope, index };
+        store.gc().await?;
+        Ok(store)
     }
 
     /// Builds an account-facing skin handle without touching the filesystem.
@@ -164,28 +167,27 @@ impl SkinStore {
             return Err(Error::SkinNotPng { name });
         }
 
-        let _guard = self.import_lock.lock().await;
-        let next_id = self
-            .index
-            .get(|index| index.value.next_id.checked_add(1))
-            .await
-            .ok_or(Error::SkinIdExhausted)?;
-        let asset = SkinAsset {
-            id: SkinId(next_id),
+        let hash = TextureHash::of(&bytes);
+        let id = SkinId(hash);
+        let path = self.path(id).await?;
+        tokio::fs::write(&path, &bytes).await?;
+
+        let inserted = SkinAsset {
+            id,
             name,
             default_model,
         };
 
-        let path = self.path(asset.id).await?;
-        tokio::fs::write(&path, bytes).await?;
-
         self.index
-            .set(|index| {
-                index.value.next_id = next_id;
-                index.value.skins.push(asset.clone());
+            .set(move |index| {
+                if !index.value.skins.iter().any(|asset| asset.id == id) {
+                    index.value.skins.push(inserted);
+                }
             })
             .await?;
-        Ok(asset)
+        self.asset(id)
+            .await
+            .ok_or(Error::SkinNotFound { skin_id: id })
     }
 
     /// Renames a local skin without changing its id, PNG file, or selections.
@@ -198,6 +200,27 @@ impl SkinStore {
 
         self.index
             .set(|index| index.value.rename(skin_id, name))
+            .await?;
+        Ok(())
+    }
+
+    /// Updates the default model of a local skin without changing its content.
+    pub async fn set_model(&self, skin_id: SkinId, model: SkinModel) -> Result<()> {
+        if self.asset(skin_id).await.is_none() {
+            return Err(Error::SkinNotFound { skin_id });
+        }
+
+        self.index
+            .set(|index| {
+                if let Some(asset) = index
+                    .value
+                    .skins
+                    .iter_mut()
+                    .find(|asset| asset.id == skin_id)
+                {
+                    asset.default_model = model;
+                }
+            })
             .await?;
         Ok(())
     }
@@ -221,8 +244,23 @@ impl SkinStore {
 
         let path = self.path(asset.id).await?;
         self.index.set(|index| index.value.remove(skin_id)).await?;
-        tokio::fs::remove_file(path).await?;
-        Ok(())
+        remove_if_present(&path).await
+    }
+
+    /// Removes unreferenced content files left behind by interrupted imports.
+    async fn gc(&self) -> Result<()> {
+        let referenced = self
+            .index
+            .get(|index| {
+                index
+                    .value
+                    .skins
+                    .iter()
+                    .map(|asset| asset.id.hash())
+                    .collect::<HashSet<_>>()
+            })
+            .await;
+        gc_content(&self.scope, "skins", &referenced).await
     }
 
     /// Selects a local skin for an account without uploading it.
@@ -288,9 +326,11 @@ impl SkinStore {
     }
 
     async fn path(&self, skin_id: SkinId) -> Result<PathBuf> {
+        let hash = skin_id.0.hex();
+        let prefix = &hash[..2];
         Ok(self
             .scope
-            .get_full_path(&format!("skins/files/{skin_id}"), Some("png".to_owned()))
+            .get_full_path(&format!("skins/{prefix}/{hash}"), Some("png".to_owned()))
             .await?)
     }
 

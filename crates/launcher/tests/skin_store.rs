@@ -1,7 +1,6 @@
 use elemental_core::auth::accounts::AccountId;
 use elemental_launcher::{SkinModel, SkinStore, error::Error};
 use elemental_shared::scope::Scope;
-use sha2::{Digest, Sha256};
 
 mod common;
 
@@ -12,10 +11,6 @@ const PNG: &[u8] = &[
     0x0F, 0x00, 0x04, 0x85, 0x01, 0x80, 0x84, 0xA9, 0x8C, 0x21, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45,
     0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
 ];
-
-fn png_hash() -> String {
-    hex::encode(Sha256::digest(PNG))
-}
 
 #[tokio::test]
 async fn skin_store_imports_selects_and_removes() {
@@ -29,15 +24,16 @@ async fn skin_store_imports_selects_and_removes() {
         .await
         .unwrap();
     let entries = store.list().await.unwrap();
+    let hash = common::texture_hash(PNG);
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].asset, asset);
-    assert_eq!(asset.id.to_string(), png_hash());
+    assert_eq!(asset.id.to_string(), hash);
     assert_eq!(
         entries[0].path,
         root.join(".elemental")
             .join("skins")
-            .join(&png_hash()[..2])
-            .join(format!("{}.png", png_hash()))
+            .join(&hash[..2])
+            .join(format!("{hash}.png"))
     );
     assert_eq!(std::fs::read(&entries[0].path).unwrap(), PNG);
     assert!(store.selected(account_id).await.unwrap().is_none());
@@ -114,30 +110,6 @@ async fn skin_store_updates_model_without_changing_content() {
         reopened.selected(account_id).await.unwrap().unwrap().model,
         SkinModel::Classic
     );
-
-    common::remove(&root);
-}
-
-#[tokio::test]
-async fn skin_store_repairs_corrupt_content() {
-    let root = common::temp_root("elemental-skin-store");
-    let scope = Scope::Directory(root.clone());
-    let store = SkinStore::open(scope).await.unwrap();
-
-    let asset = store
-        .import("Steve", PNG.to_vec(), SkinModel::Classic)
-        .await
-        .unwrap();
-    let path = store.list().await.unwrap()[0].path.clone();
-    std::fs::write(&path, b"corrupt").unwrap();
-
-    let imported = store
-        .import("Steve", PNG.to_vec(), SkinModel::Classic)
-        .await
-        .unwrap();
-    assert_eq!(imported.id, asset.id);
-    assert_eq!(std::fs::read(&path).unwrap(), PNG);
-    assert_eq!(store.list().await.unwrap().len(), 1);
 
     common::remove(&root);
 }

@@ -1,7 +1,6 @@
 use elemental_core::auth::accounts::AccountId;
 use elemental_launcher::{CapeStore, error::Error};
 use elemental_shared::scope::Scope;
-use sha2::{Digest, Sha256};
 
 mod common;
 
@@ -13,10 +12,6 @@ const PNG: &[u8] = &[
     0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
 ];
 
-fn png_hash() -> String {
-    hex::encode(Sha256::digest(PNG))
-}
-
 #[tokio::test]
 async fn cape_store_imports_selects_and_removes() {
     let root = common::temp_root("elemental-cape-store");
@@ -26,15 +21,16 @@ async fn cape_store_imports_selects_and_removes() {
 
     let asset = store.import("Test", PNG.to_vec()).await.unwrap();
     let entries = store.list().await.unwrap();
+    let hash = common::texture_hash(PNG);
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].asset, asset);
-    assert_eq!(asset.id.to_string(), png_hash());
+    assert_eq!(asset.id.to_string(), hash);
     assert_eq!(
         entries[0].path,
         root.join(".elemental")
             .join("capes")
-            .join(&png_hash()[..2])
-            .join(format!("{}.png", png_hash()))
+            .join(&hash[..2])
+            .join(format!("{hash}.png"))
     );
     assert_eq!(std::fs::read(&entries[0].path).unwrap(), PNG);
     assert!(store.selected(account_id).await.unwrap().is_none());

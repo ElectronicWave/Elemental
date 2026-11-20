@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     error::{Error, Result},
-    texture::{PNG_SIGNATURE, TextureHash, gc_content, validate_name},
+    texture::{PNG_SIGNATURE, TextureHash, gc_content, remove_if_present, validate_name},
 };
 
 const CAPE_INDEX_VERSION: usize = 1;
@@ -181,12 +181,7 @@ impl CapeStore {
 
         let path = self.path(asset.id).await?;
         self.index.set(|index| index.value.remove(cape_id)).await?;
-        match tokio::fs::remove_file(path).await {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(error.into()),
-        }
-        Ok(())
+        remove_if_present(&path).await
     }
 
     /// Removes unreferenced content files left behind by interrupted imports.

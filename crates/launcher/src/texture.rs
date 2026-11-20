@@ -74,7 +74,7 @@ impl<'de> Deserialize<'de> for TextureHash {
     }
 }
 
-async fn remove_if_present(path: &Path) -> Result<()> {
+pub(crate) async fn remove_if_present(path: &Path) -> Result<()> {
     match tokio::fs::remove_file(path).await {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),

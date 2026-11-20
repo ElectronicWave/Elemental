@@ -7,6 +7,8 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use sha2::{Digest, Sha256};
+
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 pub fn temp_root(prefix: &str) -> PathBuf {
@@ -21,4 +23,8 @@ pub fn temp_root(prefix: &str) -> PathBuf {
 
 pub fn remove(root: &Path) {
     fs::remove_dir_all(root).expect("remove test directory");
+}
+
+pub fn texture_hash(bytes: &[u8]) -> String {
+    hex::encode(Sha256::digest(bytes))
 }

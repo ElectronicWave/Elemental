@@ -6,7 +6,6 @@ description = "Facade and utilities for launching and managing Minecraft instanc
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
-homepage.workspace = true
 license.workspace = true
 
 [dependencies]

@@ -1,4 +1,4 @@
-use elemental_core::{minecraft::MinecraftVersionId, storage::Storage};
+use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::{
     drivers::vanilla::source::resolve_vanilla_metadata, error::Result,
@@ -6,8 +6,8 @@ use crate::{
 };
 
 use super::super::{
-    ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata, VersionJsonDownloadStatus,
-    VersionJsonInstanceLayout, VersionJsonRootLayout, family::ProfiledVersionJsonFamily,
+    InstanceStorage, ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata,
+    VersionJsonDownloadStatus, family::ProfiledVersionJsonFamily,
 };
 use super::ProfiledVersionJsonDriver;
 
@@ -15,19 +15,15 @@ impl<F> ProfiledVersionJsonDriver<F>
 where
     F: ProfiledVersionJsonFamily,
 {
-    pub(super) async fn resolve_or_load<L, VL>(
+    pub(super) async fn resolve_or_load(
         &self,
-        instance: &Storage<VL, Storage<L>>,
+        instance: &InstanceStorage,
         game_version: MinecraftVersionId,
         loader_version: LoaderVersionId,
     ) -> Result<(
-        ResolvedVersionJsonInstance<L, VL>,
+        ResolvedVersionJsonInstance,
         Option<VersionJsonDownloadStatus>,
-    )>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
+    )> {
         if let Some((resolved, status)) = try_load_downloaded_instance(instance)?
             && !self.family.local_metadata_needs_refresh(
                 &resolved.metadata,
@@ -53,18 +49,9 @@ where
     }
 }
 
-fn try_load_downloaded_instance<L, VL>(
-    instance: &Storage<VL, Storage<L>>,
-) -> Result<
-    Option<(
-        ResolvedVersionJsonInstance<L, VL>,
-        VersionJsonDownloadStatus,
-    )>,
->
-where
-    L: VersionJsonRootLayout + Clone,
-    VL: VersionJsonInstanceLayout + Clone,
-{
+fn try_load_downloaded_instance(
+    instance: &InstanceStorage,
+) -> Result<Option<(ResolvedVersionJsonInstance, VersionJsonDownloadStatus)>> {
     match ResolvedVersionJsonInstance::load(instance.clone()) {
         Ok(resolved) => {
             let status = resolved.download_status()?;

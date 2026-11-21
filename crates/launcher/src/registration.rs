@@ -6,7 +6,6 @@
 
 use std::{fmt, sync::Arc};
 
-use elemental_core::storage::layout::Layout;
 use elemental_driver::{
     descriptors::{
         BABRIC_DRIVER, CLEANROOM_DRIVER, FABRIC_DRIVER, FORGE_DRIVER, LEGACY_FABRIC_DRIVER,
@@ -17,9 +16,8 @@ use elemental_driver::{
     families::{
         installer::{InstallerFamilyDriver, InstallerMavenSource, MavenInstallerSpec},
         version_json::{
-            BaseInstanceLayout, BaseRootLayout, LoaderMetaSource, ProfiledVersionJsonDriver,
-            ProfiledVersionJsonFamily, ProfiledVersionJsonFamilyExt, VersionJsonInstanceLayout,
-            VersionJsonRootLayout,
+            LoaderMetaSource, ProfiledVersionJsonDriver, ProfiledVersionJsonFamily,
+            ProfiledVersionJsonFamilyExt,
         },
     },
 };
@@ -69,25 +67,18 @@ use elemental_driver::drivers::vanilla::{catalog::VanillaCatalog, driver::Vanill
 ///
 /// The launcher keeps the driver instance, so the driver must be safe to share
 /// and must not depend on mutable per-call state.
-pub struct DriverRegistration<L, VL>
-where
-    L: Layout,
-    VL: Layout,
-{
+#[derive(Clone)]
+pub struct DriverRegistration {
     descriptor: DriverDescriptor,
-    driver: Arc<dyn Driver<L, VL>>,
+    driver: Arc<dyn Driver>,
     catalog: DriverCatalog,
 }
 
-impl<L, VL> DriverRegistration<L, VL>
-where
-    L: Layout,
-    VL: Layout,
-{
+impl DriverRegistration {
     /// Creates a registration for a driver that is not built into Elemental.
     pub fn new(
         descriptor: DriverDescriptor,
-        driver: Arc<dyn Driver<L, VL>>,
+        driver: Arc<dyn Driver>,
         catalog: DriverCatalog,
     ) -> Self {
         Self {
@@ -101,30 +92,12 @@ where
         self.descriptor
     }
 
-    pub(crate) fn driver(&self) -> Arc<dyn Driver<L, VL>> {
+    pub(crate) fn driver(&self) -> Arc<dyn Driver> {
         Arc::clone(&self.driver)
     }
 }
 
-impl<L, VL> Clone for DriverRegistration<L, VL>
-where
-    L: Layout,
-    VL: Layout,
-{
-    fn clone(&self) -> Self {
-        Self {
-            descriptor: self.descriptor,
-            driver: Arc::clone(&self.driver),
-            catalog: self.catalog.clone(),
-        }
-    }
-}
-
-impl<L, VL> fmt::Debug for DriverRegistration<L, VL>
-where
-    L: Layout,
-    VL: Layout,
-{
+impl fmt::Debug for DriverRegistration {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DriverRegistration")
             .field("descriptor", &self.descriptor)
@@ -134,19 +107,11 @@ where
 
 /// Built-in and third-party drivers known to a [`crate::Launcher`].
 #[derive(Clone, Debug)]
-pub struct DriverRegistry<L = BaseRootLayout, VL = BaseInstanceLayout>
-where
-    L: Layout,
-    VL: Layout,
-{
-    custom: Vec<DriverRegistration<L, VL>>,
+pub struct DriverRegistry {
+    custom: Vec<DriverRegistration>,
 }
 
-impl<L, VL> DriverRegistry<L, VL>
-where
-    L: Layout,
-    VL: Layout,
-{
+impl DriverRegistry {
     pub(crate) fn new() -> Self {
         Self { custom: Vec::new() }
     }
@@ -183,11 +148,7 @@ where
         &self,
         descriptor: DriverDescriptor,
         origins: &DriverOrigins,
-    ) -> Result<Arc<dyn Driver<L, VL>>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone + Send,
-    {
+    ) -> Result<Arc<dyn Driver>> {
         if let Some(registration) = self
             .custom
             .iter()
@@ -201,7 +162,7 @@ where
         Ok(Arc::from(registration.driver.build(descriptor, origins)?))
     }
 
-    pub(crate) fn register(&mut self, registration: DriverRegistration<L, VL>) -> Result<()> {
+    pub(crate) fn register(&mut self, registration: DriverRegistration) -> Result<()> {
         let descriptor = registration.descriptor();
         if builtin_registration(descriptor).is_some()
             || self
@@ -279,15 +240,11 @@ impl BuiltinDriver {
         })
     }
 
-    pub(crate) fn build<L, VL>(
+    pub(crate) fn build(
         &self,
         descriptor: DriverDescriptor,
         origins: &DriverOrigins,
-    ) -> Result<Box<dyn Driver<L, VL>>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone + Send,
-    {
+    ) -> Result<Box<dyn Driver>> {
         let policy = origins.policy_for(descriptor);
         match self {
             Self::Vanilla => Ok(Box::new(VanillaDriver::new(origins.vanilla_source()))),

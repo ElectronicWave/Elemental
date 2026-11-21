@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use elemental_core::storage::{Storage, layout::Layoutable};
+use elemental_core::storage::layout::Layoutable;
 use elemental_infra::SafeRelativePath;
 use elemental_schema::forge::ForgeInstallerProfile;
 
@@ -8,27 +8,20 @@ use crate::{
     error::{Error, Result},
     families::{
         installer::{InstallerArchive, InstallerArtifact},
-        version_json::{
-            VersionJsonInstanceLayout, VersionJsonInstanceResource, VersionJsonRootLayout,
-            VersionJsonRootResource,
-        },
+        version_json::{InstanceStorage, VersionJsonInstanceResource, VersionJsonRootResource},
     },
 };
 
 use super::InstallerProcessorContext;
 
 impl<'a> InstallerProcessorContext<'a> {
-    pub(in crate::families::installer::processor) fn new<L, VL>(
-        instance: &Storage<VL, Storage<L>>,
+    pub(in crate::families::installer::processor) fn new(
+        instance: &InstanceStorage,
         installer_artifact: &'a InstallerArtifact,
         install_profile: &'a ForgeInstallerProfile,
         archive: InstallerArchive<PathBuf>,
         family_name: &'a str,
-    ) -> Result<Self>
-    where
-        L: VersionJsonRootLayout,
-        VL: VersionJsonInstanceLayout,
-    {
+    ) -> Result<Self> {
         Ok(Self {
             installer_artifact,
             install_profile,

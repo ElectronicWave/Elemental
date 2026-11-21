@@ -2,36 +2,32 @@ mod arguments;
 mod command;
 mod paths;
 
-use elemental_core::{
-    auth::credential::Credential, runtime::distribution::Distribution, storage::Storage,
-};
+use elemental_core::{auth::credential::Credential, runtime::distribution::Distribution};
 use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::error::Result;
 
 use super::{
-    extensions::PistonMetaDataExt,
-    layout::{VersionJsonInstanceLayout, VersionJsonRootLayout},
-    rules::VersionJsonRuleContext,
+    extensions::PistonMetaDataExt, layout::InstanceStorage, rules::VersionJsonRuleContext,
     variables::LauncherVariables,
 };
 
 pub(crate) use paths::resolve_absolute_path;
 
-pub struct VersionJsonLaunchBuilder<L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> {
+pub struct VersionJsonLaunchBuilder {
     pub credential: Credential,
     pub runtime: Distribution,
-    pub version: Storage<VL, Storage<L>>,
+    pub version: InstanceStorage,
     inner: LauncherVariables,
     extra_jvm_arguments: Vec<String>,
     extra_game_arguments: Vec<String>,
 }
 
-impl<L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> VersionJsonLaunchBuilder<L, VL> {
+impl VersionJsonLaunchBuilder {
     pub fn new(
         credential: Credential,
         runtime: Distribution,
-        version: Storage<VL, Storage<L>>,
+        version: InstanceStorage,
         inner: LauncherVariables,
         extra_jvm_arguments: Vec<String>,
         extra_game_arguments: Vec<String>,

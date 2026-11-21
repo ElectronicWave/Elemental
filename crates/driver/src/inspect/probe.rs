@@ -1,14 +1,11 @@
 use std::path::{Path, PathBuf};
 
-use elemental_core::storage::{
-    Storage,
-    layout::{Layout, Layoutable},
-};
+use elemental_core::storage::layout::Layoutable;
 use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::{
     error::Result,
-    families::version_json::{VersionJsonInstanceLayout, VersionJsonInstanceResource},
+    families::version_json::{InstanceStorage, VersionJsonInstanceResource},
 };
 
 #[derive(Debug, Clone)]
@@ -17,11 +14,7 @@ pub struct InstanceProbe {
 }
 
 impl InstanceProbe {
-    pub async fn collect<L, VL>(storage: &Storage<VL, Storage<L>>) -> Result<Self>
-    where
-        L: Layout,
-        VL: VersionJsonInstanceLayout,
-    {
+    pub async fn collect(storage: &InstanceStorage) -> Result<Self> {
         let preferred = storage.try_get_resource(VersionJsonInstanceResource::Metadata)?;
         let metadata_path = match tokio::fs::metadata(&preferred).await {
             Ok(metadata) if metadata.is_file() => Some(preferred),

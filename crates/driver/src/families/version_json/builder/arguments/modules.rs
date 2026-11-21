@@ -2,20 +2,16 @@ use std::collections::HashSet;
 
 use crate::{
     error::{Error, Result},
-    families::version_json::{VersionJsonRootLayout, classpath::classpath_separator},
+    families::version_json::classpath::classpath_separator,
 };
 
 use super::super::VersionJsonLaunchBuilder;
 use super::common::normalize_path_string;
 
-pub(crate) fn collect_module_path_entries<L, VL>(
-    builder: &VersionJsonLaunchBuilder<L, VL>,
+pub(crate) fn collect_module_path_entries(
+    builder: &VersionJsonLaunchBuilder,
     jvm_arguments: &[String],
-) -> Result<HashSet<String>>
-where
-    L: VersionJsonRootLayout,
-    VL: crate::families::version_json::VersionJsonInstanceLayout,
-{
+) -> Result<HashSet<String>> {
     let mut entries = HashSet::new();
     let mut index = 0usize;
 
@@ -42,14 +38,10 @@ where
     Ok(entries)
 }
 
-fn resolve_module_path_entries<L, VL>(
-    builder: &VersionJsonLaunchBuilder<L, VL>,
+fn resolve_module_path_entries(
+    builder: &VersionJsonLaunchBuilder,
     raw_value: &str,
-) -> Result<Vec<String>>
-where
-    L: VersionJsonRootLayout,
-    VL: crate::families::version_json::VersionJsonInstanceLayout,
-{
+) -> Result<Vec<String>> {
     let resolved = builder
         .inner
         .apply(&[raw_value.to_owned()])

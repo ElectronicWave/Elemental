@@ -3,16 +3,15 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use elemental_core::storage::{Storage, layout::Layoutable};
+use elemental_core::storage::layout::Layoutable;
 use elemental_infra::SafeRelativePath;
 use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::{
     error::Result,
     families::version_json::{
-        VersionJsonInstanceLayout, VersionJsonInstanceResource, VersionJsonRootLayout,
-        VersionJsonRootResource, VersionJsonRuleContext, builder::resolve_absolute_path,
-        extensions::PistonMetaLibrariesExt,
+        InstanceStorage, VersionJsonInstanceResource, VersionJsonRootResource,
+        VersionJsonRuleContext, builder::resolve_absolute_path, extensions::PistonMetaLibrariesExt,
     },
 };
 
@@ -24,16 +23,12 @@ pub fn join_classpath(entries: Vec<String>) -> String {
     entries.join(classpath_separator())
 }
 
-pub fn resolve_classpath<L, VL>(
-    version: &Storage<VL, Storage<L>>,
+pub fn resolve_classpath(
+    version: &InstanceStorage,
     metadata: &PistonMetaData,
     rule_context: &VersionJsonRuleContext,
     module_path_entries: &HashSet<String>,
-) -> Result<Vec<PathBuf>>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+) -> Result<Vec<PathBuf>> {
     let mut classpath = Vec::new();
 
     for library in metadata

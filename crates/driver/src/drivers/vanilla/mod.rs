@@ -6,4 +6,4 @@ pub mod endpoints;
 pub mod source;
 
 pub type ResolvedVanillaMetadata = ResolvedVersionJsonMetadata;
-pub type ResolvedVanillaVersion<L, VL> = ResolvedVersionJsonInstance<L, VL>;
+pub type ResolvedVanillaVersion = ResolvedVersionJsonInstance;

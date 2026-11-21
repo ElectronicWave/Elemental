@@ -21,7 +21,8 @@ pub use driver::ProfiledVersionJsonDriver;
 pub use extensions::{PistonMetaDataExt, PistonMetaLibrariesExt};
 pub use family::{ProfiledVersionJsonFamily, ProfiledVersionJsonFamilyExt};
 pub use layout::{
-    BaseInstanceLayout, BaseRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
+    BaseInstanceLayout, BaseRootLayout, GameStorage, InstanceStorage, SharedInstanceLayout,
+    SharedRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
 };
 pub use platform::VersionJsonPlatform;
 pub use prepared::{

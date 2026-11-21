@@ -1,12 +1,11 @@
 use std::{env::current_dir, path::PathBuf};
 
-use elemental_core::storage::{Storage, layout::Layoutable};
+use elemental_core::storage::layout::Layoutable;
 
 use crate::{
     error::Result,
     families::version_json::{
-        VersionJsonInstanceLayout, VersionJsonInstanceResource, VersionJsonRootLayout,
-        VersionJsonRootResource,
+        InstanceStorage, VersionJsonInstanceResource, VersionJsonRootResource,
     },
 };
 
@@ -19,11 +18,7 @@ pub(super) struct LaunchPaths {
 }
 
 impl LaunchPaths {
-    pub(super) fn resolve<L, VL>(version: &Storage<VL, Storage<L>>) -> Result<Self>
-    where
-        L: VersionJsonRootLayout,
-        VL: VersionJsonInstanceLayout,
-    {
+    pub(super) fn resolve(version: &InstanceStorage) -> Result<Self> {
         Ok(Self {
             version_root: resolve_absolute_path(version.path.clone())?,
             assets_root: resolve_absolute_path(

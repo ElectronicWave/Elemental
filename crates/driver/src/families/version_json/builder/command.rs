@@ -15,11 +15,7 @@ use crate::{
 
 use super::{VersionJsonLaunchBuilder, paths::LaunchPaths};
 
-impl<L, VL> VersionJsonLaunchBuilder<L, VL>
-where
-    L: crate::families::version_json::layout::VersionJsonRootLayout,
-    VL: crate::families::version_json::layout::VersionJsonInstanceLayout,
-{
+impl VersionJsonLaunchBuilder {
     pub fn build_command(mut self) -> Result<LaunchCommand> {
         let metadata = self
             .version

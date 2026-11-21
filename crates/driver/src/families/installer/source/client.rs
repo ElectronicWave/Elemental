@@ -1,4 +1,4 @@
-use elemental_core::{minecraft::MinecraftVersionId, storage::Storage};
+use elemental_core::minecraft::MinecraftVersionId;
 use elemental_schema::maven::MavenMetadataBody;
 
 use crate::{
@@ -7,7 +7,7 @@ use crate::{
         installer::{
             InstallerArtifact, MavenEndpoints, MavenInstallerSpec, build_installer_artifact,
         },
-        version_json::VersionJsonRootLayout,
+        version_json::GameStorage,
     },
     http::HttpSource,
     loader_version::LoaderVersionId,
@@ -55,15 +55,12 @@ impl InstallerMavenSource {
         fetch_maven_metadata(self.inner.client()?, url, self.spec().source_name).await
     }
 
-    pub fn installer_artifact<L>(
+    pub fn installer_artifact(
         &self,
-        game_storage: &Storage<L>,
+        game_storage: &GameStorage,
         game_version: &MinecraftVersionId,
         loader_version: &LoaderVersionId,
-    ) -> Result<InstallerArtifact>
-    where
-        L: VersionJsonRootLayout,
-    {
+    ) -> Result<InstallerArtifact> {
         let spec = self
             .endpoints()
             .installer_artifact_spec(game_version, loader_version)?;

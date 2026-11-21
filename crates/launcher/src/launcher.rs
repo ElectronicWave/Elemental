@@ -15,8 +15,8 @@ use elemental_core::{
 use elemental_driver::{
     driver::{Driver, DriverDescriptor, PrepareRequest},
     families::version_json::{
-        BaseInstanceLayout, BaseRootLayout, VersionJsonGameStorageExt, VersionJsonInstanceLayout,
-        VersionJsonRootLayout, builder::VersionJsonLaunchBuilder, inspect_instances,
+        GameStorage, InstanceStorage, SharedInstanceLayout, SharedRootLayout,
+        VersionJsonGameStorageExt, builder::VersionJsonLaunchBuilder, inspect_instances,
         variables::LauncherVariables,
     },
     inspect::InstalledInstance,
@@ -40,40 +40,27 @@ use crate::{
 #[cfg(feature = "yggdrasil-auth")]
 use crate::authlib_injector::{self, AuthlibInjector};
 
-type LauncherGameStorage<L> = Storage<L>;
-type LauncherInstanceStorage<L, VL> = Storage<VL, LauncherGameStorage<L>>;
-
 #[derive(Debug, Clone)]
-pub struct Launcher<L = BaseRootLayout, VL = BaseInstanceLayout>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+pub struct Launcher {
     storage_root: PathBuf,
     downloader: Arc<ElementalDownloader>,
-    root_layout: L,
-    instance_layout: VL,
+    root_layout: SharedRootLayout,
+    instance_layout: SharedInstanceLayout,
     origins: DriverOrigins,
     runtime_resolver: RuntimeResolver,
-    drivers: DriverRegistry<L, VL>,
+    drivers: DriverRegistry,
 }
 
-impl Launcher<BaseRootLayout, BaseInstanceLayout> {
-    pub fn builder() -> LauncherBuilder<BaseRootLayout, BaseInstanceLayout> {
+impl Launcher {
+    pub fn builder() -> LauncherBuilder {
         LauncherBuilder::new()
     }
-}
 
-impl<L, VL> Launcher<L, VL>
-where
-    L: VersionJsonRootLayout + Clone,
-    VL: VersionJsonInstanceLayout + Clone + Send,
-{
     pub(crate) fn new(
         storage_root: PathBuf,
         downloader: Arc<ElementalDownloader>,
-        root_layout: L,
-        instance_layout: VL,
+        root_layout: SharedRootLayout,
+        instance_layout: SharedInstanceLayout,
         origins: DriverOrigins,
         runtime_resolver: RuntimeResolver,
     ) -> Self {
@@ -92,12 +79,12 @@ where
     ///
     /// Built-in descriptors cannot be replaced. Use [`DriverSpec::custom`] to
     /// prepare an instance for a registered third-party driver.
-    pub fn register_driver(mut self, registration: DriverRegistration<L, VL>) -> Result<Self> {
+    pub fn register_driver(mut self, registration: DriverRegistration) -> Result<Self> {
         self.drivers.register(registration)?;
         Ok(self)
     }
 
-    pub fn drivers(&self) -> &DriverRegistry<L, VL> {
+    pub fn drivers(&self) -> &DriverRegistry {
         &self.drivers
     }
 
@@ -173,7 +160,7 @@ where
         instance_name: String,
         driver: DriverSpec,
         runtime_options: &RuntimeOptions,
-    ) -> Result<PreparedInstance<L, VL>> {
+    ) -> Result<PreparedInstance> {
         let session = self
             .downloader
             .session(format!("prepare {instance_name}"))
@@ -194,7 +181,7 @@ where
         instance_name: String,
         driver: DriverSpec,
         runtime_options: &RuntimeOptions,
-    ) -> Result<PreparedInstance<L, VL>> {
+    ) -> Result<PreparedInstance> {
         let prepared = self
             .prepare_in_session(&session, instance_name, driver, runtime_options)
             .await;
@@ -214,7 +201,7 @@ where
         instance_name: String,
         driver: DriverSpec,
         runtime_options: &RuntimeOptions,
-    ) -> Result<PreparedInstance<L, VL>> {
+    ) -> Result<PreparedInstance> {
         let instance = self
             .game_storage()
             .ensure_instance(instance_name, self.instance_layout.clone())
@@ -233,7 +220,7 @@ where
         Ok(PreparedInstance::new(driver.descriptor(), prepared))
     }
 
-    pub async fn load_instance(&self, instance: Instance) -> Result<PreparedInstance<L, VL>> {
+    pub async fn load_instance(&self, instance: Instance) -> Result<PreparedInstance> {
         let layout = self.instance(instance.instance_name)?;
         let driver_spec = instance.driver.driver;
         let prepared = self
@@ -245,7 +232,7 @@ where
 
     pub async fn build_launch_command(
         &self,
-        prepared: &PreparedInstance<L, VL>,
+        prepared: &PreparedInstance,
         credential: &Credential,
         runtime_options: &RuntimeOptions,
         options: &LaunchOptions,
@@ -298,7 +285,7 @@ where
 
     pub async fn launch_prepared_instance(
         &self,
-        prepared: &PreparedInstance<L, VL>,
+        prepared: &PreparedInstance,
         credential: &Credential,
         runtime_options: &RuntimeOptions,
         options: &LaunchOptions,
@@ -327,31 +314,34 @@ where
             .await
     }
 
-    fn game_storage(&self) -> LauncherGameStorage<L> {
+    fn game_storage(&self) -> GameStorage {
         Storage::new(self.storage_root.clone(), self.root_layout.clone())
     }
 
-    fn instance(&self, instance_name: String) -> Result<LauncherInstanceStorage<L, VL>> {
+    fn instance(&self, instance_name: String) -> Result<InstanceStorage> {
         Ok(self
             .game_storage()
             .instance(instance_name, self.instance_layout.clone())?)
     }
 
-    fn resolve_driver(&self, descriptor: DriverDescriptor) -> Result<Arc<dyn Driver<L, VL>>> {
+    fn resolve_driver(&self, descriptor: DriverDescriptor) -> Result<Arc<dyn Driver>> {
         self.drivers.driver(descriptor, &self.origins)
+    }
+
+    fn inspect_drivers(&self) -> Result<Vec<Arc<dyn Driver>>> {
+        self.drivers
+            .descriptors()
+            .map(|descriptor| self.resolve_driver(descriptor))
+            .collect()
     }
 }
 
-fn launch_builder<L, VL>(
+fn launch_builder(
     credential: &Credential,
     runtime: Distribution,
-    prepared: &PreparedInstance<L, VL>,
+    prepared: &PreparedInstance,
     options: &LaunchOptions,
-) -> VersionJsonLaunchBuilder<L, VL>
-where
-    L: VersionJsonRootLayout + Clone,
-    VL: VersionJsonInstanceLayout + Clone,
-{
+) -> VersionJsonLaunchBuilder {
     let mut variables = LauncherVariables::default();
 
     if let Some(client_id) = &options.client_id {
@@ -385,32 +375,11 @@ where
     )
 }
 
-impl<L, VL> Launcher<L, VL>
-where
-    L: VersionJsonRootLayout + Clone,
-    VL: VersionJsonInstanceLayout + Clone + Send,
-{
-    fn inspect_drivers(&self) -> Result<Vec<Arc<dyn Driver<L, VL>>>> {
-        self.drivers
-            .descriptors()
-            .map(|descriptor| self.resolve_driver(descriptor))
-            .collect()
-    }
-}
-
-fn driver_refs<L, VL>(drivers: &[Arc<dyn Driver<L, VL>>]) -> Vec<&dyn Driver<L, VL>>
-where
-    L: elemental_core::storage::layout::Layout,
-    VL: elemental_core::storage::layout::Layout,
-{
+fn driver_refs(drivers: &[Arc<dyn Driver>]) -> Vec<&dyn Driver> {
     drivers.iter().map(Arc::as_ref).collect()
 }
 
-fn summarize_installed_instance<L, VL>(instance: InstalledInstance<L, VL>) -> Instance
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+fn summarize_installed_instance(instance: InstalledInstance) -> Instance {
     let instance_name = instance.storage.name().unwrap_or_else(|| {
         instance
             .storage

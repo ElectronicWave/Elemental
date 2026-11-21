@@ -3,8 +3,7 @@ use elemental_infra::downloader::DownloadSession;
 use crate::{
     error::Result,
     families::version_json::{
-        VersionJsonInstanceLayout, VersionJsonRootLayout, remote::VersionJsonRemoteResolver,
-        storage::ensure_natives_extracted,
+        remote::VersionJsonRemoteResolver, storage::ensure_natives_extracted,
     },
 };
 
@@ -12,16 +11,12 @@ use super::super::{
     PreparedVersionJsonInstance, ResolvedVersionJsonInstance, VersionJsonDownloadStatus,
 };
 
-impl<L, VL> ResolvedVersionJsonInstance<L, VL>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+impl ResolvedVersionJsonInstance {
     pub async fn prepare(
         self,
         remote_resolver: &dyn VersionJsonRemoteResolver,
         session: &DownloadSession,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>> {
+    ) -> Result<PreparedVersionJsonInstance> {
         self.prepare_with_download_status(remote_resolver, session, None)
             .await
     }
@@ -31,7 +26,7 @@ where
         remote_resolver: &dyn VersionJsonRemoteResolver,
         session: &DownloadSession,
         download_status: Option<VersionJsonDownloadStatus>,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>> {
+    ) -> Result<PreparedVersionJsonInstance> {
         let download_status = match download_status {
             Some(status) if status.is_downloaded() => status,
             _ => {
@@ -56,7 +51,7 @@ where
         Ok(())
     }
 
-    pub async fn finish_preparation(self) -> Result<PreparedVersionJsonInstance<L, VL>> {
+    pub async fn finish_preparation(self) -> Result<PreparedVersionJsonInstance> {
         let download_status = self.download_status()?;
         self.finish_preparation_with_download_status(download_status)
             .await
@@ -65,7 +60,7 @@ where
     pub(crate) async fn finish_preparation_with_download_status(
         self,
         download_status: VersionJsonDownloadStatus,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>> {
+    ) -> Result<PreparedVersionJsonInstance> {
         ensure_natives_extracted(&self.version, &self.metadata).await?;
         self.into_prepared_with_status(download_status.with_natives_extracted(true))
     }

@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use elemental_core::storage::{Storage, layout::Layout};
 
 use crate::{
     driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest},
@@ -10,9 +9,7 @@ use crate::{
             InstallerFamilyRemoteResolver, InstallerMavenSource, MavenInstallerSpec,
             ResolvedInstallerFamilyVersion,
         },
-        version_json::{
-            PreparedVersionJsonInstance, VersionJsonInstanceLayout, VersionJsonRootLayout,
-        },
+        version_json::{InstanceStorage, PreparedVersionJsonInstance},
     },
     inspect::InstanceProbe,
 };
@@ -53,11 +50,7 @@ impl InstallerFamilyDriver {
 }
 
 #[async_trait]
-impl<L, VL> Driver<L, VL> for InstallerFamilyDriver
-where
-    L: Layout,
-    VL: Layout,
-{
+impl Driver for InstallerFamilyDriver {
     fn descriptor(&self) -> DriverDescriptor {
         self.source.spec().descriptor()
     }
@@ -70,14 +63,7 @@ where
         Ok(self.source.spec().identity.inspect_installed(metadata))
     }
 
-    async fn prepare(
-        &self,
-        request: &PrepareRequest<'_, L, VL>,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
+    async fn prepare(&self, request: &PrepareRequest<'_>) -> Result<PreparedVersionJsonInstance> {
         let loader_version = request.required_loader_version(self.descriptor())?;
         ResolvedInstallerFamilyVersion::new(
             self.source.clone(),
@@ -97,12 +83,8 @@ where
 
     async fn load_prepared(
         &self,
-        instance: &Storage<VL, Storage<L>>,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
+        instance: &InstanceStorage,
+    ) -> Result<PreparedVersionJsonInstance> {
         ResolvedInstallerFamilyVersion::load(&self.source, instance.clone()).await
     }
 }

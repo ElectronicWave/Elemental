@@ -5,7 +5,7 @@ use elemental_core::runtime::{
     provider::{RuntimeProviderList, default_providers},
 };
 use elemental_driver::families::version_json::{
-    BaseInstanceLayout, BaseRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
+    SharedInstanceLayout, SharedRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
 };
 use elemental_infra::downloader::ElementalDownloader;
 
@@ -13,20 +13,16 @@ use crate::{
     error::Result, launcher::Launcher, origin::DriverOrigins, registration::DriverRegistration,
 };
 
-pub struct LauncherBuilder<L = BaseRootLayout, VL = BaseInstanceLayout> {
+pub struct LauncherBuilder {
     storage_root: PathBuf,
     downloader: Arc<ElementalDownloader>,
-    root_layout: L,
-    instance_layout: VL,
+    root_layout: SharedRootLayout,
+    instance_layout: SharedInstanceLayout,
     origins: DriverOrigins,
     runtime_providers: RuntimeProviderList,
 }
 
-impl<L, VL> fmt::Debug for LauncherBuilder<L, VL>
-where
-    L: fmt::Debug,
-    VL: fmt::Debug,
-{
+impl fmt::Debug for LauncherBuilder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LauncherBuilder")
             .field("storage_root", &self.storage_root)
@@ -39,26 +35,24 @@ where
     }
 }
 
-impl Default for LauncherBuilder<BaseRootLayout, BaseInstanceLayout> {
+impl Default for LauncherBuilder {
     fn default() -> Self {
         Self {
             storage_root: PathBuf::from(".minecraft"),
             downloader: ElementalDownloader::new(),
-            root_layout: BaseRootLayout,
-            instance_layout: BaseInstanceLayout,
+            root_layout: SharedRootLayout::default(),
+            instance_layout: SharedInstanceLayout::default(),
             origins: DriverOrigins::default(),
             runtime_providers: default_providers(),
         }
     }
 }
 
-impl LauncherBuilder<BaseRootLayout, BaseInstanceLayout> {
+impl LauncherBuilder {
     pub fn new() -> Self {
         Self::default()
     }
-}
 
-impl<L, VL> LauncherBuilder<L, VL> {
     pub fn storage_root(mut self, storage_root: impl Into<PathBuf>) -> Self {
         self.storage_root = storage_root.into();
         self
@@ -82,41 +76,23 @@ impl<L, VL> LauncherBuilder<L, VL> {
         Ok(self)
     }
 
-    pub fn root_layout<NL>(self, root_layout: NL) -> LauncherBuilder<NL, VL>
+    pub fn root_layout<L>(mut self, root_layout: L) -> Self
     where
-        NL: VersionJsonRootLayout + Clone,
+        L: VersionJsonRootLayout + 'static,
     {
-        LauncherBuilder {
-            storage_root: self.storage_root,
-            downloader: self.downloader,
-            root_layout,
-            instance_layout: self.instance_layout,
-            origins: self.origins,
-            runtime_providers: self.runtime_providers,
-        }
+        self.root_layout = SharedRootLayout::new(root_layout);
+        self
     }
 
-    pub fn instance_layout<NVL>(self, instance_layout: NVL) -> LauncherBuilder<L, NVL>
+    pub fn instance_layout<VL>(mut self, instance_layout: VL) -> Self
     where
-        NVL: VersionJsonInstanceLayout + Clone + Send,
+        VL: VersionJsonInstanceLayout + 'static,
     {
-        LauncherBuilder {
-            storage_root: self.storage_root,
-            downloader: self.downloader,
-            root_layout: self.root_layout,
-            instance_layout,
-            origins: self.origins,
-            runtime_providers: self.runtime_providers,
-        }
+        self.instance_layout = SharedInstanceLayout::new(instance_layout);
+        self
     }
-}
 
-impl<L, VL> LauncherBuilder<L, VL>
-where
-    L: VersionJsonRootLayout + Clone,
-    VL: VersionJsonInstanceLayout + Clone + Send,
-{
-    pub fn build(self) -> Launcher<L, VL> {
+    pub fn build(self) -> Launcher {
         Launcher::new(
             self.storage_root,
             self.downloader,
@@ -128,10 +104,7 @@ where
     }
 
     /// Builds a launcher and registers third-party drivers.
-    pub fn build_with_drivers(
-        self,
-        registrations: Vec<DriverRegistration<L, VL>>,
-    ) -> Result<Launcher<L, VL>> {
+    pub fn build_with_drivers(self, registrations: Vec<DriverRegistration>) -> Result<Launcher> {
         registrations
             .into_iter()
             .try_fold(self.build(), |launcher, registration| {

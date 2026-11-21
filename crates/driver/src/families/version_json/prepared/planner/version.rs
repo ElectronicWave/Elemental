@@ -3,19 +3,12 @@ use elemental_infra::{SafeRelativePath, downloader::DownloadTask};
 
 use crate::{
     error::Result,
-    families::version_json::{
-        VersionJsonInstanceLayout, VersionJsonInstanceResource, VersionJsonRootLayout,
-        VersionJsonRootResource,
-    },
+    families::version_json::{VersionJsonInstanceResource, VersionJsonRootResource},
 };
 
 use super::VersionJsonInstallPlanner;
 
-impl<L, VL> VersionJsonInstallPlanner<'_, L, VL>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+impl VersionJsonInstallPlanner<'_> {
     pub(super) fn batch_version_artifacts(
         &self,
     ) -> Result<elemental_infra::downloader::DownloadBatch> {

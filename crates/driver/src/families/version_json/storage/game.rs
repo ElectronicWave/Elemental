@@ -7,7 +7,9 @@ use elemental_core::storage::Storage;
 
 use crate::{
     error::Result,
-    families::version_json::layout::{VersionJsonInstanceLayout, VersionJsonRootLayout},
+    families::version_json::layout::{
+        GameStorage, SharedInstanceLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
+    },
     inspect::{InstalledInstance, InstanceDetectionFailure},
 };
 
@@ -49,15 +51,11 @@ pub trait VersionJsonGameStorageExt {
         VL: VersionJsonInstanceLayout + Clone;
 }
 
-pub async fn inspect_instances<L, VL>(
-    storage: &Storage<L>,
-    version_layout: VL,
-    drivers: &[&dyn crate::driver::Driver<L, VL>],
-) -> Result<Vec<std::result::Result<InstalledInstance<L, VL>, InstanceDetectionFailure>>>
-where
-    L: VersionJsonRootLayout + Clone,
-    VL: VersionJsonInstanceLayout + Clone,
-{
+pub async fn inspect_instances(
+    storage: &GameStorage,
+    version_layout: SharedInstanceLayout,
+    drivers: &[&dyn crate::driver::Driver],
+) -> Result<Vec<std::result::Result<InstalledInstance, InstanceDetectionFailure>>> {
     InstalledInstance::detect_all(storage, version_layout, drivers).await
 }
 

@@ -1,4 +1,3 @@
-use elemental_core::storage::Storage;
 use elemental_infra::SafeRelativePath;
 use elemental_schema::forge::ForgeInstallerProfile;
 
@@ -9,22 +8,16 @@ use crate::{
             InstallerArtifact, installer_client_processors_ready,
             libraries::installer_library_artifacts,
         },
-        version_json::{
-            VersionJsonInstanceLayout, VersionJsonRootLayout, storage::library_artifacts_present,
-        },
+        version_json::{InstanceStorage, storage::library_artifacts_present},
     },
 };
 
 use super::{InstallerInstallStatus, InstallerStatePaths};
 
-fn profile_libraries_ready<L, VL>(
-    instance: &Storage<VL, Storage<L>>,
+fn profile_libraries_ready(
+    instance: &InstanceStorage,
     install_profile: &ForgeInstallerProfile,
-) -> Result<bool>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+) -> Result<bool> {
     let mut artifact_paths = Vec::new();
     for library in &install_profile.libraries {
         for artifact in installer_library_artifacts(library)? {
@@ -34,17 +27,13 @@ where
     library_artifacts_present(&instance.parent, artifact_paths)
 }
 
-pub async fn installer_install_status<L, VL>(
-    instance: &Storage<VL, Storage<L>>,
+pub async fn installer_install_status(
+    instance: &InstanceStorage,
     installer_artifact: &InstallerArtifact,
     install_profile: &ForgeInstallerProfile,
     launch_version_ready: bool,
     family_name: &str,
-) -> Result<InstallerInstallStatus>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+) -> Result<InstallerInstallStatus> {
     let state_paths = InstallerStatePaths::new(&instance.path, family_name)?;
 
     Ok(InstallerInstallStatus {

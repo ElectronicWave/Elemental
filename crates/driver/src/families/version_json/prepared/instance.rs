@@ -5,8 +5,8 @@ use elemental_schema::mojang::piston::{PistonMetaAssetIndexObjects, PistonMetaDa
 use crate::{
     error::{Error, Result},
     families::version_json::{
-        VersionJsonAssetIndexStorageExt, VersionJsonInstanceLayout, VersionJsonMetadataStorageExt,
-        VersionJsonRootLayout, VersionJsonRuleContext, classpath::resolve_classpath,
+        InstanceStorage, VersionJsonAssetIndexStorageExt, VersionJsonMetadataStorageExt,
+        VersionJsonRuleContext, classpath::resolve_classpath,
     },
 };
 
@@ -22,27 +22,21 @@ pub struct ResolvedVersionJsonMetadata {
 }
 
 #[derive(Debug, Clone)]
-pub struct ResolvedVersionJsonInstance<L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> {
-    pub version: elemental_core::storage::Storage<VL, elemental_core::storage::Storage<L>>,
+pub struct ResolvedVersionJsonInstance {
+    pub version: InstanceStorage,
     pub metadata: PistonMetaData,
     pub asset_index_objects: PistonMetaAssetIndexObjects,
 }
 
 #[derive(Debug, Clone)]
-pub struct PreparedVersionJsonInstance<L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> {
-    pub version: elemental_core::storage::Storage<VL, elemental_core::storage::Storage<L>>,
+pub struct PreparedVersionJsonInstance {
+    pub version: InstanceStorage,
     pub metadata: PistonMetaData,
     pub install_status: VersionJsonInstallStatus,
 }
 
-impl<L, VL> ResolvedVersionJsonInstance<L, VL>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
-    pub fn load(
-        version: elemental_core::storage::Storage<VL, elemental_core::storage::Storage<L>>,
-    ) -> Result<Self> {
+impl ResolvedVersionJsonInstance {
+    pub fn load(version: InstanceStorage) -> Result<Self> {
         let metadata = version.metadata()?;
         let asset_index_objects = version
             .parent
@@ -54,7 +48,7 @@ where
         })
     }
 
-    pub async fn into_prepared(self) -> Result<PreparedVersionJsonInstance<L, VL>> {
+    pub async fn into_prepared(self) -> Result<PreparedVersionJsonInstance> {
         let status = self.status().await?;
         self.into_prepared_with_status(status)
     }
@@ -62,7 +56,7 @@ where
     pub(super) fn into_prepared_with_status(
         self,
         status: VersionJsonInstallStatus,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>> {
+    ) -> Result<PreparedVersionJsonInstance> {
         if !status.is_ready() {
             let version_name = self
                 .version
@@ -87,11 +81,7 @@ where
     }
 }
 
-impl<L, VL> PreparedVersionJsonInstance<L, VL>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+impl PreparedVersionJsonInstance {
     pub fn instance_root(&self) -> &std::path::Path {
         self.version.path.as_path()
     }

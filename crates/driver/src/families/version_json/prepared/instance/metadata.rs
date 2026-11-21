@@ -3,8 +3,7 @@ use elemental_schema::mojang::piston::{PistonMetaAssetIndexObjects, PistonMetaDa
 use crate::{
     error::Result,
     families::version_json::{
-        VersionJsonAssetIndexStorageExt, VersionJsonInstanceLayout, VersionJsonMetadataStorageExt,
-        VersionJsonRootLayout,
+        InstanceStorage, VersionJsonAssetIndexStorageExt, VersionJsonMetadataStorageExt,
     },
 };
 
@@ -18,13 +17,7 @@ impl ResolvedVersionJsonMetadata {
         }
     }
 
-    pub async fn persist<
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    >(
-        self,
-        instance: &elemental_core::storage::Storage<VL, elemental_core::storage::Storage<L>>,
-    ) -> Result<ResolvedVersionJsonInstance<L, VL>> {
+    pub async fn persist(self, instance: &InstanceStorage) -> Result<ResolvedVersionJsonInstance> {
         instance.write_metadata(&self.metadata).await?;
         instance
             .parent

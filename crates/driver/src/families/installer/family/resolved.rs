@@ -1,6 +1,6 @@
 use elemental_core::minecraft::MinecraftVersionId;
 use elemental_core::runtime::RuntimeResolver;
-use elemental_core::storage::{Storage, layout::Layoutable};
+use elemental_core::storage::layout::Layoutable;
 use elemental_infra::downloader::DownloadSession;
 
 use crate::{
@@ -13,10 +13,7 @@ use crate::{
             run_installer_client_processors, submit_installer_profile_libraries,
             validate_installer_profile_identity,
         },
-        version_json::{
-            PreparedVersionJsonInstance, VersionJsonInstanceLayout, VersionJsonRootLayout,
-            VersionJsonRootResource,
-        },
+        version_json::{InstanceStorage, PreparedVersionJsonInstance, VersionJsonRootResource},
     },
     launch::{RuntimeOptions, resolve_prepared_version_runtime},
     loader_version::LoaderVersionId,
@@ -25,26 +22,18 @@ use crate::{
 use super::InstallerFamilyRemoteResolver;
 
 #[derive(Debug, Clone)]
-pub struct ResolvedInstallerFamilyVersion<L, VL>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+pub struct ResolvedInstallerFamilyVersion {
     pub source: InstallerMavenSource,
-    pub instance: Storage<VL, Storage<L>>,
+    pub instance: InstanceStorage,
     pub game_version: MinecraftVersionId,
     pub loader_version: LoaderVersionId,
     pub installer_artifact: InstallerArtifact,
 }
 
-impl<L, VL> ResolvedInstallerFamilyVersion<L, VL>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+impl ResolvedInstallerFamilyVersion {
     pub fn new(
         source: InstallerMavenSource,
-        instance: Storage<VL, Storage<L>>,
+        instance: InstanceStorage,
         game_version: MinecraftVersionId,
         loader_version: LoaderVersionId,
     ) -> Result<Self> {
@@ -59,13 +48,7 @@ where
             installer_artifact,
         })
     }
-}
 
-impl<L, VL> ResolvedInstallerFamilyVersion<L, VL>
-where
-    L: VersionJsonRootLayout + Clone,
-    VL: VersionJsonInstanceLayout + Clone,
-{
     pub async fn prepare(
         &self,
         session: &DownloadSession,
@@ -73,7 +56,7 @@ where
         remote_resolver: &InstallerFamilyRemoteResolver,
         runtime_options: &RuntimeOptions,
         runtime_resolver: &RuntimeResolver,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>> {
+    ) -> Result<PreparedVersionJsonInstance> {
         let spec = self.source.spec();
         let family_name = spec.family_name;
         let libraries_root = self

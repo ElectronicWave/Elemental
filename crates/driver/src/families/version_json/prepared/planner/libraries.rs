@@ -4,19 +4,12 @@ use elemental_schema::mojang::piston::{PistonMetaLibraries, PistonMetaLibrariesD
 
 use crate::{
     error::Result,
-    families::version_json::{
-        PistonMetaLibrariesExt, VersionJsonInstanceLayout, VersionJsonRootLayout,
-        VersionJsonRootResource,
-    },
+    families::version_json::{PistonMetaLibrariesExt, VersionJsonRootResource},
 };
 
 use super::VersionJsonInstallPlanner;
 
-impl<L, VL> VersionJsonInstallPlanner<'_, L, VL>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+impl VersionJsonInstallPlanner<'_> {
     pub(super) fn plan_library_tasks(
         &self,
         library: &PistonMetaLibraries,

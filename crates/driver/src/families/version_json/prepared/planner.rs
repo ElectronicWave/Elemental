@@ -8,8 +8,7 @@ use elemental_schema::mojang::piston::{PistonMetaAssetIndexObjects, PistonMetaDa
 use crate::{
     error::Result,
     families::version_json::{
-        VersionJsonInstanceLayout, VersionJsonRemoteResolver, VersionJsonRootLayout,
-        VersionJsonRootResource, VersionJsonRuleContext,
+        InstanceStorage, VersionJsonRemoteResolver, VersionJsonRootResource, VersionJsonRuleContext,
     },
 };
 
@@ -18,24 +17,19 @@ use super::ResolvedVersionJsonInstance;
 mod libraries;
 mod version;
 
-pub struct VersionJsonInstallPlanner<'a, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> {
-    pub(super) version:
-        &'a elemental_core::storage::Storage<VL, elemental_core::storage::Storage<L>>,
+pub struct VersionJsonInstallPlanner<'a> {
+    pub(super) version: &'a InstanceStorage,
     pub(super) metadata: &'a PistonMetaData,
     pub(super) asset_index_objects: &'a PistonMetaAssetIndexObjects,
     pub(super) remote_resolver: &'a dyn VersionJsonRemoteResolver,
     pub(super) rule_context: VersionJsonRuleContext,
 }
 
-impl<L, VL> ResolvedVersionJsonInstance<L, VL>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+impl ResolvedVersionJsonInstance {
     pub fn planner<'a>(
         &'a self,
         remote_resolver: &'a dyn VersionJsonRemoteResolver,
-    ) -> VersionJsonInstallPlanner<'a, L, VL> {
+    ) -> VersionJsonInstallPlanner<'a> {
         VersionJsonInstallPlanner {
             version: &self.version,
             metadata: &self.metadata,
@@ -46,11 +40,7 @@ where
     }
 }
 
-impl<L, VL> VersionJsonInstallPlanner<'_, L, VL>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+impl VersionJsonInstallPlanner<'_> {
     pub fn download_batches(&self) -> Result<Vec<DownloadBatch>> {
         let mut batches = Vec::new();
         let version = self.batch_version_artifacts()?;

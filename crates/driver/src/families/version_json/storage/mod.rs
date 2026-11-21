@@ -3,12 +3,12 @@ mod game;
 mod natives;
 mod version;
 
-use elemental_core::storage::{Storage, layout::Layoutable};
+use elemental_core::storage::layout::Layoutable;
 use elemental_infra::SafeRelativePath;
 
 use crate::{
     error::Result,
-    families::version_json::{VersionJsonRootLayout, VersionJsonRootResource},
+    families::version_json::{GameStorage, VersionJsonRootResource},
 };
 
 pub use asset_index::VersionJsonAssetIndexStorageExt;
@@ -16,12 +16,11 @@ pub use game::{VersionJsonGameStorageExt, inspect_instances};
 pub(crate) use natives::{ensure_natives_extracted, natives_are_extracted};
 pub use version::VersionJsonMetadataStorageExt;
 
-pub(crate) fn library_artifacts_present<L, I>(
-    game_storage: &Storage<L>,
+pub(crate) fn library_artifacts_present<I>(
+    game_storage: &GameStorage,
     artifact_paths: I,
 ) -> Result<bool>
 where
-    L: VersionJsonRootLayout,
     I: IntoIterator<Item = SafeRelativePath>,
 {
     for path in artifact_paths {

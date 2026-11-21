@@ -4,8 +4,8 @@ use elemental_infra::SafeRelativePath;
 use crate::{
     error::Result,
     families::version_json::{
-        VersionJsonInstanceLayout, VersionJsonInstanceResource, VersionJsonRootLayout,
-        VersionJsonRootResource, VersionJsonRuleContext, storage::natives_are_extracted,
+        VersionJsonInstanceResource, VersionJsonRootResource, VersionJsonRuleContext,
+        storage::natives_are_extracted,
     },
 };
 
@@ -13,11 +13,7 @@ use super::{ResolvedVersionJsonInstance, VersionJsonDownloadStatus, VersionJsonI
 
 mod artifacts;
 
-impl<L, VL> ResolvedVersionJsonInstance<L, VL>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+impl ResolvedVersionJsonInstance {
     pub fn download_status(&self) -> Result<VersionJsonDownloadStatus> {
         let rule_context = VersionJsonRuleContext::current();
         Ok(VersionJsonDownloadStatus {

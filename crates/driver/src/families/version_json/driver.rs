@@ -1,6 +1,5 @@
 use crate::error::Result;
 use async_trait::async_trait;
-use elemental_core::storage::{Storage, layout::Layout};
 
 use crate::{
     driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest},
@@ -9,8 +8,8 @@ use crate::{
 };
 
 use super::{
-    PreparedVersionJsonInstance, ResolvedVersionJsonInstance, VersionJsonInstanceLayout,
-    VersionJsonRootLayout, family::ProfiledVersionJsonFamily,
+    InstanceStorage, PreparedVersionJsonInstance, ResolvedVersionJsonInstance,
+    family::ProfiledVersionJsonFamily,
 };
 
 mod resolve;
@@ -61,12 +60,10 @@ where
 }
 
 #[async_trait]
-impl<F, L, VL> Driver<L, VL> for ProfiledVersionJsonDriver<F>
+impl<F> Driver for ProfiledVersionJsonDriver<F>
 where
     F: ProfiledVersionJsonFamily,
     F::Source: Sync,
-    L: Layout,
-    VL: Layout,
 {
     fn descriptor(&self) -> DriverDescriptor {
         self.family.descriptor()
@@ -80,14 +77,7 @@ where
         Ok(self.family.inspect_installed(metadata))
     }
 
-    async fn prepare(
-        &self,
-        request: &PrepareRequest<'_, L, VL>,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
+    async fn prepare(&self, request: &PrepareRequest<'_>) -> Result<PreparedVersionJsonInstance> {
         let loader_version = request.required_loader_version(self.descriptor())?;
         let (resolved, download_status) = self
             .resolve_or_load(
@@ -104,12 +94,8 @@ where
 
     async fn load_prepared(
         &self,
-        instance: &Storage<VL, Storage<L>>,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
+        instance: &InstanceStorage,
+    ) -> Result<PreparedVersionJsonInstance> {
         ResolvedVersionJsonInstance::load(instance.clone())?
             .finish_preparation()
             .await

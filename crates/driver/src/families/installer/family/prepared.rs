@@ -1,5 +1,4 @@
 use elemental_core::minecraft::MinecraftVersionId;
-use elemental_core::storage::Storage;
 
 use crate::{
     error::{Error, Result},
@@ -7,24 +6,17 @@ use crate::{
         installer::{
             InstallerMavenSource, installer_install_status, profile::load_persisted_install_profile,
         },
-        version_json::{
-            PreparedVersionJsonInstance, ResolvedVersionJsonInstance, VersionJsonInstanceLayout,
-            VersionJsonRootLayout,
-        },
+        version_json::{InstanceStorage, PreparedVersionJsonInstance, ResolvedVersionJsonInstance},
     },
 };
 
 use super::ResolvedInstallerFamilyVersion;
 
-impl<L, VL> ResolvedInstallerFamilyVersion<L, VL>
-where
-    L: VersionJsonRootLayout + Clone,
-    VL: VersionJsonInstanceLayout + Clone,
-{
+impl ResolvedInstallerFamilyVersion {
     pub async fn load(
         source: &InstallerMavenSource,
-        instance: Storage<VL, Storage<L>>,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>> {
+        instance: InstanceStorage,
+    ) -> Result<PreparedVersionJsonInstance> {
         let spec = source.spec();
         let family_name = spec.family_name;
         let install_profile = load_persisted_install_profile(&instance.path, family_name)?;

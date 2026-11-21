@@ -1,19 +1,14 @@
 use std::str::FromStr;
 
 use async_trait::async_trait;
-use elemental_core::{
-    minecraft::MinecraftVersionId,
-    runtime::RuntimeResolver,
-    storage::{Storage, layout::Layout},
-};
+use elemental_core::{minecraft::MinecraftVersionId, runtime::RuntimeResolver};
 use elemental_infra::downloader::DownloadSession;
 use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::descriptors::from_id;
 use crate::error::{Error, Result};
 use crate::families::version_json::{
-    PistonMetaDataExt, PreparedVersionJsonInstance, VersionJsonInstanceLayout,
-    VersionJsonRootLayout,
+    InstanceStorage, PistonMetaDataExt, PreparedVersionJsonInstance,
 };
 use crate::inspect::InstanceProbe;
 use crate::launch::RuntimeOptions;
@@ -72,24 +67,16 @@ impl InstalledDriver {
     }
 }
 
-pub struct PrepareRequest<'a, L, VL>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+pub struct PrepareRequest<'a> {
     pub session: &'a DownloadSession,
-    pub instance: &'a Storage<VL, Storage<L>>,
+    pub instance: &'a InstanceStorage,
     pub game_version: &'a MinecraftVersionId,
     pub loader_version: Option<&'a LoaderVersionId>,
     pub runtime_options: &'a RuntimeOptions,
     pub runtime_resolver: &'a RuntimeResolver,
 }
 
-impl<'a, L, VL> PrepareRequest<'a, L, VL>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+impl<'a> PrepareRequest<'a> {
     pub fn required_loader_version(&self, driver: DriverDescriptor) -> Result<&'a LoaderVersionId> {
         self.loader_version
             .ok_or_else(|| Error::LoaderVersionRequired {
@@ -99,7 +86,7 @@ where
 }
 
 #[async_trait]
-pub trait Driver<L: Layout, VL: Layout>: Send + Sync {
+pub trait Driver: Send + Sync {
     fn descriptor(&self) -> DriverDescriptor;
 
     async fn inspect(&self, probe: &InstanceProbe) -> Result<Option<InstalledDriver>>;
@@ -108,13 +95,7 @@ pub trait Driver<L: Layout, VL: Layout>: Send + Sync {
     ///
     /// The result contains everything launch construction needs; family-specific
     /// installation state is not part of the public result.
-    async fn prepare(
-        &self,
-        request: &PrepareRequest<'_, L, VL>,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone;
+    async fn prepare(&self, request: &PrepareRequest<'_>) -> Result<PreparedVersionJsonInstance>;
 
     /// Load a prepared version and return the common version JSON view.
     ///
@@ -122,9 +103,6 @@ pub trait Driver<L: Layout, VL: Layout>: Send + Sync {
     /// installation state is not part of the public result.
     async fn load_prepared(
         &self,
-        instance: &Storage<VL, Storage<L>>,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone;
+        instance: &InstanceStorage,
+    ) -> Result<PreparedVersionJsonInstance>;
 }

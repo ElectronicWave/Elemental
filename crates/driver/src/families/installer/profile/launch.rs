@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use elemental_core::{minecraft::MinecraftVersionId, storage::Storage};
+use elemental_core::minecraft::MinecraftVersionId;
 use elemental_schema::{forge::ForgeInstallerProfile, mojang::piston::PistonMetaLibraries};
 use serde_json::value::RawValue;
 
@@ -9,17 +9,14 @@ use crate::{
     error::{Error, Result},
     families::{
         installer::InstallerPersistedState,
-        version_json::{
-            ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata, VersionJsonInstanceLayout,
-            VersionJsonRootLayout,
-        },
+        version_json::{InstanceStorage, ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata},
     },
 };
 
 use super::{InstallerStatePaths, merge::merge_embedded_version};
 
-pub async fn persist_installer_launch_version<L, VL>(
-    instance: &Storage<VL, Storage<L>>,
+pub async fn persist_installer_launch_version(
+    instance: &InstanceStorage,
     game_version: &MinecraftVersionId,
     vanilla_source: &VanillaSource,
     embedded_version: Option<&RawValue>,
@@ -32,11 +29,7 @@ pub async fn persist_installer_launch_version<L, VL>(
              + Sync
      ),
     family_name: &str,
-) -> Result<ResolvedVersionJsonInstance<L, VL>>
-where
-    L: VersionJsonRootLayout + Clone,
-    VL: VersionJsonInstanceLayout + Clone,
-{
+) -> Result<ResolvedVersionJsonInstance> {
     let embedded_version =
         embedded_version.ok_or_else(|| Error::InstallerEmbeddedVersionMissing {
             family_name: family_name.to_owned(),

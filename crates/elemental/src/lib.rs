@@ -51,7 +51,8 @@ pub mod prelude {
         catalog::{GameVersion, LoaderRelease},
         driver::DriverDescriptor,
         families::version_json::{
-            BaseInstanceLayout, BaseRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
+            BaseInstanceLayout, BaseRootLayout, GameStorage, InstanceStorage, SharedInstanceLayout,
+            SharedRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
         },
         loader_version::LoaderVersionId,
     };

@@ -6,16 +6,11 @@ use crate::{
         ResolvedVanillaVersion,
         source::{VanillaSource, resolve_vanilla_metadata},
     },
-    families::version_json::{
-        PreparedVersionJsonInstance, VersionJsonInstanceLayout, VersionJsonRootLayout,
-    },
+    families::version_json::{InstanceStorage, PreparedVersionJsonInstance},
     inspect::{InstanceProbe, LibraryPrefixSet},
 };
 use async_trait::async_trait;
-use elemental_core::{
-    minecraft::MinecraftVersionId,
-    storage::{Storage, layout::Layout},
-};
+use elemental_core::minecraft::MinecraftVersionId;
 
 const LOADER_MARKERS: LibraryPrefixSet = LibraryPrefixSet::new(&[
     "net.minecraftforge:forge:",
@@ -37,14 +32,11 @@ impl VanillaDriver {
         Self::new(VanillaSource::default())
     }
 
-    async fn resolve_or_load<
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    >(
+    async fn resolve_or_load(
         &self,
-        instance: &Storage<VL, Storage<L>>,
+        instance: &InstanceStorage,
         version_id: MinecraftVersionId,
-    ) -> Result<ResolvedVanillaVersion<L, VL>> {
+    ) -> Result<ResolvedVanillaVersion> {
         match ResolvedVanillaVersion::load(instance.clone()) {
             Ok(resolved) => return Ok(resolved),
             Err(error) if error.is_not_found() => {}
@@ -59,7 +51,7 @@ impl VanillaDriver {
 }
 
 #[async_trait]
-impl<L: Layout, VL: Layout> Driver<L, VL> for VanillaDriver {
+impl Driver for VanillaDriver {
     fn descriptor(&self) -> DriverDescriptor {
         VANILLA_DRIVER
     }
@@ -73,20 +65,13 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for VanillaDriver {
         }
 
         Ok(Some(InstalledDriver::version_json(
-            <Self as Driver<L, VL>>::descriptor(self),
+            self.descriptor(),
             metadata,
             None,
         )))
     }
 
-    async fn prepare(
-        &self,
-        request: &PrepareRequest<'_, L, VL>,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
+    async fn prepare(&self, request: &PrepareRequest<'_>) -> Result<PreparedVersionJsonInstance> {
         self.resolve_or_load(request.instance, request.game_version.clone())
             .await?
             .prepare(self.source.endpoints(), request.session)
@@ -95,12 +80,8 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for VanillaDriver {
 
     async fn load_prepared(
         &self,
-        instance: &Storage<VL, Storage<L>>,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
+        instance: &InstanceStorage,
+    ) -> Result<PreparedVersionJsonInstance> {
         ResolvedVanillaVersion::load(instance.clone())?
             .finish_preparation()
             .await

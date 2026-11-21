@@ -1,4 +1,5 @@
 use elemental_core::{minecraft::MinecraftVersionId, storage::Storage};
+use elemental_schema::mojang::piston::{PistonMetaAssetIndexObjects, PistonMetaData};
 
 use crate::{
     drivers::vanilla::source::resolve_vanilla_metadata, error::Result,
@@ -6,8 +7,12 @@ use crate::{
 };
 
 use super::super::{
-    ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata, VersionJsonDownloadStatus,
-    VersionJsonInstanceLayout, VersionJsonRootLayout, family::ProfiledVersionJsonFamily,
+    VersionJsonDownloadStatus, VersionJsonInstanceLayout, VersionJsonRootLayout,
+    family::ProfiledVersionJsonFamily,
+    prepared::{
+        instance::{load_version_metadata, persist_version_metadata},
+        readiness::check_download_status,
+    },
 };
 use super::ProfiledVersionJsonDriver;
 
@@ -21,43 +26,23 @@ where
         game_version: MinecraftVersionId,
         loader_version: LoaderVersionId,
     ) -> Result<(
-        ResolvedVersionJsonInstance<F::RemoteResolver, L, VL>,
+        PistonMetaData,
+        PistonMetaAssetIndexObjects,
         Option<VersionJsonDownloadStatus>,
     )>
     where
         L: VersionJsonRootLayout + Clone,
         VL: VersionJsonInstanceLayout + Clone,
     {
-        match ResolvedVersionJsonInstance::load(self.remote_resolver(), instance.clone()) {
-            Ok(resolved) => {
-                let status = resolved.download_status().await?;
-                if status.is_downloaded()
-                    && !self.family.local_metadata_needs_refresh(
-                        &resolved.metadata,
-                        &game_version,
-                        &loader_version,
-                    )
-                {
-                    return Ok((resolved, Some(status)));
-                }
-            }
-            Err(error) if !error.is_not_found() => return Err(error),
-            Err(_) => {}
+        if let Some((metadata, asset_index_objects, status)) =
+            try_load_downloaded_instance(instance)?
+            && !self
+                .family
+                .local_metadata_needs_refresh(&metadata, &game_version, &loader_version)
+        {
+            return Ok((metadata, asset_index_objects, Some(status)));
         }
 
-        let resolved = self
-            .resolve_metadata(game_version, loader_version)
-            .await?
-            .persist(instance)
-            .await?;
-        Ok((resolved, None))
-    }
-
-    async fn resolve_metadata(
-        &self,
-        game_version: MinecraftVersionId,
-        loader_version: LoaderVersionId,
-    ) -> Result<ResolvedVersionJsonMetadata<F::RemoteResolver>> {
         let base_metadata =
             resolve_vanilla_metadata(&self.vanilla_source, game_version.as_str()).await?;
         let profile = self
@@ -65,11 +50,33 @@ where
             .profile(&self.source, &game_version, &loader_version)
             .await?;
         let metadata = self.family.merge_profile(base_metadata.metadata, profile)?;
+        persist_version_metadata(instance, &metadata, &base_metadata.asset_index_objects).await?;
+        Ok((metadata, base_metadata.asset_index_objects, None))
+    }
+}
 
-        Ok(ResolvedVersionJsonMetadata::new(
-            self.remote_resolver(),
-            metadata,
-            base_metadata.asset_index_objects,
-        ))
+fn try_load_downloaded_instance<L, VL>(
+    instance: &Storage<VL, Storage<L>>,
+) -> Result<
+    Option<(
+        PistonMetaData,
+        PistonMetaAssetIndexObjects,
+        VersionJsonDownloadStatus,
+    )>,
+>
+where
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+{
+    match load_version_metadata(instance) {
+        Ok((metadata, asset_index_objects)) => {
+            let status = check_download_status(instance, &metadata, &asset_index_objects)?;
+            if status.is_downloaded() {
+                return Ok(Some((metadata, asset_index_objects, status)));
+            }
+            Ok(None)
+        }
+        Err(error) if !error.is_not_found() => Err(error),
+        Err(_) => Ok(None),
     }
 }

@@ -9,6 +9,21 @@ pub trait VersionJsonRemoteResolver: Clone + Debug + Send + Sync + 'static {
     fn object_url(&self, hash: &str) -> Result<String>;
 }
 
+pub(crate) trait DynRemoteResolver: Send + Sync {
+    fn rewrite_upstream(&self, raw_url: &str) -> Result<String>;
+    fn object_url(&self, hash: &str) -> Result<String>;
+}
+
+impl<T: VersionJsonRemoteResolver> DynRemoteResolver for T {
+    fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
+        VersionJsonRemoteResolver::rewrite_upstream(self, raw_url)
+    }
+
+    fn object_url(&self, hash: &str) -> Result<String> {
+        VersionJsonRemoteResolver::object_url(self, hash)
+    }
+}
+
 pub trait UpstreamUrlRewriter: Clone + Debug + Send + Sync + 'static {
     fn rewrite_upstream(&self, raw_url: &str) -> Result<String>;
 }

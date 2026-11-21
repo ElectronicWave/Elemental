@@ -1,6 +1,6 @@
 mod identity;
-mod install;
-mod launch;
+pub(crate) mod install;
+pub(crate) mod launch;
 mod merge;
 mod state;
 mod status;

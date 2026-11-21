@@ -4,16 +4,15 @@ use elemental_infra::{SafeRelativePath, downloader::DownloadTask};
 use crate::{
     error::Result,
     families::version_json::{
-        VersionJsonInstanceLayout, VersionJsonInstanceResource, VersionJsonRemoteResolver,
-        VersionJsonRootLayout, VersionJsonRootResource,
+        VersionJsonInstanceLayout, VersionJsonInstanceResource, VersionJsonRootLayout,
+        VersionJsonRootResource,
     },
 };
 
-use super::VersionJsonInstallPlanner;
+use super::DynInstallPlanner;
 
-impl<R, L, VL> VersionJsonInstallPlanner<'_, R, L, VL>
+impl<L, VL> DynInstallPlanner<'_, L, VL>
 where
-    R: VersionJsonRemoteResolver,
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {

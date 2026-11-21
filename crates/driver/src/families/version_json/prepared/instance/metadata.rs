@@ -30,14 +30,7 @@ impl<R: VersionJsonRemoteResolver> ResolvedVersionJsonMetadata<R> {
         self,
         instance: &elemental_core::storage::Storage<VL, elemental_core::storage::Storage<L>>,
     ) -> Result<ResolvedVersionJsonInstance<R, L, VL>> {
-        instance.write_metadata(&self.metadata).await?;
-        instance
-            .parent
-            .write_asset_index(
-                self.metadata.asset_index.id.clone(),
-                &self.asset_index_objects,
-            )
-            .await?;
+        persist_version_metadata(instance, &self.metadata, &self.asset_index_objects).await?;
         Ok(ResolvedVersionJsonInstance {
             remote_resolver: self.remote_resolver,
             version: instance.clone(),
@@ -45,4 +38,19 @@ impl<R: VersionJsonRemoteResolver> ResolvedVersionJsonMetadata<R> {
             asset_index_objects: self.asset_index_objects,
         })
     }
+}
+
+pub(crate) async fn persist_version_metadata<
+    L: VersionJsonRootLayout + Clone,
+    VL: VersionJsonInstanceLayout + Clone,
+>(
+    instance: &elemental_core::storage::Storage<VL, elemental_core::storage::Storage<L>>,
+    metadata: &PistonMetaData,
+    asset_index_objects: &PistonMetaAssetIndexObjects,
+) -> Result<()> {
+    instance.write_metadata(metadata).await?;
+    instance
+        .parent
+        .write_asset_index(metadata.asset_index.id.clone(), asset_index_objects)
+        .await
 }

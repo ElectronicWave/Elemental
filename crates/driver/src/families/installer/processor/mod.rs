@@ -1,6 +1,6 @@
 mod client;
 mod context;
-mod libraries;
+pub(crate) mod libraries;
 mod runner;
 mod variables;
 

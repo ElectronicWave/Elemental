@@ -5,16 +5,15 @@ use elemental_schema::mojang::piston::{PistonMetaLibraries, PistonMetaLibrariesD
 use crate::{
     error::Result,
     families::version_json::{
-        PistonMetaLibrariesExt, VersionJsonInstanceLayout, VersionJsonRemoteResolver,
-        VersionJsonRootLayout, VersionJsonRootResource,
+        PistonMetaLibrariesExt, VersionJsonInstanceLayout, VersionJsonRootLayout,
+        VersionJsonRootResource,
     },
 };
 
-use super::VersionJsonInstallPlanner;
+use super::DynInstallPlanner;
 
-impl<R, L, VL> VersionJsonInstallPlanner<'_, R, L, VL>
+impl<L, VL> DynInstallPlanner<'_, L, VL>
 where
-    R: VersionJsonRemoteResolver,
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
@@ -22,7 +21,7 @@ where
         &self,
         library: &PistonMetaLibraries,
     ) -> Result<Vec<DownloadTask>> {
-        if !library.is_allowed(&self.rule_context) {
+        if !library.is_allowed(self.rule_context) {
             return Ok(Vec::new());
         }
         let artifacts = library.version_artifacts(self.rule_context.platform())?;

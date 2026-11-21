@@ -9,7 +9,7 @@ use crate::{
     error::Result,
     families::version_json::{
         VersionJsonInstanceLayout, VersionJsonRemoteResolver, VersionJsonRootLayout,
-        VersionJsonRootResource, VersionJsonRuleContext,
+        VersionJsonRootResource, VersionJsonRuleContext, remote::DynRemoteResolver,
     },
 };
 
@@ -32,6 +32,15 @@ pub struct VersionJsonInstallPlanner<
     pub(super) rule_context: VersionJsonRuleContext,
 }
 
+pub(crate) struct DynInstallPlanner<'a, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> {
+    pub(super) version:
+        &'a elemental_core::storage::Storage<VL, elemental_core::storage::Storage<L>>,
+    pub(super) metadata: &'a PistonMetaData,
+    pub(super) asset_index_objects: &'a PistonMetaAssetIndexObjects,
+    pub(super) remote_resolver: &'a dyn DynRemoteResolver,
+    pub(super) rule_context: &'a VersionJsonRuleContext,
+}
+
 impl<R, L, VL> ResolvedVersionJsonInstance<R, L, VL>
 where
     R: VersionJsonRemoteResolver,
@@ -49,13 +58,43 @@ where
     }
 }
 
-impl<R, L, VL> VersionJsonInstallPlanner<'_, R, L, VL>
+impl<'a, R, L, VL> VersionJsonInstallPlanner<'a, R, L, VL>
 where
     R: VersionJsonRemoteResolver,
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    pub(super) fn batch_assets(&self) -> Result<DownloadBatch> {
+    pub fn download_batches(&self) -> Result<Vec<DownloadBatch>> {
+        DynInstallPlanner {
+            version: self.version,
+            metadata: self.metadata,
+            asset_index_objects: self.asset_index_objects,
+            remote_resolver: &self.remote_resolver,
+            rule_context: &self.rule_context,
+        }
+        .download_batches()
+    }
+}
+
+impl<L, VL> DynInstallPlanner<'_, L, VL>
+where
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+{
+    pub(crate) fn download_batches(&self) -> Result<Vec<DownloadBatch>> {
+        let mut batches = Vec::new();
+        let version = self.batch_version_artifacts()?;
+        if !version.is_empty() {
+            batches.push(version);
+        }
+        let assets = self.batch_assets()?;
+        if !assets.is_empty() {
+            batches.push(assets);
+        }
+        Ok(batches)
+    }
+
+    fn batch_assets(&self) -> Result<DownloadBatch> {
         let tasks = self
             .asset_index_objects
             .objects
@@ -74,25 +113,5 @@ where
             })
             .collect::<Result<Vec<DownloadTask>>>()?;
         Ok(DownloadBatch::new(tasks).group("assets"))
-    }
-}
-
-impl<'a, R, L, VL> VersionJsonInstallPlanner<'a, R, L, VL>
-where
-    R: VersionJsonRemoteResolver,
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
-    pub fn download_batches(&self) -> Result<Vec<DownloadBatch>> {
-        let mut batches = Vec::new();
-        let version = self.batch_version_artifacts()?;
-        if !version.is_empty() {
-            batches.push(version);
-        }
-        let assets = self.batch_assets()?;
-        if !assets.is_empty() {
-            batches.push(assets);
-        }
-        Ok(batches)
     }
 }

@@ -16,7 +16,11 @@ use super::VersionJsonInstallStatus;
 mod metadata;
 mod prepare;
 
-pub(crate) use prepare::prepare_with_extra_downloads;
+pub(crate) use metadata::persist_version_metadata;
+pub(crate) use prepare::{
+    finish_instance_preparation, prepare_instance_with_download_status,
+    submit_instance_install_batches,
+};
 
 #[derive(Debug, Clone)]
 pub struct ResolvedVersionJsonMetadata<R: VersionJsonRemoteResolver> {
@@ -31,7 +35,7 @@ pub struct ResolvedVersionJsonInstance<
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 > {
-    pub(super) remote_resolver: R,
+    pub(crate) remote_resolver: R,
     pub version: elemental_core::storage::Storage<VL, elemental_core::storage::Storage<L>>,
     pub metadata: PistonMetaData,
     pub asset_index_objects: PistonMetaAssetIndexObjects,
@@ -54,10 +58,7 @@ where
         remote_resolver: R,
         version: elemental_core::storage::Storage<VL, elemental_core::storage::Storage<L>>,
     ) -> Result<Self> {
-        let metadata = version.metadata()?;
-        let asset_index_objects = version
-            .parent
-            .asset_index_objects(metadata.asset_index.id.as_str())?;
+        let (metadata, asset_index_objects) = load_version_metadata(&version)?;
         Ok(Self {
             remote_resolver,
             version,
@@ -75,28 +76,51 @@ where
         self,
         status: VersionJsonInstallStatus,
     ) -> Result<PreparedVersionJsonInstance<L, VL>> {
-        if !status.is_ready() {
-            let version = self
-                .version
-                .name()
-                .ok_or_else(|| Error::MissingVersionName {
-                    path: self.version.path.clone(),
-                })?;
-            return Err(Error::VersionNotPrepared {
-                version,
-                status: format!("{status:?}"),
-            });
-        }
-        Ok(PreparedVersionJsonInstance {
-            install_status: status,
-            version: self.version,
-            metadata: self.metadata,
-        })
+        into_prepared_instance(self.version, self.metadata, status)
     }
 
     pub fn required_java_major_version(&self) -> usize {
         self.metadata.java_version.major_version
     }
+}
+
+pub(crate) fn load_version_metadata<L, VL>(
+    version: &elemental_core::storage::Storage<VL, elemental_core::storage::Storage<L>>,
+) -> Result<(PistonMetaData, PistonMetaAssetIndexObjects)>
+where
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+{
+    let metadata = version.metadata()?;
+    let asset_index_objects = version
+        .parent
+        .asset_index_objects(metadata.asset_index.id.as_str())?;
+    Ok((metadata, asset_index_objects))
+}
+
+pub(crate) fn into_prepared_instance<L, VL>(
+    version: elemental_core::storage::Storage<VL, elemental_core::storage::Storage<L>>,
+    metadata: PistonMetaData,
+    status: VersionJsonInstallStatus,
+) -> Result<PreparedVersionJsonInstance<L, VL>>
+where
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+{
+    if !status.is_ready() {
+        let version_name = version.name().ok_or_else(|| Error::MissingVersionName {
+            path: version.path.clone(),
+        })?;
+        return Err(Error::VersionNotPrepared {
+            version: version_name,
+            status: format!("{status:?}"),
+        });
+    }
+    Ok(PreparedVersionJsonInstance {
+        install_status: status,
+        version,
+        metadata,
+    })
 }
 
 impl<L, VL> PreparedVersionJsonInstance<L, VL>

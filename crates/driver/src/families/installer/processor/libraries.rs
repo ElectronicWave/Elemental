@@ -23,9 +23,30 @@ pub async fn submit_installer_profile_libraries<L, VL, F>(
 where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
-    F: Fn(&str, &str) -> Result<String>,
+    F: Fn(&str, &str) -> Result<String> + Send + Sync,
 {
-    let tasks = install_profile_library_tasks(instance, install_profile, &artifact_url)?;
+    submit_installer_profile_libraries_dyn(
+        session,
+        instance,
+        install_profile,
+        family_name,
+        &artifact_url,
+    )
+    .await
+}
+
+pub(crate) async fn submit_installer_profile_libraries_dyn<L, VL>(
+    session: &DownloadSession,
+    instance: &Storage<VL, Storage<L>>,
+    install_profile: &ForgeInstallerProfile,
+    family_name: &str,
+    artifact_url: &(dyn Fn(&str, &str) -> Result<String> + Send + Sync),
+) -> Result<()>
+where
+    L: VersionJsonRootLayout,
+    VL: VersionJsonInstanceLayout,
+{
+    let tasks = install_profile_library_tasks(instance, install_profile, artifact_url)?;
 
     if tasks.is_empty() {
         return Ok(());
@@ -40,15 +61,14 @@ where
         })
 }
 
-fn install_profile_library_tasks<L, VL, F>(
+fn install_profile_library_tasks<L, VL>(
     instance: &Storage<VL, Storage<L>>,
     install_profile: &ForgeInstallerProfile,
-    artifact_url: &F,
+    artifact_url: &dyn Fn(&str, &str) -> Result<String>,
 ) -> Result<Vec<DownloadTask>>
 where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
-    F: Fn(&str, &str) -> Result<String>,
 {
     let mut seen = HashSet::new();
     let mut tasks = Vec::new();

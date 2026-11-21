@@ -19,8 +19,27 @@ pub async fn prepare_installer_state<V>(
     validate_profile: V,
 ) -> Result<InstallerPersistedState>
 where
-    V: Fn(&ForgeInstallerProfile) -> Result<()>,
+    V: Fn(&ForgeInstallerProfile) -> Result<()> + Send + Sync,
 {
+    prepare_installer_state_dyn(
+        session,
+        installer_artifact,
+        instance_root,
+        libraries_root,
+        family_name,
+        &validate_profile,
+    )
+    .await
+}
+
+pub(crate) async fn prepare_installer_state_dyn(
+    session: &DownloadSession,
+    installer_artifact: &InstallerArtifact,
+    instance_root: &Path,
+    libraries_root: &Path,
+    family_name: &str,
+    validate_profile: &(dyn Fn(&ForgeInstallerProfile) -> Result<()> + Send + Sync),
+) -> Result<InstallerPersistedState> {
     download_installer(session, installer_artifact, family_name).await?;
 
     let archive = InstallerArchive::new(installer_artifact.path.clone());

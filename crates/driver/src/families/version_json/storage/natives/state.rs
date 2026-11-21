@@ -3,14 +3,14 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use elemental_core::storage::{Storage, layout::Layoutable};
+use elemental_core::storage::layout::Layoutable;
 use elemental_schema::mojang::piston::{PistonMetaData, PistonMetaLibrariesDownloadsArtifact};
 
 use crate::{
     error::Result,
     families::version_json::{
         extensions::PistonMetaLibrariesExt,
-        layout::{VersionJsonInstanceLayout, VersionJsonRootLayout},
+        layout::InstanceStorage,
         resource::VersionJsonInstanceResource,
         rules::VersionJsonRuleContext,
         state::{NativesState, natives_state_store},
@@ -27,14 +27,10 @@ pub(super) struct NativeLibrarySource {
     pub(super) exclude: Vec<String>,
 }
 
-pub(super) fn expected_natives<L, VL>(
-    storage: &Storage<VL, Storage<L>>,
+pub(super) fn expected_natives(
+    storage: &InstanceStorage,
     metadata: &PistonMetaData,
-) -> Result<NativesExpectation>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+) -> Result<NativesExpectation> {
     let rule_context = VersionJsonRuleContext::current();
     let destination = storage.try_get_resource(VersionJsonInstanceResource::Natives)?;
 
@@ -44,17 +40,13 @@ where
     })
 }
 
-pub(super) async fn record_natives_state<L, VL>(
-    storage: &Storage<VL, Storage<L>>,
+pub(super) async fn record_natives_state(
+    storage: &InstanceStorage,
     metadata: &PistonMetaData,
     destination: &Path,
     rule_context: &VersionJsonRuleContext,
     extracted_files: Vec<String>,
-) -> Result<()>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+) -> Result<()> {
     let checked_at_unix_ms = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as u64;
     let native_artifacts = collect_native_artifact_paths(metadata, rule_context)?;
     natives_state_store(&storage.path)

@@ -3,17 +3,13 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use elemental_core::storage::{Storage, layout::Layout};
 #[cfg(feature = "driver-all")]
 use elemental_driver::descriptors::{ALL_DRIVERS, from_id};
 use elemental_driver::{
     descriptors::VANILLA_DRIVER,
-    driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest},
+    driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest, ResolvedDriverPlan},
     drivers::vanilla::{catalog::VanillaCatalog, driver::VanillaDriver},
     error::Result,
-    families::version_json::{
-        PreparedVersionJsonInstance, VersionJsonInstanceLayout, VersionJsonRootLayout,
-    },
     inspect::InstanceProbe,
 };
 use elemental_launcher::{DriverCatalog, DriverRegistration, Launcher};
@@ -58,7 +54,7 @@ const VALID_METADATA: &str = r#"{
 struct DetectsEverything;
 
 #[async_trait]
-impl<L: Layout, VL: Layout> Driver<L, VL> for DetectsEverything {
+impl Driver for DetectsEverything {
     fn descriptor(&self) -> DriverDescriptor {
         CUSTOM
     }
@@ -72,25 +68,7 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for DetectsEverything {
         }))
     }
 
-    async fn prepare(
-        &self,
-        _request: &PrepareRequest<'_, L, VL>,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
-        unimplemented!("inspection test only")
-    }
-
-    async fn load_prepared(
-        &self,
-        _instance: &Storage<VL, Storage<L>>,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
+    async fn resolve(&self, _request: &PrepareRequest<'_>) -> Result<ResolvedDriverPlan> {
         unimplemented!("inspection test only")
     }
 }

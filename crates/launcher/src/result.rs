@@ -3,15 +3,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use elemental_core::{
-    runtime::distribution::Distribution,
-    storage::{Storage, layout::Layoutable},
-};
+use elemental_core::{runtime::distribution::Distribution, storage::layout::Layoutable};
 use elemental_driver::{
     driver::{DriverDescriptor, InstalledDriver},
     families::version_json::{
-        BaseInstanceLayout, BaseRootLayout, PreparedVersionJsonInstance, VersionJsonInstanceLayout,
-        VersionJsonInstanceResource, VersionJsonRootLayout,
+        InstanceStorage, PreparedVersionJsonInstance, VersionJsonInstanceResource,
     },
 };
 
@@ -20,6 +16,24 @@ use crate::error::{Error, Result};
 pub struct LaunchedInstance {
     pub runtime: Distribution,
     pub child: tokio::process::Child,
+}
+
+impl LaunchedInstance {
+    pub fn id(&self) -> Option<u32> {
+        self.child.id()
+    }
+
+    pub fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+        self.child.try_wait()
+    }
+
+    pub async fn wait(&mut self) -> std::io::Result<std::process::ExitStatus> {
+        self.child.wait().await
+    }
+
+    pub async fn kill(&mut self) -> std::io::Result<()> {
+        self.child.kill().await
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,23 +88,15 @@ pub struct PreparedInstanceInfo {
     pub classpath: Vec<PathBuf>,
 }
 
-pub struct PreparedInstance<L = BaseRootLayout, VL = BaseInstanceLayout>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+pub struct PreparedInstance {
     pub(crate) driver: DriverDescriptor,
-    pub(crate) launch_version: PreparedVersionJsonInstance<L, VL>,
+    pub(crate) launch_version: PreparedVersionJsonInstance,
 }
 
-impl<L, VL> PreparedInstance<L, VL>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+impl PreparedInstance {
     pub(crate) fn new(
         driver: DriverDescriptor,
-        launch_version: PreparedVersionJsonInstance<L, VL>,
+        launch_version: PreparedVersionJsonInstance,
     ) -> Self {
         Self {
             driver,
@@ -106,7 +112,7 @@ where
         self.launch_version.instance_root()
     }
 
-    pub fn version(&self) -> &Storage<VL, Storage<L>> {
+    pub fn version(&self) -> &InstanceStorage {
         &self.launch_version.version
     }
 

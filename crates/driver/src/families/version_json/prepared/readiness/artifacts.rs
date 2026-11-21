@@ -4,20 +4,14 @@ use elemental_infra::SafeRelativePath;
 use crate::{
     error::Result,
     families::version_json::{
-        PistonMetaLibrariesExt, VersionJsonInstanceLayout, VersionJsonInstanceResource,
-        VersionJsonRemoteResolver, VersionJsonRootLayout, VersionJsonRuleContext,
+        PistonMetaLibrariesExt, VersionJsonInstanceResource, VersionJsonRuleContext,
         storage::library_artifacts_present,
     },
 };
 
 use super::ResolvedVersionJsonInstance;
 
-impl<R, L, VL> ResolvedVersionJsonInstance<R, L, VL>
-where
-    R: VersionJsonRemoteResolver,
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+impl ResolvedVersionJsonInstance {
     pub(super) fn version_artifacts_ready(
         &self,
         rule_context: &VersionJsonRuleContext,

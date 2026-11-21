@@ -1,6 +1,6 @@
 use crate::{error::Result, families::version_json::UpstreamUrlRewriter, url::OriginPolicy};
 
-use super::endpoints::{LiteLoaderEndpoints, LiteLoaderOrigin};
+use super::endpoints::{KNOWN_LITELOADER_ORIGINS, LiteLoaderEndpoints, LiteLoaderOrigin};
 
 const LEGACY_ORIGINS: &[(&str, LiteLoaderOrigin)] = &[
     (
@@ -35,7 +35,8 @@ impl LiteLoaderEndpoints {
             }
         }
 
-        self.origin_policy.rewrite_known_origin_url_or_keep(raw_url)
+        self.origin_policy
+            .rewrite_known_origin_url_or_keep(KNOWN_LITELOADER_ORIGINS, raw_url)
     }
 }
 
@@ -46,7 +47,7 @@ impl UpstreamUrlRewriter for LiteLoaderEndpoints {
 }
 
 fn rewrite_legacy_origin(
-    policy: &OriginPolicy<LiteLoaderOrigin>,
+    policy: &OriginPolicy,
     raw_url: &str,
     legacy_base: &str,
     origin: LiteLoaderOrigin,

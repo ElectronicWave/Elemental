@@ -10,9 +10,6 @@ pub enum Error {
     Json(#[from] serde_json::Error),
 
     #[error(transparent)]
-    Xml(#[from] quick_xml::DeError),
-
-    #[error(transparent)]
     Http(#[from] reqwest::Error),
 
     #[error("{message}")]
@@ -92,7 +89,7 @@ pub enum Error {
         source_name: String,
         url: String,
         #[source]
-        source: reqwest::Error,
+        source: Box<dyn StdError + Send + Sync>,
     },
 
     #[error("invalid {label} notation: {notation}")]
@@ -109,7 +106,7 @@ pub enum Error {
         source_label: String,
         url: String,
         #[source]
-        source: quick_xml::DeError,
+        source: Box<dyn StdError + Send + Sync>,
     },
 
     #[error("read version metadata failed")]
@@ -144,9 +141,6 @@ pub enum Error {
         #[source]
         source: Box<Error>,
     },
-
-    #[error("launcher variables serialized to a non-object JSON value")]
-    LauncherVariablesNotObject,
 
     #[error("can't find a valid instance named '{name}'")]
     InstanceNotFound { name: String },

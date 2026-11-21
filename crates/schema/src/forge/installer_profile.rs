@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 
 use crate::mojang::piston::PistonMetaLibraries;
 
@@ -31,7 +32,7 @@ pub struct ForgeInstallerProfile {
     #[serde(default)]
     pub install: Option<ForgeInstallerLegacyInstall>,
     #[serde(rename = "versionInfo", default)]
-    pub version_info: Option<serde_json::Value>,
+    pub version_info: Option<Box<RawValue>>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

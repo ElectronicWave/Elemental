@@ -30,15 +30,15 @@ futures = "0.3.34"
 hex = "0.4.3"
 jiff = { version = "1.0.0", features = ["serde"] }
 nidhogg = { version = "0.3.1" }
-reqwest = { version = "0.13.1", features = [
-    "json",
-    "multipart",
+reqwest = { version = "0.13.1", default-features = false, features = [
     "stream",
     "default-tls",
+    "http2",
+    "system-proxy",
 ] }
 scc = { version = "3.4.8", features = ["serde"] }
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.148"
+serde_json = { version = "1.0.148", features = ["raw_value"] }
 # for validation
 sha1 = "0.11.0"
 sha2 = "0.11.1"

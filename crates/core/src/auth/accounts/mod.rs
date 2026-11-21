@@ -1,3 +1,4 @@
+#[cfg(feature = "microsoft-auth")]
 pub mod microsoft;
 pub mod offline;
 #[cfg(feature = "yggdrasil-auth")]

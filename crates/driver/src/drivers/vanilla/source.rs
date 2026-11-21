@@ -41,11 +41,7 @@ pub async fn resolve_vanilla_metadata(
         .asset_index_objects(&metadata.asset_index.url)
         .await?;
 
-    Ok(ResolvedVanillaMetadata::new(
-        vanilla_source.endpoints().clone(),
-        metadata,
-        asset_index_objects,
-    ))
+    Ok(ResolvedVanillaMetadata::new(metadata, asset_index_objects))
 }
 
 pub fn rewrite_upstream_with_vanilla_fallback<RewriteFn>(

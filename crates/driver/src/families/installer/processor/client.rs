@@ -1,11 +1,12 @@
-use elemental_core::{runtime::distribution::Distribution, storage::Storage};
+use elemental_core::runtime::distribution::Distribution;
 use elemental_schema::forge::{ForgeInstallerProcessor, ForgeInstallerProfile};
 
 use crate::{
+    driver::PrepareStage,
     error::{Error, Result},
     families::{
         installer::{InstallerArchive, InstallerArtifact},
-        version_json::{VersionJsonInstanceLayout, VersionJsonRootLayout},
+        version_json::InstanceStorage,
     },
 };
 
@@ -13,17 +14,14 @@ use super::{
     context::InstallerProcessorContext, processor_applies_to_client, runner::run_processor,
 };
 
-pub async fn run_installer_client_processors<L, VL>(
+pub async fn run_installer_client_processors(
     runtime: &Distribution,
-    instance: &Storage<VL, Storage<L>>,
+    instance: &InstanceStorage,
     installer_artifact: &InstallerArtifact,
     install_profile: &ForgeInstallerProfile,
     family_name: &str,
-) -> Result<()>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+    on_stage: Option<&(dyn Fn(PrepareStage) + Send + Sync)>,
+) -> Result<()> {
     let client_processors = install_profile
         .processors
         .iter()
@@ -39,7 +37,16 @@ where
     }
 
     context.ensure_client_directories().await?;
-    for processor in client_processors {
+    let total = client_processors.len();
+    for (index, processor) in client_processors.into_iter().enumerate() {
+        if let Some(observer) = on_stage {
+            observer(PrepareStage::RunningProcessor {
+                family_name: family_name.to_owned(),
+                index: index + 1,
+                total,
+                jar: processor.jar.clone(),
+            });
+        }
         run_processor(runtime, &context, processor).await?;
     }
 
@@ -52,16 +59,12 @@ where
     Ok(())
 }
 
-pub async fn installer_client_processors_ready<L, VL>(
-    instance: &Storage<VL, Storage<L>>,
+pub async fn installer_client_processors_ready(
+    instance: &InstanceStorage,
     installer_artifact: &InstallerArtifact,
     install_profile: &ForgeInstallerProfile,
     family_name: &str,
-) -> Result<bool>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+) -> Result<bool> {
     if !super::installer_has_client_processors(install_profile) {
         return Ok(true);
     }
@@ -71,16 +74,12 @@ where
         .await
 }
 
-fn build_context<'a, L, VL>(
-    instance: &Storage<VL, Storage<L>>,
+fn build_context<'a>(
+    instance: &InstanceStorage,
     installer_artifact: &'a InstallerArtifact,
     install_profile: &'a ForgeInstallerProfile,
     family_name: &'a str,
-) -> Result<InstallerProcessorContext<'a>>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+) -> Result<InstallerProcessorContext<'a>> {
     InstallerProcessorContext::new(
         instance,
         installer_artifact,

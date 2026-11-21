@@ -1,8 +1,9 @@
 use crate::{
+    catalog::InstallerMavenCatalog,
     descriptors::CLEANROOM_DRIVER,
-    drivers::retrofutura::{
-        RetroFuturaCatalog, RetroFuturaDriver, RetroFuturaEndpoints, RetroFuturaFamily,
-        RetroFuturaMaven, RetroFuturaReleaseCatalog, RetroFuturaSource,
+    drivers::retrofutura::{RetroFuturaLine, retrofutura_spec},
+    families::installer::{
+        InstallerFamilyDriver, InstallerMavenSource, MavenEndpoints, MavenInstallerSpec,
     },
     inspect::{LibraryPrefixSet, ProfileIdPattern, ProfiledDriverIdentity},
     url::Origin,
@@ -23,6 +24,12 @@ impl Origin for CleanroomOrigin {
     }
 }
 
+impl AsRef<str> for CleanroomOrigin {
+    fn as_ref(&self) -> &str {
+        self.canonical()
+    }
+}
+
 const CLEANROOM_LIBRARIES: LibraryPrefixSet =
     LibraryPrefixSet::new(&["com.cleanroommc:cleanroom:"]);
 const CLEANROOM_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(
@@ -32,25 +39,29 @@ const CLEANROOM_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(
     ProfileIdPattern::new("-cleanroom-"),
 );
 
-#[derive(Debug, Clone, Copy)]
-pub struct CleanroomRetroFutura;
+pub const CLEANROOM_SPEC: MavenInstallerSpec = retrofutura_spec(RetroFuturaLine {
+    identity: CLEANROOM_IDENTITY,
+    family_name: "cleanroom",
+    source_name: "cleanroom source",
+    loader_version_prefix: "cleanroom-",
+    canonical_origin: "https://repo.cleanroommc.com/releases",
+    group: "com.cleanroommc",
+    artifact: "cleanroom",
+    game_version: CLEANROOM_GAME_VERSION,
+});
 
-impl RetroFuturaCatalog for CleanroomRetroFutura {
-    type Origin = CleanroomOrigin;
-
-    const ORIGIN: CleanroomOrigin = CleanroomOrigin;
-    const SOURCE_NAME: &'static str = "cleanroom source";
-    const GROUP: &'static str = "com.cleanroommc";
-    const ARTIFACT: &'static str = "cleanroom";
-    const GAME_VERSION: &'static str = CLEANROOM_GAME_VERSION;
-    const IDENTITY: ProfiledDriverIdentity = CLEANROOM_IDENTITY;
-    const FAMILY_NAME: &'static str = "cleanroom";
-    const LOADER_VERSION_PREFIX: &'static str = "cleanroom-";
+pub fn endpoints() -> MavenEndpoints {
+    MavenEndpoints::official(&CLEANROOM_SPEC)
 }
 
-pub type CleanroomSpec = RetroFuturaMaven<CleanroomRetroFutura>;
-pub type CleanroomEndpoints = RetroFuturaEndpoints<CleanroomRetroFutura>;
-pub type CleanroomSource = RetroFuturaSource<CleanroomRetroFutura>;
-pub type CleanroomDriverSpec = RetroFuturaFamily<CleanroomRetroFutura>;
-pub type CleanroomDriver = RetroFuturaDriver<CleanroomRetroFutura>;
-pub type CleanroomCatalog = RetroFuturaReleaseCatalog<CleanroomRetroFutura>;
+pub fn source() -> InstallerMavenSource {
+    InstallerMavenSource::official(&CLEANROOM_SPEC)
+}
+
+pub fn driver() -> InstallerFamilyDriver {
+    InstallerFamilyDriver::for_spec(&CLEANROOM_SPEC)
+}
+
+pub fn catalog() -> InstallerMavenCatalog {
+    InstallerMavenCatalog::for_spec(&CLEANROOM_SPEC)
+}

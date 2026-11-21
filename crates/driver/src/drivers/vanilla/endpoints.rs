@@ -10,6 +10,14 @@ const PISTONDATA_ORIGIN: &str = "https://piston-data.mojang.com";
 const RESOURCES_ORIGIN: &str = "https://resources.download.minecraft.net";
 const LIBRARIES_ORIGIN: &str = "https://libraries.minecraft.net";
 
+const KNOWN_VANILLA_ORIGINS: &[&str] = &[
+    LAUNCHERMETA_ORIGIN,
+    PISTONMETA_ORIGIN,
+    PISTONDATA_ORIGIN,
+    RESOURCES_ORIGIN,
+    LIBRARIES_ORIGIN,
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum VanillaOrigin {
     LauncherMeta,
@@ -21,7 +29,7 @@ pub enum VanillaOrigin {
 
 #[derive(Debug, Clone)]
 pub struct VanillaEndpoints {
-    origin_policy: OriginPolicy<VanillaOrigin>,
+    origin_policy: OriginPolicy,
 }
 
 impl Default for VanillaEndpoints {
@@ -53,8 +61,14 @@ impl Origin for VanillaOrigin {
     }
 }
 
+impl AsRef<str> for VanillaOrigin {
+    fn as_ref(&self) -> &str {
+        self.canonical()
+    }
+}
+
 impl VanillaEndpoints {
-    pub fn new(origin_policy: OriginPolicy<VanillaOrigin>) -> Self {
+    pub fn new(origin_policy: OriginPolicy) -> Self {
         Self { origin_policy }
     }
 
@@ -78,7 +92,7 @@ impl VanillaEndpoints {
         Ok(Self::new(policy))
     }
 
-    pub fn origin_policy(&self) -> &OriginPolicy<VanillaOrigin> {
+    pub fn origin_policy(&self) -> &OriginPolicy {
         &self.origin_policy
     }
 
@@ -90,7 +104,8 @@ impl VanillaEndpoints {
     }
 
     pub fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
-        self.origin_policy.rewrite_origin_url(raw_url)
+        self.origin_policy
+            .rewrite_origin_url(KNOWN_VANILLA_ORIGINS, raw_url)
     }
 
     pub fn object_url(&self, hash: impl AsRef<str>) -> Result<String> {

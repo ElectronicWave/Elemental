@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use elemental_infra::SafeRelativePath;
 use elemental_schema::forge::ForgeInstallerProfile;
+use serde_json::value::RawValue;
 
 use crate::error::Result;
 
@@ -15,7 +16,7 @@ const INSTALL_PROFILE_ENTRY: &str = "install_profile.json";
 #[derive(Debug, Clone)]
 pub struct InstallerPersistedState {
     pub install_profile: ForgeInstallerProfile,
-    pub embedded_version: Option<serde_json::Value>,
+    pub embedded_version: Option<Box<RawValue>>,
 }
 
 #[derive(Debug, Clone)]

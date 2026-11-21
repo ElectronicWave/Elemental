@@ -62,7 +62,7 @@ impl RiftSource {
             .release_asset_url(release.tag_name.as_str(), release.asset_name.as_str())?;
         let jar_bytes = fetch_bytes(self.inner.client()?, url.as_str(), "rift source").await?;
         let raw_profile = read_release_profile_json(release, jar_bytes)?;
-        let profile = serde_json::from_str(raw_profile.as_str())
+        let profile = serde_json::from_slice(raw_profile.as_slice())
             .map_err(|source| Error::DecodeRiftProfile { source })?;
 
         normalize_profile_json(profile, release, self.endpoints())
@@ -75,9 +75,9 @@ impl UpstreamUrlRewriter for RiftEndpoints {
     }
 }
 
-fn read_release_profile_json(release: &RiftRelease, jar_bytes: Vec<u8>) -> Result<String> {
+fn read_release_profile_json(release: &RiftRelease, jar_bytes: Vec<u8>) -> Result<Vec<u8>> {
     JarBytes::new(jar_bytes.as_slice())
-        .by_name_string("profile.json")
+        .by_name_bytes("profile.json")
         .map_err(|source| Error::ReadRiftProfile {
             asset_name: release.asset_name.clone(),
             source,

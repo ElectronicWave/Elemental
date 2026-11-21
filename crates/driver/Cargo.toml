@@ -11,7 +11,7 @@ license.workspace = true
 
 [dependencies]
 async-trait = { workspace = true }
-elemental-core = { path = "../core", version = "0.3.0" }
+elemental-core = { path = "../core", version = "0.3.0", default-features = false }
 elemental-infra = { path = "../infra", version = "0.3.0" }
 elemental-schema = { path = "../schema", version = "0.3.0" }
 elemental-shared = { path = "../shared", version = "0.3.0" }
@@ -19,12 +19,13 @@ futures = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-quick-xml = { version = "0.42.0", features = ["serialize"] }
+quick-xml = { version = "0.42.0", default-features = false, optional = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }
 
 [features]
 default = ["driver-all"]
+maven-xml = ["dep:quick-xml"]
 driver-all = [
     "fabric",
     "legacyfabric",
@@ -41,10 +42,10 @@ fabric = []
 legacyfabric = ["fabric"]
 babric = ["fabric"]
 quilt = []
-liteloader = []
+liteloader = ["maven-xml"]
 rift = []
-forge = []
+forge = ["maven-xml"]
 cleanroom = ["retrofutura"]
 outlands = ["retrofutura"]
-neoforge = []
-retrofutura = []
+neoforge = ["maven-xml"]
+retrofutura = ["maven-xml"]

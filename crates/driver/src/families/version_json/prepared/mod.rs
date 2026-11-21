@@ -3,7 +3,6 @@ mod planner;
 mod readiness;
 mod status;
 
-pub(crate) use instance::prepare_with_extra_downloads;
 pub use instance::{
     PreparedVersionJsonInstance, ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata,
 };

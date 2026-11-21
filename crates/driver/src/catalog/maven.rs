@@ -5,51 +5,45 @@ use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::{
     error::Result,
-    families::installer::{InstallerMavenEndpoints, InstallerMavenSource},
+    families::installer::{InstallerMavenSource, MavenInstallerSpec},
 };
 
 use super::{GameVersion, GameVersionCatalog, LoaderRelease, LoaderVersionCatalog};
 
-pub struct InstallerMavenCatalog<E>
-where
-    E: InstallerMavenEndpoints,
-{
-    source: InstallerMavenSource<E>,
+pub struct InstallerMavenCatalog {
+    source: InstallerMavenSource,
 }
 
-impl<E> InstallerMavenCatalog<E>
-where
-    E: InstallerMavenEndpoints,
-{
-    pub fn new(source: InstallerMavenSource<E>) -> Self {
+impl InstallerMavenCatalog {
+    pub fn new(source: InstallerMavenSource) -> Self {
         Self { source }
     }
 
-    pub fn source(&self) -> &InstallerMavenSource<E> {
+    pub fn for_spec(spec: &'static MavenInstallerSpec) -> Self {
+        Self::new(InstallerMavenSource::official(spec))
+    }
+
+    pub fn source(&self) -> &InstallerMavenSource {
         &self.source
     }
 }
 
-impl<E> InstallerMavenCatalog<E>
-where
-    E: InstallerMavenEndpoints + Default,
-{
-    pub fn with_defaults() -> Self {
-        Self::new(InstallerMavenSource::default())
-    }
-}
-
 #[async_trait]
-impl<E> GameVersionCatalog for InstallerMavenCatalog<E>
-where
-    E: InstallerMavenEndpoints,
-{
+impl GameVersionCatalog for InstallerMavenCatalog {
     async fn game_versions(&self) -> Result<Vec<GameVersion>> {
+        let spec = self.source.spec();
+        if let Some(fixed_game_version) = spec.fixed_game_version {
+            return Ok(vec![GameVersion {
+                id: MinecraftVersionId::from(fixed_game_version),
+                channel: None,
+            }]);
+        }
+
         let metadata = self.source.maven_metadata().await?;
         let mut seen = HashSet::new();
         let mut game_versions = Vec::new();
         for version in metadata.versioning.versions.version {
-            let Some((game_version, release)) = E::release(version) else {
+            let Some((game_version, release)) = spec.parse_release(version) else {
                 continue;
             };
             if seen.insert(game_version.clone()) {
@@ -64,21 +58,19 @@ where
 }
 
 #[async_trait]
-impl<E> LoaderVersionCatalog for InstallerMavenCatalog<E>
-where
-    E: InstallerMavenEndpoints,
-{
+impl LoaderVersionCatalog for InstallerMavenCatalog {
     async fn loader_versions(
         &self,
         game_version: &MinecraftVersionId,
     ) -> Result<Vec<LoaderRelease>> {
+        let spec = self.source.spec();
         let metadata = self.source.maven_metadata().await?;
         Ok(metadata
             .versioning
             .versions
             .version
             .into_iter()
-            .filter_map(E::release)
+            .filter_map(|version| spec.parse_release(version))
             .filter(|(_, release)| &release.game_version == game_version)
             .map(|(_, release)| release)
             .collect())

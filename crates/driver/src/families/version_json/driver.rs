@@ -1,17 +1,13 @@
 use crate::error::Result;
 use async_trait::async_trait;
-use elemental_core::storage::{Storage, layout::Layout};
 
 use crate::{
-    driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest},
+    driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest, ResolvedDriverPlan},
     drivers::vanilla::source::VanillaSource,
     inspect::InstanceProbe,
 };
 
-use super::{
-    PreparedVersionJsonInstance, ResolvedVersionJsonInstance, VersionJsonInstanceLayout,
-    VersionJsonRootLayout, family::ProfiledVersionJsonFamily,
-};
+use super::family::ProfiledVersionJsonFamily;
 
 mod resolve;
 
@@ -61,12 +57,10 @@ where
 }
 
 #[async_trait]
-impl<F, L, VL> Driver<L, VL> for ProfiledVersionJsonDriver<F>
+impl<F> Driver for ProfiledVersionJsonDriver<F>
 where
     F: ProfiledVersionJsonFamily,
     F::Source: Sync,
-    L: Layout,
-    VL: Layout,
 {
     fn descriptor(&self) -> DriverDescriptor {
         self.family.descriptor()
@@ -80,37 +74,20 @@ where
         Ok(self.family.inspect_installed(metadata))
     }
 
-    async fn prepare(
-        &self,
-        request: &PrepareRequest<'_, L, VL>,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
+    async fn resolve(&self, request: &PrepareRequest<'_>) -> Result<ResolvedDriverPlan> {
         let loader_version = request.required_loader_version(self.descriptor())?;
-        let (resolved, download_status) = self
+        let (instance, download_status) = self
             .resolve_or_load(
                 request.instance,
                 request.game_version.clone(),
                 loader_version.clone(),
             )
             .await?;
-        resolved
-            .prepare_with_download_status(request.session, download_status)
-            .await
-    }
-
-    async fn load_prepared(
-        &self,
-        instance: &Storage<VL, Storage<L>>,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone,
-    {
-        ResolvedVersionJsonInstance::load(self.remote_resolver(), instance.clone())?
-            .finish_preparation()
-            .await
+        Ok(ResolvedDriverPlan {
+            instance,
+            remote_resolver: Box::new(self.remote_resolver()),
+            download_status,
+            installer: None,
+        })
     }
 }

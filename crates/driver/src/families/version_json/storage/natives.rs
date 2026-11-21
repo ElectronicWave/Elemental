@@ -3,14 +3,14 @@ mod state;
 
 use std::path::Path;
 
-use elemental_core::storage::{Storage, layout::Layoutable};
+use elemental_core::storage::layout::Layoutable;
 use elemental_infra::{SafeRelativePath, jar::JarFile};
 use elemental_schema::mojang::piston::{PistonMetaData, PistonMetaLibrariesDownloadsArtifact};
 
 use crate::{
     error::{Error, Result},
     families::version_json::{
-        layout::{VersionJsonInstanceLayout, VersionJsonRootLayout},
+        layout::InstanceStorage,
         resource::{VersionJsonInstanceResource, VersionJsonRootResource},
         rules::VersionJsonRuleContext,
         state::natives_state_store,
@@ -24,14 +24,10 @@ use self::{
     },
 };
 
-pub(crate) async fn natives_are_extracted<L, VL>(
-    storage: &Storage<VL, Storage<L>>,
+pub(crate) async fn natives_are_extracted(
+    storage: &InstanceStorage,
     metadata: &PistonMetaData,
-) -> Result<bool>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+) -> Result<bool> {
     let expected = expected_natives(storage, metadata)?;
     if expected.native_artifacts.is_empty() {
         return Ok(true);
@@ -44,14 +40,10 @@ where
     ))
 }
 
-pub(crate) async fn ensure_natives_extracted<L, VL>(
-    storage: &Storage<VL, Storage<L>>,
+pub(crate) async fn ensure_natives_extracted(
+    storage: &InstanceStorage,
     metadata: &PistonMetaData,
-) -> Result<()>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+) -> Result<()> {
     if natives_are_extracted(storage, metadata).await? {
         return Ok(());
     }
@@ -59,14 +51,10 @@ where
     extract_natives_with_metadata(storage, metadata).await
 }
 
-pub(super) async fn extract_natives_with_metadata<L, VL>(
-    storage: &Storage<VL, Storage<L>>,
+pub(super) async fn extract_natives_with_metadata(
+    storage: &InstanceStorage,
     metadata: &PistonMetaData,
-) -> Result<()>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+) -> Result<()> {
     let destination = storage.try_get_resource(VersionJsonInstanceResource::Natives)?;
     let rule_context = VersionJsonRuleContext::current();
     std::fs::create_dir_all(&destination)?;
@@ -82,16 +70,12 @@ where
     .await
 }
 
-fn extract_native_libraries<L, VL>(
-    storage: &Storage<VL, Storage<L>>,
+fn extract_native_libraries(
+    storage: &InstanceStorage,
     metadata: &PistonMetaData,
     destination: &Path,
     rule_context: &VersionJsonRuleContext,
-) -> Result<Vec<String>>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+) -> Result<Vec<String>> {
     tokio::task::block_in_place(|| {
         for source in native_library_sources(metadata, rule_context)? {
             extract_native_library(storage, &source.artifact, destination, &source.exclude)?;
@@ -100,16 +84,12 @@ where
     })
 }
 
-fn extract_native_library<L, VL>(
-    storage: &Storage<VL, Storage<L>>,
+fn extract_native_library(
+    storage: &InstanceStorage,
     artifact: &PistonMetaLibrariesDownloadsArtifact,
     destination: &Path,
     exclude: &[String],
-) -> Result<()>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+) -> Result<()> {
     let path = SafeRelativePath::parse(artifact.path.as_str())?;
     let source = storage
         .parent

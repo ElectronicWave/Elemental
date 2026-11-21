@@ -28,7 +28,7 @@ impl<P: AsRef<Path>> InstallerArchive<P> {
     where
         T: DeserializeOwned,
     {
-        Ok(serde_json::from_str(&self.read_string(name)?)?)
+        Ok(serde_json::from_slice(&self.read_bytes(name)?)?)
     }
 
     pub(crate) async fn extract_entry(&self, name: &str, destination: &Path) -> Result<()>

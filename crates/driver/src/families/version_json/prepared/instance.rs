@@ -5,9 +5,8 @@ use elemental_schema::mojang::piston::{PistonMetaAssetIndexObjects, PistonMetaDa
 use crate::{
     error::{Error, Result},
     families::version_json::{
-        VersionJsonAssetIndexStorageExt, VersionJsonInstanceLayout, VersionJsonMetadataStorageExt,
-        VersionJsonRootLayout, VersionJsonRuleContext, classpath::resolve_classpath,
-        remote::VersionJsonRemoteResolver,
+        InstanceStorage, VersionJsonAssetIndexStorageExt, VersionJsonMetadataStorageExt,
+        VersionJsonRuleContext, classpath::resolve_classpath,
     },
 };
 
@@ -16,74 +15,57 @@ use super::VersionJsonInstallStatus;
 mod metadata;
 mod prepare;
 
-pub(crate) use prepare::prepare_with_extra_downloads;
-
 #[derive(Debug, Clone)]
-pub struct ResolvedVersionJsonMetadata<R: VersionJsonRemoteResolver> {
-    pub(super) remote_resolver: R,
+pub struct ResolvedVersionJsonMetadata {
     pub metadata: PistonMetaData,
     pub asset_index_objects: PistonMetaAssetIndexObjects,
 }
 
 #[derive(Debug, Clone)]
-pub struct ResolvedVersionJsonInstance<
-    R: VersionJsonRemoteResolver,
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-> {
-    pub(super) remote_resolver: R,
-    pub version: elemental_core::storage::Storage<VL, elemental_core::storage::Storage<L>>,
+pub struct ResolvedVersionJsonInstance {
+    pub version: InstanceStorage,
     pub metadata: PistonMetaData,
     pub asset_index_objects: PistonMetaAssetIndexObjects,
 }
 
 #[derive(Debug, Clone)]
-pub struct PreparedVersionJsonInstance<L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> {
-    pub version: elemental_core::storage::Storage<VL, elemental_core::storage::Storage<L>>,
+pub struct PreparedVersionJsonInstance {
+    pub version: InstanceStorage,
     pub metadata: PistonMetaData,
     pub install_status: VersionJsonInstallStatus,
 }
 
-impl<R, L, VL> ResolvedVersionJsonInstance<R, L, VL>
-where
-    R: VersionJsonRemoteResolver,
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
-    pub fn load(
-        remote_resolver: R,
-        version: elemental_core::storage::Storage<VL, elemental_core::storage::Storage<L>>,
-    ) -> Result<Self> {
+impl ResolvedVersionJsonInstance {
+    pub fn load(version: InstanceStorage) -> Result<Self> {
         let metadata = version.metadata()?;
         let asset_index_objects = version
             .parent
             .asset_index_objects(metadata.asset_index.id.as_str())?;
         Ok(Self {
-            remote_resolver,
             version,
             metadata,
             asset_index_objects,
         })
     }
 
-    pub async fn into_prepared(self) -> Result<PreparedVersionJsonInstance<L, VL>> {
+    pub async fn into_prepared(self) -> Result<PreparedVersionJsonInstance> {
         let status = self.status().await?;
-        self.into_prepared_with_status(status).await
+        self.into_prepared_with_status(status)
     }
 
-    async fn into_prepared_with_status(
+    pub(super) fn into_prepared_with_status(
         self,
         status: VersionJsonInstallStatus,
-    ) -> Result<PreparedVersionJsonInstance<L, VL>> {
+    ) -> Result<PreparedVersionJsonInstance> {
         if !status.is_ready() {
-            let version = self
+            let version_name = self
                 .version
                 .name()
                 .ok_or_else(|| Error::MissingVersionName {
                     path: self.version.path.clone(),
                 })?;
             return Err(Error::VersionNotPrepared {
-                version,
+                version: version_name,
                 status: format!("{status:?}"),
             });
         }
@@ -99,11 +81,7 @@ where
     }
 }
 
-impl<L, VL> PreparedVersionJsonInstance<L, VL>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
+impl PreparedVersionJsonInstance {
     pub fn instance_root(&self) -> &std::path::Path {
         self.version.path.as_path()
     }

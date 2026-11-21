@@ -1,12 +1,12 @@
 use std::path::PathBuf;
 
-use elemental_core::storage::{Storage, layout::Layoutable};
+use elemental_core::storage::layout::Layoutable;
 use elemental_infra::SafeRelativePath;
 use elemental_infra::downloader::DownloadTask;
 
 use crate::{
     error::{Error, Result},
-    families::version_json::{VersionJsonRootLayout, VersionJsonRootResource},
+    families::version_json::{GameStorage, VersionJsonRootResource},
     maven::MavenCoordinate,
 };
 
@@ -49,15 +49,12 @@ pub fn installer_coordinate_file_name(notation: &str) -> Result<String> {
     Ok(file_name)
 }
 
-pub fn build_installer_artifact<L>(
-    game_storage: &Storage<L>,
+pub fn build_installer_artifact(
+    game_storage: &GameStorage,
     coordinate: String,
     url: String,
     library_relative_path: SafeRelativePath,
-) -> Result<InstallerArtifact>
-where
-    L: VersionJsonRootLayout,
-{
+) -> Result<InstallerArtifact> {
     Ok(InstallerArtifact {
         coordinate,
         url,

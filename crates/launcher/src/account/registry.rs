@@ -1,8 +1,12 @@
 use std::collections::HashMap;
 
+#[cfg(feature = "microsoft-auth")]
 use elemental_core::auth::{
-    accounts::{Account, microsoft::MicrosoftAccount, offline::OfflineAccount},
-    authorizers::{microsoft::MICROSOFT_AUTHORIZER_ID, offline::OFFLINE_AUTHORIZER_ID},
+    accounts::microsoft::MicrosoftAccount, authorizers::microsoft::MICROSOFT_AUTHORIZER_ID,
+};
+use elemental_core::auth::{
+    accounts::{Account, offline::OfflineAccount},
+    authorizers::offline::OFFLINE_AUTHORIZER_ID,
 };
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -22,9 +26,9 @@ pub struct AccountRegistry {
 
 impl AccountRegistry {
     pub fn new() -> Self {
-        let registry = Self::empty()
-            .with::<OfflineAccount>(OFFLINE_AUTHORIZER_ID)
-            .with::<MicrosoftAccount>(MICROSOFT_AUTHORIZER_ID);
+        let registry = Self::empty().with::<OfflineAccount>(OFFLINE_AUTHORIZER_ID);
+        #[cfg(feature = "microsoft-auth")]
+        let registry = registry.with::<MicrosoftAccount>(MICROSOFT_AUTHORIZER_ID);
         #[cfg(feature = "yggdrasil-auth")]
         let registry = registry.with::<YggdrasilAccount>(YGGDRASIL_AUTHORIZER_ID);
         registry

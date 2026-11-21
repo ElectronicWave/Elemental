@@ -22,10 +22,9 @@ pub mod prelude {
     #[cfg(feature = "core")]
     pub use crate::core::{
         auth::{
-            accounts::{Account, AccountId, microsoft::MicrosoftAccount, offline::OfflineAccount},
+            accounts::{Account, AccountId, offline::OfflineAccount},
             authorizers::{
                 Authorizer,
-                microsoft::{MICROSOFT_AUTHORIZER_ID, MicrosoftAuthorizer},
                 offline::{OFFLINE_AUTHORIZER_ID, OfflineAuthorizer},
             },
             credential::{Credential, CredentialKind},
@@ -40,6 +39,12 @@ pub mod prelude {
         },
     };
 
+    #[cfg(all(feature = "core", feature = "microsoft-auth"))]
+    pub use crate::core::auth::{
+        accounts::microsoft::MicrosoftAccount,
+        authorizers::microsoft::{MICROSOFT_AUTHORIZER_ID, MicrosoftAuthorizer},
+    };
+
     #[cfg(feature = "yggdrasil-auth")]
     pub use crate::core::auth::{
         accounts::yggdrasil::{Meta, YggdrasilAccount, YggdrasilProfile},
@@ -51,7 +56,8 @@ pub mod prelude {
         catalog::{GameVersion, LoaderRelease},
         driver::DriverDescriptor,
         families::version_json::{
-            BaseInstanceLayout, BaseRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
+            BaseInstanceLayout, BaseRootLayout, GameStorage, InstanceStorage, SharedInstanceLayout,
+            SharedRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
         },
         loader_version::LoaderVersionId,
     };
@@ -63,7 +69,8 @@ pub mod prelude {
     pub use crate::launcher::{
         AccountIndex, AccountListing, AccountRef, AccountRegistry, AccountStore, DriverCatalog,
         DriverOrigins, DriverRegistration, DriverRegistry, DriverSpec, Instance, LaunchOptions,
-        LaunchResolution, LaunchedInstance, Launcher, LauncherBuilder, PreparedInstance,
-        PreparedInstanceInfo, PreparedInstanceMetadata, QuickPlayOptions, RuntimeOptions,
+        LaunchResolution, LaunchedInstance, Launcher, LauncherBuilder, PrepareInstanceBuilder,
+        PrepareStage, PreparedInstance, PreparedInstanceInfo, PreparedInstanceMetadata,
+        QuickPlayOptions, RuntimeOptions,
     };
 }

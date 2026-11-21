@@ -6,7 +6,6 @@
 
 use std::{fmt, sync::Arc};
 
-use elemental_core::storage::layout::Layout;
 use elemental_driver::{
     descriptors::{
         BABRIC_DRIVER, CLEANROOM_DRIVER, FABRIC_DRIVER, FORGE_DRIVER, LEGACY_FABRIC_DRIVER,
@@ -15,10 +14,10 @@ use elemental_driver::{
     },
     driver::{Driver, DriverDescriptor},
     families::{
-        installer::InstallerFamilyDriver,
+        installer::{InstallerFamilyDriver, InstallerMavenSource, MavenInstallerSpec},
         version_json::{
-            BaseInstanceLayout, BaseRootLayout, ProfiledVersionJsonDriver,
-            ProfiledVersionJsonFamilyExt, VersionJsonInstanceLayout, VersionJsonRootLayout,
+            LoaderMetaSource, ProfiledVersionJsonDriver, ProfiledVersionJsonFamily,
+            ProfiledVersionJsonFamilyExt,
         },
     },
 };
@@ -26,56 +25,60 @@ use elemental_driver::{
 use crate::{
     catalog::DriverCatalog,
     error::{Error, Result},
-    origin::{DriverOrigins, InstallerFamilySource, ProfiledFamilySource},
+    origin::DriverOrigins,
 };
 
 #[cfg(feature = "driver-cleanroom")]
-use elemental_driver::drivers::cleanroom::{CleanroomCatalog, CleanroomDriverSpec};
+use elemental_driver::drivers::cleanroom::{self, CLEANROOM_SPEC};
 #[cfg(any(
     feature = "driver-fabric",
     feature = "driver-legacyfabric",
     feature = "driver-babric"
 ))]
-use elemental_driver::drivers::fabric::{driver::FabricDriverFamily, source::FabricFlavor};
+use elemental_driver::drivers::fabric::{
+    driver::FabricDriverFamily,
+    source::{FabricEndpoints, FabricFlavor},
+};
 #[cfg(feature = "driver-forge")]
-use elemental_driver::drivers::forge::{ForgeCatalog, ForgeFamily};
+use elemental_driver::drivers::forge::{self, FORGE_SPEC};
 #[cfg(feature = "driver-liteloader")]
 use elemental_driver::drivers::liteloader::{
-    catalog::LiteLoaderCatalog, driver::LiteLoaderDriverFamily,
+    catalog::LiteLoaderCatalog,
+    driver::LiteLoaderDriverFamily,
+    source::{LiteLoaderEndpoints, LiteLoaderSource},
 };
 #[cfg(feature = "driver-neoforge")]
-use elemental_driver::drivers::neoforge::{NeoForgeCatalog, NeoForgeFamily};
+use elemental_driver::drivers::neoforge::{self, NEOFORGE_SPEC};
 #[cfg(feature = "driver-outlands")]
-use elemental_driver::drivers::outlands::{OutlandsCatalog, OutlandsDriverSpec};
+use elemental_driver::drivers::outlands::{self, OUTLANDS_SPEC};
 #[cfg(feature = "driver-quilt")]
-use elemental_driver::drivers::quilt::{QuiltCatalog, driver::QuiltDriverFamily};
+use elemental_driver::drivers::quilt::{
+    QuiltCatalog, driver::QuiltDriverFamily, source::QuiltEndpoints,
+};
 #[cfg(feature = "driver-rift")]
-use elemental_driver::drivers::rift::{catalog::RiftCatalog, driver::RiftDriverFamily};
+use elemental_driver::drivers::rift::{
+    catalog::RiftCatalog,
+    driver::RiftDriverFamily,
+    source::{RiftEndpoints, RiftSource},
+};
 use elemental_driver::drivers::vanilla::{catalog::VanillaCatalog, driver::VanillaDriver};
 
 /// A third-party driver added to a [`crate::Launcher`].
 ///
 /// The launcher keeps the driver instance, so the driver must be safe to share
 /// and must not depend on mutable per-call state.
-pub struct DriverRegistration<L, VL>
-where
-    L: Layout,
-    VL: Layout,
-{
+#[derive(Clone)]
+pub struct DriverRegistration {
     descriptor: DriverDescriptor,
-    driver: Arc<dyn Driver<L, VL>>,
+    driver: Arc<dyn Driver>,
     catalog: DriverCatalog,
 }
 
-impl<L, VL> DriverRegistration<L, VL>
-where
-    L: Layout,
-    VL: Layout,
-{
+impl DriverRegistration {
     /// Creates a registration for a driver that is not built into Elemental.
     pub fn new(
         descriptor: DriverDescriptor,
-        driver: Arc<dyn Driver<L, VL>>,
+        driver: Arc<dyn Driver>,
         catalog: DriverCatalog,
     ) -> Self {
         Self {
@@ -89,30 +92,12 @@ where
         self.descriptor
     }
 
-    pub(crate) fn driver(&self) -> Arc<dyn Driver<L, VL>> {
+    pub(crate) fn driver(&self) -> Arc<dyn Driver> {
         Arc::clone(&self.driver)
     }
 }
 
-impl<L, VL> Clone for DriverRegistration<L, VL>
-where
-    L: Layout,
-    VL: Layout,
-{
-    fn clone(&self) -> Self {
-        Self {
-            descriptor: self.descriptor,
-            driver: Arc::clone(&self.driver),
-            catalog: self.catalog.clone(),
-        }
-    }
-}
-
-impl<L, VL> fmt::Debug for DriverRegistration<L, VL>
-where
-    L: Layout,
-    VL: Layout,
-{
+impl fmt::Debug for DriverRegistration {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DriverRegistration")
             .field("descriptor", &self.descriptor)
@@ -122,19 +107,11 @@ where
 
 /// Built-in and third-party drivers known to a [`crate::Launcher`].
 #[derive(Clone, Debug)]
-pub struct DriverRegistry<L = BaseRootLayout, VL = BaseInstanceLayout>
-where
-    L: Layout,
-    VL: Layout,
-{
-    custom: Vec<DriverRegistration<L, VL>>,
+pub struct DriverRegistry {
+    custom: Vec<DriverRegistration>,
 }
 
-impl<L, VL> DriverRegistry<L, VL>
-where
-    L: Layout,
-    VL: Layout,
-{
+impl DriverRegistry {
     pub(crate) fn new() -> Self {
         Self { custom: Vec::new() }
     }
@@ -171,11 +148,7 @@ where
         &self,
         descriptor: DriverDescriptor,
         origins: &DriverOrigins,
-    ) -> Result<Arc<dyn Driver<L, VL>>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone + Send,
-    {
+    ) -> Result<Arc<dyn Driver>> {
         if let Some(registration) = self
             .custom
             .iter()
@@ -189,7 +162,7 @@ where
         Ok(Arc::from(registration.driver.build(descriptor, origins)?))
     }
 
-    pub(crate) fn register(&mut self, registration: DriverRegistration<L, VL>) -> Result<()> {
+    pub(crate) fn register(&mut self, registration: DriverRegistration) -> Result<()> {
         let descriptor = registration.descriptor();
         if builtin_registration(descriptor).is_some()
             || self
@@ -256,26 +229,23 @@ impl BuiltinDriver {
             #[cfg(feature = "driver-rift")]
             Self::Rift => DriverCatalog::loader(descriptor, RiftCatalog::with_defaults()),
             #[cfg(feature = "driver-forge")]
-            Self::Forge => DriverCatalog::loader(descriptor, ForgeCatalog::with_defaults()),
+            Self::Forge => DriverCatalog::loader(descriptor, forge::catalog()),
             #[cfg(feature = "driver-cleanroom")]
-            Self::Cleanroom => DriverCatalog::loader(descriptor, CleanroomCatalog::with_defaults()),
+            Self::Cleanroom => DriverCatalog::loader(descriptor, cleanroom::catalog()),
             #[cfg(feature = "driver-outlands")]
-            Self::Outlands => DriverCatalog::loader(descriptor, OutlandsCatalog::with_defaults()),
+            Self::Outlands => DriverCatalog::loader(descriptor, outlands::catalog()),
             #[cfg(feature = "driver-neoforge")]
-            Self::NeoForge => DriverCatalog::loader(descriptor, NeoForgeCatalog::with_defaults()),
+            Self::NeoForge => DriverCatalog::loader(descriptor, neoforge::catalog()),
             _ => return Err(builtin_unsupported(descriptor)),
         })
     }
 
-    pub(crate) fn build<L, VL>(
+    pub(crate) fn build(
         &self,
         descriptor: DriverDescriptor,
         origins: &DriverOrigins,
-    ) -> Result<Box<dyn Driver<L, VL>>>
-    where
-        L: VersionJsonRootLayout + Clone,
-        VL: VersionJsonInstanceLayout + Clone + Send,
-    {
+    ) -> Result<Box<dyn Driver>> {
+        let policy = origins.policy_for(descriptor);
         match self {
             Self::Vanilla => Ok(Box::new(VanillaDriver::new(origins.vanilla_source()))),
             #[cfg(any(
@@ -284,51 +254,66 @@ impl BuiltinDriver {
                 feature = "driver-babric"
             ))]
             Self::Fabric(flavor) => {
-                profiled_driver(origins, FabricDriverFamily::new(flavor.clone()))
-                    .map(|driver| Box::new(driver) as Box<dyn Driver<L, VL>>)
+                let endpoints = FabricEndpoints::for_flavor_with_policy(flavor.clone(), &policy)?;
+                Ok(Box::new(profiled_driver(
+                    origins,
+                    FabricDriverFamily::new(flavor.clone()),
+                    LoaderMetaSource::new(endpoints),
+                )))
             }
             #[cfg(feature = "driver-quilt")]
-            Self::Quilt => profiled_driver(origins, QuiltDriverFamily)
-                .map(|driver| Box::new(driver) as Box<dyn Driver<L, VL>>),
+            Self::Quilt => Ok(Box::new(profiled_driver(
+                origins,
+                QuiltDriverFamily,
+                LoaderMetaSource::new(QuiltEndpoints::new(policy)),
+            ))),
             #[cfg(feature = "driver-liteloader")]
-            Self::LiteLoader => profiled_driver(origins, LiteLoaderDriverFamily)
-                .map(|driver| Box::new(driver) as Box<dyn Driver<L, VL>>),
+            Self::LiteLoader => Ok(Box::new(profiled_driver(
+                origins,
+                LiteLoaderDriverFamily,
+                LiteLoaderSource::new(LiteLoaderEndpoints::new(policy)),
+            ))),
             #[cfg(feature = "driver-rift")]
-            Self::Rift => profiled_driver(origins, RiftDriverFamily)
-                .map(|driver| Box::new(driver) as Box<dyn Driver<L, VL>>),
+            Self::Rift => Ok(Box::new(profiled_driver(
+                origins,
+                RiftDriverFamily,
+                RiftSource::new(RiftEndpoints::new(policy)),
+            ))),
             #[cfg(feature = "driver-forge")]
-            Self::Forge => installer_driver::<ForgeFamily>(origins)
-                .map(|driver| Box::new(driver) as Box<dyn Driver<L, VL>>),
+            Self::Forge => Ok(Box::new(installer_driver(origins, &FORGE_SPEC))),
             #[cfg(feature = "driver-cleanroom")]
-            Self::Cleanroom => installer_driver::<CleanroomDriverSpec>(origins)
-                .map(|driver| Box::new(driver) as Box<dyn Driver<L, VL>>),
+            Self::Cleanroom => Ok(Box::new(installer_driver(origins, &CLEANROOM_SPEC))),
             #[cfg(feature = "driver-outlands")]
-            Self::Outlands => installer_driver::<OutlandsDriverSpec>(origins)
-                .map(|driver| Box::new(driver) as Box<dyn Driver<L, VL>>),
+            Self::Outlands => Ok(Box::new(installer_driver(origins, &OUTLANDS_SPEC))),
             #[cfg(feature = "driver-neoforge")]
-            Self::NeoForge => installer_driver::<NeoForgeFamily>(origins)
-                .map(|driver| Box::new(driver) as Box<dyn Driver<L, VL>>),
+            Self::NeoForge => Ok(Box::new(installer_driver(origins, &NEOFORGE_SPEC))),
             _ => Err(builtin_unsupported(descriptor)),
         }
     }
 }
 
-fn profiled_driver<F>(origins: &DriverOrigins, family: F) -> Result<ProfiledVersionJsonDriver<F>>
+fn profiled_driver<F>(
+    origins: &DriverOrigins,
+    family: F,
+    source: F::Source,
+) -> ProfiledVersionJsonDriver<F>
 where
-    F: ProfiledFamilySource,
+    F: ProfiledVersionJsonFamily,
 {
-    Ok(family
-        .clone()
-        .build_driver(family.source_with_origins(origins)?)
-        .with_vanilla_source(origins.vanilla_source()))
+    family
+        .build_driver(source)
+        .with_vanilla_source(origins.vanilla_source())
 }
 
-fn installer_driver<F>(origins: &DriverOrigins) -> Result<InstallerFamilyDriver<F>>
-where
-    F: InstallerFamilySource,
-{
-    Ok(InstallerFamilyDriver::new(F::source_with_origins(origins)?)
-        .with_vanilla_source(origins.vanilla_source()))
+fn installer_driver(
+    origins: &DriverOrigins,
+    spec: &'static MavenInstallerSpec,
+) -> InstallerFamilyDriver {
+    InstallerFamilyDriver::new(InstallerMavenSource::with_policy(
+        spec,
+        origins.policy_for(spec.descriptor()),
+    ))
+    .with_vanilla_source(origins.vanilla_source())
 }
 
 /// Built-in drivers in instance-detection order.

@@ -1,251 +1,197 @@
 #![cfg_attr(not(feature = "driver-all"), allow(dead_code))]
 
-use elemental_driver::{
-    drivers::vanilla::source::{VanillaEndpoints, VanillaOrigin, VanillaSource},
-    families::{installer::InstallerFamily, version_json::ProfiledVersionJsonFamily},
-    url::OriginPolicy,
-};
+use std::collections::HashMap;
 
 #[cfg(feature = "driver-babric")]
 use elemental_driver::descriptors::BABRIC_DRIVER;
+#[cfg(feature = "driver-cleanroom")]
+use elemental_driver::descriptors::CLEANROOM_DRIVER;
 #[cfg(feature = "driver-fabric")]
 use elemental_driver::descriptors::FABRIC_DRIVER;
+#[cfg(feature = "driver-forge")]
+use elemental_driver::descriptors::FORGE_DRIVER;
 #[cfg(feature = "driver-legacyfabric")]
 use elemental_driver::descriptors::LEGACY_FABRIC_DRIVER;
-#[cfg(feature = "driver-cleanroom")]
-use elemental_driver::drivers::cleanroom::{
-    CleanroomDriverSpec, CleanroomEndpoints, CleanroomOrigin, CleanroomSource,
-};
-#[cfg(any(
-    feature = "driver-fabric",
-    feature = "driver-legacyfabric",
-    feature = "driver-babric"
-))]
-use elemental_driver::drivers::fabric::{
-    driver::FabricDriverFamily,
-    source::{FabricEndpoints, FabricFlavor, FabricOrigin, FabricSource},
-};
-#[cfg(feature = "driver-forge")]
-use elemental_driver::drivers::forge::{ForgeEndpoints, ForgeOrigin, ForgeSource};
 #[cfg(feature = "driver-liteloader")]
-use elemental_driver::drivers::liteloader::{
-    driver::LiteLoaderDriverFamily,
-    source::{LiteLoaderEndpoints, LiteLoaderOrigin, LiteLoaderSource},
-};
+use elemental_driver::descriptors::LITELOADER_DRIVER;
 #[cfg(feature = "driver-neoforge")]
-use elemental_driver::drivers::neoforge::{NeoForgeEndpoints, NeoForgeOrigin, NeoForgeSource};
+use elemental_driver::descriptors::NEOFORGE_DRIVER;
 #[cfg(feature = "driver-outlands")]
-use elemental_driver::drivers::outlands::{
-    OutlandsDriverSpec, OutlandsEndpoints, OutlandsOrigin, OutlandsSource,
-};
+use elemental_driver::descriptors::OUTLANDS_DRIVER;
 #[cfg(feature = "driver-quilt")]
-use elemental_driver::drivers::quilt::{
-    driver::QuiltDriverFamily,
-    source::{QuiltEndpoints, QuiltOrigin, QuiltSource},
-};
+use elemental_driver::descriptors::QUILT_DRIVER;
 #[cfg(feature = "driver-rift")]
-use elemental_driver::drivers::rift::{
-    driver::RiftDriverFamily,
-    source::{RiftEndpoints, RiftOrigin, RiftSource},
+use elemental_driver::descriptors::RIFT_DRIVER;
+use elemental_driver::{
+    descriptors::VANILLA_DRIVER,
+    driver::DriverDescriptor,
+    drivers::vanilla::source::{VanillaEndpoints, VanillaSource},
+    url::OriginPolicy,
 };
-#[cfg(any(
-    feature = "driver-forge",
-    feature = "driver-neoforge",
-    feature = "driver-cleanroom",
-    feature = "driver-outlands"
-))]
-use elemental_driver::url::OriginEndpoints;
 
-#[cfg(any(
-    feature = "driver-fabric",
-    feature = "driver-legacyfabric",
-    feature = "driver-babric"
-))]
-use crate::error::Error;
-use crate::error::Result;
-
-/// Origin overrides grouped by driver.
+/// Mirror and upstream origin overrides, supporting both launcher-wide rules
+/// (`global`) and per-driver overrides (`for_driver`).
 ///
-/// Each driver family exposes its own typed origin enum, so the configuration
-/// stays typed instead of collapsing every origin into one launcher-wide enum.
+/// Built-in and third-party drivers share the same override mechanism via
+/// [`DriverDescriptor`], while convenience accessors preserve discovery and
+/// IDE autocompletion for built-in drivers.
 #[derive(Debug, Clone, Default)]
 pub struct DriverOrigins {
-    pub(crate) vanilla: OriginPolicy<VanillaOrigin>,
-    #[cfg(feature = "driver-fabric")]
-    pub(crate) fabric: OriginPolicy<FabricOrigin>,
-    #[cfg(feature = "driver-legacyfabric")]
-    pub(crate) legacy_fabric: OriginPolicy<FabricOrigin>,
-    #[cfg(feature = "driver-babric")]
-    pub(crate) babric: OriginPolicy<FabricOrigin>,
-    #[cfg(feature = "driver-quilt")]
-    pub(crate) quilt: OriginPolicy<QuiltOrigin>,
-    #[cfg(feature = "driver-liteloader")]
-    pub(crate) liteloader: OriginPolicy<LiteLoaderOrigin>,
-    #[cfg(feature = "driver-rift")]
-    pub(crate) rift: OriginPolicy<RiftOrigin>,
-    #[cfg(feature = "driver-forge")]
-    pub(crate) forge: OriginPolicy<ForgeOrigin>,
-    #[cfg(feature = "driver-neoforge")]
-    pub(crate) neoforge: OriginPolicy<NeoForgeOrigin>,
-    #[cfg(feature = "driver-cleanroom")]
-    pub(crate) cleanroom: OriginPolicy<CleanroomOrigin>,
-    #[cfg(feature = "driver-outlands")]
-    pub(crate) outlands: OriginPolicy<OutlandsOrigin>,
+    global: OriginPolicy,
+    per_driver: HashMap<&'static str, OriginPolicy>,
 }
 
 impl DriverOrigins {
-    pub fn vanilla(&mut self) -> &mut OriginPolicy<VanillaOrigin> {
-        &mut self.vanilla
+    /// Returns the launcher-wide policy applied before any per-driver overrides.
+    pub fn global(&mut self) -> &mut OriginPolicy {
+        &mut self.global
+    }
+
+    /// Returns a mutable per-driver policy for any built-in or third-party
+    /// driver identified by `descriptor`.
+    pub fn for_driver(&mut self, descriptor: DriverDescriptor) -> &mut OriginPolicy {
+        self.per_driver.entry(descriptor.id).or_default()
+    }
+
+    /// Resolves the effective policy for `descriptor` by layering per-driver
+    /// overrides on top of [`Self::global`].
+    pub fn policy_for(&self, descriptor: DriverDescriptor) -> OriginPolicy {
+        match self.per_driver.get(descriptor.id) {
+            Some(overrides) => self.global.merged_with(overrides),
+            None => self.global.clone(),
+        }
+    }
+
+    pub fn vanilla(&mut self) -> &mut OriginPolicy {
+        self.for_driver(VANILLA_DRIVER)
     }
 
     #[cfg(feature = "driver-fabric")]
-    pub fn fabric(&mut self) -> &mut OriginPolicy<FabricOrigin> {
-        &mut self.fabric
+    pub fn fabric(&mut self) -> &mut OriginPolicy {
+        self.for_driver(FABRIC_DRIVER)
     }
 
     #[cfg(feature = "driver-legacyfabric")]
-    pub fn legacy_fabric(&mut self) -> &mut OriginPolicy<FabricOrigin> {
-        &mut self.legacy_fabric
+    pub fn legacy_fabric(&mut self) -> &mut OriginPolicy {
+        self.for_driver(LEGACY_FABRIC_DRIVER)
     }
 
     #[cfg(feature = "driver-babric")]
-    pub fn babric(&mut self) -> &mut OriginPolicy<FabricOrigin> {
-        &mut self.babric
+    pub fn babric(&mut self) -> &mut OriginPolicy {
+        self.for_driver(BABRIC_DRIVER)
     }
 
     #[cfg(feature = "driver-quilt")]
-    pub fn quilt(&mut self) -> &mut OriginPolicy<QuiltOrigin> {
-        &mut self.quilt
+    pub fn quilt(&mut self) -> &mut OriginPolicy {
+        self.for_driver(QUILT_DRIVER)
     }
 
     #[cfg(feature = "driver-liteloader")]
-    pub fn liteloader(&mut self) -> &mut OriginPolicy<LiteLoaderOrigin> {
-        &mut self.liteloader
+    pub fn liteloader(&mut self) -> &mut OriginPolicy {
+        self.for_driver(LITELOADER_DRIVER)
     }
 
     #[cfg(feature = "driver-rift")]
-    pub fn rift(&mut self) -> &mut OriginPolicy<RiftOrigin> {
-        &mut self.rift
+    pub fn rift(&mut self) -> &mut OriginPolicy {
+        self.for_driver(RIFT_DRIVER)
     }
 
     #[cfg(feature = "driver-forge")]
-    pub fn forge(&mut self) -> &mut OriginPolicy<ForgeOrigin> {
-        &mut self.forge
+    pub fn forge(&mut self) -> &mut OriginPolicy {
+        self.for_driver(FORGE_DRIVER)
     }
 
     #[cfg(feature = "driver-neoforge")]
-    pub fn neoforge(&mut self) -> &mut OriginPolicy<NeoForgeOrigin> {
-        &mut self.neoforge
+    pub fn neoforge(&mut self) -> &mut OriginPolicy {
+        self.for_driver(NEOFORGE_DRIVER)
     }
 
     #[cfg(feature = "driver-cleanroom")]
-    pub fn cleanroom(&mut self) -> &mut OriginPolicy<CleanroomOrigin> {
-        &mut self.cleanroom
+    pub fn cleanroom(&mut self) -> &mut OriginPolicy {
+        self.for_driver(CLEANROOM_DRIVER)
     }
 
     #[cfg(feature = "driver-outlands")]
-    pub fn outlands(&mut self) -> &mut OriginPolicy<OutlandsOrigin> {
-        &mut self.outlands
+    pub fn outlands(&mut self) -> &mut OriginPolicy {
+        self.for_driver(OUTLANDS_DRIVER)
     }
-}
 
-impl DriverOrigins {
     pub(crate) fn vanilla_source(&self) -> VanillaSource {
-        VanillaSource::new(VanillaEndpoints::new(self.vanilla.clone()))
+        VanillaSource::new(VanillaEndpoints::new(self.policy_for(VANILLA_DRIVER)))
     }
 }
 
-pub(crate) trait ProfiledFamilySource: ProfiledVersionJsonFamily {
-    fn source_with_origins(&self, origins: &DriverOrigins) -> Result<Self::Source>;
-}
+#[cfg(test)]
+mod tests {
+    use elemental_driver::{
+        descriptors::VANILLA_DRIVER, driver::DriverDescriptor,
+        drivers::vanilla::source::VanillaOrigin,
+    };
 
-#[cfg(any(
-    feature = "driver-fabric",
-    feature = "driver-legacyfabric",
-    feature = "driver-babric"
-))]
-impl ProfiledFamilySource for FabricDriverFamily {
-    fn source_with_origins(&self, origins: &DriverOrigins) -> Result<Self::Source> {
-        let (flavor, overrides) = match self.descriptor() {
-            #[cfg(feature = "driver-fabric")]
-            FABRIC_DRIVER => (FabricFlavor::Fabric, &origins.fabric),
-            #[cfg(feature = "driver-legacyfabric")]
-            LEGACY_FABRIC_DRIVER => (FabricFlavor::LegacyFabric, &origins.legacy_fabric),
-            #[cfg(feature = "driver-babric")]
-            BABRIC_DRIVER => (FabricFlavor::Babric, &origins.babric),
-            descriptor => {
-                return Err(Error::UnsupportedDriver {
-                    id: descriptor.id.to_owned(),
-                });
-            }
-        };
+    use super::DriverOrigins;
 
-        let base = FabricEndpoints::for_flavor(flavor)?;
-        Ok(FabricSource::new(FabricEndpoints::new(
-            base.origin_policy().merged_with(overrides),
-        )))
-    }
-}
+    const THIRD_PARTY_DRIVER: DriverDescriptor = DriverDescriptor {
+        id: "third-party-loader",
+        name: "Third Party Loader",
+    };
 
-#[cfg(feature = "driver-quilt")]
-impl ProfiledFamilySource for QuiltDriverFamily {
-    fn source_with_origins(&self, origins: &DriverOrigins) -> Result<Self::Source> {
-        Ok(QuiltSource::new(QuiltEndpoints::new(origins.quilt.clone())))
-    }
-}
+    #[test]
+    fn policy_for_layers_per_driver_overrides_over_global_and_supports_custom_drivers() {
+        let mut origins = DriverOrigins::default();
+        origins
+            .global()
+            .override_origin(
+                VanillaOrigin::LauncherMeta,
+                "https://bmclapi2.bangbang93.com".to_owned(),
+            )
+            .expect("valid global launchermeta mirror");
+        origins
+            .global()
+            .override_origin(
+                "https://maven.example.org/releases/",
+                "https://mirror.example.org/global-maven".to_owned(),
+            )
+            .expect("valid global custom mirror");
+        origins
+            .for_driver(THIRD_PARTY_DRIVER)
+            .override_origin(
+                "https://maven.example.org/releases",
+                "https://mirror.example.org/custom-maven".to_owned(),
+            )
+            .expect("valid third-party mirror");
 
-#[cfg(feature = "driver-liteloader")]
-impl ProfiledFamilySource for LiteLoaderDriverFamily {
-    fn source_with_origins(&self, origins: &DriverOrigins) -> Result<Self::Source> {
-        Ok(LiteLoaderSource::new(LiteLoaderEndpoints::new(
-            origins.liteloader.clone(),
-        )))
-    }
-}
+        let vanilla_resolved = origins
+            .policy_for(VANILLA_DRIVER)
+            .resolve(
+                VanillaOrigin::LauncherMeta,
+                "mc/game/version_manifest_v2.json",
+            )
+            .expect("resolve vanilla mirror");
+        assert_eq!(
+            vanilla_resolved,
+            "https://bmclapi2.bangbang93.com/mc/game/version_manifest_v2.json"
+        );
 
-#[cfg(feature = "driver-rift")]
-impl ProfiledFamilySource for RiftDriverFamily {
-    fn source_with_origins(&self, origins: &DriverOrigins) -> Result<Self::Source> {
-        Ok(RiftSource::new(RiftEndpoints::new(origins.rift.clone())))
-    }
-}
-
-pub(crate) trait InstallerFamilySource: InstallerFamily {
-    fn source_with_origins(origins: &DriverOrigins) -> Result<Self::Source>;
-}
-
-#[cfg(feature = "driver-forge")]
-impl InstallerFamilySource for elemental_driver::drivers::forge::ForgeFamily {
-    fn source_with_origins(origins: &DriverOrigins) -> Result<Self::Source> {
-        Ok(ForgeSource::new(ForgeEndpoints::new(OriginEndpoints::new(
-            origins.forge.clone(),
-        ))))
-    }
-}
-
-#[cfg(feature = "driver-neoforge")]
-impl InstallerFamilySource for elemental_driver::drivers::neoforge::NeoForgeFamily {
-    fn source_with_origins(origins: &DriverOrigins) -> Result<Self::Source> {
-        Ok(NeoForgeSource::new(NeoForgeEndpoints::new(
-            OriginEndpoints::new(origins.neoforge.clone()),
-        )))
-    }
-}
-
-#[cfg(feature = "driver-cleanroom")]
-impl InstallerFamilySource for CleanroomDriverSpec {
-    fn source_with_origins(origins: &DriverOrigins) -> Result<Self::Source> {
-        Ok(CleanroomSource::new(CleanroomEndpoints::new(
-            OriginEndpoints::new(origins.cleanroom.clone()),
-        )))
-    }
-}
-
-#[cfg(feature = "driver-outlands")]
-impl InstallerFamilySource for OutlandsDriverSpec {
-    fn source_with_origins(origins: &DriverOrigins) -> Result<Self::Source> {
-        Ok(OutlandsSource::new(OutlandsEndpoints::new(
-            OriginEndpoints::new(origins.outlands.clone()),
-        )))
+        let custom_policy = origins.policy_for(THIRD_PARTY_DRIVER);
+        let custom_vanilla = custom_policy
+            .resolve(
+                VanillaOrigin::LauncherMeta,
+                "mc/game/version_manifest_v2.json",
+            )
+            .expect("inherit global override");
+        let custom_maven = custom_policy
+            .resolve(
+                "https://maven.example.org/releases",
+                "org/example/loader/1.0.0/loader-1.0.0.pom",
+            )
+            .expect("per-driver override beats global");
+        assert_eq!(
+            custom_vanilla,
+            "https://bmclapi2.bangbang93.com/mc/game/version_manifest_v2.json"
+        );
+        assert_eq!(
+            custom_maven,
+            "https://mirror.example.org/custom-maven/org/example/loader/1.0.0/loader-1.0.0.pom"
+        );
     }
 }

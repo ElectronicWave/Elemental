@@ -2,10 +2,7 @@ use std::path::PathBuf;
 
 use elemental_core::storage::layout::Layoutable;
 
-use crate::{
-    error::Result,
-    families::version_json::{VersionJsonRootLayout, VersionJsonRootResource},
-};
+use crate::{error::Result, families::version_json::VersionJsonRootResource};
 
 use super::super::{VersionJsonLaunchBuilder, paths::resolve_absolute_path};
 
@@ -19,14 +16,10 @@ pub(super) fn legacy_jvm_arguments() -> Vec<String> {
     ]
 }
 
-pub(super) fn resolve_root_resource<L, VL>(
-    builder: &VersionJsonLaunchBuilder<L, VL>,
+pub(super) fn resolve_root_resource(
+    builder: &VersionJsonLaunchBuilder,
     resource: VersionJsonRootResource,
-) -> Result<PathBuf>
-where
-    L: VersionJsonRootLayout,
-    VL: crate::families::version_json::VersionJsonInstanceLayout,
-{
+) -> Result<PathBuf> {
     resolve_absolute_path(builder.version.parent.try_get_resource(resource)?)
 }
 

@@ -1,71 +1,69 @@
-use elemental_core::{minecraft::MinecraftVersionId, storage::Storage};
+use elemental_core::minecraft::MinecraftVersionId;
+#[cfg(feature = "maven-xml")]
 use elemental_schema::maven::MavenMetadataBody;
 
+#[cfg(feature = "maven-xml")]
+use crate::maven::fetch_maven_metadata;
 use crate::{
     error::Result,
     families::{
         installer::{
-            InstallerArtifact, InstallerArtifactSource, InstallerMavenEndpoints,
-            build_installer_artifact,
+            InstallerArtifact, MavenEndpoints, MavenInstallerSpec, build_installer_artifact,
         },
-        version_json::VersionJsonRootLayout,
+        version_json::GameStorage,
     },
     http::HttpSource,
     loader_version::LoaderVersionId,
-    maven::fetch_maven_metadata,
+    url::OriginPolicy,
 };
 
 #[derive(Debug, Clone)]
-pub struct InstallerMavenSource<E>
-where
-    E: InstallerMavenEndpoints,
-{
-    inner: HttpSource<E>,
+pub struct InstallerMavenSource {
+    inner: HttpSource<MavenEndpoints>,
 }
 
-impl<E> Default for InstallerMavenSource<E>
-where
-    E: InstallerMavenEndpoints + Default,
-{
-    fn default() -> Self {
-        Self::new(E::default())
-    }
-}
-
-impl<E> InstallerMavenSource<E>
-where
-    E: InstallerMavenEndpoints,
-{
-    pub fn new(endpoints: E) -> Self {
+impl InstallerMavenSource {
+    pub fn new(endpoints: MavenEndpoints) -> Self {
+        let source_name = endpoints.spec().source_name;
         Self {
-            inner: HttpSource::new(endpoints, E::SOURCE_NAME),
+            inner: HttpSource::new(endpoints, source_name),
         }
     }
 
-    pub fn with_client(endpoints: E, client: reqwest::Client) -> Self {
+    pub fn official(spec: &'static MavenInstallerSpec) -> Self {
+        Self::new(MavenEndpoints::official(spec))
+    }
+
+    pub fn with_policy(spec: &'static MavenInstallerSpec, origin_policy: OriginPolicy) -> Self {
+        Self::new(MavenEndpoints::new(spec, origin_policy))
+    }
+
+    pub fn with_client(endpoints: MavenEndpoints, client: reqwest::Client) -> Self {
         Self {
             inner: HttpSource::with_client(endpoints, client),
         }
     }
 
-    pub fn endpoints(&self) -> &E {
+    pub fn spec(&self) -> &'static MavenInstallerSpec {
+        self.inner.endpoints().spec()
+    }
+
+    pub fn endpoints(&self) -> &MavenEndpoints {
         self.inner.endpoints()
     }
 
+    #[cfg(feature = "maven-xml")]
     pub async fn maven_metadata(&self) -> Result<MavenMetadataBody> {
         let url = self.endpoints().maven_metadata_url()?;
-        fetch_maven_metadata(self.inner.client()?, url, E::SOURCE_NAME).await
+        fetch_maven_metadata(self.inner.client()?, url, self.spec().source_name).await
     }
 
-    pub fn installer_artifact<L>(
+    pub fn installer_artifact(
         &self,
-        game_storage: &Storage<L>,
+        game_storage: &GameStorage,
         game_version: &MinecraftVersionId,
         loader_version: &LoaderVersionId,
-    ) -> Result<InstallerArtifact>
-    where
-        L: VersionJsonRootLayout,
-    {
+    ) -> Result<InstallerArtifact> {
         let spec = self
             .endpoints()
             .installer_artifact_spec(game_version, loader_version)?;
@@ -76,28 +74,5 @@ where
             spec.download_url,
             spec.relative_path,
         )
-    }
-}
-
-impl<E> InstallerArtifactSource for InstallerMavenSource<E>
-where
-    E: InstallerMavenEndpoints,
-{
-    type Endpoints = E;
-
-    fn endpoints(&self) -> &Self::Endpoints {
-        InstallerMavenSource::endpoints(self)
-    }
-
-    fn installer_artifact<L>(
-        &self,
-        game_storage: &Storage<L>,
-        game_version: &MinecraftVersionId,
-        loader_version: &LoaderVersionId,
-    ) -> Result<InstallerArtifact>
-    where
-        L: VersionJsonRootLayout,
-    {
-        InstallerMavenSource::installer_artifact(self, game_storage, game_version, loader_version)
     }
 }

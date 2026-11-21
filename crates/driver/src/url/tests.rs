@@ -15,6 +15,12 @@ impl Origin for TestOrigin {
     }
 }
 
+impl AsRef<str> for TestOrigin {
+    fn as_ref(&self) -> &str {
+        self.canonical()
+    }
+}
+
 #[test]
 fn resolve_preserves_base_path_without_trailing_slash() {
     let resolved = OriginPolicy::default()
@@ -26,9 +32,12 @@ fn resolve_preserves_base_path_without_trailing_slash() {
 
 #[test]
 fn origin_suffix_requires_a_path_boundary() {
-    let policy: OriginPolicy<TestOrigin> = OriginPolicy::default();
+    let policy = OriginPolicy::default();
     let rewritten = policy
-        .try_rewrite_origin_url("https://example.com/releases-v2/a.jar")
+        .try_rewrite_origin_url(
+            &[TestOrigin::Base.canonical()],
+            "https://example.com/releases-v2/a.jar",
+        )
         .expect("url should parse");
 
     assert!(rewritten.is_none());
@@ -40,7 +49,10 @@ fn origin_suffix_requires_a_boundary_for_trailing_slash_overrides() {
         .with_override(TestOrigin::Base, "https://example.com/releases/".to_owned())
         .expect("origin override should parse");
     let rewritten = policy
-        .try_rewrite_origin_url("https://example.com/releases-v2/a.jar")
+        .try_rewrite_origin_url(
+            &[TestOrigin::Base.canonical()],
+            "https://example.com/releases-v2/a.jar",
+        )
         .expect("url should parse");
 
     assert!(rewritten.is_none());

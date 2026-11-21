@@ -4,12 +4,16 @@ use elemental_infra::SafeRelativePath;
 use reqwest::Url;
 
 use crate::error::{Error, Result};
+#[cfg(feature = "maven-xml")]
 use crate::http::fetch_text;
 use crate::url::{require_http_scheme, with_directory_path};
 
+use super::MavenArtifactDownload;
+#[cfg(feature = "maven-xml")]
+use super::MavenCoordinate;
+#[cfg(feature = "maven-xml")]
 use super::snapshot::decode_snapshot_metadata;
 use super::url::artifact_url;
-use super::{MavenArtifactDownload, MavenCoordinate};
 
 #[derive(Debug, Clone)]
 pub struct MavenRepository {
@@ -46,6 +50,7 @@ impl MavenRepository {
         })
     }
 
+    #[cfg(feature = "maven-xml")]
     pub async fn resolve_snapshot_artifact(
         &self,
         client: &reqwest::Client,

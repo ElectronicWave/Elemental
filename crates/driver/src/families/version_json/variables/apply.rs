@@ -1,36 +1,30 @@
 use std::collections::HashMap;
 
-use crate::error::Result;
-
 use super::LauncherVariables;
 
 impl LauncherVariables {
-    pub fn apply_mut(&self, args: &mut [String]) -> Result<()> {
-        let applied = self.apply(args.to_vec())?;
-        args.clone_from_slice(&applied);
-        Ok(())
-    }
-
-    pub fn apply(&self, args: Vec<String>) -> Result<Vec<String>> {
-        self.apply_with(args, &HashMap::new())
+    pub fn apply(&self, args: &[String]) -> Vec<String> {
+        args.iter()
+            .map(|value| replace_variables(value, self, None))
+            .collect()
     }
 
     pub fn apply_with(
         &self,
-        args: Vec<String>,
+        args: &[String],
         extra_variables: &HashMap<String, String>,
-    ) -> Result<Vec<String>> {
-        let mut result = Vec::with_capacity(args.len());
-        let mut data = self.hashmap()?;
-        data.extend(extra_variables.clone());
-
-        result.extend(args.iter().map(|value| replace_variables(value, &data)));
-
-        Ok(result)
+    ) -> Vec<String> {
+        args.iter()
+            .map(|value| replace_variables(value, self, Some(extra_variables)))
+            .collect()
     }
 }
 
-fn replace_variables(value: &str, data: &HashMap<String, String>) -> String {
+fn replace_variables(
+    value: &str,
+    variables: &LauncherVariables,
+    extra_variables: Option<&HashMap<String, String>>,
+) -> String {
     let mut output = String::with_capacity(value.len());
     let mut rest = value;
 
@@ -42,7 +36,10 @@ fn replace_variables(value: &str, data: &HashMap<String, String>) -> String {
             return output;
         };
         let key = &after_open[..end];
-        match data.get(key) {
+        let replacement = extra_variables
+            .and_then(|extra| extra.get(key).map(String::as_str))
+            .or_else(|| variables.get(key));
+        match replacement {
             Some(replacement) => output.push_str(replacement),
             None => output.push_str(&rest[start..start + 2 + end + 1]),
         }

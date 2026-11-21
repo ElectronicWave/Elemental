@@ -10,17 +10,14 @@ use crate::{
 
 use super::{InstallerPersistedState, InstallerStatePaths, state::read_embedded_version};
 
-pub async fn prepare_installer_state<V>(
+pub async fn prepare_installer_state(
     session: &DownloadSession,
     installer_artifact: &InstallerArtifact,
     instance_root: &Path,
     libraries_root: &Path,
     family_name: &str,
-    validate_profile: V,
-) -> Result<InstallerPersistedState>
-where
-    V: Fn(&ForgeInstallerProfile) -> Result<()>,
-{
+    validate_profile: &(dyn Fn(&ForgeInstallerProfile) -> Result<()> + Send + Sync),
+) -> Result<InstallerPersistedState> {
     download_installer(session, installer_artifact, family_name).await?;
 
     let archive = InstallerArchive::new(installer_artifact.path.clone());
@@ -97,7 +94,7 @@ async fn finish_installer_state(
         .persist_install_profile(&install_profile)
         .await?;
     state_paths
-        .persist_embedded_version(embedded_version.as_ref())
+        .persist_embedded_version(embedded_version.as_deref())
         .await?;
     archive
         .extract_maven_artifacts(libraries_root)

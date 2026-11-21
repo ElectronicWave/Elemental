@@ -1,20 +1,18 @@
 use std::path::PathBuf;
 
-use elemental_core::storage::{Storage, layout::Layout};
-
 use crate::{
     driver::{Driver, InstalledDriver},
     error::Result,
     families::version_json::{
-        VersionJsonGameStorageExt, VersionJsonInstanceLayout, VersionJsonRootLayout,
+        GameStorage, InstanceStorage, SharedInstanceLayout, VersionJsonGameStorageExt,
     },
 };
 
 use super::InstanceProbe;
 
 #[derive(Debug, Clone)]
-pub struct InstalledInstance<L: Layout, VL: Layout> {
-    pub storage: Storage<VL, Storage<L>>,
+pub struct InstalledInstance {
+    pub storage: InstanceStorage,
     pub driver: InstalledDriver,
 }
 
@@ -25,11 +23,8 @@ pub struct InstanceDetectionFailure {
     pub error: crate::error::Error,
 }
 
-impl<L: Layout + Clone, VL: VersionJsonInstanceLayout + Clone> InstalledInstance<L, VL> {
-    pub async fn detect(
-        storage: Storage<VL, Storage<L>>,
-        drivers: &[&dyn Driver<L, VL>],
-    ) -> Result<Option<Self>> {
+impl InstalledInstance {
+    pub async fn detect(storage: InstanceStorage, drivers: &[&dyn Driver]) -> Result<Option<Self>> {
         let probe = InstanceProbe::collect(&storage).await?;
         for driver in drivers {
             if let Some(installed) = driver.inspect(&probe).await? {
@@ -42,17 +37,11 @@ impl<L: Layout + Clone, VL: VersionJsonInstanceLayout + Clone> InstalledInstance
 
         Ok(None)
     }
-}
 
-impl<L, VL> InstalledInstance<L, VL>
-where
-    L: VersionJsonRootLayout + Clone,
-    VL: VersionJsonInstanceLayout + Clone,
-{
     pub async fn detect_all(
-        storage: &Storage<L>,
-        version_layout: VL,
-        drivers: &[&dyn Driver<L, VL>],
+        storage: &GameStorage,
+        version_layout: SharedInstanceLayout,
+        drivers: &[&dyn Driver],
     ) -> Result<Vec<std::result::Result<Self, InstanceDetectionFailure>>> {
         let mut detected = Vec::new();
 
@@ -75,11 +64,7 @@ where
     }
 }
 
-fn instance_name<L, VL>(instance: &Storage<VL, Storage<L>>) -> String
-where
-    L: Layout,
-    VL: Layout,
-{
+fn instance_name(instance: &InstanceStorage) -> String {
     instance.name().unwrap_or_else(|| {
         instance
             .path

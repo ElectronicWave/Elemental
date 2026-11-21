@@ -4,8 +4,7 @@ use elemental_infra::SafeRelativePath;
 use crate::{
     error::Result,
     families::version_json::{
-        VersionJsonInstanceLayout, VersionJsonInstanceResource, VersionJsonRemoteResolver,
-        VersionJsonRootLayout, VersionJsonRootResource, VersionJsonRuleContext,
+        VersionJsonInstanceResource, VersionJsonRootResource, VersionJsonRuleContext,
         storage::natives_are_extracted,
     },
 };
@@ -14,13 +13,8 @@ use super::{ResolvedVersionJsonInstance, VersionJsonDownloadStatus, VersionJsonI
 
 mod artifacts;
 
-impl<R, L, VL> ResolvedVersionJsonInstance<R, L, VL>
-where
-    R: VersionJsonRemoteResolver,
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
-    pub async fn download_status(&self) -> Result<VersionJsonDownloadStatus> {
+impl ResolvedVersionJsonInstance {
+    pub fn download_status(&self) -> Result<VersionJsonDownloadStatus> {
         let rule_context = VersionJsonRuleContext::current();
         Ok(VersionJsonDownloadStatus {
             metadata_persisted: self
@@ -40,7 +34,7 @@ where
     }
 
     pub async fn status(&self) -> Result<VersionJsonInstallStatus> {
-        let download_status = self.download_status().await?;
+        let download_status = self.download_status()?;
         let natives_extracted = natives_are_extracted(&self.version, &self.metadata).await?;
         Ok(download_status.with_natives_extracted(natives_extracted))
     }

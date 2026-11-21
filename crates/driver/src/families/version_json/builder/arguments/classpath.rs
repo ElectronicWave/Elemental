@@ -4,24 +4,17 @@ use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::{
     error::Result,
-    families::version_json::{
-        VersionJsonRootLayout,
-        classpath::{join_classpath, resolve_classpath},
-    },
+    families::version_json::classpath::{join_classpath, resolve_classpath},
 };
 
 use super::super::VersionJsonLaunchBuilder;
 
-pub(crate) fn build_classpath<L, VL>(
-    builder: &VersionJsonLaunchBuilder<L, VL>,
+pub(crate) fn build_classpath(
+    builder: &VersionJsonLaunchBuilder,
     metadata: &PistonMetaData,
     rule_context: &crate::families::version_json::VersionJsonRuleContext,
     module_path_entries: &HashSet<String>,
-) -> Result<String>
-where
-    L: VersionJsonRootLayout,
-    VL: crate::families::version_json::VersionJsonInstanceLayout,
-{
+) -> Result<String> {
     let classpath = resolve_classpath(
         &builder.version,
         metadata,

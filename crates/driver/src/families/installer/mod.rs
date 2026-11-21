@@ -13,11 +13,7 @@ pub use artifact::{
     installer_coordinate_path,
 };
 pub use driver::InstallerFamilyDriver;
-pub use family::{
-    InstallerArtifactEndpoints, InstallerArtifactSource, InstallerFamily,
-    InstallerFamilyRemoteResolver, ResolvedInstallerFamilyLaunchVersion,
-    ResolvedInstallerFamilyMetadata, ResolvedInstallerFamilyVersion,
-};
+pub use family::{InstallerFamilyRemoteResolver, ResolvedInstallerFamilyVersion};
 pub use libraries::{
     is_retro_futura_runtime_library, merge_libraries_prefer_embedded, merge_retro_futura_libraries,
     normalize_library_urls,
@@ -27,14 +23,13 @@ pub use processor::{
     run_installer_client_processors, submit_installer_profile_libraries,
 };
 pub use profile::{
-    InstallerInstallStatus, InstallerLaunchVersionRequest, InstallerPersistedState,
-    load_persisted_installer_state, persist_installer_launch_version, prepare_installer_state,
+    InstallerInstallStatus, InstallerPersistedState, load_persisted_installer_state,
+    persist_installer_launch_version, prepare_installer_state,
 };
 pub(crate) use profile::{
     installer_install_status, profile_game_and_raw_loader_version,
     validate_installer_profile_identity,
 };
 pub use source::{
-    InstallerMavenArtifactSpec, InstallerMavenEndpoints, InstallerMavenSource, MavenEndpoints,
-    MavenSpec,
+    InstallerMavenArtifactSpec, InstallerMavenSource, MavenEndpoints, MavenInstallerSpec,
 };

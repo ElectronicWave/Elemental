@@ -300,10 +300,11 @@ async fn send_texture_request(
         return Ok(());
     }
 
-    let body = response
-        .text()
+    let bytes = response
+        .bytes()
         .await
         .map_err(|source| Error::TextureRequest { operation, source })?;
+    let body = String::from_utf8_lossy(&bytes).into_owned();
     Err(Error::TextureStatus {
         operation,
         status,

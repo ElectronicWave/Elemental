@@ -182,134 +182,161 @@ fn decode_maven_metadata(raw: &str) -> std::result::Result<MavenMetadataBody, Ma
     })
 }
 
+#[derive(Debug, Default)]
+struct PendingSnapshot {
+    timestamp: Option<String>,
+    build_number: Option<usize>,
+}
+
+impl PendingSnapshot {
+    fn finish(self) -> std::result::Result<SnapshotVersion, MavenXmlError> {
+        Ok(SnapshotVersion {
+            timestamp: self
+                .timestamp
+                .ok_or(MavenXmlError::MissingElement("<timestamp>"))?,
+            build_number: self
+                .build_number
+                .ok_or(MavenXmlError::MissingElement("<buildNumber>"))?,
+        })
+    }
+}
+
+#[derive(Debug, Default)]
+struct SnapshotParser {
+    saw_versioning: bool,
+    version: String,
+    pending_snapshot: Option<PendingSnapshot>,
+    snapshot: Option<SnapshotVersion>,
+    current_artifact: Option<PartialSnapshotArtifact>,
+    snapshot_versions: Vec<SnapshotArtifactVersion>,
+}
+
+impl SnapshotParser {
+    fn handle(&mut self, event: XmlEvent<'_>) -> std::result::Result<(), MavenXmlError> {
+        match event {
+            XmlEvent::Start(path) => {
+                let parts = path.iter().map(String::as_str).collect::<Vec<&str>>();
+                self.on_start(parts.as_slice());
+                Ok(())
+            }
+            XmlEvent::End(path, text) => {
+                let parts = path.iter().map(String::as_str).collect::<Vec<&str>>();
+                self.on_end(parts.as_slice(), text)
+            }
+        }
+    }
+
+    fn on_start(&mut self, parts: &[&str]) {
+        match parts {
+            ["metadata", "versioning", "snapshot"] => {
+                self.pending_snapshot = Some(PendingSnapshot::default());
+            }
+            [
+                "metadata",
+                "versioning",
+                "snapshotVersions",
+                "snapshotVersion",
+            ] => {
+                self.current_artifact = Some(PartialSnapshotArtifact::default());
+            }
+            _ => {}
+        }
+    }
+
+    fn on_end(&mut self, parts: &[&str], text: &str) -> std::result::Result<(), MavenXmlError> {
+        match parts {
+            ["metadata", "version"] => self.version = text.to_owned(),
+            ["metadata", "versioning"] => self.saw_versioning = true,
+            ["metadata", "versioning", "snapshot"] => {
+                if let Some(pending) = self.pending_snapshot.take() {
+                    self.snapshot = Some(pending.finish()?);
+                }
+            }
+            ["metadata", "versioning", "snapshot", rest @ ..] => {
+                self.on_snapshot_end(rest, text)?;
+            }
+            ["metadata", "versioning", "snapshotVersions", rest @ ..] => {
+                self.on_artifact_end(rest, text)?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn on_snapshot_end(
+        &mut self,
+        rest: &[&str],
+        text: &str,
+    ) -> std::result::Result<(), MavenXmlError> {
+        let Some(pending) = &mut self.pending_snapshot else {
+            return Ok(());
+        };
+        match rest {
+            ["timestamp"] => pending.timestamp = Some(text.to_owned()),
+            ["buildNumber"] => {
+                let parsed =
+                    text.parse::<usize>()
+                        .map_err(|source| MavenXmlError::InvalidBuildNumber {
+                            value: text.to_owned(),
+                            source,
+                        })?;
+                pending.build_number = Some(parsed);
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn on_artifact_end(
+        &mut self,
+        rest: &[&str],
+        text: &str,
+    ) -> std::result::Result<(), MavenXmlError> {
+        let field = match rest {
+            ["snapshotVersion", field] | [field] if *field != "snapshotVersion" => field,
+            [] | ["snapshotVersion"] => {
+                if let Some(artifact) = self
+                    .current_artifact
+                    .take()
+                    .and_then(|item| item.finish().transpose())
+                {
+                    self.snapshot_versions.push(artifact?);
+                }
+                return Ok(());
+            }
+            _ => return Ok(()),
+        };
+
+        let artifact = self.current_artifact.get_or_insert_with(Default::default);
+        match *field {
+            "classifier" => artifact.classifier = (!text.is_empty()).then(|| text.to_owned()),
+            "extension" => artifact.extension = Some(text.to_owned()),
+            "value" => artifact.value = Some(text.to_owned()),
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn into_metadata(self) -> std::result::Result<SnapshotMavenMetadata, MavenXmlError> {
+        if !self.saw_versioning {
+            return Err(MavenXmlError::MissingElement("<versioning>"));
+        }
+        Ok(SnapshotMavenMetadata {
+            version: self.version,
+            versioning: SnapshotVersioning {
+                snapshot: self.snapshot,
+                snapshot_versions: self.snapshot_versions,
+            },
+        })
+    }
+}
+
 fn decode_snapshot_metadata_xml(
     raw: &str,
 ) -> std::result::Result<SnapshotMavenMetadata, MavenXmlError> {
-    let mut saw_versioning = false;
-    let mut version = String::new();
-    let mut pending_snapshot: Option<(Option<String>, Option<usize>)> = None;
-    let mut snapshot: Option<SnapshotVersion> = None;
-    let mut current_artifact: Option<PartialSnapshotArtifact> = None;
-    let mut snapshot_versions = Vec::new();
-
-    walk_xml(raw, |event| match event {
-        XmlEvent::Start(path) => {
-            let parts = path.iter().map(String::as_str).collect::<Vec<&str>>();
-            match parts.as_slice() {
-                ["metadata", "versioning", "snapshot"] => {
-                    pending_snapshot = Some((None, None));
-                }
-                [
-                    "metadata",
-                    "versioning",
-                    "snapshotVersions",
-                    "snapshotVersion",
-                ] => {
-                    current_artifact = Some(PartialSnapshotArtifact::default());
-                }
-                _ => {}
-            }
-            Ok(())
-        }
-        XmlEvent::End(path, text) => {
-            let parts = path.iter().map(String::as_str).collect::<Vec<&str>>();
-            match parts.as_slice() {
-                ["metadata", "version"] => {
-                    version = text.to_owned();
-                }
-                ["metadata", "versioning"] => {
-                    saw_versioning = true;
-                }
-                ["metadata", "versioning", "snapshot", "timestamp"] => {
-                    if let Some((timestamp, _)) = &mut pending_snapshot {
-                        *timestamp = Some(text.to_owned());
-                    }
-                }
-                ["metadata", "versioning", "snapshot", "buildNumber"] => {
-                    if let Some((_, build_number)) = &mut pending_snapshot {
-                        let parsed = text.parse::<usize>().map_err(|source| {
-                            MavenXmlError::InvalidBuildNumber {
-                                value: text.to_owned(),
-                                source,
-                            }
-                        })?;
-                        *build_number = Some(parsed);
-                    }
-                }
-                ["metadata", "versioning", "snapshot"] => {
-                    if let Some((timestamp, build_number)) = pending_snapshot.take() {
-                        snapshot = Some(SnapshotVersion {
-                            timestamp: timestamp
-                                .ok_or(MavenXmlError::MissingElement("<timestamp>"))?,
-                            build_number: build_number
-                                .ok_or(MavenXmlError::MissingElement("<buildNumber>"))?,
-                        });
-                    }
-                }
-                [
-                    "metadata",
-                    "versioning",
-                    "snapshotVersions",
-                    "snapshotVersion",
-                    "classifier",
-                ]
-                | ["metadata", "versioning", "snapshotVersions", "classifier"] => {
-                    let artifact = current_artifact.get_or_insert_with(Default::default);
-                    artifact.classifier = (!text.is_empty()).then(|| text.to_owned());
-                }
-                [
-                    "metadata",
-                    "versioning",
-                    "snapshotVersions",
-                    "snapshotVersion",
-                    "extension",
-                ]
-                | ["metadata", "versioning", "snapshotVersions", "extension"] => {
-                    current_artifact
-                        .get_or_insert_with(Default::default)
-                        .extension = Some(text.to_owned());
-                }
-                [
-                    "metadata",
-                    "versioning",
-                    "snapshotVersions",
-                    "snapshotVersion",
-                    "value",
-                ]
-                | ["metadata", "versioning", "snapshotVersions", "value"] => {
-                    current_artifact.get_or_insert_with(Default::default).value =
-                        Some(text.to_owned());
-                }
-                [
-                    "metadata",
-                    "versioning",
-                    "snapshotVersions",
-                    "snapshotVersion",
-                ]
-                | ["metadata", "versioning", "snapshotVersions"] => {
-                    if let Some(artifact) =
-                        current_artifact.take().and_then(|a| a.finish().transpose())
-                    {
-                        snapshot_versions.push(artifact?);
-                    }
-                }
-                _ => {}
-            }
-            Ok(())
-        }
-    })?;
-
-    if !saw_versioning {
-        return Err(MavenXmlError::MissingElement("<versioning>"));
-    }
-
-    Ok(SnapshotMavenMetadata {
-        version,
-        versioning: SnapshotVersioning {
-            snapshot,
-            snapshot_versions,
-        },
-    })
+    let mut parser = SnapshotParser::default();
+    walk_xml(raw, |event| parser.handle(event))?;
+    parser.into_metadata()
 }
 
 enum XmlEvent<'a> {

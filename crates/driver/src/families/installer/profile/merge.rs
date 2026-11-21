@@ -57,10 +57,17 @@ pub(super) fn merge_embedded_version(
     ) -> Vec<PistonMetaLibraries>,
     family_name: &str,
 ) -> Result<PistonMetaData> {
-    let mut embedded = serde_json::from_value::<EmbeddedVersionData>(embedded_version.clone())
-        .map_err(|source| Error::DecodeEmbeddedVersion {
+    let embedded_bytes =
+        serde_json::to_vec(embedded_version).map_err(|source| Error::DecodeEmbeddedVersion {
             family_name: family_name.to_owned(),
             source,
+        })?;
+    let mut embedded =
+        serde_json::from_slice::<EmbeddedVersionData>(&embedded_bytes).map_err(|source| {
+            Error::DecodeEmbeddedVersion {
+                family_name: family_name.to_owned(),
+                source,
+            }
         })?;
     embedded.libraries = normalize_libraries(embedded.libraries)?;
 

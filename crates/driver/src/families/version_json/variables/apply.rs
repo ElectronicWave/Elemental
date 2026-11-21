@@ -20,17 +20,18 @@ impl LauncherVariables {
         args: Vec<String>,
         extra_variables: &HashMap<String, String>,
     ) -> Result<Vec<String>> {
-        let mut result = Vec::with_capacity(args.len());
-        let mut data = self.hashmap()?;
-        data.extend(extra_variables.clone());
-
-        result.extend(args.iter().map(|value| replace_variables(value, &data)));
-
-        Ok(result)
+        Ok(args
+            .iter()
+            .map(|value| replace_variables(value, self, extra_variables))
+            .collect())
     }
 }
 
-fn replace_variables(value: &str, data: &HashMap<String, String>) -> String {
+fn replace_variables(
+    value: &str,
+    variables: &LauncherVariables,
+    extra_variables: &HashMap<String, String>,
+) -> String {
     let mut output = String::with_capacity(value.len());
     let mut rest = value;
 
@@ -42,7 +43,11 @@ fn replace_variables(value: &str, data: &HashMap<String, String>) -> String {
             return output;
         };
         let key = &after_open[..end];
-        match data.get(key) {
+        let replacement = extra_variables
+            .get(key)
+            .map(String::as_str)
+            .or_else(|| variables.get(key));
+        match replacement {
             Some(replacement) => output.push_str(replacement),
             None => output.push_str(&rest[start..start + 2 + end + 1]),
         }

@@ -1,5 +1,3 @@
-use std::fs::File;
-
 use async_trait::async_trait;
 use elemental_core::storage::{Storage, layout::Layoutable};
 use elemental_schema::mojang::piston::PistonMetaData;
@@ -20,7 +18,7 @@ where
 {
     fn metadata(&self) -> Result<PistonMetaData> {
         let path = self.try_get_resource(VersionJsonInstanceResource::Metadata)?;
-        Ok(serde_json::from_reader(File::open(path)?)?)
+        Ok(serde_json::from_slice(&std::fs::read(path)?)?)
     }
 
     async fn write_metadata(&self, metadata: &PistonMetaData) -> Result<()> {

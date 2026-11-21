@@ -12,23 +12,26 @@ use super::{InstallerPersistedState, InstallerStatePaths};
 impl InstallerStatePaths<'_> {
     pub(crate) fn load(&self) -> Result<InstallerPersistedState> {
         let install_profile_path = self.install_profile_path();
-        let install_profile = serde_json::from_reader(std::fs::File::open(&install_profile_path)?)
-            .map_err(|source| Error::ReadPersistedInstallProfile {
+        let install_profile_bytes = std::fs::read(&install_profile_path)?;
+        let install_profile = serde_json::from_slice(&install_profile_bytes).map_err(|source| {
+            Error::ReadPersistedInstallProfile {
                 family_name: self.family.as_str().to_owned(),
                 path: install_profile_path.clone(),
                 source,
-            })?;
+            }
+        })?;
 
         let embedded_version_path = self.embedded_version_path();
         let embedded_version = if embedded_version_path.exists() {
+            let embedded_version_bytes = std::fs::read(&embedded_version_path)?;
             Some(
-                serde_json::from_reader(std::fs::File::open(&embedded_version_path)?).map_err(
-                    |source| Error::ReadPersistedEmbeddedVersion {
+                serde_json::from_slice(&embedded_version_bytes).map_err(|source| {
+                    Error::ReadPersistedEmbeddedVersion {
                         family_name: self.family.as_str().to_owned(),
                         path: embedded_version_path.clone(),
                         source,
-                    },
-                )?,
+                    }
+                })?,
             )
         } else {
             None

@@ -1,16 +1,9 @@
-use std::collections::HashMap;
-
-use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
-
-use crate::error::{Error, Result};
-
 mod apply;
 mod offline;
 
 use super::classpath::classpath_separator;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct LauncherVariables {
     pub auth_player_name: String,
     pub version_name: String,
@@ -27,13 +20,9 @@ pub struct LauncherVariables {
     pub version_type: String,
     pub resolution_width: String,
     pub resolution_height: String,
-    #[serde(rename = "quickPlayPath")]
     pub quick_play_path: Option<String>,
-    #[serde(rename = "quickPlaySingleplayer")]
     pub quick_play_singleplayer: Option<String>,
-    #[serde(rename = "quickPlayMultiplayer")]
     pub quick_play_multiplayer: Option<String>,
-    #[serde(rename = "quickPlayRealms")]
     pub quick_play_realms: Option<String>,
     pub natives_directory: String,
     pub launcher_name: String,
@@ -74,32 +63,51 @@ impl Default for LauncherVariables {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Clone, Debug)]
 pub enum UserType {
     Legacy,
     Msa,
     Mojang,
 }
 
+impl UserType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Legacy => "legacy",
+            Self::Msa => "msa",
+            Self::Mojang => "mojang",
+        }
+    }
+}
+
 impl LauncherVariables {
-    pub fn hashmap(&self) -> Result<HashMap<String, String>> {
-        Ok(HashMap::from_iter(self.map()?.into_iter().filter_map(
-            |(key, value)| match value {
-                Value::String(string) => Some((key, string)),
-                _ => None,
-            },
-        )))
-    }
-
-    pub fn map(&self) -> Result<Map<String, Value>> {
-        Ok(serde_json::to_value(self)?
-            .as_object()
-            .ok_or(Error::LauncherVariablesNotObject)?
-            .clone())
-    }
-
-    pub fn json(&self) -> Result<String> {
-        Ok(serde_json::to_string(self)?)
+    pub fn get(&self, key: &str) -> Option<&str> {
+        Some(match key {
+            "auth_player_name" => &self.auth_player_name,
+            "version_name" => &self.version_name,
+            "game_directory" => &self.game_directory,
+            "assets_root" => &self.assets_root,
+            "assets_index_name" => &self.assets_index_name,
+            "auth_uuid" => &self.auth_uuid,
+            "auth_access_token" => &self.auth_access_token,
+            "user_properties" => &self.user_properties,
+            "clientid" => &self.clientid,
+            "auth_xuid" => &self.auth_xuid,
+            "user_type" => self.user_type.as_str(),
+            "version_type" => &self.version_type,
+            "resolution_width" => &self.resolution_width,
+            "resolution_height" => &self.resolution_height,
+            "quickPlayPath" => self.quick_play_path.as_deref()?,
+            "quickPlaySingleplayer" => self.quick_play_singleplayer.as_deref()?,
+            "quickPlayMultiplayer" => self.quick_play_multiplayer.as_deref()?,
+            "quickPlayRealms" => self.quick_play_realms.as_deref()?,
+            "natives_directory" => &self.natives_directory,
+            "launcher_name" => &self.launcher_name,
+            "launcher_version" => &self.launcher_version,
+            "library_directory" => &self.library_directory,
+            "classpath_separator" => &self.classpath_separator,
+            "classpath" => &self.classpath,
+            _ => return None,
+        })
     }
 }

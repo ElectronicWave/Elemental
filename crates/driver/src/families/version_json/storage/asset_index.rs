@@ -1,5 +1,3 @@
-use std::fs::File;
-
 use async_trait::async_trait;
 use elemental_core::storage::{Storage, layout::Layoutable};
 use elemental_infra::SafeRelativePath;
@@ -47,6 +45,6 @@ where
         let path = self.try_get_resource(VersionJsonRootResource::AssetIndexes(Some(
             SafeRelativePath::parse(id.as_ref())?,
         )))?;
-        Ok(serde_json::from_reader(File::open(path)?)?)
+        Ok(serde_json::from_slice(&std::fs::read(path)?)?)
     }
 }

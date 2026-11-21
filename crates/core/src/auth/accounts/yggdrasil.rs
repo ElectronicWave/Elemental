@@ -7,6 +7,8 @@ use nidhogg::{
         textures::{ModelType, Texture},
     },
 };
+
+pub use nidhogg::types::meta::Meta;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -111,6 +113,21 @@ impl YggdrasilAccount {
             .await
             .map_err(|source| Error::Yggdrasil { source })
     }
+
+    /// Fetches the metadata document exposed by the account's Yggdrasil API.
+    ///
+    /// Returns `None` for offline accounts because they have no remote API
+    /// root.
+    pub async fn metadata(&self) -> Result<Option<Meta>> {
+        if self.base_url.is_none() {
+            return Ok(None);
+        }
+        self.client()?
+            .metadata()
+            .await
+            .map_err(|source| Error::Yggdrasil { source })
+            .map(Some)
+    }
 }
 
 #[async_trait]
@@ -148,6 +165,10 @@ impl Account for YggdrasilAccount {
             return Ok(Box::new(self.clone()));
         }
         Ok(Box::new(YggdrasilAuthorizer::refresh_account(self).await?))
+    }
+
+    async fn metadata(&self) -> Result<Option<Meta>> {
+        YggdrasilAccount::metadata(self).await
     }
 
     async fn textures(&self) -> Result<ProfileTextures> {

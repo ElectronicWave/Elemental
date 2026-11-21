@@ -23,13 +23,13 @@ license = "AGPL-3.0-only"
 # Just for dev test and cli use
 anyhow = { version = "1.0.104" }
 async-trait = "0.1.92"
-base64 = "0.23.0"
+base64 = "0.23.1"
 dirs = { version = "7" }
 erased-serde = "0.4.11"
 futures = "0.3.34"
 hex = "0.4.3"
 jiff = { version = "1.0.0", features = ["serde"] }
-nidhogg = { version = "0.3.0" }
+nidhogg = { version = "0.3.1" }
 reqwest = { version = "0.13.1", features = [
     "json",
     "multipart",

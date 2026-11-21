@@ -22,4 +22,9 @@ thiserror = { workspace = true }
 zip = { version = "9.0.0", default-features = false, features = ["deflate"] }
 
 [features]
+default = ["tls-aws-lc"]
+tls-aws-lc = ["reqwest/rustls"]
+tls-rustls-no-provider = ["reqwest/rustls-no-provider"]
+tls-native = ["reqwest/native-tls"]
+tls-native-vendored = ["reqwest/native-tls-vendored"]
 serde = ["dep:serde"]

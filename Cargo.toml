@@ -28,10 +28,9 @@ erased-serde = "0.4.11"
 futures = "0.3.34"
 hex = "0.4.3"
 jiff = { version = "1.0.0", features = ["serde"] }
-nidhogg = { version = "0.3.1" }
+nidhogg = { version = "0.3.1", default-features = false }
 reqwest = { version = "0.13.1", default-features = false, features = [
     "stream",
-    "default-tls",
     "http2",
     "system-proxy",
 ] }

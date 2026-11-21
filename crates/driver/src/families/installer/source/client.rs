@@ -1,6 +1,9 @@
 use elemental_core::minecraft::MinecraftVersionId;
+#[cfg(feature = "maven-xml")]
 use elemental_schema::maven::MavenMetadataBody;
 
+#[cfg(feature = "maven-xml")]
+use crate::maven::fetch_maven_metadata;
 use crate::{
     error::Result,
     families::{
@@ -11,7 +14,6 @@ use crate::{
     },
     http::HttpSource,
     loader_version::LoaderVersionId,
-    maven::fetch_maven_metadata,
     url::OriginPolicy,
 };
 
@@ -50,6 +52,7 @@ impl InstallerMavenSource {
         self.inner.endpoints()
     }
 
+    #[cfg(feature = "maven-xml")]
     pub async fn maven_metadata(&self) -> Result<MavenMetadataBody> {
         let url = self.endpoints().maven_metadata_url()?;
         fetch_maven_metadata(self.inner.client()?, url, self.spec().source_name).await

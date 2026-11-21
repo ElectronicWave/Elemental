@@ -1,9 +1,14 @@
+#[cfg(feature = "microsoft-auth")]
 use std::future::Future;
 
+#[cfg(feature = "microsoft-auth")]
 use elemental_core::auth::authorizers::microsoft::{
     MicrosoftAuthorizer, VerificationHandlerResult,
 };
-use elemental_launcher::{AccountStore, Launcher};
+#[cfg(feature = "microsoft-auth")]
+use elemental_launcher::AccountStore;
+use elemental_launcher::Launcher;
+#[cfg(feature = "microsoft-auth")]
 use elemental_shared::scope::Scope;
 
 mod common;
@@ -23,6 +28,7 @@ async fn inspect_instances_future_is_send() {
     assert!(report.failures.is_empty());
 }
 
+#[cfg(feature = "microsoft-auth")]
 #[test]
 fn microsoft_sign_in_future_is_send_and_static() {
     fn assert_send_static<F: Future + Send + 'static>(_: F) {}

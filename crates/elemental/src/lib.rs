@@ -22,10 +22,9 @@ pub mod prelude {
     #[cfg(feature = "core")]
     pub use crate::core::{
         auth::{
-            accounts::{Account, AccountId, microsoft::MicrosoftAccount, offline::OfflineAccount},
+            accounts::{Account, AccountId, offline::OfflineAccount},
             authorizers::{
                 Authorizer,
-                microsoft::{MICROSOFT_AUTHORIZER_ID, MicrosoftAuthorizer},
                 offline::{OFFLINE_AUTHORIZER_ID, OfflineAuthorizer},
             },
             credential::{Credential, CredentialKind},
@@ -38,6 +37,12 @@ pub mod prelude {
             distribution::Distribution,
             provider::{RuntimeProvider, RuntimeProviderList, default_providers},
         },
+    };
+
+    #[cfg(all(feature = "core", feature = "microsoft-auth"))]
+    pub use crate::core::auth::{
+        accounts::microsoft::MicrosoftAccount,
+        authorizers::microsoft::{MICROSOFT_AUTHORIZER_ID, MicrosoftAuthorizer},
     };
 
     #[cfg(feature = "yggdrasil-auth")]

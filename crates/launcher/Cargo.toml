@@ -12,7 +12,7 @@ license.workspace = true
 [dependencies]
 thiserror = { workspace = true }
 tokio = { workspace = true }
-elemental-core = { path = "../core", version = "0.3.0" }
+elemental-core = { path = "../core", version = "0.3.0", default-features = false }
 elemental-driver = { path = "../driver", version = "0.3.0", default-features = false }
 elemental-infra = { path = "../infra", version = "0.3.0" }
 elemental-shared = { path = "../shared", version = "0.3.0" }
@@ -27,7 +27,8 @@ sha2 = { workspace = true }
 async-trait = { workspace = true }
 
 [features]
-default = ["driver-all"]
+default = ["driver-all", "microsoft-auth"]
+microsoft-auth = ["elemental-core/microsoft-auth"]
 driver-all = [
     "driver-fabric",
     "driver-legacyfabric",

@@ -1,12 +1,14 @@
 mod artifact;
 mod coordinate;
 mod repository;
+#[cfg(feature = "maven-xml")]
 mod snapshot;
 mod url;
 
 pub use artifact::maven_library_downloads;
 pub use coordinate::MavenCoordinate;
 pub use repository::MavenRepository;
+#[cfg(feature = "maven-xml")]
 pub use snapshot::fetch_maven_metadata;
 
 use elemental_infra::SafeRelativePath;

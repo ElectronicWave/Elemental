@@ -61,15 +61,12 @@ where
 }
 
 pub async fn fetch_text(client: &reqwest::Client, url: &str, source_name: &str) -> Result<String> {
-    send_ok(client, url, source_name)
-        .await?
-        .text()
-        .await
-        .map_err(|source| Error::DecodeResource {
-            source_name: source_name.to_owned(),
-            url: url.to_owned(),
-            source: Box::new(source),
-        })
+    let bytes = fetch_bytes(client, url, source_name).await?;
+    String::from_utf8(bytes).map_err(|source| Error::DecodeResource {
+        source_name: source_name.to_owned(),
+        url: url.to_owned(),
+        source: Box::new(source),
+    })
 }
 
 pub async fn fetch_bytes(

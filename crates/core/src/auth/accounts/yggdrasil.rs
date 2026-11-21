@@ -4,14 +4,14 @@ use nidhogg::{
     client::Nidhogg,
     request::texture::TextureType as NidhoggTextureType,
     types::{
+        meta::Meta,
         profile::{Profile, ProfilePropertyError},
         textures::{ModelType, Texture},
-        meta::Meta
     },
 };
 
-use serde::{Deserialize, Serialize};
 use serde::ser::Error;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::auth::accounts::offline::offline_uuid;
@@ -116,9 +116,11 @@ impl YggdrasilAccount {
             .map_err(|source| Error::Yggdrasil { source })
     }
 
-    async fn server_metadata(&self) -> Result<ServerMetadata> {
-        let meta = self.client()?.metadata().await.map_err(|source| Error::Yggdrasil { source })?;
-        Ok(ServerMetadata::from_nidhogg(&meta))
+    async fn metadata(&self) -> Result<Meta> {
+        self.client()?
+            .metadata()
+            .await
+            .map_err(|source| Error::Yggdrasil { source })
     }
 }
 
@@ -251,34 +253,5 @@ fn uploadable_texture(value: String) -> Option<AccountTextureType> {
         Some(AccountTextureType::Cape)
     } else {
         None
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ServerMetadata {
-    pub name: Option<String>,
-    pub implementation: Option<String>,
-    pub implementation_version: Option<String>,
-    pub homepage: Option<String>,
-    pub register: Option<String>,
-    pub non_email_login: Option<bool>,
-    pub legacy_skin_api: Option<bool>,
-}
-
-impl ServerMetadata {
-    pub fn from_nidhogg(meta: &Meta) -> Self {
-        Self {
-            name: meta.name.clone(),
-            implementation: meta.implementation.clone(),
-            implementation_version: meta.implementation_version.clone(),
-            homepage: meta.homepage.clone(),
-            register: meta.register.clone(),
-            non_email_login: meta.non_email_login,
-            legacy_skin_api: meta.legacy_skin_api,
-        }
-    }
-
-    pub fn get_base64(&self) -> Result<String, Error> {
-        Ok(BASE64_STANDARD.encode(serde_json::to_string(&self)?))
     }
 }

@@ -1,54 +1,39 @@
-use std::marker::PhantomData;
-
 use crate::{
     drivers::vanilla::source::{VanillaEndpoints, rewrite_upstream_with_vanilla_fallback},
     error::Result,
-    families::version_json::VersionJsonRemoteResolver,
+    families::{installer::MavenEndpoints, version_json::VersionJsonRemoteResolver},
 };
 
-use super::InstallerFamily;
-
 #[derive(Debug, Clone)]
-pub struct InstallerFamilyRemoteResolver<F>
-where
-    F: InstallerFamily,
-{
+pub struct InstallerFamilyRemoteResolver {
     vanilla_endpoints: VanillaEndpoints,
-    endpoints: F::Endpoints,
-    family: PhantomData<F>,
+    endpoints: MavenEndpoints,
 }
 
-impl<F> InstallerFamilyRemoteResolver<F>
-where
-    F: InstallerFamily,
-{
-    pub fn new(vanilla_endpoints: VanillaEndpoints, endpoints: F::Endpoints) -> Self {
+impl InstallerFamilyRemoteResolver {
+    pub fn new(vanilla_endpoints: VanillaEndpoints, endpoints: MavenEndpoints) -> Self {
         Self {
             vanilla_endpoints,
             endpoints,
-            family: PhantomData,
         }
     }
 
     pub fn artifact_url(&self, raw_url: &str, artifact_path: &str) -> Result<String> {
         if raw_url.trim().is_empty() {
-            return F::default_artifact_url(&self.endpoints, artifact_path);
+            return self.endpoints.artifact_url(artifact_path);
         }
 
         self.rewrite_upstream(raw_url)
     }
 }
 
-impl<F> VersionJsonRemoteResolver for InstallerFamilyRemoteResolver<F>
-where
-    F: InstallerFamily,
-{
+impl VersionJsonRemoteResolver for InstallerFamilyRemoteResolver {
     fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
         rewrite_upstream_with_vanilla_fallback(
             &self.vanilla_endpoints,
             raw_url,
-            F::FAMILY_NAME,
-            || F::rewrite_upstream(&self.endpoints, raw_url),
+            self.endpoints.spec().family_name,
+            || self.endpoints.rewrite_upstream(raw_url),
         )
     }
 

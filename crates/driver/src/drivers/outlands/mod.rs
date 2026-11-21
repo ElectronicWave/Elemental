@@ -1,8 +1,9 @@
 use crate::{
+    catalog::InstallerMavenCatalog,
     descriptors::OUTLANDS_DRIVER,
-    drivers::retrofutura::{
-        RetroFuturaCatalog, RetroFuturaDriver, RetroFuturaEndpoints, RetroFuturaFamily,
-        RetroFuturaMaven, RetroFuturaReleaseCatalog, RetroFuturaSource,
+    drivers::retrofutura::{RetroFuturaLine, retrofutura_spec},
+    families::installer::{
+        InstallerFamilyDriver, InstallerMavenSource, MavenEndpoints, MavenInstallerSpec,
     },
     inspect::{LibraryPrefixSet, ProfileIdPattern, ProfiledDriverIdentity},
     url::Origin,
@@ -23,6 +24,12 @@ impl Origin for OutlandsOrigin {
     }
 }
 
+impl AsRef<str> for OutlandsOrigin {
+    fn as_ref(&self) -> &str {
+        self.canonical()
+    }
+}
+
 const OUTLANDS_LIBRARIES: LibraryPrefixSet = LibraryPrefixSet::new(&["top.outlands:outlands:"]);
 const OUTLANDS_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(
     OUTLANDS_DRIVER,
@@ -31,25 +38,29 @@ const OUTLANDS_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(
     ProfileIdPattern::new("-outlands-"),
 );
 
-#[derive(Debug, Clone, Copy)]
-pub struct OutlandsRetroFutura;
+pub const OUTLANDS_SPEC: MavenInstallerSpec = retrofutura_spec(RetroFuturaLine {
+    identity: OUTLANDS_IDENTITY,
+    family_name: "outlands",
+    source_name: "Outlands source",
+    loader_version_prefix: "outlands-",
+    canonical_origin: "https://maven.outlands.top/releases/",
+    group: "top.outlands",
+    artifact: "outlands",
+    game_version: OUTLANDS_GAME_VERSION,
+});
 
-impl RetroFuturaCatalog for OutlandsRetroFutura {
-    type Origin = OutlandsOrigin;
-
-    const ORIGIN: OutlandsOrigin = OutlandsOrigin;
-    const SOURCE_NAME: &'static str = "Outlands source";
-    const GROUP: &'static str = "top.outlands";
-    const ARTIFACT: &'static str = "outlands";
-    const GAME_VERSION: &'static str = OUTLANDS_GAME_VERSION;
-    const IDENTITY: ProfiledDriverIdentity = OUTLANDS_IDENTITY;
-    const FAMILY_NAME: &'static str = "outlands";
-    const LOADER_VERSION_PREFIX: &'static str = "outlands-";
+pub fn endpoints() -> MavenEndpoints {
+    MavenEndpoints::official(&OUTLANDS_SPEC)
 }
 
-pub type OutlandsSpec = RetroFuturaMaven<OutlandsRetroFutura>;
-pub type OutlandsEndpoints = RetroFuturaEndpoints<OutlandsRetroFutura>;
-pub type OutlandsSource = RetroFuturaSource<OutlandsRetroFutura>;
-pub type OutlandsDriverSpec = RetroFuturaFamily<OutlandsRetroFutura>;
-pub type OutlandsDriver = RetroFuturaDriver<OutlandsRetroFutura>;
-pub type OutlandsCatalog = RetroFuturaReleaseCatalog<OutlandsRetroFutura>;
+pub fn source() -> InstallerMavenSource {
+    InstallerMavenSource::official(&OUTLANDS_SPEC)
+}
+
+pub fn driver() -> InstallerFamilyDriver {
+    InstallerFamilyDriver::for_spec(&OUTLANDS_SPEC)
+}
+
+pub fn catalog() -> InstallerMavenCatalog {
+    InstallerMavenCatalog::for_spec(&OUTLANDS_SPEC)
+}

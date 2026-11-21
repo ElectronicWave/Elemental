@@ -6,8 +6,13 @@ use crate::{
     error::Result,
     families::version_json::{LoaderMetaEndpoints, LoaderMetaSource, UpstreamUrlRewriter},
     loader_version::LoaderVersionId,
-    url::{Origin, OriginEndpoints},
+    url::{Origin, OriginEndpoints, OriginPolicy},
 };
+
+const KNOWN_QUILT_ORIGINS: &[&str] = &[
+    "https://meta.quiltmc.org",
+    "https://maven.quiltmc.org/repository/release",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum QuiltOrigin {
@@ -29,7 +34,23 @@ impl Origin for QuiltOrigin {
     }
 }
 
-pub type QuiltEndpoints = OriginEndpoints<QuiltOrigin>;
+impl AsRef<str> for QuiltOrigin {
+    fn as_ref(&self) -> &str {
+        self.canonical()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct QuiltEndpoints {
+    endpoints: OriginEndpoints,
+}
+
+impl Default for QuiltEndpoints {
+    fn default() -> Self {
+        Self::official()
+    }
+}
+
 pub type QuiltSource = LoaderMetaSource<QuiltEndpoints>;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -43,16 +64,26 @@ pub struct QuiltLoaderListVersion {
 }
 
 impl QuiltEndpoints {
+    pub fn new(origin_policy: OriginPolicy) -> Self {
+        Self {
+            endpoints: OriginEndpoints::new(KNOWN_QUILT_ORIGINS, origin_policy),
+        }
+    }
+
+    pub fn official() -> Self {
+        Self::new(OriginPolicy::default())
+    }
+
     pub fn game_versions_url(&self) -> Result<String> {
-        self.resolve_meta_segments(["v3", "versions", "game"])
+        self.resolve_meta_segments(&["v3", "versions", "game"])
     }
 
     pub fn loader_versions_url(&self, game_version: &str) -> Result<String> {
-        self.resolve_meta_segments(["v3", "versions", "loader", game_version])
+        self.resolve_meta_segments(&["v3", "versions", "loader", game_version])
     }
 
     pub fn profile_json_url(&self, game_version: &str, loader_version: &str) -> Result<String> {
-        self.resolve_meta_segments([
+        self.resolve_meta_segments(&[
             "v3",
             "versions",
             "loader",
@@ -63,8 +94,8 @@ impl QuiltEndpoints {
         ])
     }
 
-    fn resolve_meta_segments<const N: usize>(&self, segments: [&str; N]) -> Result<String> {
-        self.resolve_segments(QuiltOrigin::Meta, segments)
+    fn resolve_meta_segments(&self, segments: &[&str]) -> Result<String> {
+        self.endpoints.resolve_segments(QuiltOrigin::Meta, segments)
     }
 }
 
@@ -107,6 +138,6 @@ impl LoaderMetaEndpoints for QuiltEndpoints {
 
 impl UpstreamUrlRewriter for QuiltEndpoints {
     fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
-        self.rewrite_known_or_keep(raw_url)
+        self.endpoints.rewrite_known_or_keep(raw_url)
     }
 }

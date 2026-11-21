@@ -13,10 +13,7 @@ pub use artifact::{
     installer_coordinate_path,
 };
 pub use driver::InstallerFamilyDriver;
-pub use family::{
-    InstallerArtifactEndpoints, InstallerArtifactSource, InstallerFamily,
-    InstallerFamilyRemoteResolver, ResolvedInstallerFamilyVersion,
-};
+pub use family::{InstallerFamilyRemoteResolver, ResolvedInstallerFamilyVersion};
 pub use libraries::{
     is_retro_futura_runtime_library, merge_libraries_prefer_embedded, merge_retro_futura_libraries,
     normalize_library_urls,
@@ -34,6 +31,5 @@ pub(crate) use profile::{
     validate_installer_profile_identity,
 };
 pub use source::{
-    InstallerMavenArtifactSpec, InstallerMavenEndpoints, InstallerMavenSource, MavenEndpoints,
-    MavenSpec,
+    InstallerMavenArtifactSpec, InstallerMavenSource, MavenEndpoints, MavenInstallerSpec,
 };

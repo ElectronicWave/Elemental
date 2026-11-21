@@ -1,15 +1,14 @@
-use std::marker::PhantomData;
-
-use crate::error::Result;
 use async_trait::async_trait;
 use elemental_core::storage::{Storage, layout::Layout};
 
 use crate::{
     driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest},
     drivers::vanilla::source::VanillaSource,
+    error::Result,
     families::{
         installer::{
-            InstallerFamily, InstallerFamilyRemoteResolver, ResolvedInstallerFamilyVersion,
+            InstallerFamilyRemoteResolver, InstallerMavenSource, MavenInstallerSpec,
+            ResolvedInstallerFamilyVersion,
         },
         version_json::{
             PreparedVersionJsonInstance, VersionJsonInstanceLayout, VersionJsonRootLayout,
@@ -19,25 +18,21 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub struct InstallerFamilyDriver<F>
-where
-    F: InstallerFamily,
-{
-    source: F::Source,
+pub struct InstallerFamilyDriver {
+    source: InstallerMavenSource,
     vanilla_source: VanillaSource,
-    family: PhantomData<F>,
 }
 
-impl<F> InstallerFamilyDriver<F>
-where
-    F: InstallerFamily,
-{
-    pub fn new(source: F::Source) -> Self {
+impl InstallerFamilyDriver {
+    pub fn new(source: InstallerMavenSource) -> Self {
         Self {
             source,
             vanilla_source: VanillaSource::default(),
-            family: PhantomData,
         }
+    }
+
+    pub fn for_spec(spec: &'static MavenInstallerSpec) -> Self {
+        Self::new(InstallerMavenSource::official(spec))
     }
 
     pub fn with_vanilla_source(mut self, vanilla_source: VanillaSource) -> Self {
@@ -46,37 +41,25 @@ where
     }
 
     pub fn descriptor(&self) -> DriverDescriptor {
-        F::descriptor()
+        self.source.spec().descriptor()
     }
 
-    fn remote_resolver(&self) -> InstallerFamilyRemoteResolver<F> {
+    fn remote_resolver(&self) -> InstallerFamilyRemoteResolver {
         InstallerFamilyRemoteResolver::new(
             self.vanilla_source.endpoints().clone(),
-            F::source_endpoints(&self.source).clone(),
+            self.source.endpoints().clone(),
         )
     }
 }
 
-impl<F> InstallerFamilyDriver<F>
-where
-    F: InstallerFamily,
-    F::Source: Default,
-{
-    pub fn with_defaults() -> Self {
-        Self::new(F::Source::default())
-    }
-}
-
 #[async_trait]
-impl<F, L, VL> Driver<L, VL> for InstallerFamilyDriver<F>
+impl<L, VL> Driver<L, VL> for InstallerFamilyDriver
 where
-    F: InstallerFamily,
-    F::Source: Send + Sync,
     L: Layout,
     VL: Layout,
 {
     fn descriptor(&self) -> DriverDescriptor {
-        F::descriptor()
+        self.source.spec().descriptor()
     }
 
     async fn inspect(&self, probe: &InstanceProbe) -> Result<Option<InstalledDriver>> {
@@ -84,7 +67,7 @@ where
             return Ok(None);
         };
 
-        Ok(F::IDENTITY.inspect_installed(metadata))
+        Ok(self.source.spec().identity.inspect_installed(metadata))
     }
 
     async fn prepare(
@@ -120,6 +103,6 @@ where
         L: VersionJsonRootLayout + Clone,
         VL: VersionJsonInstanceLayout + Clone,
     {
-        ResolvedInstallerFamilyVersion::<F, L, VL>::load(&self.source, instance.clone()).await
+        ResolvedInstallerFamilyVersion::load(&self.source, instance.clone()).await
     }
 }

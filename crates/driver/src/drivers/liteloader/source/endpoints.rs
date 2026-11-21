@@ -3,6 +3,14 @@ use crate::{
     url::{Origin, OriginPolicy},
 };
 
+pub(super) const KNOWN_LITELOADER_ORIGINS: &[&str] = &[
+    "https://dl.liteloader.com/versions",
+    "https://repo.mumfrey.com/content/repositories/snapshots",
+    "https://repo.spongepowered.org/maven",
+    "https://libraries.minecraft.net",
+    "https://repo.maven.apache.org/maven2",
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LiteLoaderOrigin {
     Downloads,
@@ -14,7 +22,7 @@ pub enum LiteLoaderOrigin {
 
 #[derive(Debug, Clone)]
 pub struct LiteLoaderEndpoints {
-    pub(super) origin_policy: OriginPolicy<LiteLoaderOrigin>,
+    pub(super) origin_policy: OriginPolicy,
 }
 
 impl Default for LiteLoaderEndpoints {
@@ -46,8 +54,14 @@ impl Origin for LiteLoaderOrigin {
     }
 }
 
+impl AsRef<str> for LiteLoaderOrigin {
+    fn as_ref(&self) -> &str {
+        self.canonical()
+    }
+}
+
 impl LiteLoaderEndpoints {
-    pub fn new(origin_policy: OriginPolicy<LiteLoaderOrigin>) -> Self {
+    pub fn new(origin_policy: OriginPolicy) -> Self {
         Self { origin_policy }
     }
 

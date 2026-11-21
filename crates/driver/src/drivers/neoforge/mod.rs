@@ -4,7 +4,8 @@ use crate::{
     catalog::{InstallerMavenCatalog, LoaderRelease},
     descriptors::NEOFORGE_DRIVER,
     families::installer::{
-        InstallerFamily, InstallerFamilyDriver, InstallerMavenSource, MavenEndpoints, MavenSpec,
+        InstallerFamilyDriver, InstallerMavenSource, MavenEndpoints, MavenInstallerSpec,
+        merge_libraries_prefer_embedded,
     },
     inspect::{LibraryPrefixSet, ProfileIdPattern, ProfiledDriverIdentity},
     loader_version::LoaderVersionId,
@@ -24,46 +25,11 @@ impl Origin for NeoForgeOrigin {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct NeoForgeSpec;
-
-impl MavenSpec for NeoForgeSpec {
-    type Origin = NeoForgeOrigin;
-
-    const SOURCE_NAME: &'static str = "neoforge source";
-    const MAVEN_ORIGIN: NeoForgeOrigin = NeoForgeOrigin;
-    const GROUP: &'static str = "net.neoforged";
-    const ARTIFACT: &'static str = "neoforge";
-
-    fn version(_game_version: &MinecraftVersionId, loader_version: &LoaderVersionId) -> String {
-        loader_version.as_str().to_owned()
-    }
-
-    fn release(version: String) -> Option<(MinecraftVersionId, LoaderRelease)> {
-        let game_version = infer_neoforge_game_version(version.as_str())?;
-        Some((
-            game_version.clone(),
-            LoaderRelease::new(game_version, LoaderVersionId::from(version)),
-        ))
+impl AsRef<str> for NeoForgeOrigin {
+    fn as_ref(&self) -> &str {
+        self.canonical()
     }
 }
-
-pub type NeoForgeEndpoints = MavenEndpoints<NeoForgeSpec>;
-pub type NeoForgeSource = InstallerMavenSource<NeoForgeEndpoints>;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct NeoForgeFamily;
-
-impl InstallerFamily for NeoForgeFamily {
-    type Source = NeoForgeSource;
-    type Endpoints = NeoForgeEndpoints;
-
-    const IDENTITY: ProfiledDriverIdentity = NEOFORGE_IDENTITY;
-    const FAMILY_NAME: &'static str = "neoforge";
-    const LOADER_VERSION_PREFIX: &'static str = "neoforge-";
-}
-
-pub type NeoForgeDriver = InstallerFamilyDriver<NeoForgeFamily>;
 
 const NEOFORGE_MARKERS: LibraryPrefixSet = LibraryPrefixSet::new(&[
     "net.neoforged:neoforge:",
@@ -78,7 +44,53 @@ const NEOFORGE_IDENTITY: ProfiledDriverIdentity = ProfiledDriverIdentity::new(
     ProfileIdPattern::loader_prefixed("neoforge-"),
 );
 
-pub type NeoForgeCatalog = InstallerMavenCatalog<NeoForgeEndpoints>;
+pub const NEOFORGE_SPEC: MavenInstallerSpec = MavenInstallerSpec {
+    identity: NEOFORGE_IDENTITY,
+    family_name: "neoforge",
+    source_name: "neoforge source",
+    loader_version_prefix: "neoforge-",
+    canonical_origin: "https://maven.neoforged.net/releases",
+    group: "net.neoforged",
+    artifact: "neoforge",
+    fixed_game_version: None,
+    format_version: neoforge_version,
+    parse_release: neoforge_release,
+    merge_libraries: merge_libraries_prefer_embedded,
+};
+
+pub fn endpoints() -> MavenEndpoints {
+    MavenEndpoints::official(&NEOFORGE_SPEC)
+}
+
+pub fn source() -> InstallerMavenSource {
+    InstallerMavenSource::official(&NEOFORGE_SPEC)
+}
+
+pub fn driver() -> InstallerFamilyDriver {
+    InstallerFamilyDriver::for_spec(&NEOFORGE_SPEC)
+}
+
+pub fn catalog() -> InstallerMavenCatalog {
+    InstallerMavenCatalog::for_spec(&NEOFORGE_SPEC)
+}
+
+fn neoforge_version(
+    _game_version: &MinecraftVersionId,
+    loader_version: &LoaderVersionId,
+) -> String {
+    loader_version.as_str().to_owned()
+}
+
+fn neoforge_release(
+    _spec: &MavenInstallerSpec,
+    version: String,
+) -> Option<(MinecraftVersionId, LoaderRelease)> {
+    let game_version = infer_neoforge_game_version(version.as_str())?;
+    Some((
+        game_version.clone(),
+        LoaderRelease::new(game_version, LoaderVersionId::from(version)),
+    ))
+}
 
 fn infer_neoforge_game_version(loader_version: &str) -> Option<MinecraftVersionId> {
     let core_version = loader_version.split('-').next().unwrap_or(loader_version);

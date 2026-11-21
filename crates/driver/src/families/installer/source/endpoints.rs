@@ -1,93 +1,70 @@
-use std::marker::PhantomData;
-
 use elemental_core::minecraft::MinecraftVersionId;
+use elemental_infra::SafeRelativePath;
 
 use crate::{
-    catalog::LoaderRelease,
     error::Result,
-    families::installer::{
-        InstallerArtifactEndpoints, InstallerMavenArtifactSpec, InstallerMavenEndpoints,
-    },
+    families::installer::{InstallerMavenArtifactSpec, MavenInstallerSpec},
     loader_version::LoaderVersionId,
-    url::{OriginEndpoints, OriginPolicy},
+    url::OriginPolicy,
 };
 
-use super::spec::MavenSpec;
-
 #[derive(Debug, Clone)]
-pub struct MavenEndpoints<S>
-where
-    S: MavenSpec,
-{
-    endpoints: OriginEndpoints<S::Origin>,
-    marker: PhantomData<S>,
+pub struct MavenEndpoints {
+    spec: &'static MavenInstallerSpec,
+    known_origins: [&'static str; 1],
+    origin_policy: OriginPolicy,
 }
 
-impl<S> Default for MavenEndpoints<S>
-where
-    S: MavenSpec,
-{
-    fn default() -> Self {
-        Self::official()
-    }
-}
-
-impl<S> MavenEndpoints<S>
-where
-    S: MavenSpec,
-{
-    pub fn new(endpoints: OriginEndpoints<S::Origin>) -> Self {
+impl MavenEndpoints {
+    pub fn new(spec: &'static MavenInstallerSpec, origin_policy: OriginPolicy) -> Self {
         Self {
-            endpoints,
-            marker: PhantomData,
+            spec,
+            known_origins: [spec.canonical_origin],
+            origin_policy,
         }
     }
 
-    pub fn official() -> Self {
-        Self::new(OriginEndpoints::official())
+    pub fn official(spec: &'static MavenInstallerSpec) -> Self {
+        Self::new(spec, OriginPolicy::default())
+    }
+
+    pub fn spec(&self) -> &'static MavenInstallerSpec {
+        self.spec
     }
 
     pub fn resolve(&self, path: &str) -> Result<String> {
-        self.endpoints.resolve(S::MAVEN_ORIGIN, path)
+        self.origin_policy.resolve(self.spec.canonical_origin, path)
     }
 
-    pub fn origin_policy(&self) -> &OriginPolicy<S::Origin> {
-        self.endpoints.origin_policy()
+    pub fn origin_policy(&self) -> &OriginPolicy {
+        &self.origin_policy
     }
-}
 
-impl<S> InstallerArtifactEndpoints for MavenEndpoints<S>
-where
-    S: MavenSpec,
-{
-    fn artifact_url(&self, artifact_path: &str) -> Result<String> {
+    pub fn artifact_url(&self, artifact_path: &str) -> Result<String> {
         self.resolve(artifact_path)
     }
 
-    fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
-        S::rewrite_upstream(&self.endpoints, raw_url)
-    }
-}
-
-impl<S> InstallerMavenEndpoints for MavenEndpoints<S>
-where
-    S: MavenSpec,
-{
-    const SOURCE_NAME: &'static str = S::SOURCE_NAME;
-
-    fn maven_metadata_url(&self) -> Result<String> {
-        self.resolve(&S::metadata_path()?)
+    pub fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
+        self.origin_policy
+            .rewrite_known_origin_url_or_keep(&self.known_origins, raw_url)
     }
 
-    fn installer_artifact_spec(
+    pub fn maven_metadata_url(&self) -> Result<String> {
+        self.resolve(&self.spec.metadata_path()?)
+    }
+
+    pub fn installer_artifact_spec(
         &self,
         game_version: &MinecraftVersionId,
         loader_version: &LoaderVersionId,
     ) -> Result<InstallerMavenArtifactSpec> {
-        S::installer_artifact(&self.endpoints, game_version, loader_version)
-    }
-
-    fn release(version: String) -> Option<(MinecraftVersionId, LoaderRelease)> {
-        S::release(version)
+        let version = self.spec.version(game_version, loader_version);
+        let coordinate = self.spec.installer_coordinate(&version)?;
+        let artifact_path = coordinate.artifact_path();
+        Ok(InstallerMavenArtifactSpec {
+            coordinate: coordinate.to_string(),
+            download_url: self.resolve(&artifact_path)?,
+            relative_path: SafeRelativePath::parse(artifact_path)?,
+        })
     }
 }

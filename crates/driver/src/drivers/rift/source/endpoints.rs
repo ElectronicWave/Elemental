@@ -3,6 +3,13 @@ use crate::{
     url::{Origin, OriginPolicy},
 };
 
+const KNOWN_RIFT_ORIGINS: &[&str] = &[
+    "https://api.github.com",
+    "https://github.com",
+    "https://repo.spongepowered.org/maven",
+    "https://repo.maven.apache.org/maven2",
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RiftOrigin {
     GitHubApi,
@@ -13,7 +20,7 @@ pub enum RiftOrigin {
 
 #[derive(Debug, Clone)]
 pub struct RiftEndpoints {
-    origin_policy: OriginPolicy<RiftOrigin>,
+    origin_policy: OriginPolicy,
 }
 
 impl Default for RiftEndpoints {
@@ -43,8 +50,14 @@ impl Origin for RiftOrigin {
     }
 }
 
+impl AsRef<str> for RiftOrigin {
+    fn as_ref(&self) -> &str {
+        self.canonical()
+    }
+}
+
 impl RiftEndpoints {
-    pub fn new(origin_policy: OriginPolicy<RiftOrigin>) -> Self {
+    pub fn new(origin_policy: OriginPolicy) -> Self {
         Self { origin_policy }
     }
 
@@ -55,14 +68,14 @@ impl RiftEndpoints {
     pub fn releases_url(&self) -> Result<String> {
         self.origin_policy.resolve_segments(
             RiftOrigin::GitHubApi,
-            ["repos", "DimensionalDevelopment", "Rift", "releases"],
+            &["repos", "DimensionalDevelopment", "Rift", "releases"],
         )
     }
 
     pub fn release_asset_url(&self, tag_name: &str, asset_name: &str) -> Result<String> {
         self.origin_policy.resolve_segments(
             RiftOrigin::GitHubReleases,
-            [
+            &[
                 "DimensionalDevelopment",
                 "Rift",
                 "releases",
@@ -74,7 +87,8 @@ impl RiftEndpoints {
     }
 
     pub fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
-        self.origin_policy.rewrite_known_origin_url_or_keep(raw_url)
+        self.origin_policy
+            .rewrite_known_origin_url_or_keep(KNOWN_RIFT_ORIGINS, raw_url)
     }
 
     pub fn sponge_maven_url(&self) -> Result<String> {

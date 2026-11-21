@@ -97,7 +97,8 @@ implements `Authorizer` for real accounts.
 | `tls-native-vendored` | Platform TLS with vendored OpenSSL for static or cross-compiled builds |
 
 Select at most one TLS backend. A non-default backend requires
-`default-features = false`.
+`default-features = false`. Enabling an HTTP authentication feature without a
+TLS backend is a compile error.
 
 ## Core Concepts
 

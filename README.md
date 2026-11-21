@@ -291,6 +291,8 @@ elemental = {
 }
 ```
 
+Enabling an HTTP module without a TLS backend is a compile error.
+
 `tls-rustls-no-provider` does not bundle a cryptography provider. Add `rustls`
 with a provider such as `ring`, then install it process-wide before making HTTP
 requests:

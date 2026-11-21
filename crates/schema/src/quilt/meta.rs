@@ -1,15 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 pub use crate::fabric::{
-    ProfileJson, ProfileLibrary, ProfileLibraryArtifact, ProfileLibraryDownloads,
+    GameVersion, ProfileJson, ProfileLibrary, ProfileLibraryArtifact, ProfileLibraryDownloads,
     ProfileLibraryExtract, ProfileLogging, ProfileLoggingClient, ProfileLoggingFile,
 };
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct GameVersion {
-    pub version: String,
-    pub stable: bool,
-}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct LoaderVersionHashes {

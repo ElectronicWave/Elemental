@@ -4,7 +4,7 @@ use std::{
 };
 
 use elemental_schema::forge::ForgeInstallerProfile;
-use serde::Serialize;
+use serde_json::value::RawValue;
 use tokio::fs::create_dir_all;
 
 use crate::error::{Error, Result};
@@ -18,9 +18,10 @@ impl InstallerStatePaths<'_> {
         &self,
         install_profile: &ForgeInstallerProfile,
     ) -> Result<()> {
-        write_json(
+        let serialized = serde_json::to_vec_pretty(install_profile)?;
+        write_bytes_atomically(
             self.install_profile_path(),
-            install_profile,
+            &serialized,
             self.family.as_str(),
         )
         .await
@@ -28,11 +29,12 @@ impl InstallerStatePaths<'_> {
 
     pub(crate) async fn persist_embedded_version(
         &self,
-        embedded_version: Option<&serde_json::Value>,
+        embedded_version: Option<&RawValue>,
     ) -> Result<()> {
         let path = self.embedded_version_path();
         if let Some(version) = embedded_version {
-            return write_json(path, version, self.family.as_str()).await;
+            return write_bytes_atomically(path, version.get().as_bytes(), self.family.as_str())
+                .await;
         }
 
         if path.exists() {
@@ -42,15 +44,14 @@ impl InstallerStatePaths<'_> {
     }
 }
 
-async fn write_json<T: Serialize>(path: PathBuf, value: &T, family_name: &str) -> Result<()> {
+async fn write_bytes_atomically(path: PathBuf, bytes: &[u8], family_name: &str) -> Result<()> {
     let parent = path.parent().ok_or_else(|| Error::MissingParentDirectory {
         context: format!("{family_name} installer state path has no parent directory"),
         path: path.clone(),
     })?;
     create_dir_all(parent).await?;
-    let serialized = serde_json::to_vec_pretty(value)?;
     let temp_path = temporary_sibling_path(&path);
-    tokio::fs::write(&temp_path, serialized).await?;
+    tokio::fs::write(&temp_path, bytes).await?;
 
     if let Err(source) = tokio::fs::rename(&temp_path, &path).await {
         // Windows does not replace an existing destination with `rename`.

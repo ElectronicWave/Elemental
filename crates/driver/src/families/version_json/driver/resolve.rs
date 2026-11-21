@@ -1,5 +1,4 @@
 use elemental_core::{minecraft::MinecraftVersionId, storage::Storage};
-use elemental_schema::mojang::piston::{PistonMetaAssetIndexObjects, PistonMetaData};
 
 use crate::{
     drivers::vanilla::source::resolve_vanilla_metadata, error::Result,
@@ -7,12 +6,8 @@ use crate::{
 };
 
 use super::super::{
-    VersionJsonDownloadStatus, VersionJsonInstanceLayout, VersionJsonRootLayout,
-    family::ProfiledVersionJsonFamily,
-    prepared::{
-        instance::{load_version_metadata, persist_version_metadata},
-        readiness::check_download_status,
-    },
+    ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata, VersionJsonDownloadStatus,
+    VersionJsonInstanceLayout, VersionJsonRootLayout, family::ProfiledVersionJsonFamily,
 };
 use super::ProfiledVersionJsonDriver;
 
@@ -26,21 +21,21 @@ where
         game_version: MinecraftVersionId,
         loader_version: LoaderVersionId,
     ) -> Result<(
-        PistonMetaData,
-        PistonMetaAssetIndexObjects,
+        ResolvedVersionJsonInstance<L, VL>,
         Option<VersionJsonDownloadStatus>,
     )>
     where
         L: VersionJsonRootLayout + Clone,
         VL: VersionJsonInstanceLayout + Clone,
     {
-        if let Some((metadata, asset_index_objects, status)) =
-            try_load_downloaded_instance(instance)?
-            && !self
-                .family
-                .local_metadata_needs_refresh(&metadata, &game_version, &loader_version)
+        if let Some((resolved, status)) = try_load_downloaded_instance(instance)?
+            && !self.family.local_metadata_needs_refresh(
+                &resolved.metadata,
+                &game_version,
+                &loader_version,
+            )
         {
-            return Ok((metadata, asset_index_objects, Some(status)));
+            return Ok((resolved, Some(status)));
         }
 
         let base_metadata =
@@ -50,8 +45,11 @@ where
             .profile(&self.source, &game_version, &loader_version)
             .await?;
         let metadata = self.family.merge_profile(base_metadata.metadata, profile)?;
-        persist_version_metadata(instance, &metadata, &base_metadata.asset_index_objects).await?;
-        Ok((metadata, base_metadata.asset_index_objects, None))
+        let resolved =
+            ResolvedVersionJsonMetadata::new(metadata, base_metadata.asset_index_objects)
+                .persist(instance)
+                .await?;
+        Ok((resolved, None))
     }
 }
 
@@ -59,20 +57,19 @@ fn try_load_downloaded_instance<L, VL>(
     instance: &Storage<VL, Storage<L>>,
 ) -> Result<
     Option<(
-        PistonMetaData,
-        PistonMetaAssetIndexObjects,
+        ResolvedVersionJsonInstance<L, VL>,
         VersionJsonDownloadStatus,
     )>,
 >
 where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
+    L: VersionJsonRootLayout + Clone,
+    VL: VersionJsonInstanceLayout + Clone,
 {
-    match load_version_metadata(instance) {
-        Ok((metadata, asset_index_objects)) => {
-            let status = check_download_status(instance, &metadata, &asset_index_objects)?;
+    match ResolvedVersionJsonInstance::load(instance.clone()) {
+        Ok(resolved) => {
+            let status = resolved.download_status()?;
             if status.is_downloaded() {
-                return Ok(Some((metadata, asset_index_objects, status)));
+                return Ok(Some((resolved, status)));
             }
             Ok(None)
         }

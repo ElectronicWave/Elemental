@@ -11,21 +11,13 @@ use crate::{
     error::Result,
     families::{
         installer::{
-            InstallerArtifact, InstallerPersistedState, installer_has_client_processors,
-            processor::libraries::submit_installer_profile_libraries_dyn,
-            profile::{
-                install::prepare_installer_state_dyn, launch::persist_installer_launch_metadata,
-            },
-            run_installer_client_processors, validate_installer_profile_identity,
+            InstallerArtifact, installer_has_client_processors, prepare_installer_state,
+            profile::persist_installer_launch_version, run_installer_client_processors,
+            submit_installer_profile_libraries, validate_installer_profile_identity,
         },
         version_json::{
-            PreparedVersionJsonInstance, VersionJsonInstanceLayout, VersionJsonRootLayout,
-            VersionJsonRootResource,
-            prepared::{
-                instance::{finish_instance_preparation, submit_instance_install_batches},
-                readiness::check_download_status,
-            },
-            remote::DynRemoteResolver,
+            PreparedVersionJsonInstance, VersionJsonInstanceLayout, VersionJsonRemoteResolver,
+            VersionJsonRootLayout, VersionJsonRootResource,
         },
     },
     launch::{RuntimeOptions, resolve_prepared_version_runtime},
@@ -89,68 +81,120 @@ where
         runtime_options: &RuntimeOptions,
         runtime_resolver: &RuntimeResolver,
     ) -> Result<PreparedVersionJsonInstance<L, VL>> {
-        let endpoints = F::source_endpoints(&self.source);
-        prepare_installer_instance(
-            &self.instance,
-            &self.game_version,
-            &self.loader_version,
-            &self.installer_artifact,
-            F::FAMILY_NAME,
+        let ops = InstallerFamilyContext {
+            endpoints: F::source_endpoints(&self.source),
+            remote_resolver,
+        };
+        let context = PrepareInstallerContext {
+            instance: &self.instance,
+            game_version: &self.game_version,
+            loader_version: &self.loader_version,
+            installer_artifact: &self.installer_artifact,
             session,
             vanilla_source,
-            remote_resolver,
-            F::profile_identity,
-            &|libraries| F::normalize_libraries(endpoints, libraries),
-            &F::merge_libraries,
-            &|raw_url, artifact_path| remote_resolver.artifact_url(raw_url, artifact_path),
             runtime_options,
             runtime_resolver,
-        )
-        .await
+        };
+        prepare_installer_instance(context, &ops).await
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+trait InstallerFamilyOps: Send + Sync {
+    fn family_name(&self) -> &'static str;
+    fn remote_resolver(&self) -> &dyn VersionJsonRemoteResolver;
+    fn profile_identity(
+        &self,
+        install_profile: &ForgeInstallerProfile,
+    ) -> Result<(String, LoaderVersionId)>;
+    fn normalize_libraries(
+        &self,
+        libraries: Vec<PistonMetaLibraries>,
+    ) -> Result<Vec<PistonMetaLibraries>>;
+    fn merge_libraries(
+        &self,
+        base: Vec<PistonMetaLibraries>,
+        embedded: Vec<PistonMetaLibraries>,
+    ) -> Vec<PistonMetaLibraries>;
+    fn artifact_url(&self, raw_url: &str, artifact_path: &str) -> Result<String>;
+}
+
+struct InstallerFamilyContext<'a, F: InstallerFamily> {
+    endpoints: &'a F::Endpoints,
+    remote_resolver: &'a InstallerFamilyRemoteResolver<F>,
+}
+
+impl<F: InstallerFamily> InstallerFamilyOps for InstallerFamilyContext<'_, F> {
+    fn family_name(&self) -> &'static str {
+        F::FAMILY_NAME
+    }
+
+    fn remote_resolver(&self) -> &dyn VersionJsonRemoteResolver {
+        self.remote_resolver
+    }
+
+    fn profile_identity(
+        &self,
+        install_profile: &ForgeInstallerProfile,
+    ) -> Result<(String, LoaderVersionId)> {
+        F::profile_identity(install_profile)
+    }
+
+    fn normalize_libraries(
+        &self,
+        libraries: Vec<PistonMetaLibraries>,
+    ) -> Result<Vec<PistonMetaLibraries>> {
+        F::normalize_libraries(self.endpoints, libraries)
+    }
+
+    fn merge_libraries(
+        &self,
+        base: Vec<PistonMetaLibraries>,
+        embedded: Vec<PistonMetaLibraries>,
+    ) -> Vec<PistonMetaLibraries> {
+        F::merge_libraries(base, embedded)
+    }
+
+    fn artifact_url(&self, raw_url: &str, artifact_path: &str) -> Result<String> {
+        self.remote_resolver.artifact_url(raw_url, artifact_path)
+    }
+}
+
+struct PrepareInstallerContext<'a, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> {
+    instance: &'a Storage<VL, Storage<L>>,
+    game_version: &'a MinecraftVersionId,
+    loader_version: &'a LoaderVersionId,
+    installer_artifact: &'a InstallerArtifact,
+    session: &'a DownloadSession,
+    vanilla_source: &'a VanillaSource,
+    runtime_options: &'a RuntimeOptions,
+    runtime_resolver: &'a RuntimeResolver,
+}
+
 async fn prepare_installer_instance<L, VL>(
-    instance: &Storage<VL, Storage<L>>,
-    game_version: &MinecraftVersionId,
-    loader_version: &LoaderVersionId,
-    installer_artifact: &InstallerArtifact,
-    family_name: &str,
-    session: &DownloadSession,
-    vanilla_source: &VanillaSource,
-    remote_resolver: &dyn DynRemoteResolver,
-    profile_identity: fn(&ForgeInstallerProfile) -> Result<(String, LoaderVersionId)>,
-    normalize_libraries: &(
-         dyn Fn(Vec<PistonMetaLibraries>) -> Result<Vec<PistonMetaLibraries>> + Send + Sync
-     ),
-    merge_libraries: &(
-         dyn Fn(Vec<PistonMetaLibraries>, Vec<PistonMetaLibraries>) -> Vec<PistonMetaLibraries>
-             + Send
-             + Sync
-     ),
-    artifact_url: &(dyn Fn(&str, &str) -> Result<String> + Send + Sync),
-    runtime_options: &RuntimeOptions,
-    runtime_resolver: &RuntimeResolver,
+    context: PrepareInstallerContext<'_, L, VL>,
+    ops: &dyn InstallerFamilyOps,
 ) -> Result<PreparedVersionJsonInstance<L, VL>>
 where
     L: VersionJsonRootLayout + Clone,
     VL: VersionJsonInstanceLayout + Clone,
 {
-    let libraries_root = instance
+    let family_name = ops.family_name();
+    let libraries_root = context
+        .instance
         .parent
         .try_get_resource(VersionJsonRootResource::Libraries(None))?;
-    let installer_state: InstallerPersistedState = prepare_installer_state_dyn(
-        session,
-        installer_artifact,
-        &instance.path,
+    let installer_state = prepare_installer_state(
+        context.session,
+        context.installer_artifact,
+        &context.instance.path,
         &libraries_root,
         family_name,
         &|install_profile| {
-            let (profile_game_version, profile_loader_version) = profile_identity(install_profile)?;
+            let (profile_game_version, profile_loader_version) =
+                ops.profile_identity(install_profile)?;
             validate_installer_profile_identity(
-                game_version.as_str(),
-                loader_version,
+                context.game_version.as_str(),
+                context.loader_version,
                 &profile_game_version,
                 &profile_loader_version,
                 family_name,
@@ -159,46 +203,43 @@ where
     )
     .await?;
 
-    let (metadata, asset_index_objects) = persist_installer_launch_metadata(
-        instance,
-        game_version,
-        vanilla_source,
-        installer_state.embedded_version.as_ref(),
-        normalize_libraries,
-        merge_libraries,
+    let resolved_launch = persist_installer_launch_version(
+        context.instance,
+        context.game_version,
+        context.vanilla_source,
+        installer_state.embedded_version.as_deref(),
+        &|libraries| ops.normalize_libraries(libraries),
+        &|base, embedded| ops.merge_libraries(base, embedded),
         family_name,
     )
     .await?;
 
-    submit_instance_install_batches(
-        remote_resolver,
-        instance,
-        &metadata,
-        &asset_index_objects,
-        session,
-    )
-    .await?;
-    submit_installer_profile_libraries_dyn(
-        session,
-        instance,
+    resolved_launch
+        .submit_install_batches(ops.remote_resolver(), context.session)
+        .await?;
+    submit_installer_profile_libraries(
+        context.session,
+        &context.instance.parent,
         &installer_state.install_profile,
         family_name,
-        artifact_url,
+        &|raw_url, artifact_path| ops.artifact_url(raw_url, artifact_path),
     )
     .await?;
-    session.success().await?;
-    let download_status = check_download_status(instance, &metadata, &asset_index_objects)?;
-    let launch_version =
-        finish_instance_preparation(instance.clone(), metadata, download_status).await?;
+    context.session.success().await?;
+
+    let launch_version = resolved_launch.finish_preparation().await?;
 
     if installer_has_client_processors(&installer_state.install_profile) {
-        let runtime =
-            resolve_prepared_version_runtime(&launch_version, runtime_options, runtime_resolver)
-                .await?;
+        let runtime = resolve_prepared_version_runtime(
+            &launch_version,
+            context.runtime_options,
+            context.runtime_resolver,
+        )
+        .await?;
         run_installer_client_processors(
             &runtime,
-            instance,
-            installer_artifact,
+            context.instance,
+            context.installer_artifact,
             &installer_state.install_profile,
             family_name,
         )

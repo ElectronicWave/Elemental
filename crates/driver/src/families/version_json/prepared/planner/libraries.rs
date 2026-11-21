@@ -10,9 +10,9 @@ use crate::{
     },
 };
 
-use super::DynInstallPlanner;
+use super::VersionJsonInstallPlanner;
 
-impl<L, VL> DynInstallPlanner<'_, L, VL>
+impl<L, VL> VersionJsonInstallPlanner<'_, L, VL>
 where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
@@ -21,7 +21,7 @@ where
         &self,
         library: &PistonMetaLibraries,
     ) -> Result<Vec<DownloadTask>> {
-        if !library.is_allowed(self.rule_context) {
+        if !library.is_allowed(&self.rule_context) {
             return Ok(Vec::new());
         }
         let artifacts = library.version_artifacts(self.rule_context.platform())?;

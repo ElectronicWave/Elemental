@@ -9,7 +9,7 @@ use crate::{
     error::Result,
     families::version_json::{
         VersionJsonInstanceLayout, VersionJsonRemoteResolver, VersionJsonRootLayout,
-        VersionJsonRootResource, VersionJsonRuleContext, remote::DynRemoteResolver,
+        VersionJsonRootResource, VersionJsonRuleContext,
     },
 };
 
@@ -18,70 +18,40 @@ use super::ResolvedVersionJsonInstance;
 mod libraries;
 mod version;
 
-pub struct VersionJsonInstallPlanner<
-    'a,
-    R: VersionJsonRemoteResolver,
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-> {
+pub struct VersionJsonInstallPlanner<'a, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> {
     pub(super) version:
         &'a elemental_core::storage::Storage<VL, elemental_core::storage::Storage<L>>,
     pub(super) metadata: &'a PistonMetaData,
     pub(super) asset_index_objects: &'a PistonMetaAssetIndexObjects,
-    pub(super) remote_resolver: R,
+    pub(super) remote_resolver: &'a dyn VersionJsonRemoteResolver,
     pub(super) rule_context: VersionJsonRuleContext,
 }
 
-pub(crate) struct DynInstallPlanner<'a, L: VersionJsonRootLayout, VL: VersionJsonInstanceLayout> {
-    pub(super) version:
-        &'a elemental_core::storage::Storage<VL, elemental_core::storage::Storage<L>>,
-    pub(super) metadata: &'a PistonMetaData,
-    pub(super) asset_index_objects: &'a PistonMetaAssetIndexObjects,
-    pub(super) remote_resolver: &'a dyn DynRemoteResolver,
-    pub(super) rule_context: &'a VersionJsonRuleContext,
-}
-
-impl<R, L, VL> ResolvedVersionJsonInstance<R, L, VL>
+impl<L, VL> ResolvedVersionJsonInstance<L, VL>
 where
-    R: VersionJsonRemoteResolver,
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
-    pub fn planner(&self) -> VersionJsonInstallPlanner<'_, R, L, VL> {
+    pub fn planner<'a>(
+        &'a self,
+        remote_resolver: &'a dyn VersionJsonRemoteResolver,
+    ) -> VersionJsonInstallPlanner<'a, L, VL> {
         VersionJsonInstallPlanner {
             version: &self.version,
             metadata: &self.metadata,
             asset_index_objects: &self.asset_index_objects,
-            remote_resolver: self.remote_resolver.clone(),
+            remote_resolver,
             rule_context: VersionJsonRuleContext::current(),
         }
     }
 }
 
-impl<'a, R, L, VL> VersionJsonInstallPlanner<'a, R, L, VL>
+impl<L, VL> VersionJsonInstallPlanner<'_, L, VL>
 where
-    R: VersionJsonRemoteResolver,
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,
 {
     pub fn download_batches(&self) -> Result<Vec<DownloadBatch>> {
-        DynInstallPlanner {
-            version: self.version,
-            metadata: self.metadata,
-            asset_index_objects: self.asset_index_objects,
-            remote_resolver: &self.remote_resolver,
-            rule_context: &self.rule_context,
-        }
-        .download_batches()
-    }
-}
-
-impl<L, VL> DynInstallPlanner<'_, L, VL>
-where
-    L: VersionJsonRootLayout,
-    VL: VersionJsonInstanceLayout,
-{
-    pub(crate) fn download_batches(&self) -> Result<Vec<DownloadBatch>> {
         let mut batches = Vec::new();
         let version = self.batch_version_artifacts()?;
         if !version.is_empty() {

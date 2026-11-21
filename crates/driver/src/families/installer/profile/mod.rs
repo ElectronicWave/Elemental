@@ -1,6 +1,6 @@
 mod identity;
-pub(crate) mod install;
-pub(crate) mod launch;
+mod install;
+mod launch;
 mod merge;
 mod state;
 mod status;
@@ -8,7 +8,8 @@ mod status;
 pub use identity::{profile_game_and_raw_loader_version, validate_installer_profile_identity};
 pub use install::prepare_installer_state;
 pub use launch::{
-    InstallerLaunchVersionRequest, load_persisted_installer_state, persist_installer_launch_version,
+    load_persisted_install_profile, load_persisted_installer_state,
+    persist_installer_launch_version,
 };
 pub use state::InstallerPersistedState;
 pub(crate) use state::InstallerStatePaths;

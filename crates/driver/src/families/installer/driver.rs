@@ -120,11 +120,6 @@ where
         L: VersionJsonRootLayout + Clone,
         VL: VersionJsonInstanceLayout + Clone,
     {
-        ResolvedInstallerFamilyVersion::load(
-            self.source.clone(),
-            self.remote_resolver(),
-            instance.clone(),
-        )
-        .await
+        ResolvedInstallerFamilyVersion::<F, L, VL>::load(&self.source, instance.clone()).await
     }
 }

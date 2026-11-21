@@ -9,15 +9,8 @@ use crate::{
 };
 
 use super::{
-    PreparedVersionJsonInstance, VersionJsonInstanceLayout, VersionJsonRootLayout,
-    family::ProfiledVersionJsonFamily,
-    prepared::{
-        instance::{
-            finish_instance_preparation, load_version_metadata,
-            prepare_instance_with_download_status,
-        },
-        readiness::check_download_status,
-    },
+    PreparedVersionJsonInstance, ResolvedVersionJsonInstance, VersionJsonInstanceLayout,
+    VersionJsonRootLayout, family::ProfiledVersionJsonFamily,
 };
 
 mod resolve;
@@ -96,7 +89,7 @@ where
         VL: VersionJsonInstanceLayout + Clone,
     {
         let loader_version = request.required_loader_version(self.descriptor())?;
-        let (metadata, asset_index_objects, download_status) = self
+        let (resolved, download_status) = self
             .resolve_or_load(
                 request.instance,
                 request.game_version.clone(),
@@ -104,15 +97,9 @@ where
             )
             .await?;
         let remote_resolver = self.remote_resolver();
-        prepare_instance_with_download_status(
-            &remote_resolver,
-            request.instance.clone(),
-            metadata,
-            asset_index_objects,
-            request.session,
-            download_status,
-        )
-        .await
+        resolved
+            .prepare_with_download_status(&remote_resolver, request.session, download_status)
+            .await
     }
 
     async fn load_prepared(
@@ -123,18 +110,8 @@ where
         L: VersionJsonRootLayout + Clone,
         VL: VersionJsonInstanceLayout + Clone,
     {
-        load_prepared_version_json_instance(instance.clone()).await
+        ResolvedVersionJsonInstance::load(instance.clone())?
+            .finish_preparation()
+            .await
     }
-}
-
-async fn load_prepared_version_json_instance<L, VL>(
-    instance: Storage<VL, Storage<L>>,
-) -> Result<PreparedVersionJsonInstance<L, VL>>
-where
-    L: VersionJsonRootLayout + Clone,
-    VL: VersionJsonInstanceLayout + Clone,
-{
-    let (metadata, asset_index_objects) = load_version_metadata(&instance)?;
-    let download_status = check_download_status(&instance, &metadata, &asset_index_objects)?;
-    finish_instance_preparation(instance, metadata, download_status).await
 }

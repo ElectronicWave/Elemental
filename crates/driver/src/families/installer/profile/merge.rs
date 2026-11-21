@@ -3,6 +3,7 @@ use elemental_schema::mojang::piston::{
     PistonMetaJavaVersion, PistonMetaLibraries, PistonMetaLogging,
 };
 use serde::Deserialize;
+use serde_json::value::RawValue;
 
 use crate::{
     error::{Error, Result},
@@ -49,7 +50,7 @@ struct EmbeddedVersionData {
 
 pub(super) fn merge_embedded_version(
     base_metadata: PistonMetaData,
-    embedded_version: &serde_json::Value,
+    embedded_version: &RawValue,
     normalize_libraries: &dyn Fn(Vec<PistonMetaLibraries>) -> Result<Vec<PistonMetaLibraries>>,
     merge_libraries: &dyn Fn(
         Vec<PistonMetaLibraries>,
@@ -57,18 +58,13 @@ pub(super) fn merge_embedded_version(
     ) -> Vec<PistonMetaLibraries>,
     family_name: &str,
 ) -> Result<PistonMetaData> {
-    let embedded_bytes =
-        serde_json::to_vec(embedded_version).map_err(|source| Error::DecodeEmbeddedVersion {
-            family_name: family_name.to_owned(),
-            source,
-        })?;
-    let mut embedded =
-        serde_json::from_slice::<EmbeddedVersionData>(&embedded_bytes).map_err(|source| {
-            Error::DecodeEmbeddedVersion {
-                family_name: family_name.to_owned(),
-                source,
-            }
-        })?;
+    let mut embedded = serde_json::from_slice::<EmbeddedVersionData>(
+        embedded_version.get().as_bytes(),
+    )
+    .map_err(|source| Error::DecodeEmbeddedVersion {
+        family_name: family_name.to_owned(),
+        source,
+    })?;
     embedded.libraries = normalize_libraries(embedded.libraries)?;
 
     let PistonMetaData {

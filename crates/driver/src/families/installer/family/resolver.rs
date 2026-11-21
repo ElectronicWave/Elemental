@@ -3,9 +3,7 @@ use std::marker::PhantomData;
 use crate::{
     drivers::vanilla::source::{VanillaEndpoints, rewrite_upstream_with_vanilla_fallback},
     error::Result,
-    families::version_json::{
-        ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata, VersionJsonRemoteResolver,
-    },
+    families::version_json::VersionJsonRemoteResolver,
 };
 
 use super::InstallerFamily;
@@ -19,11 +17,6 @@ where
     endpoints: F::Endpoints,
     family: PhantomData<F>,
 }
-
-pub type ResolvedInstallerFamilyMetadata<F> =
-    ResolvedVersionJsonMetadata<InstallerFamilyRemoteResolver<F>>;
-pub type ResolvedInstallerFamilyLaunchVersion<F, L, VL> =
-    ResolvedVersionJsonInstance<InstallerFamilyRemoteResolver<F>, L, VL>;
 
 impl<F> InstallerFamilyRemoteResolver<F>
 where

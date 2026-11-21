@@ -22,10 +22,7 @@ mod resolved;
 mod resolver;
 
 pub use resolved::ResolvedInstallerFamilyVersion;
-pub use resolver::{
-    InstallerFamilyRemoteResolver, ResolvedInstallerFamilyLaunchVersion,
-    ResolvedInstallerFamilyMetadata,
-};
+pub use resolver::InstallerFamilyRemoteResolver;
 
 pub trait InstallerArtifactEndpoints: Clone + Debug + Send + Sync + 'static {
     fn artifact_url(&self, artifact_path: &str) -> Result<String>;

@@ -45,7 +45,7 @@ impl VanillaDriver {
         instance: &Storage<VL, Storage<L>>,
         version_id: MinecraftVersionId,
     ) -> Result<ResolvedVanillaVersion<L, VL>> {
-        match ResolvedVanillaVersion::load(self.source.endpoints().clone(), instance.clone()) {
+        match ResolvedVanillaVersion::load(instance.clone()) {
             Ok(resolved) => return Ok(resolved),
             Err(error) if error.is_not_found() => {}
             Err(error) => return Err(error),
@@ -89,7 +89,7 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for VanillaDriver {
     {
         self.resolve_or_load(request.instance, request.game_version.clone())
             .await?
-            .prepare(request.session)
+            .prepare(self.source.endpoints(), request.session)
             .await
     }
 
@@ -101,7 +101,7 @@ impl<L: Layout, VL: Layout> Driver<L, VL> for VanillaDriver {
         L: VersionJsonRootLayout + Clone,
         VL: VersionJsonInstanceLayout + Clone,
     {
-        ResolvedVanillaVersion::load(self.source.endpoints().clone(), instance.clone())?
+        ResolvedVanillaVersion::load(instance.clone())?
             .finish_preparation()
             .await
     }

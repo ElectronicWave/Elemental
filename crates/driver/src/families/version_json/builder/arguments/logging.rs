@@ -38,10 +38,10 @@ where
     }
 
     Ok(Some(builder.inner.apply_with(
-        vec![client.argument.clone()],
+        std::slice::from_ref(&client.argument),
         &HashMap::from([(
             "path".to_owned(),
             log_config_path.to_string_lossy().to_string(),
         )]),
-    )?))
+    )))
 }

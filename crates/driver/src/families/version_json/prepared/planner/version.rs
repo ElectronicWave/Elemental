@@ -9,9 +9,9 @@ use crate::{
     },
 };
 
-use super::DynInstallPlanner;
+use super::VersionJsonInstallPlanner;
 
-impl<L, VL> DynInstallPlanner<'_, L, VL>
+impl<L, VL> VersionJsonInstallPlanner<'_, L, VL>
 where
     L: VersionJsonRootLayout,
     VL: VersionJsonInstanceLayout,

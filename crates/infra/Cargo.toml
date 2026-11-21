@@ -6,7 +6,6 @@ description = "Infrastructure library for Elemental, providing some infra object
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
-homepage.workspace = true
 license.workspace = true
 
 [dependencies]

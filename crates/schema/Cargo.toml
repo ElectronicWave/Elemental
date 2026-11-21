@@ -6,7 +6,6 @@ description = "Mojang / Modloaders version manifest schema definitions and utili
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
-homepage.workspace = true
 license.workspace = true
 
 [dependencies]

@@ -28,6 +28,8 @@ directly.
 - A prepared version JSON view that exposes metadata, natives, and classpath
   without importing family traits.
 - Shared version JSON layouts for game roots and individual instances.
+- Selectable TLS backend through `tls-aws-lc` (default),
+  `tls-rustls-no-provider`, `tls-native`, or `tls-native-vendored`.
 
 ## Installation
 

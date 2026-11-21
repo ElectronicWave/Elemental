@@ -22,6 +22,8 @@ reload it, build a mutable launch command, then start the game.
   play, and extra arguments.
 - A stable read-only view of prepared instance metadata, natives, and the
   resolved classpath.
+- Selectable TLS backend through `tls-aws-lc` (default),
+  `tls-rustls-no-provider`, `tls-native`, or `tls-native-vendored`.
 
 ## Installation
 

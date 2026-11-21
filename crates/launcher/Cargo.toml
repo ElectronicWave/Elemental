@@ -13,7 +13,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 elemental-core = { path = "../core", version = "0.3.0", default-features = false }
 elemental-driver = { path = "../driver", version = "0.3.0", default-features = false }
-elemental-infra = { path = "../infra", version = "0.3.0" }
+elemental-infra = { path = "../infra", version = "0.3.0", default-features = false }
 elemental-shared = { path = "../shared", version = "0.3.0" }
 erased-serde = { workspace = true }
 hex = { workspace = true }
@@ -26,8 +26,32 @@ sha2 = { workspace = true }
 async-trait = { workspace = true }
 
 [features]
-default = ["driver-all", "microsoft-auth"]
+default = ["driver-all", "microsoft-auth", "tls-aws-lc"]
 microsoft-auth = ["elemental-core/microsoft-auth"]
+tls-aws-lc = [
+    "elemental-core/tls-aws-lc",
+    "elemental-driver/tls-aws-lc",
+    "elemental-infra/tls-aws-lc",
+    "nidhogg?/tls-aws-lc",
+]
+tls-rustls-no-provider = [
+    "elemental-core/tls-rustls-no-provider",
+    "elemental-driver/tls-rustls-no-provider",
+    "elemental-infra/tls-rustls-no-provider",
+    "nidhogg?/tls-rustls-no-provider",
+]
+tls-native = [
+    "elemental-core/tls-native",
+    "elemental-driver/tls-native",
+    "elemental-infra/tls-native",
+    "nidhogg?/tls-native",
+]
+tls-native-vendored = [
+    "elemental-core/tls-native-vendored",
+    "elemental-driver/tls-native-vendored",
+    "elemental-infra/tls-native-vendored",
+    "nidhogg?/tls-native-vendored",
+]
 driver-all = [
     "driver-fabric",
     "driver-legacyfabric",

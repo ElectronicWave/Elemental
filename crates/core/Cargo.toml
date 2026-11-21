@@ -9,7 +9,7 @@ repository.workspace = true
 license.workspace = true
 
 [features]
-default = ["microsoft-auth"]
+default = ["microsoft-auth", "tls-aws-lc"]
 microsoft-auth = [
     "dep:base64",
     "dep:minecraft-msa-auth",
@@ -20,6 +20,10 @@ microsoft-auth = [
     "reqwest/json",
     "reqwest/multipart",
 ]
+tls-aws-lc = ["reqwest?/rustls", "nidhogg?/tls-aws-lc"]
+tls-rustls-no-provider = ["reqwest?/rustls-no-provider", "nidhogg?/tls-rustls-no-provider"]
+tls-native = ["reqwest?/native-tls", "nidhogg?/tls-native"]
+tls-native-vendored = ["reqwest?/native-tls-vendored", "nidhogg?/tls-native-vendored"]
 yggdrasil-auth = ["dep:nidhogg"]
 offline-server = ["yggdrasil-auth", "nidhogg/server"]
 

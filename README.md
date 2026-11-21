@@ -231,7 +231,7 @@ reusable infrastructure together.
 | `elemental::schema` | `elemental-schema` | `schema` |
 
 `full` enables every module. The default feature set is `full` plus
-`shared-json` and `object-notify`.
+`shared-json`, `object-notify`, and `tls-aws-lc`.
 
 Common launcher types are available through the prelude:
 
@@ -266,6 +266,10 @@ Forwarded features:
 | `yggdrasil-auth` | Enables Yggdrasil authentication support, including authlib-injector download and launch injection |
 | `authlib-injector-embed` | Embeds an authlib-injector snapshot as a fallback when metadata retrieval, download, or verification fails |
 | `offline-server` | Enables the local offline Yggdrasil server and authlib-injector support in `elemental-launcher` |
+| `tls-aws-lc` | Default TLS backend: Rustls with `aws-lc-rs` |
+| `tls-rustls-no-provider` | Rustls without a bundled cryptography provider |
+| `tls-native` | Platform TLS, using `schannel` on Windows and the system store elsewhere |
+| `tls-native-vendored` | Platform TLS with vendored OpenSSL for static or cross-compiled builds |
 
 > [!IMPORTANT]
 > Forwarded features enable their parent module where applicable:
@@ -273,6 +277,29 @@ Forwarded features:
 > `object`, `infra-serde` enables `infra`, and `yggdrasil-auth` enables `core`
 > and `launcher`. With `default-features = false`, add the module feature
 > directly when you need it without a forwarded feature.
+
+Select at most one TLS backend. Cargo features are additive, so a non-default
+backend requires disabling defaults:
+
+```toml
+[dependencies]
+elemental = {
+    package = "elemental-kit",
+    version = "0.3",
+    default-features = false,
+    features = ["launcher", "tls-native"],
+}
+```
+
+`tls-rustls-no-provider` does not bundle a cryptography provider. Add `rustls`
+with a provider such as `ring`, then install it process-wide before making HTTP
+requests:
+
+```rust
+rustls::crypto::ring::default_provider()
+    .install_default()
+    .expect("failed to install Rustls provider");
+```
 
 ## Documentation
 

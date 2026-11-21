@@ -28,6 +28,10 @@ path instead of choosing between `core`, `task`, and `report`.
 `ElementalDownloader` is a factory and owner of shared resources such as the
 connection budget and bandwidth limiter. It does not represent one operation.
 Each operation is a `DownloadSession`: open a session, submit tasks or batches
+
+Downloads use `tls-aws-lc` by default. Disable default features and select
+`tls-rustls-no-provider`, `tls-native`, or `tls-native-vendored` to use another
+TLS backend.
 to it, then finish it to get a report. This keeps related downloads together
 and lets the caller observe progress or inspect failures as a unit. Pass
 `&DownloadSession` to code that performs downloads instead of passing the

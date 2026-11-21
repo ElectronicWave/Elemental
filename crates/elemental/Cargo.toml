@@ -28,6 +28,31 @@ shared-toml = ["shared", "elemental-shared/toml"]
 driver = ["dep:elemental-driver", "core", "infra", "schema", "shared"]
 launcher = ["dep:elemental-launcher", "core", "driver", "infra"]
 
+tls-aws-lc = [
+    "elemental-core?/tls-aws-lc",
+    "elemental-driver?/tls-aws-lc",
+    "elemental-infra?/tls-aws-lc",
+    "elemental-launcher?/tls-aws-lc",
+]
+tls-rustls-no-provider = [
+    "elemental-core?/tls-rustls-no-provider",
+    "elemental-driver?/tls-rustls-no-provider",
+    "elemental-infra?/tls-rustls-no-provider",
+    "elemental-launcher?/tls-rustls-no-provider",
+]
+tls-native = [
+    "elemental-core?/tls-native",
+    "elemental-driver?/tls-native",
+    "elemental-infra?/tls-native",
+    "elemental-launcher?/tls-native",
+]
+tls-native-vendored = [
+    "elemental-core?/tls-native-vendored",
+    "elemental-driver?/tls-native-vendored",
+    "elemental-infra?/tls-native-vendored",
+    "elemental-launcher?/tls-native-vendored",
+]
+
 driver-all = [
     "driver-fabric",
     "driver-legacyfabric",
@@ -104,4 +129,4 @@ full = [
     "schema",
 ]
 
-default = ["full", "shared-json", "object-notify"]
+default = ["full", "shared-json", "object-notify", "tls-aws-lc"]

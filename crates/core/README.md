@@ -91,6 +91,14 @@ implements `Authorizer` for real accounts.
 | --- | --- |
 | `yggdrasil-auth` | Enables the Yggdrasil account and authorizer, and `Credential::auth_server` |
 | `offline-server` | Enables `yggdrasil-auth` and re-exports nidhogg's offline server |
+| `tls-aws-lc` | Default TLS backend: Rustls with `aws-lc-rs` |
+| `tls-rustls-no-provider` | Rustls without a bundled cryptography provider |
+| `tls-native` | Platform TLS, using `schannel` on Windows and the system store elsewhere |
+| `tls-native-vendored` | Platform TLS with vendored OpenSSL for static or cross-compiled builds |
+
+Select at most one TLS backend. A non-default backend requires
+`default-features = false`. Enabling an HTTP authentication feature without a
+TLS backend is a compile error.
 
 ## Core Concepts
 

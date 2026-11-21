@@ -7,6 +7,8 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[cfg(feature = "yggdrasil-auth")]
+use crate::auth::accounts::yggdrasil::Meta;
 use crate::auth::credential::Credential;
 use crate::auth::error::Result;
 use crate::auth::texture::{ProfileTextures, SkinModel};
@@ -69,6 +71,15 @@ pub trait Account: Send + Sync + erased_serde::Serialize {
     async fn credential(&self) -> Result<Credential>;
 
     async fn refresh(&self) -> Result<Box<dyn Account>>;
+
+    /// Returns the authentication service metadata when the provider exposes it.
+    ///
+    /// `None` means metadata is unavailable for this account type or, for an
+    /// offline Yggdrasil account, that there is no remote API root.
+    #[cfg(feature = "yggdrasil-auth")]
+    async fn metadata(&self) -> Result<Option<Meta>> {
+        Ok(None)
+    }
 
     async fn textures(&self) -> Result<ProfileTextures> {
         unsupported("read textures")

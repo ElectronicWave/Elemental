@@ -42,7 +42,7 @@ pub mod prelude {
 
     #[cfg(feature = "yggdrasil-auth")]
     pub use crate::core::auth::{
-        accounts::yggdrasil::{YggdrasilAccount, YggdrasilProfile},
+        accounts::yggdrasil::{Meta, YggdrasilAccount, YggdrasilProfile},
         authorizers::yggdrasil::{YGGDRASIL_AUTHORIZER_ID, YggdrasilAuthorizer},
     };
 

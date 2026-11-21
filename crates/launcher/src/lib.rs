@@ -27,8 +27,9 @@ pub use elemental_core::auth::texture::{
     Cape, ProfileTextures, Skin, SkinModel, SkinPixels, TextureType,
 };
 pub use elemental_core::launcher::command::LaunchCommand;
+pub use elemental_driver::driver::PrepareStage;
 pub use elemental_infra::downloader::{DownloadProgress, DownloadSession};
-pub use launcher::Launcher;
+pub use launcher::{Launcher, PrepareInstanceBuilder};
 pub use origin::DriverOrigins;
 pub use registration::{DriverRegistration, DriverRegistry};
 pub use request::{LaunchOptions, LaunchResolution, QuickPlayOptions, RuntimeOptions};

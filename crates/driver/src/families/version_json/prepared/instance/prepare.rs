@@ -17,18 +17,8 @@ impl ResolvedVersionJsonInstance {
         remote_resolver: &dyn VersionJsonRemoteResolver,
         session: &DownloadSession,
     ) -> Result<PreparedVersionJsonInstance> {
-        self.prepare_with_download_status(remote_resolver, session, None)
-            .await
-    }
-
-    pub(crate) async fn prepare_with_download_status(
-        self,
-        remote_resolver: &dyn VersionJsonRemoteResolver,
-        session: &DownloadSession,
-        download_status: Option<VersionJsonDownloadStatus>,
-    ) -> Result<PreparedVersionJsonInstance> {
-        let download_status = match download_status {
-            Some(status) if status.is_downloaded() => status,
+        let download_status = match self.download_status() {
+            Ok(status) if status.is_downloaded() => status,
             _ => {
                 self.submit_install_batches(remote_resolver, session)
                     .await?;

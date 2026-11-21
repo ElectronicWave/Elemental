@@ -64,7 +64,8 @@ pub mod prelude {
     pub use crate::launcher::{
         AccountIndex, AccountListing, AccountRef, AccountRegistry, AccountStore, DriverCatalog,
         DriverOrigins, DriverRegistration, DriverRegistry, DriverSpec, Instance, LaunchOptions,
-        LaunchResolution, LaunchedInstance, Launcher, LauncherBuilder, PreparedInstance,
-        PreparedInstanceInfo, PreparedInstanceMetadata, QuickPlayOptions, RuntimeOptions,
+        LaunchResolution, LaunchedInstance, Launcher, LauncherBuilder, PrepareInstanceBuilder,
+        PrepareStage, PreparedInstance, PreparedInstanceInfo, PreparedInstanceMetadata,
+        QuickPlayOptions, RuntimeOptions,
     };
 }

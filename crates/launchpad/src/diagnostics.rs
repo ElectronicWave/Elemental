@@ -75,8 +75,8 @@ pub fn collect_version_diagnostics(info: &PreparedInstanceInfo) -> VersionDiagno
 }
 
 pub async fn run_process(launcher: &Launcher, command: LaunchCommand) -> Result<ExitStatus> {
-    let mut child = launcher.launch(command)?.child;
-    Ok(child.wait().await?)
+    let mut launched = launcher.launch(command)?;
+    Ok(launched.wait().await?)
 }
 
 pub fn print_launch_diagnostics(diagnostics_input: &LaunchDiagnostics<'_>) {

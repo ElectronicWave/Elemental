@@ -2,6 +2,7 @@ use elemental_core::runtime::distribution::Distribution;
 use elemental_schema::forge::{ForgeInstallerProcessor, ForgeInstallerProfile};
 
 use crate::{
+    driver::PrepareStage,
     error::{Error, Result},
     families::{
         installer::{InstallerArchive, InstallerArtifact},
@@ -19,6 +20,7 @@ pub async fn run_installer_client_processors(
     installer_artifact: &InstallerArtifact,
     install_profile: &ForgeInstallerProfile,
     family_name: &str,
+    on_stage: Option<&(dyn Fn(PrepareStage) + Send + Sync)>,
 ) -> Result<()> {
     let client_processors = install_profile
         .processors
@@ -35,7 +37,16 @@ pub async fn run_installer_client_processors(
     }
 
     context.ensure_client_directories().await?;
-    for processor in client_processors {
+    let total = client_processors.len();
+    for (index, processor) in client_processors.into_iter().enumerate() {
+        if let Some(observer) = on_stage {
+            observer(PrepareStage::RunningProcessor {
+                family_name: family_name.to_owned(),
+                index: index + 1,
+                total,
+                jar: processor.jar.clone(),
+            });
+        }
         run_processor(runtime, &context, processor).await?;
     }
 

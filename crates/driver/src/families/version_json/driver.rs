@@ -2,15 +2,12 @@ use crate::error::Result;
 use async_trait::async_trait;
 
 use crate::{
-    driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest},
+    driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest, ResolvedDriverPlan},
     drivers::vanilla::source::VanillaSource,
     inspect::InstanceProbe,
 };
 
-use super::{
-    InstanceStorage, PreparedVersionJsonInstance, ResolvedVersionJsonInstance,
-    family::ProfiledVersionJsonFamily,
-};
+use super::family::ProfiledVersionJsonFamily;
 
 mod resolve;
 
@@ -77,27 +74,20 @@ where
         Ok(self.family.inspect_installed(metadata))
     }
 
-    async fn prepare(&self, request: &PrepareRequest<'_>) -> Result<PreparedVersionJsonInstance> {
+    async fn resolve(&self, request: &PrepareRequest<'_>) -> Result<ResolvedDriverPlan> {
         let loader_version = request.required_loader_version(self.descriptor())?;
-        let (resolved, download_status) = self
+        let (instance, download_status) = self
             .resolve_or_load(
                 request.instance,
                 request.game_version.clone(),
                 loader_version.clone(),
             )
             .await?;
-        let remote_resolver = self.remote_resolver();
-        resolved
-            .prepare_with_download_status(&remote_resolver, request.session, download_status)
-            .await
-    }
-
-    async fn load_prepared(
-        &self,
-        instance: &InstanceStorage,
-    ) -> Result<PreparedVersionJsonInstance> {
-        ResolvedVersionJsonInstance::load(instance.clone())?
-            .finish_preparation()
-            .await
+        Ok(ResolvedDriverPlan {
+            instance,
+            remote_resolver: Box::new(self.remote_resolver()),
+            download_status,
+            installer: None,
+        })
     }
 }

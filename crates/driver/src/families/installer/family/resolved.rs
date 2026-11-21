@@ -1,21 +1,18 @@
 use elemental_core::minecraft::MinecraftVersionId;
-use elemental_core::runtime::RuntimeResolver;
 use elemental_core::storage::layout::Layoutable;
 use elemental_infra::downloader::DownloadSession;
 
 use crate::{
+    driver::{InstallerExecutionPlan, ResolvedDriverPlan},
     drivers::vanilla::source::VanillaSource,
     error::Result,
     families::{
         installer::{
-            InstallerArtifact, InstallerMavenSource, installer_has_client_processors,
-            prepare_installer_state, profile::persist_installer_launch_version,
-            run_installer_client_processors, submit_installer_profile_libraries,
-            validate_installer_profile_identity,
+            InstallerArtifact, InstallerMavenSource, prepare_installer_state,
+            profile::persist_installer_launch_version, validate_installer_profile_identity,
         },
-        version_json::{InstanceStorage, PreparedVersionJsonInstance, VersionJsonRootResource},
+        version_json::{InstanceStorage, VersionJsonRootResource},
     },
-    launch::{RuntimeOptions, resolve_prepared_version_runtime},
     loader_version::LoaderVersionId,
 };
 
@@ -49,14 +46,12 @@ impl ResolvedInstallerFamilyVersion {
         })
     }
 
-    pub async fn prepare(
+    pub async fn resolve(
         &self,
         session: &DownloadSession,
         vanilla_source: &VanillaSource,
-        remote_resolver: &InstallerFamilyRemoteResolver,
-        runtime_options: &RuntimeOptions,
-        runtime_resolver: &RuntimeResolver,
-    ) -> Result<PreparedVersionJsonInstance> {
+        remote_resolver: InstallerFamilyRemoteResolver,
+    ) -> Result<ResolvedDriverPlan> {
         let spec = self.source.spec();
         let family_name = spec.family_name;
         let libraries_root = self
@@ -94,38 +89,15 @@ impl ResolvedInstallerFamilyVersion {
         )
         .await?;
 
-        resolved_launch
-            .submit_install_batches(remote_resolver, session)
-            .await?;
-        submit_installer_profile_libraries(
-            session,
-            &self.instance.parent,
-            &installer_state.install_profile,
-            family_name,
-            &|raw_url, artifact_path| remote_resolver.artifact_url(raw_url, artifact_path),
-        )
-        .await?;
-        session.success().await?;
-
-        let launch_version = resolved_launch.finish_preparation().await?;
-
-        if installer_has_client_processors(&installer_state.install_profile) {
-            let runtime = resolve_prepared_version_runtime(
-                &launch_version,
-                runtime_options,
-                runtime_resolver,
-            )
-            .await?;
-            run_installer_client_processors(
-                &runtime,
-                &self.instance,
-                &self.installer_artifact,
-                &installer_state.install_profile,
+        Ok(ResolvedDriverPlan {
+            instance: resolved_launch,
+            remote_resolver: Box::new(remote_resolver),
+            download_status: None,
+            installer: Some(InstallerExecutionPlan {
                 family_name,
-            )
-            .await?;
-        }
-
-        Ok(launch_version)
+                installer_artifact: self.installer_artifact.clone(),
+                install_profile: installer_state.install_profile,
+            }),
+        })
     }
 }

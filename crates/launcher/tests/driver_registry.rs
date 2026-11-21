@@ -7,10 +7,9 @@ use async_trait::async_trait;
 use elemental_driver::descriptors::{ALL_DRIVERS, from_id};
 use elemental_driver::{
     descriptors::VANILLA_DRIVER,
-    driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest},
+    driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest, ResolvedDriverPlan},
     drivers::vanilla::{catalog::VanillaCatalog, driver::VanillaDriver},
     error::Result,
-    families::version_json::{InstanceStorage, PreparedVersionJsonInstance},
     inspect::InstanceProbe,
 };
 use elemental_launcher::{DriverCatalog, DriverRegistration, Launcher};
@@ -69,14 +68,7 @@ impl Driver for DetectsEverything {
         }))
     }
 
-    async fn prepare(&self, _request: &PrepareRequest<'_>) -> Result<PreparedVersionJsonInstance> {
-        unimplemented!("inspection test only")
-    }
-
-    async fn load_prepared(
-        &self,
-        _instance: &InstanceStorage,
-    ) -> Result<PreparedVersionJsonInstance> {
+    async fn resolve(&self, _request: &PrepareRequest<'_>) -> Result<ResolvedDriverPlan> {
         unimplemented!("inspection test only")
     }
 }

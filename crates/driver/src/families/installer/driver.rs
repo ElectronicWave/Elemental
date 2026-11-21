@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use crate::{
-    driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest},
+    driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest, ResolvedDriverPlan},
     drivers::vanilla::source::VanillaSource,
     error::Result,
     families::{
@@ -63,7 +63,7 @@ impl Driver for InstallerFamilyDriver {
         Ok(self.source.spec().identity.inspect_installed(metadata))
     }
 
-    async fn prepare(&self, request: &PrepareRequest<'_>) -> Result<PreparedVersionJsonInstance> {
+    async fn resolve(&self, request: &PrepareRequest<'_>) -> Result<ResolvedDriverPlan> {
         let loader_version = request.required_loader_version(self.descriptor())?;
         ResolvedInstallerFamilyVersion::new(
             self.source.clone(),
@@ -71,20 +71,19 @@ impl Driver for InstallerFamilyDriver {
             request.game_version.clone(),
             loader_version.clone(),
         )?
-        .prepare(
+        .resolve(
             request.session,
             &self.vanilla_source,
-            &self.remote_resolver(),
-            request.runtime_options,
-            request.runtime_resolver,
+            self.remote_resolver(),
         )
         .await
     }
 
-    async fn load_prepared(
+    async fn verify_prepared(
         &self,
         instance: &InstanceStorage,
-    ) -> Result<PreparedVersionJsonInstance> {
-        ResolvedInstallerFamilyVersion::load(&self.source, instance.clone()).await
+        prepared: &PreparedVersionJsonInstance,
+    ) -> Result<()> {
+        ResolvedInstallerFamilyVersion::verify_prepared(&self.source, instance, prepared).await
     }
 }

@@ -7,6 +7,10 @@ use crate::drivers::vanilla::source::{VanillaEndpoints, rewrite_upstream_with_va
 pub trait VersionJsonRemoteResolver: Debug + Send + Sync + 'static {
     fn rewrite_upstream(&self, raw_url: &str) -> Result<String>;
     fn object_url(&self, hash: &str) -> Result<String>;
+
+    fn artifact_url(&self, raw_url: &str, _artifact_path: &str) -> Result<String> {
+        self.rewrite_upstream(raw_url)
+    }
 }
 
 pub trait UpstreamUrlRewriter: Clone + Debug + Send + Sync + 'static {

@@ -17,14 +17,6 @@ impl InstallerFamilyRemoteResolver {
             endpoints,
         }
     }
-
-    pub fn artifact_url(&self, raw_url: &str, artifact_path: &str) -> Result<String> {
-        if raw_url.trim().is_empty() {
-            return self.endpoints.artifact_url(artifact_path);
-        }
-
-        self.rewrite_upstream(raw_url)
-    }
 }
 
 impl VersionJsonRemoteResolver for InstallerFamilyRemoteResolver {
@@ -39,5 +31,13 @@ impl VersionJsonRemoteResolver for InstallerFamilyRemoteResolver {
 
     fn object_url(&self, hash: &str) -> Result<String> {
         self.vanilla_endpoints.object_url(hash)
+    }
+
+    fn artifact_url(&self, raw_url: &str, artifact_path: &str) -> Result<String> {
+        if raw_url.trim().is_empty() {
+            return self.endpoints.artifact_url(artifact_path);
+        }
+
+        self.rewrite_upstream(raw_url)
     }
 }

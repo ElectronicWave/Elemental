@@ -1,12 +1,12 @@
 use crate::error::Result;
 use crate::{
     descriptors::VANILLA_DRIVER,
-    driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest},
+    driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest, ResolvedDriverPlan},
     drivers::vanilla::{
         ResolvedVanillaVersion,
         source::{VanillaSource, resolve_vanilla_metadata},
     },
-    families::version_json::{InstanceStorage, PreparedVersionJsonInstance},
+    families::version_json::InstanceStorage,
     inspect::{InstanceProbe, LibraryPrefixSet},
 };
 use async_trait::async_trait;
@@ -71,19 +71,16 @@ impl Driver for VanillaDriver {
         )))
     }
 
-    async fn prepare(&self, request: &PrepareRequest<'_>) -> Result<PreparedVersionJsonInstance> {
-        self.resolve_or_load(request.instance, request.game_version.clone())
-            .await?
-            .prepare(self.source.endpoints(), request.session)
-            .await
-    }
-
-    async fn load_prepared(
-        &self,
-        instance: &InstanceStorage,
-    ) -> Result<PreparedVersionJsonInstance> {
-        ResolvedVanillaVersion::load(instance.clone())?
-            .finish_preparation()
-            .await
+    async fn resolve(&self, request: &PrepareRequest<'_>) -> Result<ResolvedDriverPlan> {
+        let instance = self
+            .resolve_or_load(request.instance, request.game_version.clone())
+            .await?;
+        let download_status = instance.download_status().ok();
+        Ok(ResolvedDriverPlan {
+            instance,
+            remote_resolver: Box::new(self.source.endpoints().clone()),
+            download_status,
+            installer: None,
+        })
     }
 }

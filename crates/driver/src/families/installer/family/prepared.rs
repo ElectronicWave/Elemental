@@ -6,17 +6,18 @@ use crate::{
         installer::{
             InstallerMavenSource, installer_install_status, profile::load_persisted_install_profile,
         },
-        version_json::{InstanceStorage, PreparedVersionJsonInstance, ResolvedVersionJsonInstance},
+        version_json::{InstanceStorage, PreparedVersionJsonInstance},
     },
 };
 
 use super::ResolvedInstallerFamilyVersion;
 
 impl ResolvedInstallerFamilyVersion {
-    pub async fn load(
+    pub async fn verify_prepared(
         source: &InstallerMavenSource,
-        instance: InstanceStorage,
-    ) -> Result<PreparedVersionJsonInstance> {
+        instance: &InstanceStorage,
+        prepared: &PreparedVersionJsonInstance,
+    ) -> Result<()> {
         let spec = source.spec();
         let family_name = spec.family_name;
         let install_profile = load_persisted_install_profile(&instance.path, family_name)?;
@@ -27,15 +28,11 @@ impl ResolvedInstallerFamilyVersion {
             &loader_version,
         )?;
 
-        let launch_version = ResolvedVersionJsonInstance::load(instance.clone())?
-            .finish_preparation()
-            .await?;
-
         let install_status = installer_install_status(
-            &instance,
+            instance,
             &installer_artifact,
             &install_profile,
-            launch_version.install_status.is_ready(),
+            prepared.install_status.is_ready(),
             family_name,
         )
         .await?;
@@ -52,6 +49,6 @@ impl ResolvedInstallerFamilyVersion {
             });
         }
 
-        Ok(launch_version)
+        Ok(())
     }
 }

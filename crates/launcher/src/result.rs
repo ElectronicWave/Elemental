@@ -18,6 +18,24 @@ pub struct LaunchedInstance {
     pub child: tokio::process::Child,
 }
 
+impl LaunchedInstance {
+    pub fn id(&self) -> Option<u32> {
+        self.child.id()
+    }
+
+    pub fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+        self.child.try_wait()
+    }
+
+    pub async fn wait(&mut self) -> std::io::Result<std::process::ExitStatus> {
+        self.child.wait().await
+    }
+
+    pub async fn kill(&mut self) -> std::io::Result<()> {
+        self.child.kill().await
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RemoveInstanceOutcome {
     Removed,

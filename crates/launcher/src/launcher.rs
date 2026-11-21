@@ -13,7 +13,7 @@ use elemental_core::{
     storage::Storage,
 };
 use elemental_driver::{
-    driver::{Driver, DriverDescriptor, PrepareRequest},
+    driver::{Driver, DriverDescriptor, PrepareRequest, PrepareStage},
     families::version_json::{
         GameStorage, InstanceStorage, SharedInstanceLayout, SharedRootLayout,
         VersionJsonGameStorageExt, builder::VersionJsonLaunchBuilder, inspect_instances,
@@ -154,6 +154,22 @@ impl Launcher {
         }
     }
 
+    /// Starts configuring an instance preparation operation.
+    pub fn prepare_instance(
+        &self,
+        instance_name: impl Into<String>,
+        driver: DriverSpec,
+    ) -> PrepareInstanceBuilder<'_> {
+        PrepareInstanceBuilder {
+            launcher: self,
+            instance_name: instance_name.into(),
+            driver,
+            runtime_options: None,
+            session: None,
+            on_stage: None,
+        }
+    }
+
     /// Install or refresh an instance with a default download session.
     pub async fn prepare(
         &self,
@@ -161,12 +177,9 @@ impl Launcher {
         driver: DriverSpec,
         runtime_options: &RuntimeOptions,
     ) -> Result<PreparedInstance> {
-        let session = self
-            .downloader
-            .session(format!("prepare {instance_name}"))
-            .open()
-            .await?;
-        self.prepare_with_session(session, instance_name, driver, runtime_options)
+        self.prepare_instance(instance_name, driver)
+            .runtime_options(runtime_options)
+            .run()
             .await
     }
 
@@ -182,14 +195,11 @@ impl Launcher {
         driver: DriverSpec,
         runtime_options: &RuntimeOptions,
     ) -> Result<PreparedInstance> {
-        let prepared = self
-            .prepare_in_session(&session, instance_name, driver, runtime_options)
-            .await;
-        let report = session.finish().await;
-        let prepared = prepared?;
-        let report = report?;
-        report.success()?;
-        Ok(prepared)
+        self.prepare_instance(instance_name, driver)
+            .session(session)
+            .runtime_options(runtime_options)
+            .run()
+            .await
     }
 
     /// Low-level preparation inside a caller-owned session.
@@ -201,6 +211,7 @@ impl Launcher {
         instance_name: String,
         driver: DriverSpec,
         runtime_options: &RuntimeOptions,
+        on_stage: Option<&(dyn Fn(PrepareStage) + Send + Sync)>,
     ) -> Result<PreparedInstance> {
         let instance = self
             .game_storage()
@@ -215,6 +226,7 @@ impl Launcher {
                 loader_version: driver.loader_version(),
                 runtime_options,
                 runtime_resolver: &self.runtime_resolver,
+                on_stage,
             })
             .await?;
         Ok(PreparedInstance::new(driver.descriptor(), prepared))
@@ -333,6 +345,66 @@ impl Launcher {
             .descriptors()
             .map(|descriptor| self.resolve_driver(descriptor))
             .collect()
+    }
+}
+
+/// Fluent builder for configuring and running [`Launcher::prepare_instance`].
+pub struct PrepareInstanceBuilder<'a> {
+    launcher: &'a Launcher,
+    instance_name: String,
+    driver: DriverSpec,
+    runtime_options: Option<&'a RuntimeOptions>,
+    session: Option<DownloadSession>,
+    on_stage: Option<Box<dyn Fn(PrepareStage) + Send + Sync + 'a>>,
+}
+
+impl<'a> PrepareInstanceBuilder<'a> {
+    pub fn runtime_options(mut self, options: &'a RuntimeOptions) -> Self {
+        self.runtime_options = Some(options);
+        self
+    }
+
+    pub fn session(mut self, session: DownloadSession) -> Self {
+        self.session = Some(session);
+        self
+    }
+
+    pub fn on_stage<F>(mut self, observer: F) -> Self
+    where
+        F: Fn(PrepareStage) + Send + Sync + 'a,
+    {
+        self.on_stage = Some(Box::new(observer));
+        self
+    }
+
+    pub async fn run(self) -> Result<PreparedInstance> {
+        let session = match self.session {
+            Some(session) => session,
+            None => {
+                self.launcher
+                    .downloader
+                    .session(format!("prepare {}", self.instance_name))
+                    .open()
+                    .await?
+            }
+        };
+        let default_runtime = RuntimeOptions::default();
+        let runtime_options = self.runtime_options.unwrap_or(&default_runtime);
+        let prepared = self
+            .launcher
+            .prepare_in_session(
+                &session,
+                self.instance_name,
+                self.driver,
+                runtime_options,
+                self.on_stage.as_deref(),
+            )
+            .await;
+        let report = session.finish().await;
+        let prepared = prepared?;
+        let report = report?;
+        report.success()?;
+        Ok(prepared)
     }
 }
 

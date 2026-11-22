@@ -109,6 +109,9 @@ pub enum Error {
     #[error("invalid texture hash '{value}'")]
     InvalidTextureHash { value: String },
 
+    #[error(transparent)]
+    HttpClient(#[from] elemental_core::http::HttpClientError),
+
     #[cfg(feature = "yggdrasil-auth")]
     #[error(transparent)]
     AuthlibInjectorDistribution(#[from] nidhogg::error::NidhoggError),

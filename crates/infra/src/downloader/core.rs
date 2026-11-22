@@ -1,3 +1,4 @@
+use elemental_core::http::SwappableClient;
 use scc::HashMap;
 use std::sync::{Arc, atomic::AtomicU64};
 use tokio::sync::broadcast;
@@ -20,7 +21,7 @@ const EVENT_CHANNEL_CAPACITY: usize = 4096;
 
 #[derive(Debug)]
 pub struct ElementalDownloader {
-    pub(super) client: reqwest::Client,
+    pub(super) client: SwappableClient,
     sessions: HashMap<SessionId, Arc<SessionHandler>>,
     events: broadcast::Sender<DownloadEvent>,
     pub(super) concurrency: Arc<ConcurrencyController>,
@@ -43,7 +44,7 @@ impl ElementalDownloader {
     }
 
     fn from_parts(
-        client: reqwest::Client,
+        client: SwappableClient,
         materializer: Arc<dyn Materializer>,
         config: ValidatedDownloaderConfig,
     ) -> Arc<Self> {
@@ -87,6 +88,11 @@ impl ElementalDownloader {
 
     pub fn rate_limit(&self) -> DownloadRateLimit {
         self.bandwidth_limiter.rate_limit()
+    }
+
+    /// Returns the swappable HTTP client used for download transfers.
+    pub fn http_client(&self) -> &SwappableClient {
+        &self.client
     }
 
     pub async fn set_max_concurrent_downloads(

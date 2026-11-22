@@ -4,7 +4,7 @@ use elemental_schema::maven::{MavenMetadataBody, MavenMetadataVersion, MavenMeta
 use quick_xml::{Reader, escape::unescape, events::Event};
 
 use crate::error::{Error, Result};
-use crate::http::fetch_text;
+use crate::http::fetch_text_with_headers;
 
 use super::{MavenCoordinate, validate_component};
 
@@ -139,8 +139,9 @@ pub async fn fetch_maven_metadata(
     client: &reqwest::Client,
     url: String,
     source_label: &str,
+    headers: &reqwest::header::HeaderMap,
 ) -> Result<MavenMetadataBody> {
-    let raw = fetch_text(client, url.as_str(), source_label).await?;
+    let raw = fetch_text_with_headers(client, url.as_str(), source_label, headers).await?;
     decode_maven_metadata(raw.as_str()).map_err(|source| Error::DecodeMavenMetadata {
         source_label: source_label.to_owned(),
         url,

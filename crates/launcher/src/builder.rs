@@ -1,8 +1,11 @@
 use std::{fmt, path::PathBuf, sync::Arc};
 
-use elemental_core::runtime::{
-    RuntimeResolver,
-    provider::{RuntimeProviderList, default_providers},
+use elemental_core::{
+    http::{HttpClientConfig, SwappableClient},
+    runtime::{
+        RuntimeResolver,
+        provider::{RuntimeProviderList, default_providers},
+    },
 };
 use elemental_driver::families::version_json::{
     SharedInstanceLayout, SharedRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
@@ -15,7 +18,8 @@ use crate::{
 
 pub struct LauncherBuilder {
     storage_root: PathBuf,
-    downloader: Arc<ElementalDownloader>,
+    http_client: Option<SwappableClient>,
+    downloader: Option<Arc<ElementalDownloader>>,
     root_layout: SharedRootLayout,
     instance_layout: SharedInstanceLayout,
     origins: DriverOrigins,
@@ -26,6 +30,7 @@ impl fmt::Debug for LauncherBuilder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LauncherBuilder")
             .field("storage_root", &self.storage_root)
+            .field("http_client", &self.http_client)
             .field("downloader", &self.downloader)
             .field("root_layout", &self.root_layout)
             .field("instance_layout", &self.instance_layout)
@@ -39,7 +44,8 @@ impl Default for LauncherBuilder {
     fn default() -> Self {
         Self {
             storage_root: PathBuf::from(".minecraft"),
-            downloader: ElementalDownloader::new(),
+            http_client: None,
+            downloader: None,
             root_layout: SharedRootLayout::default(),
             instance_layout: SharedInstanceLayout::default(),
             origins: DriverOrigins::default(),
@@ -58,8 +64,20 @@ impl LauncherBuilder {
         self
     }
 
+    /// Sets the shared [`SwappableClient`] distributed to built-in drivers,
+    /// catalogs, and the default downloader.
+    pub fn http_client(mut self, http_client: SwappableClient) -> Self {
+        self.http_client = Some(http_client);
+        self
+    }
+
+    /// Builds a [`SwappableClient`] from `config` and attaches it to this builder.
+    pub fn http_client_config(self, config: HttpClientConfig) -> Result<Self> {
+        Ok(self.http_client(SwappableClient::new(config)?))
+    }
+
     pub fn downloader(mut self, downloader: Arc<ElementalDownloader>) -> Self {
-        self.downloader = downloader;
+        self.downloader = Some(downloader);
         self
     }
 
@@ -93,9 +111,20 @@ impl LauncherBuilder {
     }
 
     pub fn build(self) -> Launcher {
+        let http_client = self.http_client.unwrap_or_else(|| {
+            SwappableClient::try_default().expect("default HTTP client configuration must be valid")
+        });
+        let downloader = self.downloader.unwrap_or_else(|| {
+            ElementalDownloader::builder()
+                .http_client(http_client.clone())
+                .build()
+                .expect("default downloader builder must be valid")
+        });
+
         Launcher::new(
             self.storage_root,
-            self.downloader,
+            http_client,
+            downloader,
             self.root_layout,
             self.instance_layout,
             self.origins,

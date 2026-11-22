@@ -8,6 +8,7 @@ use std::{
 
 use elemental_core::{
     auth::credential::Credential,
+    http::SwappableClient,
     launcher::{command::LaunchCommand, process},
     runtime::{RuntimeResolver, distribution::Distribution},
     storage::Storage,
@@ -43,6 +44,7 @@ use crate::authlib_injector::{self, AuthlibInjector};
 #[derive(Debug, Clone)]
 pub struct Launcher {
     storage_root: PathBuf,
+    http_client: SwappableClient,
     downloader: Arc<ElementalDownloader>,
     root_layout: SharedRootLayout,
     instance_layout: SharedInstanceLayout,
@@ -58,20 +60,23 @@ impl Launcher {
 
     pub(crate) fn new(
         storage_root: PathBuf,
+        http_client: SwappableClient,
         downloader: Arc<ElementalDownloader>,
         root_layout: SharedRootLayout,
         instance_layout: SharedInstanceLayout,
         origins: DriverOrigins,
         runtime_resolver: RuntimeResolver,
     ) -> Self {
+        let drivers = DriverRegistry::new(http_client.clone());
         Self {
             storage_root,
+            http_client,
             downloader,
             root_layout,
             instance_layout,
             origins,
             runtime_resolver,
-            drivers: DriverRegistry::new(),
+            drivers,
         }
     }
 
@@ -94,6 +99,12 @@ impl Launcher {
 
     pub fn downloader(&self) -> &Arc<ElementalDownloader> {
         &self.downloader
+    }
+
+    /// Returns the shared [`SwappableClient`] used by built-in drivers,
+    /// catalogs, and the default downloader.
+    pub fn http_client(&self) -> &SwappableClient {
+        &self.http_client
     }
 
     pub fn runtime_resolver(&self) -> &RuntimeResolver {

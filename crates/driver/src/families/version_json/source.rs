@@ -4,10 +4,11 @@ use crate::{
     catalog::{GameVersion, LoaderRelease},
     error::Result,
 };
-use elemental_core::minecraft::MinecraftVersionId;
+use elemental_core::{http::SwappableClient, minecraft::MinecraftVersionId};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde::de::DeserializeOwned;
 
-use crate::http::{HttpSource, fetch_json};
+use crate::http::HttpSource;
 
 pub trait LoaderMetaEndpoints: Clone + Debug + Send + Sync + 'static {
     type GameVersion: DeserializeOwned;
@@ -64,18 +65,34 @@ where
         }
     }
 
+    pub fn with_http_client(endpoints: E, client: SwappableClient) -> Self {
+        Self {
+            inner: HttpSource::with_http_client(endpoints, client),
+        }
+    }
+
+    pub fn with_headers(mut self, headers: HeaderMap) -> Self {
+        self.inner = self.inner.with_headers(headers);
+        self
+    }
+
+    pub fn with_header(mut self, name: HeaderName, value: HeaderValue) -> Self {
+        self.inner = self.inner.with_header(name, value);
+        self
+    }
+
     pub fn endpoints(&self) -> &E {
         self.inner.endpoints()
     }
 
     pub async fn game_versions(&self) -> Result<Vec<E::GameVersion>> {
         let url = self.endpoints().game_versions_url()?;
-        fetch_json(self.inner.client()?, url.as_str(), E::SOURCE_NAME).await
+        self.inner.fetch_json(url.as_str(), E::SOURCE_NAME).await
     }
 
     pub async fn loader_versions(&self, game_version: &str) -> Result<Vec<E::LoaderGameVersion>> {
         let url = self.endpoints().loader_versions_url(game_version)?;
-        fetch_json(self.inner.client()?, url.as_str(), E::SOURCE_NAME).await
+        self.inner.fetch_json(url.as_str(), E::SOURCE_NAME).await
     }
 
     pub async fn profile_json(
@@ -86,7 +103,7 @@ where
         let url = self
             .endpoints()
             .profile_json_url(game_version, loader_version)?;
-        fetch_json(self.inner.client()?, url.as_str(), E::SOURCE_NAME).await
+        self.inner.fetch_json(url.as_str(), E::SOURCE_NAME).await
     }
 }
 
@@ -102,6 +119,6 @@ where
         let url = self
             .endpoints()
             .loader_profile_url(game_version, loader_version)?;
-        fetch_json(self.inner.client()?, url.as_str(), E::SOURCE_NAME).await
+        self.inner.fetch_json(url.as_str(), E::SOURCE_NAME).await
     }
 }

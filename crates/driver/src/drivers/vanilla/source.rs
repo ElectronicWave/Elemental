@@ -1,12 +1,14 @@
+use elemental_core::http::SwappableClient;
 use elemental_schema::mojang::{
     launcher::LaunchMetaData,
     piston::{PistonMetaAssetIndexObjects, PistonMetaData},
 };
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
 use crate::{
     drivers::vanilla::ResolvedVanillaMetadata,
     error::{Error, Result},
-    http::{HttpSource, fetch_json},
+    http::HttpSource,
 };
 
 pub use super::endpoints::{VanillaEndpoints, VanillaOrigin};
@@ -77,18 +79,34 @@ impl VanillaSource {
         }
     }
 
+    pub fn with_http_client(endpoints: VanillaEndpoints, client: SwappableClient) -> Self {
+        Self {
+            inner: HttpSource::with_http_client(endpoints, client),
+        }
+    }
+
+    pub fn with_headers(mut self, headers: HeaderMap) -> Self {
+        self.inner = self.inner.with_headers(headers);
+        self
+    }
+
+    pub fn with_header(mut self, name: HeaderName, value: HeaderValue) -> Self {
+        self.inner = self.inner.with_header(name, value);
+        self
+    }
+
     pub fn endpoints(&self) -> &VanillaEndpoints {
         self.inner.endpoints()
     }
 
     pub async fn launch_meta(&self) -> Result<LaunchMetaData> {
         let url = self.endpoints().version_manifest_url()?;
-        fetch_json(self.inner.client()?, url.as_str(), "vanilla source").await
+        self.inner.fetch_json(url.as_str(), "vanilla source").await
     }
 
     pub async fn piston_meta(&self, url: impl AsRef<str>) -> Result<PistonMetaData> {
         let url = self.endpoints().rewrite_upstream(url.as_ref())?;
-        fetch_json(self.inner.client()?, url.as_str(), "vanilla source").await
+        self.inner.fetch_json(url.as_str(), "vanilla source").await
     }
 
     pub async fn asset_index_objects(
@@ -96,6 +114,6 @@ impl VanillaSource {
         url: impl AsRef<str>,
     ) -> Result<PistonMetaAssetIndexObjects> {
         let url = self.endpoints().rewrite_upstream(url.as_ref())?;
-        fetch_json(self.inner.client()?, url.as_str(), "vanilla source").await
+        self.inner.fetch_json(url.as_str(), "vanilla source").await
     }
 }

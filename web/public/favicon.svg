@@ -1,64 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <defs>
-    <radialGradient id="el-aura" cx="50%" cy="48%" r="48%">
-      <stop offset="0%" stop-color="#d2a8ff" stop-opacity="0.28"/>
-      <stop offset="55%" stop-color="#79c0ff" stop-opacity="0.08"/>
-      <stop offset="100%" stop-color="#050505" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="el-frame" x1="16" y1="0" x2="16" y2="32" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.24"/>
-      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.06"/>
-    </linearGradient>
-    <linearGradient id="el-top" x1="16" y1="5" x2="16" y2="16" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#343342"/>
-      <stop offset="100%" stop-color="#1b1a24"/>
-    </linearGradient>
-    <linearGradient id="el-left" x1="6.5" y1="10.5" x2="16" y2="27" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#201f29"/>
-      <stop offset="100%" stop-color="#0f0f15"/>
-    </linearGradient>
-    <linearGradient id="el-right" x1="25.5" y1="10.5" x2="16" y2="27" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#15151c"/>
-      <stop offset="100%" stop-color="#09090d"/>
-    </linearGradient>
-    <linearGradient id="el-edge" x1="16" y1="5" x2="16" y2="27" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.82"/>
-      <stop offset="50%" stop-color="#d2a8ff" stop-opacity="0.48"/>
-      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.18"/>
-    </linearGradient>
-    <linearGradient id="el-rune" x1="16" y1="10.8" x2="16" y2="21.2" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.72"/>
-      <stop offset="100%" stop-color="#d2a8ff" stop-opacity="0.38"/>
-    </linearGradient>
-    <radialGradient id="el-core-glow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/>
-      <stop offset="45%" stop-color="#d2a8ff" stop-opacity="0.28"/>
-      <stop offset="100%" stop-color="#d2a8ff" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="el-star" x1="16" y1="9.6" x2="16" y2="22.4" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="55%" stop-color="#f3ecff"/>
-      <stop offset="100%" stop-color="#d2a8ff"/>
-    </linearGradient>
-  </defs>
-
-  <rect width="32" height="32" rx="7" fill="#050505"/>
-  <rect width="32" height="32" rx="7" fill="url(#el-aura)"/>
-  <rect x="0.75" y="0.75" width="30.5" height="30.5" rx="6.25" stroke="url(#el-frame)" stroke-width="1"/>
-
-  <!-- Isometric Obsidian Cornerstone -->
-  <path d="M16 5L25.5 10.5L16 16L6.5 10.5Z" fill="url(#el-top)"/>
-  <path d="M6.5 10.5L16 16V27L6.5 21.5Z" fill="url(#el-left)"/>
-  <path d="M25.5 10.5V21.5L16 27V16Z" fill="url(#el-right)"/>
-
-  <!-- Chiseled Structural Seams & Outer Bevel -->
-  <path d="M6.5 10.5L16 16L25.5 10.5M16 16V27" stroke="#ffffff" stroke-opacity="0.24" stroke-width="0.9" stroke-linecap="round"/>
-  <path d="M16 5L25.5 10.5V21.5L16 27L6.5 21.5V10.5Z" stroke="url(#el-edge)" stroke-width="1.15" stroke-linejoin="round"/>
-  <path d="M6.5 10.5L16 5L25.5 10.5" stroke="#ffffff" stroke-opacity="0.55" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"/>
-
-  <!-- Arcane Sigil Ring & Radiant Elemental Core -->
-  <circle cx="16" cy="16" r="6" fill="url(#el-core-glow)"/>
-  <circle cx="16" cy="16" r="5.2" stroke="url(#el-rune)" stroke-width="0.85"/>
-  <path d="M16 9.6Q16 16 21.8 16Q16 16 16 22.4Q16 16 10.2 16Q16 16 16 9.6Z" fill="url(#el-star)"/>
-  <circle cx="16" cy="16" r="1.1" fill="#ffffff"/>
+  <rect width="32" height="32" rx="7" fill="#08080a" />
+  <rect x="0.75" y="0.75" width="30.5" height="30.5" rx="6.25" stroke="#26262b" stroke-width="1.5" />
+  <polygon points="16,4.5 26,10.2 26,21.8 16,27.5 6,21.8 6,10.2" fill="#f5f5f5" />
+  <polygon points="16,16 26,10.2 26,21.8 16,27.5" fill="#a1a1aa" opacity="0.55" />
+  <path d="M16 9.5Q16 16 22.5 16Q16 16 16 22.5Q16 16 9.5 16Q16 16 16 9.5Z" fill="#08080a" />
+  <rect x="14.7" y="14.7" width="2.6" height="2.6" transform="rotate(45 16 16)" fill="#ffffff" />
 </svg>

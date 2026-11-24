@@ -329,6 +329,25 @@ impl Distribution {
         self.path.join("bin").join(format!("java{EXE_SUFFIX}"))
     }
 
+    /// Windowed executable used to start a game process.
+    ///
+    /// On Windows `java.exe` opens a console window that stays attached to the
+    /// game, while `javaw.exe` starts the same JVM without a console. Returns
+    /// `None` when the runtime has no windowed executable, including on
+    /// platforms other than Windows. Probes and installer processors must keep
+    /// using [`Self::executable`] because they read the JVM's stdout/stderr.
+    pub fn executablew(&self) -> Option<PathBuf> {
+        #[cfg(windows)]
+        {
+            let windowed = self.path.join("bin").join(format!("javaw{EXE_SUFFIX}"));
+            if windowed.exists() {
+                return Some(windowed);
+            }
+        }
+
+        None
+    }
+
     pub fn require_compatible(
         &self,
         required_major_version: usize,

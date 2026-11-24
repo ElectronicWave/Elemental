@@ -830,6 +830,12 @@ Before spawning, `finalize_launch` prints diagnostics, including the resolved
 runtime, cwd, argument count, metadata identifiers, version jar, and the natives
 directory contents (`crates/launchpad/src/commands.rs:127`).
 
+`LaunchCommand::program` prefers `Distribution::executablew` (`javaw.exe` on
+Windows) so the game does not keep a console attached, and falls back to
+`Distribution::executable` (`java.exe`) when no windowed executable exists.
+Runtime probes and installer processors always use `Distribution::executable`
+because they capture JVM output.
+
 ```rust
 // crates/core/src/launcher/process.rs:8
 pub fn spawn_command(command: LaunchCommand) -> Result<Child> {

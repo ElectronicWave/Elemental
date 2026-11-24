@@ -30,7 +30,9 @@ impl LaunchCommand {
     }
 
     pub fn program(&self) -> PathBuf {
-        self.runtime.executable()
+        self.runtime
+            .executablew()
+            .unwrap_or_else(|| self.runtime.executable())
     }
 
     pub fn arguments(&self) -> Vec<String> {

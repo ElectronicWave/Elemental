@@ -1,0 +1,441 @@
+---
+import '../styles/global.css';
+import { SDK_META } from '../data/sdk';
+import { withBase } from '../lib/paths';
+
+interface Props {
+  title: string;
+  description?: string;
+  activeNav?: 'home' | 'docs';
+}
+
+const {
+  title,
+  description = 'A modular Rust toolkit for Minecraft launchers and reusable application infrastructure.',
+  activeNav = 'home',
+} = Astro.props;
+
+const fullTitle = title === SDK_META.name ? `${SDK_META.name} — Modular Rust Minecraft Launcher SDK` : `${title} · ${SDK_META.name}`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#090909" />
+    <link rel="icon" type="image/svg+xml" href={withBase('/favicon.svg')} />
+    <title>{fullTitle}</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a href={withBase('/')} class="brand" aria-label="Elemental home">
+          <svg class="brand-mark" width="24" height="24" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="bm-top" x1="16" y1="5" x2="16" y2="16" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#343342"/>
+                <stop offset="100%" stop-color="#1b1a24"/>
+              </linearGradient>
+              <linearGradient id="bm-left" x1="6.5" y1="10.5" x2="16" y2="27" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#201f29"/>
+                <stop offset="100%" stop-color="#0f0f15"/>
+              </linearGradient>
+              <linearGradient id="bm-right" x1="25.5" y1="10.5" x2="16" y2="27" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#15151c"/>
+                <stop offset="100%" stop-color="#09090d"/>
+              </linearGradient>
+              <linearGradient id="bm-edge" x1="16" y1="5" x2="16" y2="27" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#ffffff" stop-opacity="0.82"/>
+                <stop offset="50%" stop-color="#d2a8ff" stop-opacity="0.48"/>
+                <stop offset="100%" stop-color="#ffffff" stop-opacity="0.18"/>
+              </linearGradient>
+              <linearGradient id="bm-rune" x1="16" y1="10.8" x2="16" y2="21.2" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#ffffff" stop-opacity="0.72"/>
+                <stop offset="100%" stop-color="#d2a8ff" stop-opacity="0.38"/>
+              </linearGradient>
+              <radialGradient id="bm-glow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/>
+                <stop offset="45%" stop-color="#d2a8ff" stop-opacity="0.28"/>
+                <stop offset="100%" stop-color="#d2a8ff" stop-opacity="0"/>
+              </radialGradient>
+              <linearGradient id="bm-star" x1="16" y1="9.6" x2="16" y2="22.4" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#ffffff"/>
+                <stop offset="55%" stop-color="#f3ecff"/>
+                <stop offset="100%" stop-color="#d2a8ff"/>
+              </linearGradient>
+            </defs>
+            <path d="M16 5L25.5 10.5L16 16L6.5 10.5Z" fill="url(#bm-top)"/>
+            <path d="M6.5 10.5L16 16V27L6.5 21.5Z" fill="url(#bm-left)"/>
+            <path d="M25.5 10.5V21.5L16 27V16Z" fill="url(#bm-right)"/>
+            <path d="M6.5 10.5L16 16L25.5 10.5M16 16V27" stroke="#ffffff" stroke-opacity="0.24" stroke-width="0.9" stroke-linecap="round"/>
+            <path d="M16 5L25.5 10.5V21.5L16 27L6.5 21.5V10.5Z" stroke="url(#bm-edge)" stroke-width="1.15" stroke-linejoin="round"/>
+            <path d="M6.5 10.5L16 5L25.5 10.5" stroke="#ffffff" stroke-opacity="0.55" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="16" cy="16" r="6" fill="url(#bm-glow)"/>
+            <circle cx="16" cy="16" r="5.2" stroke="url(#bm-rune)" stroke-width="0.85"/>
+            <path d="M16 9.6Q16 16 21.8 16Q16 16 16 22.4Q16 16 10.2 16Q16 16 16 9.6Z" fill="url(#bm-star)"/>
+            <circle cx="16" cy="16" r="1.1" fill="#ffffff"/>
+          </svg>
+          <span class="brand-name">{SDK_META.name}</span>
+          <span class="brand-version tabular">v{SDK_META.version}</span>
+        </a>
+
+        <nav class="nav-links" aria-label="Primary">
+          <a href={withBase('/')} class:list={['nav-link', { active: activeNav === 'home' }]}>Overview</a>
+          <a href={withBase('/#getting-started')} class="nav-link nav-secondary">Get Started</a>
+          <a href={withBase('/#crates')} class="nav-link nav-secondary">Crates</a>
+          <a href={withBase('/docs/')} class:list={['nav-link', { active: activeNav === 'docs' }]}>Docs</a>
+        </nav>
+
+        <div class="header-actions">
+          <a href={SDK_META.docsRsUrl} target="_blank" rel="noreferrer" class="header-meta-link">
+            docs.rs
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+              <path d="M3.5 8.5L8.5 3.5M8.5 3.5H4.5M8.5 3.5V7.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </a>
+          <a href={SDK_META.repositoryUrl} target="_blank" rel="noreferrer" class="btn btn-secondary btn-sm gh-star-btn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+            </svg>
+            <span>GitHub</span>
+            <span class="gh-stars" id="gh-star-wrap" hidden>
+              <span class="gh-stars-sep" aria-hidden="true"></span>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/>
+              </svg>
+              <span class="tabular" id="gh-star-count"></span>
+            </span>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <div class="footer-left">
+          <span class="footer-brand">elemental-kit</span>
+          <span class="footer-sep">/</span>
+          <span class="footer-meta tabular">Rust {SDK_META.minRustVersion}+ · Edition {SDK_META.rustEdition} · {SDK_META.license}</span>
+        </div>
+        <div class="footer-links">
+          <a href={withBase('/docs/')}>Documentation</a>
+          <a href={withBase('/docs/launch-flow/')}>Launch Flow</a>
+          <a href={withBase('/docs/migration/0.3/')}>0.3 Migration</a>
+          <a href={SDK_META.docsRsUrl} target="_blank" rel="noreferrer">docs.rs</a>
+          <a href={SDK_META.repositoryUrl} target="_blank" rel="noreferrer">Repository</a>
+        </div>
+      </div>
+
+      <div class="footer-wordmark-wrap" aria-hidden="true">
+        <div class="container">
+          <div class="footer-wordmark">ELEMENTAL</div>
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      const revealEls = document.querySelectorAll('.reveal');
+      if ('IntersectionObserver' in window) {
+        const obs = new IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) {
+              if (entry.isIntersecting) {
+                entry.target.classList.add('is-visible');
+                obs.unobserve(entry.target);
+              }
+            }
+          },
+          { threshold: 0.08, rootMargin: '0px 0px -32px 0px' },
+        );
+        revealEls.forEach((el) => obs.observe(el));
+      } else {
+        revealEls.forEach((el) => el.classList.add('is-visible'));
+      }
+
+      // Live GitHub star count with 10-minute sessionStorage cache
+      const starWrap = document.getElementById('gh-star-wrap');
+      const starCount = document.getElementById('gh-star-count');
+      if (starWrap && starCount) {
+        const formatStars = (n: number): string =>
+          n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(n);
+
+        const applyStars = (n: number) => {
+          starCount.textContent = formatStars(n);
+          starWrap.hidden = false;
+        };
+
+        const cacheKey = 'elemental_gh_stars_v1';
+        let cached: { count: number; ts: number } | null = null;
+        try {
+          const raw = sessionStorage.getItem(cacheKey);
+          if (raw) cached = JSON.parse(raw);
+        } catch {
+          // ignore storage access errors
+        }
+
+        if (cached && typeof cached.count === 'number' && Date.now() - cached.ts < 600_000) {
+          applyStars(cached.count);
+        } else {
+          fetch('https://api.github.com/repos/ElectronicWave/Elemental', {
+            headers: { Accept: 'application/vnd.github+json' },
+          })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+              if (data && typeof data.stargazers_count === 'number') {
+                applyStars(data.stargazers_count);
+                try {
+                  sessionStorage.setItem(
+                    cacheKey,
+                    JSON.stringify({ count: data.stargazers_count, ts: Date.now() }),
+                  );
+                } catch {
+                  // ignore storage quota errors
+                }
+              }
+            })
+            .catch(() => {
+              // stay gracefully hidden when offline
+            });
+        }
+      }
+    </script>
+  </body>
+</html>
+
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    height: var(--nav-height);
+    background: rgba(9, 9, 9, 0.86);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .header-inner {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  .brand-name {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+  }
+
+  .brand-version {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+  }
+
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .nav-link {
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition:
+      color var(--dur-fast) var(--ease-out),
+      background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .nav-link:hover {
+    color: var(--text-primary);
+    background: var(--bg-surface);
+  }
+
+  .nav-link.active {
+    color: var(--text-primary);
+    background: var(--bg-raised);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+
+  .header-meta-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-secondary);
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+
+  .header-meta-link:hover {
+    color: var(--accent-soft);
+  }
+
+  .gh-star-btn {
+    gap: 7px;
+  }
+
+  .gh-stars {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .gh-stars svg {
+    color: #f5c451;
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+
+  .gh-star-btn:hover .gh-stars svg {
+    color: #fde047;
+  }
+
+  .gh-stars[hidden] {
+    display: none;
+  }
+
+  .gh-stars-sep {
+    width: 1px;
+    height: 13px;
+    background: var(--border-default);
+    margin-inline: 2px;
+  }
+
+  .site-footer {
+    margin-top: 96px;
+    border-top: 1px solid var(--border-subtle);
+    background: var(--bg-void);
+    padding: 40px 0 0;
+    overflow: hidden;
+  }
+
+  .footer-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+    padding-bottom: 36px;
+  }
+
+  .footer-wordmark-wrap {
+    border-top: 1px solid var(--border-subtle);
+    padding-top: 18px;
+    user-select: none;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .footer-wordmark {
+    font-family: var(--font-sans);
+    font-size: clamp(56px, 14.5vw, 208px);
+    font-weight: 620;
+    line-height: 0.82;
+    letter-spacing: -0.055em;
+    text-align: center;
+    white-space: nowrap;
+    margin-bottom: -0.1em;
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.24) 0%,
+      rgba(255, 255, 255, 0.08) 58%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .footer-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-family: var(--font-mono);
+    font-size: 13px;
+  }
+
+  .footer-brand {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  .footer-sep {
+    color: var(--text-muted);
+  }
+
+  .footer-meta {
+    color: var(--text-muted);
+  }
+
+  .footer-links {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .footer-links a {
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+
+  .footer-links a:hover {
+    color: var(--text-primary);
+  }
+
+  @media (max-width: 768px) {
+    .header-inner {
+      gap: 10px;
+    }
+    .nav-secondary {
+      display: none;
+    }
+    .nav-links {
+      gap: 2px;
+    }
+    .nav-link {
+      padding: 6px 8px;
+      font-size: 13px;
+    }
+    .header-meta-link {
+      display: none;
+    }
+    .brand-version {
+      display: none;
+    }
+  }
+</style>

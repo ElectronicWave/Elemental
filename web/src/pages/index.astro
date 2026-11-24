@@ -1,0 +1,978 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import VoxelLatticeCanvas from '../components/VoxelLatticeCanvas.astro';
+import HeroCodeShowcase from '../components/HeroCodeShowcase.astro';
+import CargoBuilder from '../components/CargoBuilder.astro';
+import { DRIVER_FAMILIES, SDK_META, WORKSPACE_CRATES } from '../data/sdk';
+import { sortDocs } from '../lib/docs';
+import { highlightShellBlock, highlightShellLine } from '../lib/highlight';
+import { withBase } from '../lib/paths';
+
+const allDocs = sortDocs(await getCollection('docs'));
+const architectureDocs = allDocs.filter((d) => !d.slug.startsWith('migration/'));
+const migrationDocs = allDocs.filter((d) => d.slug.startsWith('migration/'));
+
+const layerLabels: Record<string, string> = {
+  facade: 'Facade',
+  orchestration: 'Orchestration',
+  domain: 'Domain',
+  foundation: 'Foundation',
+  binary: 'CLI Binary',
+};
+
+const launchpadSetupRaw = `git clone https://github.com/ElectronicWave/Elemental.git && cd Elemental
+cargo run -p launchpad`;
+
+const launchpadSetupHtml = highlightShellBlock(launchpadSetupRaw);
+---
+
+<BaseLayout title={SDK_META.name} activeNav="home">
+  <!-- HERO -->
+  <section class="hero">
+    <VoxelLatticeCanvas />
+    <div class="container hero-grid">
+      <div class="hero-copy">
+        <div class="hero-eyebrow tabular">
+          <span>elemental-kit {SDK_META.version}</span>
+          <span class="dot" aria-hidden="true"></span>
+          <span>Rust {SDK_META.minRustVersion}+ · Edition {SDK_META.rustEdition}</span>
+        </div>
+
+        <h1 class="hero-title">
+          Every <span class="hl hl-key">element</span> of a <span class="hl">Minecraft launcher</span>, in <span class="hl">Rust</span>.
+        </h1>
+
+        <p class="hero-sub">
+          Discover versions, prepare modded instances, resolve local Java runtimes, and spawn the JVM
+          through one async <code>Send + Sync</code> interface — or adopt the persistence, object-pool,
+          and download crates independently.
+        </p>
+
+        <div class="hero-actions">
+          <a href={withBase('/#getting-started')} class="btn btn-primary">
+            Get started
+          </a>
+          <a href={withBase('/docs/launch-flow/')} class="btn btn-secondary">
+            Inspect launch flow
+          </a>
+        </div>
+
+        <dl class="hero-stats">
+          <div class="stat-item">
+            <dt>Built-in drivers</dt>
+            <dd class="tabular">11</dd>
+          </div>
+          <div class="stat-item">
+            <dt>Workspace crates</dt>
+            <dd class="tabular">9</dd>
+          </div>
+          <div class="stat-item">
+            <dt>Auth providers</dt>
+            <dd class="tabular">3</dd>
+          </div>
+          <div class="stat-item">
+            <dt>Async futures</dt>
+            <dd class="tabular">Send + Sync</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="hero-visual">
+        <HeroCodeShowcase />
+      </div>
+    </div>
+  </section>
+
+  <!-- 01 // GETTING STARTED -->
+  <section class="section reveal" id="getting-started">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-index">01 // GETTING STARTED</span>
+        <h2 class="section-title">Add elemental-kit to your Cargo.toml.</h2>
+        <p class="section-desc">
+          Requires Rust {SDK_META.minRustVersion}+ (Edition {SDK_META.rustEdition}) and a local Java runtime.
+          Pick the exact modules, forwarded features, and TLS backend your application needs.
+        </p>
+      </div>
+
+      <CargoBuilder />
+    </div>
+  </section>
+
+  <!-- 02 // TRY LAUNCHPAD DEMO -->
+  <section class="section reveal" id="launchpad">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-index">02 // LAUNCHPAD DEMO</span>
+        <h2 class="section-title">Try our launchpad CLI across every loader.</h2>
+        <p class="section-desc">
+          <code>launchpad</code> is our reference CLI built directly on <code>elemental-kit</code>.
+          Run it with no arguments to open the interactive setup wizard, or pass any of the 11 supported
+          drivers below to prepare and launch directly from your terminal.
+        </p>
+      </div>
+
+      <div class="launchpad-banner corner-frame">
+        <div class="cli-bar">
+          <div class="cli-bar-left">
+            <span class="cli-lang">sh</span>
+            <span class="cli-title">Clone workspace & launch interactive wizard</span>
+          </div>
+          <button type="button" class="cli-copy-btn" data-copy-raw={launchpadSetupRaw}>
+            Copy
+          </button>
+        </div>
+        <pre class="cli-pre"><code set:html={launchpadSetupHtml} /></pre>
+      </div>
+
+      <div class="driver-grid">
+        {DRIVER_FAMILIES.map((family) => (
+          <article class="driver-card corner-frame">
+            <div class="driver-card-top">
+              <div>
+                <h3 class="driver-name">{family.name}</h3>
+                <span class="driver-family-tag">{family.familyLabel}</span>
+              </div>
+              <span class="driver-java tabular">Java {family.javaMajor}</span>
+            </div>
+
+            <p class="driver-summary">{family.summary}</p>
+
+            <ul class="driver-chips" aria-label={`${family.name} drivers`}>
+              {family.drivers.map((drv) => (
+                <li class="driver-chip">{drv}</li>
+              ))}
+            </ul>
+
+            <div class="driver-cmd-row">
+              <div class="driver-cmd">
+                <code set:html={highlightShellLine(`$ ${family.cliCommand}`)} />
+              </div>
+              <button
+                type="button"
+                class="cmd-copy-btn"
+                data-copy-raw={family.cliCommand}
+                aria-label={`Copy ${family.name} launchpad command`}
+              >
+                Copy
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 // MODULAR CRATES (OPT-IN ARCHITECTURE) -->
+  <section class="section reveal" id="crates">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-index">03 // MODULAR ARCHITECTURE</span>
+        <h2 class="section-title">Modular by design. Enable only what you need.</h2>
+        <p class="section-desc">
+          Every capability is isolated into its own crate and gated behind explicit Cargo features.
+          Turn off <code>default-features</code> to compile a minimal launcher stack—or adopt standalone
+          foundation crates like persistence, object pools, and download sessions in any Rust app.
+        </p>
+      </div>
+
+      <div class="element-grid">
+        {WORKSPACE_CRATES.map((crate) => (
+          <a
+            href={crate.readmeUrl}
+            target="_blank"
+            rel="noreferrer"
+            class:list={['element-cell', 'corner-frame', `layer-cell-${crate.layer}`]}
+          >
+            <div class="element-top">
+              <span class="element-num tabular">{crate.atomicNumber}</span>
+              <span class:list={['layer-tag', `layer-${crate.layer}`]}>
+                {layerLabels[crate.layer]}
+              </span>
+            </div>
+            <div class="element-symbol-row">
+              <span class="element-symbol">{crate.symbol}</span>
+              <div class="element-id">
+                <span class="element-crate">{crate.name}</span>
+                <span class="element-mod">
+                  {crate.modulePath ?? 'workspace binary'}
+                </span>
+              </div>
+            </div>
+            <p class="element-purpose">{crate.purpose}</p>
+            <div class="element-feature">
+              {crate.feature ? (
+                <code>feature = "{crate.feature}"</code>
+              ) : (
+                <code>cargo run -p launchpad</code>
+              )}
+            </div>
+          </a>
+        ))}
+      </div>
+
+      <div class="capability-row">
+        <div class="info-card corner-frame">
+          <h3 class="info-card-title">Opt-in auth & local testing features</h3>
+          <p class="info-card-body">
+            <code>OfflineAuthorizer</code>, <code>MicrosoftAuthorizer</code>, and
+            <code>YggdrasilAuthorizer</code> share one <code>Authorizer</code> contract. Enable
+            <code>yggdrasil-auth</code> or <code>offline-server</code> only when your launcher needs them.
+          </p>
+          <div class="info-card-tags">
+            <code>yggdrasil-auth</code>
+            <code>offline-server</code>
+            <code>AccountStore</code>
+          </div>
+        </div>
+
+        <div class="info-card corner-frame">
+          <h3 class="info-card-title">Pluggable storage & layout compatibility</h3>
+          <p class="info-card-body">
+            Swap storage layouts via <code>Storage&lt;L&gt;</code> or keep default probing that preserves
+            Elemental, Prism, PCL, and XMCL layouts without overwriting user-modified libraries.
+          </p>
+          <div class="info-card-tags">
+            <code>Storage&lt;L&gt;</code>
+            <code>--local-only</code>
+            <code>DriverRegistration</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 // ARCHITECTURE & DOCUMENTATION -->
+  <section class="section reveal" id="documentation">
+    <div class="container">
+      <div class="section-header section-header-row">
+        <div>
+          <span class="section-index">04 // ARCHITECTURE & DOCS</span>
+          <h2 class="section-title">How Elemental works under the hood.</h2>
+          <p class="section-desc">
+            Read the end-to-end launch pipeline specification and engineering principles directly from
+            <code>./docs</code>, complete with Mermaid state diagrams and source references.
+          </p>
+        </div>
+        <a href={withBase('/docs/')} class="btn btn-secondary btn-sm">
+          Browse all docs ({allDocs.length})
+        </a>
+      </div>
+
+      <div class="docs-grid">
+        {architectureDocs.map((doc) => (
+          <a href={withBase(`/docs/${doc.slug}/`)} class="doc-card corner-frame">
+            <div class="doc-card-meta">
+              <span class="doc-group">{doc.group}</span>
+              <span class="doc-read tabular">{doc.readingMinutes} min read</span>
+            </div>
+            <h3 class="doc-card-title">{doc.title}</h3>
+            <p class="doc-card-desc">{doc.description}</p>
+            <span class="doc-card-path">docs/{doc.slug}.md</span>
+          </a>
+        ))}
+      </div>
+
+      {migrationDocs.length > 0 && (
+        <div class="migration-strip corner-frame">
+          <div class="migration-head">
+            <span class="migration-label">Upgrading from an earlier release?</span>
+            <span class="migration-sub">Breaking-change tables and API migration notes</span>
+          </div>
+          <div class="migration-links">
+            {migrationDocs.map((doc) => (
+              <a href={withBase(`/docs/${doc.slug}/`)} class="migration-pill">
+                <span>{doc.title}</span>
+                <span class="migration-arrow" aria-hidden="true">→</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  const copyButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-copy-raw]'));
+  copyButtons.forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const raw = btn.dataset.copyRaw ?? '';
+      if (!raw) return;
+      const original = btn.textContent ?? 'Copy';
+      try {
+        await navigator.clipboard.writeText(raw);
+        btn.textContent = 'Copied';
+        window.setTimeout(() => {
+          btn.textContent = original;
+        }, 1500);
+      } catch {
+        btn.textContent = 'Select';
+      }
+    });
+  });
+</script>
+
+<style>
+  /* HERO */
+  .hero {
+    position: relative;
+    padding: 76px 0 68px;
+    border-bottom: 1px solid var(--border-subtle);
+    overflow: hidden;
+  }
+
+  .hero-grid {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 0.94fr) minmax(0, 1.06fr);
+    gap: 48px;
+    align-items: center;
+  }
+
+  .hero-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .hero-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+
+  .hero-eyebrow .dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--text-primary);
+  }
+
+  .hero-title {
+    margin: 0;
+    font-size: clamp(36px, 4.6vw, 56px);
+    font-weight: 420;
+    line-height: 1.08;
+    letter-spacing: -0.035em;
+    color: #707070;
+    max-width: 16ch;
+  }
+
+  .hero-title .hl {
+    color: #ffffff;
+    font-weight: 580;
+  }
+
+  .hero-title .hl-key {
+    position: relative;
+    display: inline-block;
+    font-weight: 620;
+    padding-bottom: 2px;
+    border-bottom: 1.5px solid rgba(255, 255, 255, 0.5);
+  }
+
+  .hero-sub {
+    margin: 0;
+    font-size: 16.5px;
+    line-height: 1.65;
+    color: var(--text-secondary);
+    max-width: 48ch;
+  }
+
+  .hero-sub code {
+    font-size: 14px;
+    color: var(--text-primary);
+    background: var(--bg-surface);
+    padding: 1px 6px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--border-subtle);
+    white-space: nowrap;
+  }
+
+  .hero-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .hero-stats {
+    margin: 12px 0 0;
+    padding-top: 24px;
+    border-top: 1px solid var(--border-subtle);
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .stat-item {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 4px;
+  }
+
+  .stat-item dt {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .stat-item dd {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 17px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+
+  .hero-visual {
+    min-width: 0;
+  }
+
+  /* SECTIONS */
+  .section {
+    padding-top: 96px;
+  }
+
+  .section-header {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 32px;
+    max-width: 680px;
+  }
+
+  .section-header-row {
+    max-width: none;
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .section-title {
+    margin: 0;
+    font-size: clamp(26px, 3.2vw, 36px);
+    font-weight: 500;
+    line-height: 1.14;
+    letter-spacing: -0.025em;
+    color: var(--text-primary);
+  }
+
+  .section-desc {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--text-secondary);
+  }
+
+  .section-desc code {
+    font-size: 13.5px;
+    color: var(--text-primary);
+    background: var(--bg-surface);
+    padding: 1px 6px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--border-subtle);
+  }
+
+  /* LAUNCHPAD DEMO BANNER */
+  .launchpad-banner {
+    overflow: hidden;
+    background: var(--bg-void);
+    margin-bottom: 20px;
+  }
+
+  .cli-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 18px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .cli-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .cli-lang {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-primary);
+    background: var(--bg-void);
+    border: 1px solid var(--border-default);
+    padding: 1px 7px;
+    border-radius: var(--radius-xs);
+  }
+
+  .cli-title {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .cli-copy-btn,
+  .cmd-copy-btn {
+    height: 28px;
+    padding: 0 11px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--border-default);
+    background: var(--bg-void);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition:
+      color var(--dur-fast) var(--ease-out),
+      border-color var(--dur-fast) var(--ease-out);
+  }
+
+  .cli-copy-btn:hover,
+  .cmd-copy-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+  }
+
+  .cli-pre {
+    margin: 0;
+    padding: 16px 20px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  /* DRIVERS */
+  .driver-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+
+  .driver-card {
+    min-width: 0;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .driver-card:hover {
+    border-color: var(--border-strong);
+    background: var(--bg-raised);
+  }
+
+  .driver-card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .driver-name {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .driver-family-tag {
+    display: inline-block;
+    margin-top: 2px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .driver-java {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-primary);
+    background: var(--bg-void);
+    border: 1px solid var(--border-default);
+    padding: 3px 9px;
+    border-radius: var(--radius-xs);
+    flex-shrink: 0;
+  }
+
+  .driver-summary {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+  }
+
+  .driver-chips {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .driver-chip {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-primary);
+    background: var(--bg-void);
+    border: 1px solid var(--border-subtle);
+    padding: 3px 9px;
+    border-radius: var(--radius-xs);
+  }
+
+  .driver-cmd-row {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px 6px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-void);
+    border: 1px solid var(--border-subtle);
+    min-width: 0;
+  }
+
+  .driver-cmd {
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    padding: 2px 0;
+  }
+
+  .driver-cmd code {
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  /* ELEMENTAL PERIODIC CRATE GRID */
+  .element-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .element-cell {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      background-color var(--dur-fast) var(--ease-out),
+      transform var(--dur-fast) var(--ease-out);
+  }
+
+  .element-cell:hover {
+    border-color: var(--border-strong);
+    background: var(--bg-raised);
+    transform: translateY(-2px);
+  }
+
+  .element-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .element-num {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .element-symbol-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .element-symbol {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-void);
+    border: 1px solid var(--border-default);
+    font-family: var(--font-mono);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    flex-shrink: 0;
+  }
+
+  .layer-cell-facade .element-symbol {
+    background: var(--text-primary);
+    border-color: var(--text-primary);
+    color: var(--bg-void);
+  }
+
+  .element-id {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .element-crate {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .element-mod {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .element-purpose {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.58;
+    color: var(--text-secondary);
+  }
+
+  .element-feature {
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .element-feature code {
+    font-size: 11.5px;
+    color: var(--text-muted);
+  }
+
+  .layer-tag {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-void);
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .layer-facade {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+  }
+
+  /* CAPABILITY CARDS */
+  .capability-row {
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+
+  .info-card {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .info-card-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .info-card-body {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--text-secondary);
+  }
+
+  .info-card-body code {
+    font-size: 12.5px;
+    color: var(--text-primary);
+  }
+
+  .info-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .info-card-tags code {
+    font-size: 11.5px;
+    padding: 3px 8px;
+    border-radius: var(--radius-xs);
+    background: var(--bg-void);
+    border: 1px solid var(--border-default);
+    color: var(--text-primary);
+  }
+
+  /* DOCS GRID */
+  .docs-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+
+  .doc-card {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .doc-card:hover {
+    border-color: var(--border-strong);
+    background: var(--bg-raised);
+  }
+
+  .doc-card-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  .doc-group {
+    color: var(--text-primary);
+  }
+
+  .doc-read {
+    color: var(--text-muted);
+  }
+
+  .doc-card-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .doc-card-desc {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+  }
+
+  .doc-card-path {
+    margin-top: auto;
+    padding-top: 8px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  /* MIGRATION STRIP (Secondary) */
+  .migration-strip {
+    margin-top: 20px;
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .migration-head {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .migration-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .migration-sub {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .migration-links {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .migration-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-void);
+    border: 1px solid var(--border-default);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    transition:
+      color var(--dur-fast) var(--ease-out),
+      border-color var(--dur-fast) var(--ease-out);
+  }
+
+  .migration-pill:hover {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+  }
+
+  .migration-arrow {
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 1080px) {
+    .hero-grid {
+      grid-template-columns: 1fr;
+      gap: 40px;
+    }
+    .element-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 768px) {
+    .hero {
+      padding: 48px 0;
+    }
+    .hero-stats {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .driver-grid,
+    .element-grid,
+    .capability-row,
+    .docs-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

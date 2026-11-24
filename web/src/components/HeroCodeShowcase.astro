@@ -1,0 +1,769 @@
+---
+interface VariantOption {
+  readonly label: string;
+  readonly lines: readonly string[];
+  readonly raw: string;
+}
+
+interface StageConfig {
+  readonly id: string;
+  readonly index: string;
+  readonly shortLabel: string;
+  readonly title: string;
+  readonly description: string;
+  readonly variants: readonly VariantOption[];
+}
+
+const STAGES: readonly StageConfig[] = [
+  {
+    id: 'builder',
+    index: '01',
+    shortLabel: 'Builder',
+    title: 'Composable Launcher Builder',
+    description: 'Override storage layouts, Java runtime providers, or mirror origins without forking core logic.',
+    variants: [
+      {
+        label: 'Default',
+        raw: `    let launcher = Launcher::builder()\n        .storage_root(".minecraft")\n        .runtime_providers(default_providers())\n        .build();`,
+        lines: [
+          `    <span class="kw">let</span> launcher = <span class="ty">Launcher</span>::<span class="fn">builder</span>()`,
+          `        .<span class="fn">storage_root</span>(<span class="str">".minecraft"</span>)`,
+          `        .<span class="fn">runtime_providers</span>(<span class="fn">default_providers</span>())`,
+          `        .<span class="fn">build</span>();`,
+        ],
+      },
+      {
+        label: 'Custom Providers',
+        raw: `    let launcher = Launcher::builder()\n        .storage_root(".minecraft")\n        .runtime_providers(custom_javas)\n        .origin_overrides(mirrors).build();`,
+        lines: [
+          `    <span class="kw">let</span> launcher = <span class="ty">Launcher</span>::<span class="fn">builder</span>()`,
+          `        .<span class="fn">storage_root</span>(<span class="str">".minecraft"</span>)`,
+          `        .<span class="fn">runtime_providers</span>(custom_javas)`,
+          `        .<span class="fn">origin_overrides</span>(mirrors).<span class="fn">build</span>();`,
+        ],
+      },
+    ],
+  },
+  {
+    id: 'driver',
+    index: '02',
+    shortLabel: 'Driver',
+    title: 'Swap Any Loader or Custom Driver',
+    description: '11 built-in drivers plus third-party DriverRegistration — same prepare() call, zero branching.',
+    variants: [
+      {
+        label: 'Vanilla',
+        raw: `    let spec = DriverSpec::vanilla(\n        "1.20.1".into(),\n    );\n    let prepared = launcher.prepare("Instance".into(), spec, &rt).await?;`,
+        lines: [
+          `    <span class="kw">let</span> spec = <span class="ty">DriverSpec</span>::<span class="fn">vanilla</span>(`,
+          `        <span class="str">"1.20.1"</span>.<span class="fn">into</span>(),`,
+          `    );`,
+          `    <span class="kw">let</span> prepared = launcher.<span class="fn">prepare</span>(<span class="str">"Instance"</span>.<span class="fn">into</span>(), spec, &amp;rt).<span class="kw">await</span>?;`,
+        ],
+      },
+      {
+        label: 'Fabric',
+        raw: `    let spec = DriverSpec::from_descriptor(\n        FABRIC_DRIVER, "1.20.1".into(), Some("0.16.10".into()),\n    )?;\n    let prepared = launcher.prepare("Instance".into(), spec, &rt).await?;`,
+        lines: [
+          `    <span class="kw">let</span> spec = <span class="ty">DriverSpec</span>::<span class="fn">from_descriptor</span>(`,
+          `        <span class="ty">FABRIC_DRIVER</span>, <span class="str">"1.20.1"</span>.<span class="fn">into</span>(), <span class="ty">Some</span>(<span class="str">"0.16.10"</span>.<span class="fn">into</span>()),`,
+          `    )?;`,
+          `    <span class="kw">let</span> prepared = launcher.<span class="fn">prepare</span>(<span class="str">"Instance"</span>.<span class="fn">into</span>(), spec, &amp;rt).<span class="kw">await</span>?;`,
+        ],
+      },
+      {
+        label: 'Custom 3rd-Party',
+        raw: `    let spec = DriverSpec::custom(\n        my_loader_desc, "1.20.1".into(), Some("1.0.0".into()),\n    );\n    let prepared = launcher.prepare("Instance".into(), spec, &rt).await?;`,
+        lines: [
+          `    <span class="kw">let</span> spec = <span class="ty">DriverSpec</span>::<span class="fn">custom</span>(`,
+          `        my_loader_desc, <span class="str">"1.20.1"</span>.<span class="fn">into</span>(), <span class="ty">Some</span>(<span class="str">"1.0.0"</span>.<span class="fn">into</span>()),`,
+          `    );`,
+          `    <span class="kw">let</span> prepared = launcher.<span class="fn">prepare</span>(<span class="str">"Instance"</span>.<span class="fn">into</span>(), spec, &amp;rt).<span class="kw">await</span>?;`,
+        ],
+      },
+    ],
+  },
+  {
+    id: 'auth',
+    index: '03',
+    shortLabel: 'Auth',
+    title: 'Pluggable Authorizer Contract',
+    description: 'Switch Offline, Microsoft, or Yggdrasil auth cleanly — AccountStore persists and refreshes tokens.',
+    variants: [
+      {
+        label: 'Offline',
+        raw: `    let account = OfflineAuthorizer { username: "Player".into() }\n        .authorize().await?;\n    let cred = account.credential().await?;`,
+        lines: [
+          `    <span class="kw">let</span> account = <span class="ty">OfflineAuthorizer</span> { username: <span class="str">"Player"</span>.<span class="fn">into</span>() }`,
+          `        .<span class="fn">authorize</span>().<span class="kw">await</span>?;`,
+          `    <span class="kw">let</span> cred = account.<span class="fn">credential</span>().<span class="kw">await</span>?;`,
+        ],
+      },
+      {
+        label: 'Microsoft',
+        raw: `    let account = MicrosoftAuthorizer::new(on_device_code)\n        .authorize().await?;\n    let cred = account.credential().await?;`,
+        lines: [
+          `    <span class="kw">let</span> account = <span class="ty">MicrosoftAuthorizer</span>::<span class="fn">new</span>(on_device_code)`,
+          `        .<span class="fn">authorize</span>().<span class="kw">await</span>?;`,
+          `    <span class="kw">let</span> cred = account.<span class="fn">credential</span>().<span class="kw">await</span>?;`,
+        ],
+      },
+      {
+        label: 'Yggdrasil',
+        raw: `    let account = YggdrasilAuthorizer::new(auth_url, creds)\n        .authorize().await?;\n    let cred = account.credential().await?;`,
+        lines: [
+          `    <span class="kw">let</span> account = <span class="ty">YggdrasilAuthorizer</span>::<span class="fn">new</span>(auth_url, creds)`,
+          `        .<span class="fn">authorize</span>().<span class="kw">await</span>?;`,
+          `    <span class="kw">let</span> cred = account.<span class="fn">credential</span>().<span class="kw">await</span>?;`,
+        ],
+      },
+    ],
+  },
+  {
+    id: 'launch',
+    index: '04',
+    shortLabel: 'Launch',
+    title: 'Inspectable LaunchCommand',
+    description: 'Customize JVM flags, game args, or working directory on LaunchCommand before spawning the process.',
+    variants: [
+      {
+        label: 'Standard',
+        raw: `    let cmd = launcher\n        .build_launch_command(&prepared, &cred, &rt, &opts)\n        .await?;\n    let mut game = launcher.launch(cmd)?;`,
+        lines: [
+          `    <span class="kw">let</span> cmd = launcher`,
+          `        .<span class="fn">build_launch_command</span>(&amp;prepared, &amp;cred, &amp;rt, &amp;opts)`,
+          `        .<span class="kw">await</span>?;`,
+          `    <span class="kw">let mut</span> game = launcher.<span class="fn">launch</span>(cmd)?;`,
+        ],
+      },
+      {
+        label: 'Custom JVM Args',
+        raw: `    let mut cmd = launcher\n        .build_launch_command(&prepared, &cred, &rt, &opts).await?;\n    cmd.jvm_arguments.push("-Xmx4G".into());\n    let mut game = launcher.launch(cmd)?;`,
+        lines: [
+          `    <span class="kw">let mut</span> cmd = launcher`,
+          `        .<span class="fn">build_launch_command</span>(&amp;prepared, &amp;cred, &amp;rt, &amp;opts).<span class="kw">await</span>?;`,
+          `    cmd.jvm_arguments.<span class="fn">push</span>(<span class="str">"-Xmx4G"</span>.<span class="fn">into</span>());`,
+          `    <span class="kw">let mut</span> game = launcher.<span class="fn">launch</span>(cmd)?;`,
+        ],
+      },
+    ],
+  },
+];
+---
+
+<div
+  class="code-window corner-frame"
+  id="hero-code-showcase"
+  data-stages={JSON.stringify(STAGES)}
+>
+  <div class="window-header">
+    <div class="file-id">
+      <span class="file-dot" aria-hidden="true"></span>
+      <span class="file-name">src/main.rs</span>
+      <span class="file-badge tabular">Rust 2024</span>
+    </div>
+    <div class="header-controls">
+      <button type="button" class="ctrl-btn" id="hero-play-toggle" aria-label="Pause walkthrough">
+        Pause
+      </button>
+      <button type="button" class="ctrl-btn" id="hero-code-copy">
+        Copy
+      </button>
+    </div>
+  </div>
+
+  <!-- Anchored floating stage popup -->
+  <div class="stage-popup" id="stage-popup" aria-live="polite">
+    <div class="popup-top">
+      <span class="popup-step tabular" id="popup-step">01 / 04</span>
+      <div class="popup-variants" id="popup-variants" role="group" aria-label="Swap customization variant"></div>
+    </div>
+    <div class="popup-title" id="popup-title">{STAGES[0].title}</div>
+    <div class="popup-desc" id="popup-desc">{STAGES[0].description}</div>
+    <div class="popup-progress" aria-hidden="true">
+      <div class="popup-progress-bar" id="popup-progress-bar"></div>
+    </div>
+  </div>
+
+  <!-- Single unified main.rs code canvas -->
+  <div class="code-surface">
+    <div class="code-block code-static" data-block="header">
+      <div class="code-line"><span class="ln tabular">01</span><span class="lt"><span class="kw">use</span> elemental::prelude::*;</span></div>
+      <div class="code-line"><span class="ln tabular">02</span><span class="lt"><span class="macro">#[tokio::main]</span></span></div>
+      <div class="code-line"><span class="ln tabular">03</span><span class="lt"><span class="kw">async fn</span> <span class="fn">main</span>() -&gt; <span class="ty">anyhow::Result</span>&lt;()&gt; &#123;</span></div>
+    </div>
+
+    {STAGES.map((stage, idx) => (
+      <div
+        class:list={['code-block', 'code-stage', { active: idx === 0 }]}
+        data-stage-block={stage.id}
+        data-stage-idx={idx}
+        role="button"
+        tabindex="0"
+        aria-label={`Inspect step ${stage.index}: ${stage.title}`}
+      >
+        <div class="stage-lines" data-stage-lines={stage.id}>
+          {stage.variants[0].lines.map((html) => (
+            <div class="code-line">
+              <span class="ln tabular"></span>
+              <span class="lt" set:html={html} />
+            </div>
+          ))}
+        </div>
+      </div>
+    ))}
+
+    <div class="code-block code-static" data-block="footer">
+      <div class="code-line"><span class="ln tabular"></span><span class="lt">    game.child.<span class="fn">wait</span>().<span class="kw">await</span>?;</span></div>
+      <div class="code-line"><span class="ln tabular"></span><span class="lt">    <span class="ty">Ok</span>(())</span></div>
+      <div class="code-line"><span class="ln tabular"></span><span class="lt">&#125;</span></div>
+    </div>
+  </div>
+
+  <!-- Stepper footer -->
+  <div class="window-footer">
+    <div class="step-pills" role="tablist" aria-label="Walkthrough steps">
+      {STAGES.map((stage, idx) => (
+        <button
+          type="button"
+          role="tab"
+          aria-selected={idx === 0 ? 'true' : 'false'}
+          class:list={['step-pill', { active: idx === 0 }]}
+          data-step-btn={idx}
+        >
+          <span class="pill-idx tabular">{stage.index}</span>
+          <span>{stage.shortLabel}</span>
+        </button>
+      ))}
+    </div>
+  </div>
+</div>
+
+<style>
+  .code-window {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    background: var(--bg-void);
+    box-shadow:
+      0 24px 64px rgba(0, 0, 0, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  .window-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .file-id {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .file-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-primary);
+    flex-shrink: 0;
+  }
+
+  .file-name {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .file-badge {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 1px 6px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-void);
+  }
+
+  .header-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .ctrl-btn {
+    height: 28px;
+    padding: 0 10px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--border-default);
+    background: var(--bg-void);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    cursor: pointer;
+    transition:
+      color var(--dur-fast) var(--ease-out),
+      border-color var(--dur-fast) var(--ease-out);
+  }
+
+  .ctrl-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+  }
+
+  /* Anchored stage popup card — locked height to prevent layout shift */
+  .stage-popup {
+    position: relative;
+    margin: 12px 14px 4px;
+    padding: 12px 14px 14px;
+    min-height: 112px;
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--radius-sm);
+    background: var(--bg-raised);
+    border: 1px solid var(--border-default);
+    overflow: hidden;
+  }
+
+  .popup-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 24px;
+    margin-bottom: 6px;
+  }
+
+  .popup-step {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: 0.04em;
+  }
+
+  .popup-variants {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .popup-variants :global(.variant-btn) {
+    height: 22px;
+    padding: 0 8px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-void);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    cursor: pointer;
+    transition:
+      background-color var(--dur-fast) var(--ease-out),
+      color var(--dur-fast) var(--ease-out),
+      border-color var(--dur-fast) var(--ease-out);
+  }
+
+  .popup-variants :global(.variant-btn:hover) {
+    color: var(--text-primary);
+    border-color: var(--border-default);
+  }
+
+  .popup-variants :global(.variant-btn.active) {
+    background: var(--text-primary);
+    color: var(--bg-void);
+    border-color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  .popup-title {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+    line-height: 1.3;
+  }
+
+  .popup-desc {
+    margin-top: 3px;
+    min-height: 36px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+  }
+
+  .popup-progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .popup-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--text-primary);
+  }
+
+  /* Code surface */
+  .code-surface {
+    padding: 10px 0 12px;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: 12.2px;
+    line-height: 1.65;
+  }
+
+  .code-block {
+    padding: 3px 0;
+    border-left: 2px solid transparent;
+    transition:
+      opacity 260ms var(--ease-out),
+      background-color 260ms var(--ease-out),
+      border-color 260ms var(--ease-out);
+  }
+
+  .code-static {
+    opacity: 0.42;
+  }
+
+  .code-stage {
+    cursor: pointer;
+    opacity: 0.36;
+  }
+
+  .code-stage:hover {
+    opacity: 0.72;
+  }
+
+  .code-stage.active {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.045);
+    border-left-color: var(--text-primary);
+  }
+
+  .stage-lines.morphing {
+    animation: codeMorph 260ms var(--ease-out);
+  }
+
+  @keyframes codeMorph {
+    from {
+      opacity: 0.15;
+      transform: translateY(3px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .code-surface :global(.code-line) {
+    display: flex;
+    gap: 14px;
+    padding: 0 16px;
+  }
+
+  .code-surface :global(.ln) {
+    user-select: none;
+    color: #484848;
+    min-width: 20px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .code-stage.active :global(.ln) {
+    color: #888888;
+  }
+
+  .code-surface :global(.lt) {
+    color: var(--syn-plain);
+    white-space: pre;
+  }
+
+  /* Vivid syntax colors inside monochrome shell */
+  .code-surface :global(.kw) { color: var(--syn-kw); font-weight: 500; }
+  .code-surface :global(.ty) { color: var(--syn-ty); }
+  .code-surface :global(.fn) { color: var(--syn-fn); }
+  .code-surface :global(.str) { color: var(--syn-str); }
+  .code-surface :global(.macro) { color: var(--syn-macro); }
+  .code-surface :global(.cm) { color: var(--syn-cm); }
+
+  /* Footer step pills */
+  .window-footer {
+    padding: 10px 14px;
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .step-pills {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .step-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 8px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-void);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    cursor: pointer;
+    transition:
+      color var(--dur-fast) var(--ease-out),
+      border-color var(--dur-fast) var(--ease-out),
+      background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .step-pill:hover {
+    color: var(--text-secondary);
+    border-color: var(--border-default);
+  }
+
+  .step-pill.active {
+    color: var(--text-primary);
+    background: var(--bg-raised);
+    border-color: var(--border-strong);
+  }
+
+  .pill-idx {
+    opacity: 0.65;
+  }
+
+  @media (max-width: 520px) {
+    .step-pills {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .file-badge {
+      display: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stage-lines.morphing {
+      animation: none;
+    }
+  }
+</style>
+
+<script>
+  interface VariantOptionClient {
+    label: string;
+    lines: string[];
+    raw: string;
+  }
+
+  interface StageConfigClient {
+    id: string;
+    index: string;
+    shortLabel: string;
+    title: string;
+    description: string;
+    variants: VariantOptionClient[];
+  }
+
+  const root = document.getElementById('hero-code-showcase');
+  if (root) {
+    const stages: StageConfigClient[] = JSON.parse(root.dataset.stages ?? '[]');
+    const stageBlocks = Array.from(root.querySelectorAll<HTMLElement>('[data-stage-block]'));
+    const stepBtns = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-step-btn]'));
+    const popupStep = document.getElementById('popup-step');
+    const popupTitle = document.getElementById('popup-title');
+    const popupDesc = document.getElementById('popup-desc');
+    const popupVariants = document.getElementById('popup-variants');
+    const progressBar = document.getElementById('popup-progress-bar');
+    const playToggle = document.getElementById('hero-play-toggle');
+    const copyBtn = document.getElementById('hero-code-copy');
+
+    const variantIndices = stages.map(() => 0);
+    let activeStage = 0;
+    let isPlaying = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let timerId = 0;
+    const STEP_DURATION_MS = 4200;
+
+    const renumberLines = () => {
+      const allNums = root.querySelectorAll<HTMLElement>('.code-surface .ln');
+      allNums.forEach((el, i) => {
+        el.textContent = String(i + 1).padStart(2, '0');
+      });
+    };
+
+    const renderStageLines = (stageIdx: number, animate: boolean) => {
+      const stage = stages[stageIdx];
+      if (!stage) return;
+      const container = root.querySelector<HTMLElement>(`[data-stage-lines="${stage.id}"]`);
+      if (!container) return;
+      const variant = stage.variants[variantIndices[stageIdx]] ?? stage.variants[0];
+
+      container.innerHTML = variant.lines
+        .map((html) => `<div class="code-line"><span class="ln tabular"></span><span class="lt">${html}</span></div>`)
+        .join('');
+
+      if (animate) {
+        container.classList.remove('morphing');
+        void container.offsetWidth;
+        container.classList.add('morphing');
+      }
+      renumberLines();
+    };
+
+    const restartProgress = () => {
+      if (!progressBar) return;
+      progressBar.style.transition = 'none';
+      progressBar.style.width = '0%';
+      if (!isPlaying) return;
+      void progressBar.offsetWidth;
+      progressBar.style.transition = `width ${STEP_DURATION_MS}ms linear`;
+      progressBar.style.width = '100%';
+    };
+
+    const renderPopup = () => {
+      const stage = stages[activeStage];
+      if (!stage) return;
+      if (popupStep) popupStep.textContent = `${stage.index} / 0${stages.length}`;
+      if (popupTitle) popupTitle.textContent = stage.title;
+      if (popupDesc) popupDesc.textContent = stage.description;
+
+      if (popupVariants) {
+        popupVariants.innerHTML = '';
+        stage.variants.forEach((v, vIdx) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = `variant-btn${vIdx === variantIndices[activeStage] ? ' active' : ''}`;
+          btn.textContent = v.label;
+          btn.addEventListener('click', () => {
+            variantIndices[activeStage] = vIdx;
+            renderStageLines(activeStage, true);
+            renderPopup();
+            scheduleNext();
+          });
+          popupVariants.appendChild(btn);
+        });
+      }
+    };
+
+    const setActiveStage = (idx: number, advanceVariant = false) => {
+      activeStage = ((idx % stages.length) + stages.length) % stages.length;
+
+      if (advanceVariant) {
+        const stage = stages[activeStage];
+        if (stage && stage.variants.length > 1) {
+          variantIndices[activeStage] = (variantIndices[activeStage] + 1) % stage.variants.length;
+          renderStageLines(activeStage, true);
+        }
+      }
+
+      stageBlocks.forEach((blk, i) => {
+        blk.classList.toggle('active', i === activeStage);
+      });
+      stepBtns.forEach((btn, i) => {
+        const active = i === activeStage;
+        btn.classList.toggle('active', active);
+        btn.setAttribute('aria-selected', String(active));
+      });
+
+      renderPopup();
+      restartProgress();
+    };
+
+    const scheduleNext = () => {
+      window.clearTimeout(timerId);
+      if (!isPlaying) {
+        if (progressBar) {
+          progressBar.style.transition = 'none';
+          progressBar.style.width = '0%';
+        }
+        return;
+      }
+      restartProgress();
+      timerId = window.setTimeout(() => {
+        const currentStage = stages[activeStage];
+        // On steps with multiple variants, swap variant once before moving to next step
+        if (currentStage && variantIndices[activeStage] === 0 && currentStage.variants.length > 1) {
+          variantIndices[activeStage] = 1;
+          renderStageLines(activeStage, true);
+          renderPopup();
+          scheduleNext();
+        } else {
+          setActiveStage(activeStage + 1, false);
+          scheduleNext();
+        }
+      }, STEP_DURATION_MS);
+    };
+
+    stepBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.stepBtn ?? '0');
+        setActiveStage(idx, false);
+        scheduleNext();
+      });
+    });
+
+    stageBlocks.forEach((blk) => {
+      const activate = () => {
+        const idx = Number(blk.dataset.stageIdx ?? '0');
+        setActiveStage(idx, idx === activeStage);
+        scheduleNext();
+      };
+      blk.addEventListener('click', activate);
+      blk.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          activate();
+        }
+      });
+    });
+
+    playToggle?.addEventListener('click', () => {
+      isPlaying = !isPlaying;
+      playToggle.textContent = isPlaying ? 'Pause' : 'Play';
+      playToggle.setAttribute('aria-label', isPlaying ? 'Pause walkthrough' : 'Play walkthrough');
+      scheduleNext();
+    });
+
+    copyBtn?.addEventListener('click', async () => {
+      const bodyParts = stages.map((st, i) => st.variants[variantIndices[i]]?.raw ?? st.variants[0].raw);
+      const fullCode = [
+        'use elemental::prelude::*;',
+        '#[tokio::main]',
+        'async fn main() -> anyhow::Result<()> {',
+        ...bodyParts,
+        '    game.child.wait().await?;',
+        '    Ok(())',
+        '}',
+      ].join('\n');
+      try {
+        await navigator.clipboard.writeText(fullCode);
+        copyBtn.textContent = 'Copied';
+        window.setTimeout(() => {
+          copyBtn.textContent = 'Copy';
+        }, 1600);
+      } catch {
+        copyBtn.textContent = 'Select';
+      }
+    });
+
+    if (playToggle) {
+      playToggle.textContent = isPlaying ? 'Pause' : 'Play';
+    }
+    renumberLines();
+    setActiveStage(0, false);
+    scheduleNext();
+  }
+</script>

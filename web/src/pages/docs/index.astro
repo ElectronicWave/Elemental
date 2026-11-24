@@ -1,0 +1,123 @@
+---
+import { getCollection } from 'astro:content';
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { groupDocs, sortDocs } from '../../lib/docs';
+import { withBase } from '../../lib/paths';
+
+const allDocs = sortDocs(await getCollection('docs'));
+const groups = groupDocs(allDocs);
+---
+
+<DocsLayout
+  title="Documentation"
+  description="Architecture guides, launch flow specifications, refactoring principles, and migration references for Elemental."
+  groups={groups}
+>
+  <div class="docs-hub">
+    <span class="section-index">REPOSITORY // ./docs</span>
+    <h1>Elemental Documentation</h1>
+    <p class="hub-lead">
+      Every document below is loaded directly from <code>./docs</code> at build time. Updates to
+      markdown files, Mermaid diagrams, or migration guides in the repository appear here automatically.
+    </p>
+
+    {groups.map((group) => (
+      <section class="hub-group">
+        <h2>{group.name}</h2>
+        <div class="hub-grid">
+          {group.items.map((doc) => (
+            <a href={withBase(`/docs/${doc.slug}/`)} class="hub-card corner-frame">
+              <div class="hub-card-top">
+                <span class="hub-path">docs/{doc.slug}.md</span>
+                <span class="hub-read tabular">{doc.readingMinutes} min</span>
+              </div>
+              <h3>{doc.title}</h3>
+              <p>{doc.description}</p>
+            </a>
+          ))}
+        </div>
+      </section>
+    ))}
+  </div>
+</DocsLayout>
+
+<style>
+  .docs-hub h1 {
+    margin: 12px 0 14px;
+    font-size: clamp(28px, 3.6vw, 38px);
+    font-weight: 500;
+    letter-spacing: -0.025em;
+  }
+
+  .hub-lead {
+    margin: 0 0 36px;
+    font-size: 15.5px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+    max-width: 62ch;
+  }
+
+  .hub-group {
+    margin-bottom: 36px;
+  }
+
+  .hub-group h2 {
+    margin: 0 0 14px;
+    padding-top: 0;
+    border-top: none;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--accent);
+  }
+
+  .hub-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .hub-card {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-decoration: none !important;
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .hub-card:hover {
+    border-color: var(--accent-border);
+    background: var(--bg-raised);
+  }
+
+  .hub-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-muted);
+  }
+
+  .hub-card h3 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .hub-card p {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+  }
+
+  @media (max-width: 640px) {
+    .hub-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

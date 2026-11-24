@@ -1,0 +1,392 @@
+---
+import { CARGO_FEATURES, SDK_META } from '../data/sdk';
+
+const moduleFeatures = CARGO_FEATURES.filter((f) => f.category === 'module');
+const forwardedFeatures = CARGO_FEATURES.filter((f) => f.category === 'forwarded');
+const tlsFeatures = CARGO_FEATURES.filter((f) => f.category === 'tls');
+---
+
+<div class="cargo-builder corner-frame" id="cargo-builder">
+  <div class="builder-controls">
+    <div class="feature-group">
+      <div class="group-head">
+        <span class="group-title">Modules</span>
+        <button type="button" class="preset-link" id="preset-full">Use full defaults</button>
+      </div>
+      <div class="chip-grid">
+        {moduleFeatures.map((feat) => (
+          <label class="feat-chip">
+            <input
+              type="checkbox"
+              name="feature"
+              value={feat.id}
+              checked={feat.defaultEnabled}
+            />
+            <span class="chip-box">
+              <span class="chip-name">{feat.id}</span>
+              <span class="chip-desc">{feat.description}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
+
+    <div class="feature-group">
+      <div class="group-head">
+        <span class="group-title">Forwarded Features</span>
+        <span class="group-note">Auto-enables parent modules</span>
+      </div>
+      <div class="chip-grid">
+        {forwardedFeatures.map((feat) => (
+          <label class="feat-chip">
+            <input
+              type="checkbox"
+              name="feature"
+              value={feat.id}
+              checked={feat.defaultEnabled}
+            />
+            <span class="chip-box">
+              <span class="chip-name">{feat.id}</span>
+              <span class="chip-desc">{feat.description}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
+
+    <div class="feature-group">
+      <div class="group-head">
+        <span class="group-title">TLS Backend</span>
+        <span class="group-note">Select exactly one</span>
+      </div>
+      <div class="tls-grid">
+        {tlsFeatures.map((feat) => (
+          <label class="feat-chip">
+            <input
+              type="radio"
+              name="tls"
+              value={feat.id}
+              checked={feat.defaultEnabled}
+            />
+            <span class="chip-box">
+              <span class="chip-name">{feat.id}</span>
+              <span class="chip-desc">{feat.description}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
+  </div>
+
+  <div class="builder-output">
+    <div class="output-bar">
+      <span class="output-file">Cargo.toml</span>
+      <button type="button" class="copy-btn" id="copy-cargo">Copy snippet</button>
+    </div>
+    <pre class="output-pre"><code id="cargo-toml-output"></code></pre>
+    <div class="output-note" id="cargo-note">
+      Default feature set: <code>full</code> + <code>shared-json</code> + <code>object-notify</code> + <code>tls-aws-lc</code>.
+    </div>
+  </div>
+</div>
+
+<style>
+  .cargo-builder {
+    display: grid;
+    grid-template-columns: 1.35fr 1fr;
+    overflow: hidden;
+    align-items: stretch;
+  }
+
+  .builder-controls {
+    min-width: 0;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    border-right: 1px solid var(--border-subtle);
+  }
+
+  .feature-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .group-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .group-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .group-note {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-muted);
+  }
+
+  .preset-link {
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent-soft);
+    cursor: pointer;
+  }
+
+  .preset-link:hover {
+    text-decoration: underline;
+  }
+
+  .chip-grid,
+  .tls-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .feat-chip {
+    position: relative;
+    cursor: pointer;
+  }
+
+  .feat-chip input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .chip-box {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    height: 100%;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-void);
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .feat-chip:hover .chip-box {
+    border-color: var(--border-default);
+  }
+
+  .feat-chip input:checked + .chip-box {
+    border-color: var(--text-primary);
+    background: var(--bg-raised);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+
+  .feat-chip input:focus-visible + .chip-box {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .chip-name {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .chip-desc {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+  }
+
+  .builder-output {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background: var(--bg-void);
+  }
+
+  .output-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .output-file {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+
+  .copy-btn {
+    height: 30px;
+    padding: 0 12px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--border-default);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    cursor: pointer;
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .copy-btn:hover {
+    border-color: var(--accent-border);
+    background: var(--bg-raised);
+  }
+
+  .output-pre {
+    flex: 1;
+    margin: 0;
+    padding: 20px;
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--text-primary);
+    overflow-x: auto;
+  }
+
+  .output-note {
+    padding: 14px 20px;
+    border-top: 1px solid var(--border-subtle);
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+
+  .output-note code {
+    color: var(--accent-soft);
+    font-size: 12px;
+  }
+
+  @media (max-width: 960px) {
+    .cargo-builder {
+      grid-template-columns: 1fr;
+    }
+    .builder-controls {
+      border-right: none;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+  }
+
+  @media (max-width: 600px) {
+    .chip-grid,
+    .tls-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<script define:vars={{ sdkVersion: SDK_META.version.slice(0, 3) }}>
+  const root = document.getElementById('cargo-builder');
+  if (root) {
+    const checkboxes = Array.from(root.querySelectorAll('input[type="checkbox"][name="feature"]'));
+    const radios = Array.from(root.querySelectorAll('input[type="radio"][name="tls"]'));
+    const outputEl = document.getElementById('cargo-toml-output');
+    const noteEl = document.getElementById('cargo-note');
+    const copyBtn = document.getElementById('copy-cargo');
+    const presetFullBtn = document.getElementById('preset-full');
+
+    const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const highlightTomlLine = (line) => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('[')) {
+        return `<span class="syn-fn">${esc(line)}</span>`;
+      }
+      if (trimmed.startsWith('#')) {
+        return `<span class="syn-cm">${esc(line)}</span>`;
+      }
+      const tokenRe = /"[^"]*"|\b(?:true|false)\b|[a-zA-Z0-9_-]+(?=\s*=)/g;
+      let out = '';
+      let lastIndex = 0;
+      for (const match of line.matchAll(tokenRe)) {
+        const idx = match.index ?? 0;
+        const tok = match[0];
+        out += esc(line.slice(lastIndex, idx));
+        if (tok.startsWith('"')) {
+          out += `<span class="syn-str">${esc(tok)}</span>`;
+        } else if (tok === 'true' || tok === 'false') {
+          out += `<span class="syn-kw">${tok}</span>`;
+        } else {
+          out += `<span class="syn-ty">${esc(tok)}</span>`;
+        }
+        lastIndex = idx + tok.length;
+      }
+      out += esc(line.slice(lastIndex));
+      return out;
+    };
+    const highlightToml = (source) => source.split('\n').map(highlightTomlLine).join('\n');
+
+    let latestPlainToml = '';
+
+    const render = () => {
+      const selectedFeatures = checkboxes.filter((cb) => cb.checked).map((cb) => cb.value);
+      const selectedTls = radios.find((r) => r.checked)?.value ?? 'tls-aws-lc';
+
+      const allFeatures = [...selectedFeatures, selectedTls];
+      const useMinimal = selectedFeatures.length > 0;
+
+      let toml = '';
+      if (!useMinimal && selectedTls === 'tls-aws-lc') {
+        toml = `[dependencies]\nelemental = { package = "elemental-kit", version = "${sdkVersion}" }\ntokio = { version = "1", features = ["macros", "process", "rt-multi-thread"] }`;
+        if (noteEl) {
+          noteEl.innerHTML = 'Default features: <code>full</code>, <code>shared-json</code>, <code>object-notify</code>, <code>tls-aws-lc</code>.';
+        }
+      } else {
+        const featuresList = allFeatures.map((f) => `"${f}"`).join(', ');
+        toml = `[dependencies]\nelemental = {\n    package = "elemental-kit",\n    version = "${sdkVersion}",\n    default-features = false,\n    features = [${featuresList}],\n}\ntokio = { version = "1", features = ["macros", "process", "rt-multi-thread"] }`;
+        if (noteEl) {
+          if (selectedTls === 'tls-rustls-no-provider') {
+            noteEl.innerHTML = 'Install a <code>rustls</code> crypto provider (e.g. <code>ring</code>) process-wide before making HTTP requests.';
+          } else {
+            noteEl.innerHTML = `Selective build with <code>default-features = false</code> and ${allFeatures.length} explicit feature${allFeatures.length === 1 ? '' : 's'}.`;
+          }
+        }
+      }
+
+      latestPlainToml = toml;
+      if (outputEl) {
+        outputEl.innerHTML = highlightToml(toml);
+      }
+    };
+
+    checkboxes.forEach((cb) => cb.addEventListener('change', render));
+    radios.forEach((r) => r.addEventListener('change', render));
+
+    presetFullBtn?.addEventListener('click', () => {
+      checkboxes.forEach((cb) => {
+        cb.checked = false;
+      });
+      radios.forEach((r) => {
+        r.checked = r.value === 'tls-aws-lc';
+      });
+      render();
+    });
+
+    copyBtn?.addEventListener('click', async () => {
+      if (!latestPlainToml) return;
+      try {
+        await navigator.clipboard.writeText(latestPlainToml);
+        copyBtn.textContent = 'Copied';
+        window.setTimeout(() => {
+          copyBtn.textContent = 'Copy snippet';
+        }, 1600);
+      } catch {
+        copyBtn.textContent = 'Select & copy';
+      }
+    });
+
+    render();
+  }
+</script>

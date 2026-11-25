@@ -6,71 +6,76 @@ const forwardedFeatures = CARGO_FEATURES.filter((f) => f.category === 'forwarded
 const tlsFeatures = CARGO_FEATURES.filter((f) => f.category === 'tls');
 ---
 
-<div class="cargo-builder corner-frame" id="cargo-builder">
-  <div class="builder-controls">
-    <div class="feature-group">
-      <div class="group-head">
-        <span class="group-title">Modules</span>
-        <button type="button" class="preset-link" id="preset-full">Use full defaults</button>
+<div class="corner-frame grid grid-cols-1 items-stretch overflow-hidden lg:grid-cols-[1.35fr_1fr]" id="cargo-builder">
+  <div class="flex min-w-0 flex-col gap-6 border-b border-border-subtle p-6 lg:border-r lg:border-b-0">
+    <div class="flex flex-col gap-2.5">
+      <div class="flex items-baseline justify-between gap-3">
+        <span class="text-[13px] font-semibold text-fg">Modules</span>
+        <button type="button" class="cursor-pointer border-0 bg-transparent p-0 font-mono text-xs text-accent-soft hover:underline" id="preset-full">
+          Use full defaults
+        </button>
       </div>
-      <div class="chip-grid">
+      <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {moduleFeatures.map((feat) => (
-          <label class="feat-chip">
+          <label class="group relative cursor-pointer">
             <input
               type="checkbox"
               name="feature"
               value={feat.id}
               checked={feat.defaultEnabled}
+              class="peer pointer-events-none absolute opacity-0"
             />
-            <span class="chip-box">
-              <span class="chip-name">{feat.id}</span>
-              <span class="chip-desc">{feat.description}</span>
+            <span class="flex h-full flex-col gap-0.5 rounded-lg border border-border-subtle bg-void px-3 py-2.5 transition-colors group-hover:border-border-default peer-checked:border-fg peer-checked:bg-raised peer-checked:shadow-[inset_0_1px_0_var(--inset-highlight)] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent">
+              <span class="font-mono text-[12.5px] font-medium text-fg">{feat.id}</span>
+              <span class="text-xs leading-[1.4] text-fg-secondary">{feat.description}</span>
             </span>
           </label>
         ))}
       </div>
     </div>
 
-    <div class="feature-group">
-      <div class="group-head">
-        <span class="group-title">Forwarded Features</span>
-        <span class="group-note">Auto-enables parent modules</span>
+    <div class="flex flex-col gap-2.5">
+      <div class="flex items-baseline justify-between gap-3">
+        <span class="text-[13px] font-semibold text-fg">Forwarded Features</span>
+        <span class="font-mono text-[11.5px] text-fg-muted">Auto-enables parent modules</span>
       </div>
-      <div class="chip-grid">
+      <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {forwardedFeatures.map((feat) => (
-          <label class="feat-chip">
+          <label class="group relative cursor-pointer">
             <input
               type="checkbox"
               name="feature"
               value={feat.id}
               checked={feat.defaultEnabled}
+              class="peer pointer-events-none absolute opacity-0"
             />
-            <span class="chip-box">
-              <span class="chip-name">{feat.id}</span>
-              <span class="chip-desc">{feat.description}</span>
+            <span class="flex h-full flex-col gap-0.5 rounded-lg border border-border-subtle bg-void px-3 py-2.5 transition-colors group-hover:border-border-default peer-checked:border-fg peer-checked:bg-raised peer-checked:shadow-[inset_0_1px_0_var(--inset-highlight)] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent">
+              <span class="font-mono text-[12.5px] font-medium text-fg">{feat.id}</span>
+              <span class="text-xs leading-[1.4] text-fg-secondary">{feat.description}</span>
             </span>
           </label>
         ))}
       </div>
     </div>
 
-    <div class="feature-group">
-      <div class="group-head">
-        <span class="group-title">TLS Backend</span>
-        <span class="group-note">Select exactly one</span>
+    <div class="flex flex-col gap-2.5">
+      <div class="flex items-baseline justify-between gap-3">
+        <span class="text-[13px] font-semibold text-fg">TLS Backend</span>
+        <span class="font-mono text-[11.5px] text-fg-muted">Select exactly one</span>
       </div>
-      <div class="tls-grid">
+      <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {tlsFeatures.map((feat) => (
-          <label class="feat-chip">
+          <label class="group relative cursor-pointer">
             <input
               type="radio"
               name="tls"
               value={feat.id}
               checked={feat.defaultEnabled}
+              class="peer pointer-events-none absolute opacity-0"
             />
-            <span class="chip-box">
-              <span class="chip-name">{feat.id}</span>
-              <span class="chip-desc">{feat.description}</span>
+            <span class="flex h-full flex-col gap-0.5 rounded-lg border border-border-subtle bg-void px-3 py-2.5 transition-colors group-hover:border-border-default peer-checked:border-fg peer-checked:bg-raised peer-checked:shadow-[inset_0_1px_0_var(--inset-highlight)] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent">
+              <span class="font-mono text-[12.5px] font-medium text-fg">{feat.id}</span>
+              <span class="text-xs leading-[1.4] text-fg-secondary">{feat.description}</span>
             </span>
           </label>
         ))}
@@ -78,215 +83,23 @@ const tlsFeatures = CARGO_FEATURES.filter((f) => f.category === 'tls');
     </div>
   </div>
 
-  <div class="builder-output">
-    <div class="output-bar">
-      <span class="output-file">Cargo.toml</span>
-      <button type="button" class="copy-btn" id="copy-cargo">Copy snippet</button>
+  <div class="flex min-w-0 flex-col justify-between bg-void">
+    <div class="flex items-center justify-between border-b border-border-subtle px-5 py-3.5">
+      <span class="font-mono text-[12.5px] text-fg-secondary">Cargo.toml</span>
+      <button
+        type="button"
+        class="h-[30px] cursor-pointer rounded border border-border-default bg-surface px-3 font-mono text-xs text-fg transition-colors hover:border-accent-border hover:bg-raised"
+        id="copy-cargo"
+      >
+        Copy snippet
+      </button>
     </div>
-    <pre class="output-pre"><code id="cargo-toml-output"></code></pre>
-    <div class="output-note" id="cargo-note">
+    <pre class="m-0 flex-1 overflow-x-auto p-5 text-[13px] leading-[1.65] text-fg"><code id="cargo-toml-output"></code></pre>
+    <div class="border-t border-border-subtle px-5 py-3.5 text-[12.5px] text-fg-secondary [&_code]:text-xs [&_code]:text-accent-soft" id="cargo-note">
       Default feature set: <code>full</code> + <code>shared-json</code> + <code>object-notify</code> + <code>tls-aws-lc</code>.
     </div>
   </div>
 </div>
-
-<style>
-  .cargo-builder {
-    display: grid;
-    grid-template-columns: 1.35fr 1fr;
-    overflow: hidden;
-    align-items: stretch;
-  }
-
-  .builder-controls {
-    min-width: 0;
-    padding: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    border-right: 1px solid var(--border-subtle);
-  }
-
-  .feature-group {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .group-head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .group-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-primary);
-  }
-
-  .group-note {
-    font-family: var(--font-mono);
-    font-size: 11.5px;
-    color: var(--text-muted);
-  }
-
-  .preset-link {
-    background: none;
-    border: none;
-    padding: 0;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--accent-soft);
-    cursor: pointer;
-  }
-
-  .preset-link:hover {
-    text-decoration: underline;
-  }
-
-  .chip-grid,
-  .tls-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .feat-chip {
-    position: relative;
-    cursor: pointer;
-  }
-
-  .feat-chip input {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .chip-box {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    height: 100%;
-    padding: 10px 12px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border-subtle);
-    background: var(--bg-void);
-    transition:
-      border-color var(--dur-fast) var(--ease-out),
-      background-color var(--dur-fast) var(--ease-out);
-  }
-
-  .feat-chip:hover .chip-box {
-    border-color: var(--border-default);
-  }
-
-  .feat-chip input:checked + .chip-box {
-    border-color: var(--text-primary);
-    background: var(--bg-raised);
-    box-shadow: inset 0 1px 0 var(--inset-highlight);
-  }
-
-  .feat-chip input:focus-visible + .chip-box {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
-
-  .chip-name {
-    font-family: var(--font-mono);
-    font-size: 12.5px;
-    font-weight: 500;
-    color: var(--text-primary);
-  }
-
-  .chip-desc {
-    font-size: 12px;
-    line-height: 1.4;
-    color: var(--text-secondary);
-  }
-
-  .builder-output {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    background: var(--bg-void);
-  }
-
-  .output-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 20px;
-    border-bottom: 1px solid var(--border-subtle);
-  }
-
-  .output-file {
-    font-family: var(--font-mono);
-    font-size: 12.5px;
-    color: var(--text-secondary);
-  }
-
-  .copy-btn {
-    height: 30px;
-    padding: 0 12px;
-    border-radius: var(--radius-xs);
-    border: 1px solid var(--border-default);
-    background: var(--bg-surface);
-    color: var(--text-primary);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    cursor: pointer;
-    transition:
-      border-color var(--dur-fast) var(--ease-out),
-      background-color var(--dur-fast) var(--ease-out);
-  }
-
-  .copy-btn:hover {
-    border-color: var(--accent-border);
-    background: var(--bg-raised);
-  }
-
-  .output-pre {
-    flex: 1;
-    margin: 0;
-    padding: 20px;
-    font-size: 13px;
-    line-height: 1.65;
-    color: var(--text-primary);
-    overflow-x: auto;
-  }
-
-  .output-note {
-    padding: 14px 20px;
-    border-top: 1px solid var(--border-subtle);
-    font-size: 12.5px;
-    color: var(--text-secondary);
-  }
-
-  .output-note code {
-    color: var(--accent-soft);
-    font-size: 12px;
-  }
-
-  @media (max-width: 960px) {
-    .cargo-builder {
-      grid-template-columns: 1fr;
-    }
-    .builder-controls {
-      border-right: none;
-      border-bottom: 1px solid var(--border-subtle);
-    }
-  }
-
-  @media (max-width: 600px) {
-    .chip-grid,
-    .tls-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-</style>
 
 <script define:vars={{ sdkVersion: SDK_META.version.slice(0, 3) }}>
   const root = document.getElementById('cargo-builder');

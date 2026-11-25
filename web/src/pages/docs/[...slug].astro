@@ -1,0 +1,46 @@
+---
+import { getCollection, render } from 'astro:content';
+import DocsLayout from '../../layouts/DocsLayout.astro';
+import { groupDocs, sortDocs, type DocMeta } from '../../lib/docs';
+
+export async function getStaticPaths() {
+  const allDocs = sortDocs(await getCollection('docs'));
+  const groups = groupDocs(allDocs);
+
+  return allDocs.map((doc, index) => ({
+    params: { slug: doc.slug },
+    props: {
+      doc,
+      groups,
+      prevDoc: index > 0 ? allDocs[index - 1] : null,
+      nextDoc: index < allDocs.length - 1 ? allDocs[index + 1] : null,
+    },
+  }));
+}
+
+interface Props {
+  doc: DocMeta;
+  groups: ReturnType<typeof groupDocs>;
+  prevDoc: DocMeta | null;
+  nextDoc: DocMeta | null;
+}
+
+const { doc, groups, prevDoc, nextDoc } = Astro.props;
+const { Content, headings } = await render(doc.entry);
+const hasMermaid = (doc.entry.body ?? '').includes('```mermaid');
+---
+
+<DocsLayout
+  title={doc.title}
+  description={doc.description}
+  groups={groups}
+  activeSlug={doc.slug}
+  headings={headings}
+  prevDoc={prevDoc}
+  nextDoc={nextDoc}
+  sourcePath={doc.slug}
+  readingMinutes={doc.readingMinutes}
+  hasMermaid={hasMermaid}
+>
+  <Content />
+</DocsLayout>

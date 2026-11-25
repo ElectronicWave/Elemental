@@ -1,0 +1,22 @@
+{
+  "name": "elemental-web",
+  "type": "module",
+  "version": "0.3.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "doctor": "npx react-doctor@latest"
+  },
+  "dependencies": {
+    "astro": "^7.4.13",
+    "mermaid": "^11.6.0",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "typescript": "^5.8.3"
+  }
+}

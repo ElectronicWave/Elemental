@@ -1,0 +1,354 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..700&family=JetBrains+Mono:wght@300..700&display=swap');
+
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Pure architectural monochrome ramp */
+  --bg-void: #050505;
+  --bg-page: #090909;
+  --bg-surface: #101010;
+  --bg-raised: #171717;
+  --bg-hover: #202020;
+
+  /* Three monochrome text roles */
+  --text-primary: #f5f5f5;
+  --text-secondary: #9a9a9a;
+  --text-muted: #666666;
+
+  /* Stark white single accent */
+  --accent: #ffffff;
+  --accent-soft: #d8d8d8;
+  --accent-on-solid: #050505;
+  --accent-dim: rgba(255, 255, 255, 0.08);
+  --accent-border: rgba(255, 255, 255, 0.34);
+
+  /* Syntax highlight palette (vivid jewel tones inside monochrome frame) */
+  --syn-kw: #ff7b72;
+  --syn-ty: #ffa657;
+  --syn-fn: #d2a8ff;
+  --syn-str: #a5d6ff;
+  --syn-num: #79c0ff;
+  --syn-macro: #7ee787;
+  --syn-cm: #6e7681;
+  --syn-plain: #e6edf3;
+
+  /* Precision hairlines */
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-default: rgba(255, 255, 255, 0.16);
+  --border-strong: rgba(255, 255, 255, 0.32);
+
+  /* Theme-aware chrome & surfaces */
+  --header-bg: rgba(9, 9, 9, 0.86);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
+  --btn-primary-hover: #ffffff;
+  --hero-dim: #707070;
+  --hero-key-border: rgba(255, 255, 255, 0.5);
+  --wordmark-start: rgba(255, 255, 255, 0.24);
+  --wordmark-mid: rgba(255, 255, 255, 0.08);
+  --wordmark-end: rgba(255, 255, 255, 0);
+  --inset-highlight: rgba(255, 255, 255, 0.08);
+  --elevated-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --code-active-bg: rgba(255, 255, 255, 0.045);
+  --code-progress-bg: rgba(255, 255, 255, 0.06);
+  --code-ln: #484848;
+  --code-ln-active: #888888;
+
+  /* Variable Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Spacing & layout */
+  --container-max: 1280px;
+  --nav-height: 60px;
+
+  /* Radius scale */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 150ms;
+  --dur-med: 320ms;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* Architectural limestone monochrome ramp */
+  --bg-void: #f4f4f5;
+  --bg-page: #fafafa;
+  --bg-surface: #ffffff;
+  --bg-raised: #f4f4f5;
+  --bg-hover: #e4e4e7;
+
+  /* Three monochrome text roles */
+  --text-primary: #09090b;
+  --text-secondary: #52525b;
+  --text-muted: #71717a;
+
+  /* Stark ink single accent */
+  --accent: #09090b;
+  --accent-soft: #27272a;
+  --accent-on-solid: #ffffff;
+  --accent-dim: rgba(9, 9, 11, 0.06);
+  --accent-border: rgba(9, 9, 11, 0.28);
+
+  /* Syntax highlight palette (GitHub Light Default) */
+  --syn-kw: #cf222e;
+  --syn-ty: #953800;
+  --syn-fn: #8250df;
+  --syn-str: #0a3069;
+  --syn-num: #0550ae;
+  --syn-macro: #116329;
+  --syn-cm: #6e7781;
+  --syn-plain: #1f2328;
+
+  /* Precision hairlines */
+  --border-subtle: rgba(9, 9, 11, 0.08);
+  --border-default: rgba(9, 9, 11, 0.16);
+  --border-strong: rgba(9, 9, 11, 0.32);
+
+  /* Theme-aware chrome & surfaces */
+  --header-bg: rgba(250, 250, 250, 0.86);
+  --scrollbar-thumb: rgba(9, 9, 11, 0.18);
+  --scrollbar-thumb-hover: rgba(9, 9, 11, 0.34);
+  --btn-primary-hover: #27272a;
+  --hero-dim: #71717a;
+  --hero-key-border: rgba(9, 9, 11, 0.45);
+  --wordmark-start: rgba(9, 9, 11, 0.16);
+  --wordmark-mid: rgba(9, 9, 11, 0.05);
+  --wordmark-end: rgba(9, 9, 11, 0);
+  --inset-highlight: rgba(9, 9, 11, 0.06);
+  --elevated-shadow:
+    0 20px 50px rgba(9, 9, 11, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --code-active-bg: rgba(9, 9, 11, 0.04);
+  --code-progress-bg: rgba(9, 9, 11, 0.08);
+  --code-ln: #a1a1aa;
+  --code-ln-active: #52525b;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-optical-sizing: auto;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  overflow-x: clip;
+}
+
+/* Subtle scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input {
+  font-family: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 1.5px solid var(--accent);
+  outline-offset: 2px;
+}
+
+code,
+pre,
+kbd {
+  font-family: var(--font-mono);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.container {
+  width: 100%;
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding-inline: 24px;
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding-inline: 16px;
+  }
+}
+
+/* Clean, understated monochrome card surface */
+.corner-frame {
+  position: relative;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+}
+
+/* Section index label */
+.section-index {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.section-index::before {
+  content: '';
+  width: 18px;
+  height: 1px;
+  background: var(--text-primary);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 22px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn-primary {
+  background: var(--text-primary);
+  color: var(--accent-on-solid);
+}
+
+.btn-primary:hover {
+  background: var(--btn-primary-hover);
+}
+
+.btn-secondary {
+  background: var(--bg-raised);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.btn-sm {
+  height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+/* Scroll reveal animation */
+.reveal {
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 480ms var(--ease-out),
+    transform 480ms var(--ease-out);
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* Syntax highlight utility classes for sh / toml */
+.syn-kw { color: var(--syn-kw); font-weight: 500; }
+.syn-ty { color: var(--syn-ty); }
+.syn-fn { color: var(--syn-fn); }
+.syn-str { color: var(--syn-str); }
+.syn-num { color: var(--syn-num); }
+.syn-macro { color: var(--syn-macro); }
+.syn-cm { color: var(--syn-cm); }
+.syn-plain { color: var(--syn-plain); }
+
+/* Shiki code blocks — dual theme inside monochrome surface */
+pre.astro-code {
+  margin: 0;
+  padding: 16px 20px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background-color: var(--bg-void) !important;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+:root[data-theme='dark'] .astro-code,
+:root[data-theme='dark'] .astro-code span {
+  color: var(--shiki-dark) !important;
+}

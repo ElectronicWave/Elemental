@@ -1,0 +1,285 @@
+<canvas id="electronic-wave-canvas" class="wave-canvas" aria-hidden="true"></canvas>
+
+<style>
+  .wave-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.9;
+  }
+</style>
+
+<script>
+  const canvas = document.getElementById('electronic-wave-canvas') as HTMLCanvasElement | null;
+  if (canvas) {
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let width = 0;
+      let height = 0;
+      let dpr = Math.min(window.devicePixelRatio || 1, 2);
+      let rafId = 0;
+      let isVisible = true;
+      let mouseX = -9999;
+      let mouseY = -9999;
+      let targetFreqBoost = 0;
+      let freqBoost = 0;
+
+      interface TracePath {
+        points: Array<[number, number]>;
+        progress: number;
+        speed: number;
+        cooldown: number;
+      }
+
+      let traces: TracePath[] = [];
+      let vias: Array<[number, number]> = [];
+
+      const smoothstep = (edge0: number, edge1: number, x: number): number => {
+        const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+        return t * t * (3 - 2 * t);
+      };
+
+      const buildScene = () => {
+        const rect = canvas.getBoundingClientRect();
+        width = rect.width;
+        height = rect.height;
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.max(1, Math.floor(width * dpr));
+        canvas.height = Math.max(1, Math.floor(height * dpr));
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        traces = [];
+        vias = [];
+
+        const step = 64;
+        const cols = Math.ceil(width / step) + 1;
+        const rows = Math.ceil(height / step) + 1;
+
+        for (let r = 1; r < rows; r += 2) {
+          for (let c = 1; c < cols; c += 3) {
+            if ((c * 5 + r * 7) % 4 === 0) {
+              vias.push([c * step, r * step]);
+            }
+          }
+        }
+
+        const traceCount = Math.min(14, Math.max(7, Math.floor(width / 100)));
+        for (let i = 0; i < traceCount; i++) {
+          const startX = ((i * 137) % Math.max(1, cols)) * step;
+          const startY = ((i * 53) % Math.max(1, rows)) * step;
+          const dir = i % 2 === 0 ? 1 : -1;
+          const seg1 = (1 + (i % 3)) * step;
+          const diag = step * 0.75;
+          const seg2 = (2 + (i % 2)) * step;
+          const pts: Array<[number, number]> = [
+            [startX, startY],
+            [startX + seg1 * dir, startY],
+            [startX + (seg1 + diag) * dir, startY + diag],
+            [startX + (seg1 + diag + seg2) * dir, startY + diag],
+          ];
+          traces.push({
+            points: pts,
+            progress: Math.random(),
+            speed: 0.002 + (i % 4) * 0.0006,
+            cooldown: 0,
+          });
+        }
+      };
+
+      const pointOnPath = (pts: Array<[number, number]>, t: number): [number, number] => {
+        const totalSegs = pts.length - 1;
+        const scaled = Math.min(0.9999, Math.max(0, t)) * totalSegs;
+        const idx = Math.floor(scaled);
+        const localT = scaled - idx;
+        const [x1, y1] = pts[idx];
+        const [x2, y2] = pts[idx + 1];
+        return [x1 + (x2 - x1) * localT, y1 + (y2 - y1) * localT];
+      };
+
+      const render = (time: number) => {
+        ctx.clearRect(0, 0, width, height);
+        freqBoost += (targetFreqBoost - freqBoost) * 0.06;
+
+        const isLight = document.documentElement.dataset.theme === 'light';
+        const fg = isLight ? '9, 9, 11' : '255, 255, 255';
+        const bg = isLight ? '250, 250, 250' : '9, 9, 9';
+        const alphaScale = isLight ? 1.35 : 1;
+
+        // 1. Hairline architectural coordinate grid
+        const grid = 64;
+        ctx.strokeStyle = `rgba(${fg}, ${0.026 * alphaScale})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let x = 0; x <= width; x += grid) {
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+        }
+        for (let y = 0; y <= height; y += grid) {
+          ctx.moveTo(0, y);
+          ctx.lineTo(width, y);
+        }
+        ctx.stroke();
+
+        // 2. Monochrome via rings (respond subtly to cursor)
+        for (let i = 0; i < vias.length; i++) {
+          const [vx, vy] = vias[i];
+          const dist = Math.hypot(vx - mouseX, vy - mouseY);
+          const prox = dist < 180 ? 1 - dist / 180 : 0;
+          ctx.beginPath();
+          ctx.arc(vx, vy, 2.2 + prox * 1.5, 0, Math.PI * 2);
+          ctx.strokeStyle = prox > 0.05
+            ? `rgba(${fg}, ${Math.min(0.75, (0.2 + prox * 0.45) * alphaScale)})`
+            : `rgba(${fg}, ${0.08 * alphaScale})`;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+
+        // 3. 45-degree monochrome circuit traces + organically fading electron pulses
+        for (let i = 0; i < traces.length; i++) {
+          const tr = traces[i];
+          ctx.beginPath();
+          tr.points.forEach(([px, py], idx) => {
+            if (idx === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          });
+          ctx.strokeStyle = `rgba(${fg}, ${0.045 * alphaScale})`;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+
+          if (!reducedMotion) {
+            if (tr.cooldown > 0) {
+              tr.cooldown -= 1;
+              continue;
+            }
+            tr.progress += tr.speed;
+            if (tr.progress >= 1.18) {
+              tr.progress = 0;
+              tr.cooldown = 35 + ((i * 23) % 70);
+              continue;
+            }
+          }
+
+          // Smooth fade-in at start (0..0.18) and long organic fade-out at end (0.72..1.0)
+          const headT = Math.min(1, tr.progress);
+          const tailT = Math.max(0, tr.progress - 0.18);
+          const fadeIn = smoothstep(0, 0.18, tr.progress);
+          const fadeOut = 1 - smoothstep(0.72, 1.14, tr.progress);
+          const lifeAlpha = fadeIn * fadeOut;
+
+          if (lifeAlpha <= 0.005) continue;
+
+          const [hx, hy] = pointOnPath(tr.points, headT);
+          const [tx, ty] = pointOnPath(tr.points, Math.min(1, tailT));
+
+          const grad = ctx.createLinearGradient(tx, ty, hx, hy);
+          grad.addColorStop(0, `rgba(${fg}, 0)`);
+          grad.addColorStop(1, `rgba(${fg}, ${Math.min(0.65, 0.34 * lifeAlpha * alphaScale)})`);
+
+          ctx.beginPath();
+          ctx.moveTo(tx, ty);
+          ctx.lineTo(hx, hy);
+          ctx.strokeStyle = grad;
+          ctx.lineWidth = 1.25;
+          ctx.stroke();
+
+          // Soft head glow + crisp core that scales down gently as it fades
+          const headRadius = 1.6 * (0.45 + 0.55 * lifeAlpha);
+          ctx.beginPath();
+          ctx.arc(hx, hy, headRadius, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${fg}, ${Math.min(0.88, 0.88 * lifeAlpha)})`;
+          ctx.fill();
+        }
+
+        // 4. Monochrome oscilloscope harmonic ribbons
+        const t = reducedMotion ? 0 : time * 0.00085;
+        const waves = [
+          { yRatio: 0.74, amp: 20, freq: 0.0052, phase: t * 1.1, alpha: 0.18, width: 1.25 },
+          { yRatio: 0.77, amp: 13, freq: 0.0088 + freqBoost * 0.0028, phase: -t * 1.5, alpha: 0.1, width: 1.0 },
+          { yRatio: 0.71, amp: 8, freq: 0.0125, phase: t * 2.0, alpha: 0.06, width: 1.0 },
+        ];
+
+        for (const w of waves) {
+          ctx.beginPath();
+          const baseY = height * w.yRatio;
+          for (let x = 0; x <= width; x += 6) {
+            const cursorDist = Math.abs(x - mouseX);
+            const cursorLift = cursorDist < 200 ? (1 - cursorDist / 200) * 14 : 0;
+            const y =
+              baseY +
+              Math.sin(x * w.freq + w.phase) * (w.amp + cursorLift) *
+                (0.55 + 0.45 * Math.sin(x * 0.002 + t * 0.5));
+            if (x === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.strokeStyle = `rgba(${fg}, ${w.alpha})`;
+          ctx.lineWidth = w.width;
+          ctx.stroke();
+        }
+
+        // Smooth edge fades (bottom, left, right) so particles never vanish abruptly at viewport edges
+        const bottomFade = ctx.createLinearGradient(0, height * 0.58, 0, height);
+        bottomFade.addColorStop(0, `rgba(${bg}, 0)`);
+        bottomFade.addColorStop(1, `rgba(${bg}, 1)`);
+        ctx.fillStyle = bottomFade;
+        ctx.fillRect(0, height * 0.58, width, height * 0.42);
+
+        const leftFade = ctx.createLinearGradient(0, 0, Math.min(120, width * 0.12), 0);
+        leftFade.addColorStop(0, `rgba(${bg}, 0.92)`);
+        leftFade.addColorStop(1, `rgba(${bg}, 0)`);
+        ctx.fillStyle = leftFade;
+        ctx.fillRect(0, 0, Math.min(120, width * 0.12), height);
+
+        const rightEdge = Math.min(120, width * 0.12);
+        const rightFade = ctx.createLinearGradient(width - rightEdge, 0, width, 0);
+        rightFade.addColorStop(0, `rgba(${bg}, 0)`);
+        rightFade.addColorStop(1, `rgba(${bg}, 0.92)`);
+        ctx.fillStyle = rightFade;
+        ctx.fillRect(width - rightEdge, 0, rightEdge, height);
+
+        if (!reducedMotion && isVisible) {
+          rafId = requestAnimationFrame(render);
+        }
+      };
+
+      const onPointerMove = (e: PointerEvent) => {
+        const rect = canvas.getBoundingClientRect();
+        mouseX = e.clientX - rect.left;
+        mouseY = e.clientY - rect.top;
+        targetFreqBoost = Math.max(0, Math.min(1, 1 - mouseY / Math.max(1, height)));
+      };
+
+      const onPointerLeave = () => {
+        mouseX = -9999;
+        mouseY = -9999;
+        targetFreqBoost = 0;
+      };
+
+      buildScene();
+      window.addEventListener('resize', buildScene);
+      window.addEventListener('pointermove', onPointerMove, { passive: true });
+      window.addEventListener('pointerleave', onPointerLeave, { passive: true });
+      window.addEventListener('elemental-theme-change', () => {
+        if (reducedMotion || !isVisible) {
+          render(performance.now());
+        }
+      });
+
+      if ('IntersectionObserver' in window) {
+        const obs = new IntersectionObserver((entries) => {
+          isVisible = entries[0]?.isIntersecting ?? true;
+          if (isVisible && !reducedMotion) {
+            cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(render);
+          }
+        });
+        obs.observe(canvas);
+      }
+
+      rafId = requestAnimationFrame(render);
+    }
+  }
+</script>

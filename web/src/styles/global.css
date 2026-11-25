@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..700&family=JetBrains+Mono:wght@300..700&display=swap');
 
-:root {
+:root,
+:root[data-theme='dark'] {
   color-scheme: dark;
 
   /* Pure architectural monochrome ramp */
@@ -37,6 +38,25 @@
   --border-default: rgba(255, 255, 255, 0.16);
   --border-strong: rgba(255, 255, 255, 0.32);
 
+  /* Theme-aware chrome & surfaces */
+  --header-bg: rgba(9, 9, 9, 0.86);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
+  --btn-primary-hover: #ffffff;
+  --hero-dim: #707070;
+  --hero-key-border: rgba(255, 255, 255, 0.5);
+  --wordmark-start: rgba(255, 255, 255, 0.24);
+  --wordmark-mid: rgba(255, 255, 255, 0.08);
+  --wordmark-end: rgba(255, 255, 255, 0);
+  --inset-highlight: rgba(255, 255, 255, 0.08);
+  --elevated-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --code-active-bg: rgba(255, 255, 255, 0.045);
+  --code-progress-bg: rgba(255, 255, 255, 0.06);
+  --code-ln: #484848;
+  --code-ln-active: #888888;
+
   /* Variable Typography */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -57,6 +77,63 @@
   --dur-med: 320ms;
 }
 
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* Architectural limestone monochrome ramp */
+  --bg-void: #f4f4f5;
+  --bg-page: #fafafa;
+  --bg-surface: #ffffff;
+  --bg-raised: #f4f4f5;
+  --bg-hover: #e4e4e7;
+
+  /* Three monochrome text roles */
+  --text-primary: #09090b;
+  --text-secondary: #52525b;
+  --text-muted: #71717a;
+
+  /* Stark ink single accent */
+  --accent: #09090b;
+  --accent-soft: #27272a;
+  --accent-on-solid: #ffffff;
+  --accent-dim: rgba(9, 9, 11, 0.06);
+  --accent-border: rgba(9, 9, 11, 0.28);
+
+  /* Syntax highlight palette (GitHub Light Default) */
+  --syn-kw: #cf222e;
+  --syn-ty: #953800;
+  --syn-fn: #8250df;
+  --syn-str: #0a3069;
+  --syn-num: #0550ae;
+  --syn-macro: #116329;
+  --syn-cm: #6e7781;
+  --syn-plain: #1f2328;
+
+  /* Precision hairlines */
+  --border-subtle: rgba(9, 9, 11, 0.08);
+  --border-default: rgba(9, 9, 11, 0.16);
+  --border-strong: rgba(9, 9, 11, 0.32);
+
+  /* Theme-aware chrome & surfaces */
+  --header-bg: rgba(250, 250, 250, 0.86);
+  --scrollbar-thumb: rgba(9, 9, 11, 0.18);
+  --scrollbar-thumb-hover: rgba(9, 9, 11, 0.34);
+  --btn-primary-hover: #27272a;
+  --hero-dim: #71717a;
+  --hero-key-border: rgba(9, 9, 11, 0.45);
+  --wordmark-start: rgba(9, 9, 11, 0.16);
+  --wordmark-mid: rgba(9, 9, 11, 0.05);
+  --wordmark-end: rgba(9, 9, 11, 0);
+  --inset-highlight: rgba(9, 9, 11, 0.06);
+  --elevated-shadow:
+    0 20px 50px rgba(9, 9, 11, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --code-active-bg: rgba(9, 9, 11, 0.04);
+  --code-progress-bg: rgba(9, 9, 11, 0.08);
+  --code-ln: #a1a1aa;
+  --code-ln-active: #52525b;
+}
+
 *,
 *::before,
 *::after {
@@ -64,7 +141,6 @@
 }
 
 html {
-  color-scheme: dark;
   background-color: var(--bg-page);
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -84,10 +160,10 @@ body {
   overflow-x: clip;
 }
 
-/* Subtle dark scrollbars */
+/* Subtle scrollbars */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -100,12 +176,12 @@ body {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.32);
+  background: var(--scrollbar-thumb-hover);
 }
 
 a {
@@ -201,11 +277,11 @@ kbd {
 
 .btn-primary {
   background: var(--text-primary);
-  color: var(--bg-void);
+  color: var(--accent-on-solid);
 }
 
 .btn-primary:hover {
-  background: #ffffff;
+  background: var(--btn-primary-hover);
 }
 
 .btn-secondary {
@@ -260,7 +336,7 @@ kbd {
 .syn-cm { color: var(--syn-cm); }
 .syn-plain { color: var(--syn-plain); }
 
-/* Shiki code blocks — vivid syntax inside obsidian surface */
+/* Shiki code blocks — dual theme inside monochrome surface */
 pre.astro-code {
   margin: 0;
   padding: 16px 20px;
@@ -270,4 +346,9 @@ pre.astro-code {
   overflow-x: auto;
   font-size: 13px;
   line-height: 1.65;
+}
+
+:root[data-theme='dark'] .astro-code,
+:root[data-theme='dark'] .astro-code span {
+  color: var(--shiki-dark) !important;
 }

@@ -5,7 +5,12 @@ on:
     branches: ["main"]
     paths:
       - "web/**"
-      - "docs/**"
+      - "!web/AGENTS.md"
+      - "docs/meta.yaml"
+      - "docs/tutorial/**"
+      - "docs/cookbook/**"
+      - "docs/architecture/**"
+      - "docs/migration/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -16,7 +21,7 @@ permissions:
 
 concurrency:
   group: "pages"
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -40,6 +45,9 @@ jobs:
       - name: Install dependencies
         run: pnpm --dir web install --frozen-lockfile
 
+      - name: Check Astro site
+        run: pnpm --dir web check
+
       - name: Build Astro site
         env:
           GITHUB_ACTIONS: "true"
@@ -51,6 +59,7 @@ jobs:
           path: web/dist
 
   deploy:
+    if: github.ref == 'refs/heads/main'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

@@ -53,7 +53,7 @@ const launchpadSetupHtml = highlightShellBlock(launchpadSetupRaw);
           <a href={withBase('/#getting-started')} class="btn btn-primary">
             Get started
           </a>
-          <a href={withBase('/docs/launch-flow/')} class="btn btn-secondary">
+          <a href={withBase('/docs/architecture/launch-flow/')} class="btn btn-secondary">
             Inspect launch flow
           </a>
         </div>
@@ -360,12 +360,12 @@ const launchpadSetupHtml = highlightShellBlock(launchpadSetupRaw);
     font-weight: 420;
     line-height: 1.08;
     letter-spacing: -0.035em;
-    color: #707070;
+    color: var(--hero-dim);
     max-width: 16ch;
   }
 
   .hero-title .hl {
-    color: #ffffff;
+    color: var(--text-primary);
     font-weight: 580;
   }
 
@@ -374,7 +374,7 @@ const launchpadSetupHtml = highlightShellBlock(launchpadSetupRaw);
     display: inline-block;
     font-weight: 620;
     padding-bottom: 2px;
-    border-bottom: 1.5px solid rgba(255, 255, 255, 0.5);
+    border-bottom: 1.5px solid var(--hero-key-border);
   }
 
   .hero-sub {

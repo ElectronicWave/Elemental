@@ -104,9 +104,14 @@
         ctx.clearRect(0, 0, width, height);
         freqBoost += (targetFreqBoost - freqBoost) * 0.06;
 
+        const isLight = document.documentElement.dataset.theme === 'light';
+        const fg = isLight ? '9, 9, 11' : '255, 255, 255';
+        const bg = isLight ? '250, 250, 250' : '9, 9, 9';
+        const alphaScale = isLight ? 1.35 : 1;
+
         // 1. Hairline architectural coordinate grid
         const grid = 64;
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.026)';
+        ctx.strokeStyle = `rgba(${fg}, ${0.026 * alphaScale})`;
         ctx.lineWidth = 1;
         ctx.beginPath();
         for (let x = 0; x <= width; x += grid) {
@@ -127,8 +132,8 @@
           ctx.beginPath();
           ctx.arc(vx, vy, 2.2 + prox * 1.5, 0, Math.PI * 2);
           ctx.strokeStyle = prox > 0.05
-            ? `rgba(255, 255, 255, ${0.2 + prox * 0.45})`
-            : 'rgba(255, 255, 255, 0.08)';
+            ? `rgba(${fg}, ${Math.min(0.75, (0.2 + prox * 0.45) * alphaScale)})`
+            : `rgba(${fg}, ${0.08 * alphaScale})`;
           ctx.lineWidth = 1;
           ctx.stroke();
         }
@@ -141,7 +146,7 @@
             if (idx === 0) ctx.moveTo(px, py);
             else ctx.lineTo(px, py);
           });
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.045)';
+          ctx.strokeStyle = `rgba(${fg}, ${0.045 * alphaScale})`;
           ctx.lineWidth = 1;
           ctx.stroke();
 
@@ -171,8 +176,8 @@
           const [tx, ty] = pointOnPath(tr.points, Math.min(1, tailT));
 
           const grad = ctx.createLinearGradient(tx, ty, hx, hy);
-          grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
-          grad.addColorStop(1, `rgba(255, 255, 255, ${0.34 * lifeAlpha})`);
+          grad.addColorStop(0, `rgba(${fg}, 0)`);
+          grad.addColorStop(1, `rgba(${fg}, ${Math.min(0.65, 0.34 * lifeAlpha * alphaScale)})`);
 
           ctx.beginPath();
           ctx.moveTo(tx, ty);
@@ -185,7 +190,7 @@
           const headRadius = 1.6 * (0.45 + 0.55 * lifeAlpha);
           ctx.beginPath();
           ctx.arc(hx, hy, headRadius, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(255, 255, 255, ${0.88 * lifeAlpha})`;
+          ctx.fillStyle = `rgba(${fg}, ${Math.min(0.88, 0.88 * lifeAlpha)})`;
           ctx.fill();
         }
 
@@ -210,28 +215,28 @@
             if (x === 0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
           }
-          ctx.strokeStyle = `rgba(255, 255, 255, ${w.alpha})`;
+          ctx.strokeStyle = `rgba(${fg}, ${w.alpha})`;
           ctx.lineWidth = w.width;
           ctx.stroke();
         }
 
         // Smooth edge fades (bottom, left, right) so particles never vanish abruptly at viewport edges
         const bottomFade = ctx.createLinearGradient(0, height * 0.58, 0, height);
-        bottomFade.addColorStop(0, 'rgba(9, 9, 9, 0)');
-        bottomFade.addColorStop(1, 'rgba(9, 9, 9, 1)');
+        bottomFade.addColorStop(0, `rgba(${bg}, 0)`);
+        bottomFade.addColorStop(1, `rgba(${bg}, 1)`);
         ctx.fillStyle = bottomFade;
         ctx.fillRect(0, height * 0.58, width, height * 0.42);
 
         const leftFade = ctx.createLinearGradient(0, 0, Math.min(120, width * 0.12), 0);
-        leftFade.addColorStop(0, 'rgba(9, 9, 9, 0.92)');
-        leftFade.addColorStop(1, 'rgba(9, 9, 9, 0)');
+        leftFade.addColorStop(0, `rgba(${bg}, 0.92)`);
+        leftFade.addColorStop(1, `rgba(${bg}, 0)`);
         ctx.fillStyle = leftFade;
         ctx.fillRect(0, 0, Math.min(120, width * 0.12), height);
 
         const rightEdge = Math.min(120, width * 0.12);
         const rightFade = ctx.createLinearGradient(width - rightEdge, 0, width, 0);
-        rightFade.addColorStop(0, 'rgba(9, 9, 9, 0)');
-        rightFade.addColorStop(1, 'rgba(9, 9, 9, 0.92)');
+        rightFade.addColorStop(0, `rgba(${bg}, 0)`);
+        rightFade.addColorStop(1, `rgba(${bg}, 0.92)`);
         ctx.fillStyle = rightFade;
         ctx.fillRect(width - rightEdge, 0, rightEdge, height);
 
@@ -257,6 +262,11 @@
       window.addEventListener('resize', buildScene);
       window.addEventListener('pointermove', onPointerMove, { passive: true });
       window.addEventListener('pointerleave', onPointerLeave, { passive: true });
+      window.addEventListener('elemental-theme-change', () => {
+        if (reducedMotion || !isVisible) {
+          render(performance.now());
+        }
+      });
 
       if ('IntersectionObserver' in window) {
         const obs = new IntersectionObserver((entries) => {

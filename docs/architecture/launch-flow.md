@@ -1,3 +1,10 @@
+---
+title: Launch Flow
+description: How Elemental prepares and launches a Minecraft instance from launchpad to the spawned JVM process.
+create-date: 2026-11-10
+updated-date: 2026-11-24
+---
+
 # Launch Flow
 
 This document describes how Elemental prepares and launches a Minecraft

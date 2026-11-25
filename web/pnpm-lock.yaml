@@ -14,6 +14,9 @@ importers:
       mermaid:
         specifier: ^11.6.0
         version: 11.17.2
+      yaml:
+        specifier: ^2.9.1
+        version: 2.9.1
     devDependencies:
       '@astrojs/check':
         specifier: ^0.9.4

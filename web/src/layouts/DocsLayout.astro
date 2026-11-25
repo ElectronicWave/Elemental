@@ -37,59 +37,57 @@ const tocHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
 <BaseLayout title={title} description={description} activeNav="docs">
   <div class="container docs-shell">
     <aside class="docs-sidebar" aria-label="Documentation navigation">
-      <div class="sidebar-sticky">
-        <a href={withBase('/docs/')} class:list={['sidebar-overview', { active: !activeSlug }]}>
-          Documentation Home
-        </a>
+      <a href={withBase('/docs/')} class:list={['sidebar-overview', { active: !activeSlug }]}>
+        Documentation Home
+      </a>
 
-        {groups.map((group) => (
-          <div class="sidebar-group">
-            <div class="sidebar-group-title">{group.name}</div>
-            <ul class="sidebar-list">
-              {group.items.map((item) => (
-                <li>
-                  <a
-                    href={withBase(`/docs/${item.slug}/`)}
-                    class:list={['sidebar-link', { active: activeSlug === item.slug }]}
-                  >
-                    {item.title}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-
+      {groups.map((group) => (
         <div class="sidebar-group">
-          <div class="sidebar-group-title">External References</div>
+          <div class="sidebar-group-title">{group.name}</div>
           <ul class="sidebar-list">
-            <li>
-              <a href={SDK_META.docsRsUrl} target="_blank" rel="noreferrer" class="sidebar-link">
-                API Reference (docs.rs)
-              </a>
-            </li>
-            <li>
-              <a
-                href={`${SDK_META.repositoryUrl}/blob/main/crates/shared/DESIGN.md`}
-                target="_blank"
-                rel="noreferrer"
-                class="sidebar-link"
-              >
-                Persistence Design
-              </a>
-            </li>
-            <li>
-              <a
-                href={`${SDK_META.repositoryUrl}/blob/main/crates/object/DESIGN.md`}
-                target="_blank"
-                rel="noreferrer"
-                class="sidebar-link"
-              >
-                Object Pool Design
-              </a>
-            </li>
+            {group.items.map((item) => (
+              <li>
+                <a
+                  href={withBase(`/docs/${item.slug}/`)}
+                  class:list={['sidebar-link', { active: activeSlug === item.slug }]}
+                >
+                  {item.title}
+                </a>
+              </li>
+            ))}
           </ul>
         </div>
+      ))}
+
+      <div class="sidebar-group">
+        <div class="sidebar-group-title">External References</div>
+        <ul class="sidebar-list">
+          <li>
+            <a href={SDK_META.docsRsUrl} target="_blank" rel="noreferrer" class="sidebar-link">
+              API Reference (docs.rs)
+            </a>
+          </li>
+          <li>
+            <a
+              href={`${SDK_META.repositoryUrl}/blob/main/crates/shared/DESIGN.md`}
+              target="_blank"
+              rel="noreferrer"
+              class="sidebar-link"
+            >
+              Persistence Design
+            </a>
+          </li>
+          <li>
+            <a
+              href={`${SDK_META.repositoryUrl}/blob/main/crates/object/DESIGN.md`}
+              target="_blank"
+              rel="noreferrer"
+              class="sidebar-link"
+            >
+              Object Pool Design
+            </a>
+          </li>
+        </ul>
       </div>
     </aside>
 
@@ -140,21 +138,76 @@ const tocHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
 
     {tocHeadings.length > 0 && (
       <aside class="docs-toc" aria-label="Table of contents">
-        <div class="toc-sticky">
-          <div class="toc-title">On this page</div>
-          <ul class="toc-list">
-            {tocHeadings.map((h) => (
-              <li class:list={['toc-item', { 'toc-sub': h.depth === 3 }]}>
-                <a href={`#${h.slug}`} class="toc-link">
-                  {h.text}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <div class="toc-title">On this page</div>
+        <ul class="toc-list">
+          {tocHeadings.map((h) => (
+            <li class:list={['toc-item', { 'toc-sub': h.depth === 3 }]}>
+              <a href={`#${h.slug}`} class="toc-link" data-toc-link={h.slug}>
+                {h.text}
+              </a>
+            </li>
+          ))}
+        </ul>
       </aside>
     )}
   </div>
+
+  {tocHeadings.length > 0 && (
+    <script>
+      const tocLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>('[data-toc-link]'));
+      if (tocLinks.length > 0) {
+        const linkBySlug = new Map<string, HTMLAnchorElement>(
+          tocLinks
+            .map((link) => [link.dataset.tocLink ?? '', link] as const)
+            .filter(([slug]) => slug.length > 0),
+        );
+
+        const headings = Array.from(linkBySlug.keys())
+          .map((slug) => document.getElementById(slug))
+          .filter((el): el is HTMLElement => el !== null);
+
+        let activeSlug = '';
+        const setActive = (slug: string) => {
+          if (!slug || slug === activeSlug) return;
+          activeSlug = slug;
+          for (const [id, link] of linkBySlug) {
+            link.classList.toggle('active', id === slug);
+          }
+        };
+
+        if (headings.length > 0) {
+          setActive(headings[0].id);
+
+          const updateActiveHeading = () => {
+            const offset = 112;
+            let current = headings[0].id;
+            for (const heading of headings) {
+              if (heading.getBoundingClientRect().top <= offset) {
+                current = heading.id;
+              } else {
+                break;
+              }
+            }
+            setActive(current);
+          };
+
+          let ticking = false;
+          const onScroll = () => {
+            if (ticking) return;
+            ticking = true;
+            window.requestAnimationFrame(() => {
+              updateActiveHeading();
+              ticking = false;
+            });
+          };
+
+          window.addEventListener('scroll', onScroll, { passive: true });
+          window.addEventListener('hashchange', updateActiveHeading);
+          updateActiveHeading();
+        }
+      }
+    </script>
+  )}
 
   {hasMermaid && (
     <script>
@@ -163,26 +216,53 @@ const tocHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
       );
 
       if (mermaidBlocks.length > 0) {
+        const sources = mermaidBlocks.map((pre) => pre.textContent?.trim() ?? '');
+        const containers: HTMLElement[] = mermaidBlocks.map((pre) => {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'mermaid-frame corner-frame';
+          pre.replaceWith(wrapper);
+          return wrapper;
+        });
+
+        let renderSeq = 0;
+
+        const getMermaidThemeVariables = (isLight: boolean) =>
+          isLight
+            ? {
+                darkMode: false,
+                background: '#f4f4f5',
+                primaryColor: '#ffffff',
+                primaryTextColor: '#09090b',
+                primaryBorderColor: '#09090b',
+                lineColor: '#71717a',
+                secondaryColor: '#f4f4f5',
+                tertiaryColor: '#fafafa',
+                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+                fontSize: '13px',
+              }
+            : {
+                darkMode: true,
+                background: '#050505',
+                primaryColor: '#121212',
+                primaryTextColor: '#f5f5f5',
+                primaryBorderColor: '#ffffff',
+                lineColor: '#737373',
+                secondaryColor: '#1a1a1a',
+                tertiaryColor: '#101010',
+                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+                fontSize: '13px',
+              };
+
         const renderDiagrams = async () => {
           if (document.fonts?.ready) {
             await document.fonts.ready;
           }
+          const isLight = document.documentElement.dataset.theme === 'light';
           const { default: mermaid } = await import('mermaid');
           mermaid.initialize({
             startOnLoad: false,
             theme: 'base',
-            themeVariables: {
-              darkMode: true,
-              background: '#050505',
-              primaryColor: '#121212',
-              primaryTextColor: '#f5f5f5',
-              primaryBorderColor: '#ffffff',
-              lineColor: '#737373',
-              secondaryColor: '#1a1a1a',
-              tertiaryColor: '#101010',
-              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
-              fontSize: '13px',
-            },
+            themeVariables: getMermaidThemeVariables(isLight),
             flowchart: {
               htmlLabels: true,
               curve: 'basis',
@@ -192,24 +272,24 @@ const tocHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
             },
           });
 
+          const batchId = ++renderSeq;
           await Promise.all(
-            mermaidBlocks.map(async (pre, i) => {
-              const source = pre.textContent?.trim() ?? '';
+            sources.map(async (source, i) => {
               if (!source) return;
               try {
-                const { svg } = await mermaid.render(`mermaid-graph-${i}`, source);
-                const wrapper = document.createElement('div');
-                wrapper.className = 'mermaid-frame corner-frame';
-                wrapper.innerHTML = svg;
-                pre.replaceWith(wrapper);
+                const { svg } = await mermaid.render(`mermaid-graph-${batchId}-${i}`, source);
+                containers[i].innerHTML = svg;
               } catch {
-                // Keep original code block if Mermaid fails to parse
+                containers[i].textContent = source;
               }
             }),
           );
         };
 
         void renderDiagrams();
+        window.addEventListener('elemental-theme-change', () => {
+          void renderDiagrams();
+        });
       }
     </script>
   )}
@@ -224,12 +304,14 @@ const tocHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
     align-items: start;
   }
 
-  .sidebar-sticky,
-  .toc-sticky {
+  .docs-sidebar,
+  .docs-toc {
     position: sticky;
     top: calc(var(--nav-height) + 28px);
     max-height: calc(100vh - var(--nav-height) - 48px);
     overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: 24px;
   }
 
   .sidebar-overview {
@@ -531,11 +613,15 @@ const tocHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
 
   .toc-link {
     display: block;
+    margin-left: -1px;
     padding: 2px 0 2px 12px;
+    border-left: 1.5px solid transparent;
     font-size: 12.5px;
     line-height: 1.45;
     color: var(--text-muted);
-    transition: color var(--dur-fast) var(--ease-out);
+    transition:
+      color var(--dur-fast) var(--ease-out),
+      border-color var(--dur-fast) var(--ease-out);
   }
 
   .toc-sub .toc-link {
@@ -543,7 +629,12 @@ const tocHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
   }
 
   .toc-link:hover {
+    color: var(--accent-soft);
+  }
+
+  .toc-link.active {
     color: var(--accent);
+    border-left-color: var(--accent);
   }
 
   @media (max-width: 1120px) {
@@ -560,9 +651,10 @@ const tocHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
       grid-template-columns: 1fr;
       gap: 28px;
     }
-    .sidebar-sticky {
+    .docs-sidebar {
       position: static;
       max-height: none;
+      overflow-y: visible;
       padding-bottom: 20px;
       border-bottom: 1px solid var(--border-subtle);
     }

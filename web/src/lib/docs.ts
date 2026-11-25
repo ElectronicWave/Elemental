@@ -1,107 +1,42 @@
 import type { CollectionEntry } from 'astro:content';
+import { loadDocsMeta, type DocSectionMeta } from './docs-meta';
 
 export type DocEntry = CollectionEntry<'docs'>;
+export type { DocSectionMeta };
 
 export interface DocMeta {
   readonly id: string;
   readonly slug: string;
+  readonly sectionId: string;
   readonly title: string;
   readonly description: string;
   readonly group: string;
-  readonly order: number;
+  readonly createDate: Date;
+  readonly updatedDate: Date;
   readonly readingMinutes: number;
   readonly entry: DocEntry;
 }
 
 export interface DocGroup {
+  readonly id: string;
   readonly name: string;
+  readonly description: string;
   readonly items: readonly DocMeta[];
 }
 
-const KNOWN_ORDER: Record<string, number> = {
-  'launch-flow': 10,
-  refactor: 20,
-  'migration/0.3': 30,
-  'migration/0.2': 40,
-};
+export const DOC_SECTIONS: readonly DocSectionMeta[] = loadDocsMeta().sections;
 
-function stripMarkdown(text: string): string {
-  return text
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/[*_~>#]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+const SECTION_INDEX: ReadonlyMap<string, { readonly meta: DocSectionMeta; readonly order: number }> = new Map(
+  DOC_SECTIONS.map((meta, index) => [meta.id, { meta, order: index }]),
+);
 
-function extractTitle(entry: DocEntry): string {
-  if (entry.data.title) {
-    return entry.data.title;
+function getSectionEntry(slug: string): { readonly meta: DocSectionMeta; readonly order: number } {
+  const sectionId = slug.split('/')[0] ?? '';
+  const found = SECTION_INDEX.get(sectionId);
+  if (!found) {
+    throw new Error(`Document "${slug}" does not belong to any section declared in docs/meta.yaml`);
   }
-  const body = entry.body ?? '';
-  const match = body.match(/^#\s+(.+)$/m);
-  if (match?.[1]) {
-    return stripMarkdown(match[1]);
-  }
-  const lastSegment = entry.id.split('/').pop() ?? entry.id;
-  return lastSegment
-    .replace(/\.md$/i, '')
-    .replace(/[-_]/g, ' ')
-    .replace(/\b\w/g, (ch) => ch.toUpperCase());
-}
-
-function extractDescription(entry: DocEntry): string {
-  if (entry.data.description) {
-    return entry.data.description;
-  }
-  const body = entry.body ?? '';
-  const lines = body.split(/\r?\n/);
-  const paragraphLines: string[] = [];
-  let inCodeFence = false;
-
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (line.startsWith('```')) {
-      inCodeFence = !inCodeFence;
-      continue;
-    }
-    if (inCodeFence) {
-      continue;
-    }
-    if (!line) {
-      if (paragraphLines.length > 0) {
-        break;
-      }
-      continue;
-    }
-    if (line.startsWith('#') || line.startsWith('|') || line.startsWith('- ') || line.startsWith('>')) {
-      if (paragraphLines.length > 0) {
-        break;
-      }
-      continue;
-    }
-    paragraphLines.push(line);
-  }
-
-  const joined = stripMarkdown(paragraphLines.join(' '));
-  if (joined.length <= 160) {
-    return joined;
-  }
-  return `${joined.slice(0, 157).trimEnd()}...`;
-}
-
-function extractGroup(id: string): string {
-  const cleanId = id.replace(/\.md$/i, '');
-  if (!cleanId.includes('/')) {
-    return 'Architecture & Guides';
-  }
-  const firstSegment = cleanId.split('/')[0] ?? 'Guides';
-  if (firstSegment === 'migration') {
-    return 'Migration Guides';
-  }
-  return firstSegment
-    .replace(/[-_]/g, ' ')
-    .replace(/\b\w/g, (ch) => ch.toUpperCase());
+  return found;
 }
 
 function estimateReadingMinutes(body: string): number {
@@ -115,14 +50,16 @@ export function normalizeDocSlug(id: string): string {
 
 export function toDocMeta(entry: DocEntry): DocMeta {
   const slug = normalizeDocSlug(entry.id);
-  const order = entry.data.order ?? KNOWN_ORDER[slug] ?? 100;
+  const { meta } = getSectionEntry(slug);
   return {
     id: entry.id,
     slug,
-    title: extractTitle(entry),
-    description: extractDescription(entry),
-    group: extractGroup(slug),
-    order,
+    sectionId: meta.id,
+    title: entry.data.title,
+    description: entry.data.description,
+    group: meta.label,
+    createDate: entry.data['create-date'],
+    updatedDate: entry.data['updated-date'],
     readingMinutes: estimateReadingMinutes(entry.body ?? ''),
     entry,
   };
@@ -130,22 +67,43 @@ export function toDocMeta(entry: DocEntry): DocMeta {
 
 export function sortDocs(entries: readonly DocEntry[]): DocMeta[] {
   return entries.map(toDocMeta).sort((a, b) => {
-    if (a.order !== b.order) {
-      return a.order - b.order;
+    const sectionA = getSectionEntry(a.slug);
+    const sectionB = getSectionEntry(b.slug);
+    if (sectionA.order !== sectionB.order) {
+      return sectionA.order - sectionB.order;
     }
+
+    const direction = sectionA.meta.sort === 'asc' ? 1 : -1;
+    const createDiff = (a.createDate.getTime() - b.createDate.getTime()) * direction;
+    if (createDiff !== 0) {
+      return createDiff;
+    }
+
+    const updatedDiff = b.updatedDate.getTime() - a.updatedDate.getTime();
+    if (updatedDiff !== 0) {
+      return updatedDiff;
+    }
+
     return a.slug.localeCompare(b.slug);
   });
 }
 
 export function groupDocs(docs: readonly DocMeta[]): DocGroup[] {
-  const map = new Map<string, DocMeta[]>();
+  const grouped = new Map<string, DocMeta[]>();
   for (const doc of docs) {
-    const list = map.get(doc.group);
+    const list = grouped.get(doc.sectionId);
     if (list) {
       list.push(doc);
     } else {
-      map.set(doc.group, [doc]);
+      grouped.set(doc.sectionId, [doc]);
     }
   }
-  return Array.from(map.entries()).map(([name, items]) => ({ name, items }));
+
+  return DOC_SECTIONS.flatMap((section) => {
+    const items = grouped.get(section.id);
+    if (!items || items.length === 0) {
+      return [];
+    }
+    return [{ id: section.id, name: section.label, description: section.description, items }];
+  });
 }

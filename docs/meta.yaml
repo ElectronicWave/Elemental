@@ -1,0 +1,17 @@
+sections:
+  - id: tutorial
+    label: Tutorial
+    description: Step-by-step guides to get started with Elemental.
+    sort: asc
+  - id: cookbook
+    label: Cookbook
+    description: Practical recipes for building launcher features from 0 to 1.
+    sort: desc
+  - id: architecture
+    label: Architecture
+    description: Design documents and internals explaining how Elemental works.
+    sort: desc
+  - id: migration
+    label: Migration
+    description: Upgrade guides and breaking-change tables between releases.
+    sort: desc

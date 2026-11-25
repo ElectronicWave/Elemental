@@ -13,26 +13,29 @@ const groups = groupDocs(allDocs);
   description="Architecture guides, launch flow specifications, refactoring principles, and migration references for Elemental."
   groups={groups}
 >
-  <div class="docs-hub">
+  <div>
     <span class="section-index">REPOSITORY // ./docs</span>
-    <h1>Elemental Documentation</h1>
-    <p class="hub-lead">
+    <h1 class="mt-3 mb-3.5 text-[clamp(28px,3.6vw,38px)] font-medium tracking-[-0.025em]">Elemental Documentation</h1>
+    <p class="mb-9 max-w-[62ch] text-[15.5px] leading-[1.7] text-fg-secondary">
       Every document below is loaded directly from <code>./docs</code> at build time. Updates to
       markdown files, Mermaid diagrams, or migration guides in the repository appear here automatically.
     </p>
 
     {groups.map((group) => (
-      <section class="hub-group">
-        <h2>{group.name}</h2>
-        <div class="hub-grid">
+      <section class="mb-9">
+        <h2 class="mt-0 mb-3.5 border-t-0 pt-0 font-mono text-[13px] text-accent">{group.name}</h2>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {group.items.map((doc) => (
-            <a href={withBase(`/docs/${doc.slug}/`)} class="hub-card corner-frame">
-              <div class="hub-card-top">
-                <span class="hub-path">docs/{doc.slug}.md</span>
-                <span class="hub-read tabular">{doc.readingMinutes} min</span>
+            <a
+              href={withBase(`/docs/${doc.slug}/`)}
+              class="corner-frame flex flex-col gap-2 p-5 no-underline transition-colors hover:border-accent-border hover:bg-raised"
+            >
+              <div class="flex items-center justify-between font-mono text-[11.5px] text-fg-muted">
+                <span>docs/{doc.slug}.md</span>
+                <span class="tabular">{doc.readingMinutes} min</span>
               </div>
-              <h3>{doc.title}</h3>
-              <p>{doc.description}</p>
+              <h3 class="m-0 text-[17px] font-medium text-fg">{doc.title}</h3>
+              <p class="m-0 text-[13.5px] leading-[1.55] text-fg-secondary">{doc.description}</p>
             </a>
           ))}
         </div>
@@ -40,84 +43,3 @@ const groups = groupDocs(allDocs);
     ))}
   </div>
 </DocsLayout>
-
-<style>
-  .docs-hub h1 {
-    margin: 12px 0 14px;
-    font-size: clamp(28px, 3.6vw, 38px);
-    font-weight: 500;
-    letter-spacing: -0.025em;
-  }
-
-  .hub-lead {
-    margin: 0 0 36px;
-    font-size: 15.5px;
-    line-height: 1.7;
-    color: var(--text-secondary);
-    max-width: 62ch;
-  }
-
-  .hub-group {
-    margin-bottom: 36px;
-  }
-
-  .hub-group h2 {
-    margin: 0 0 14px;
-    padding-top: 0;
-    border-top: none;
-    font-family: var(--font-mono);
-    font-size: 13px;
-    color: var(--accent);
-  }
-
-  .hub-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-  }
-
-  .hub-card {
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    text-decoration: none !important;
-    transition:
-      border-color var(--dur-fast) var(--ease-out),
-      background-color var(--dur-fast) var(--ease-out);
-  }
-
-  .hub-card:hover {
-    border-color: var(--accent-border);
-    background: var(--bg-raised);
-  }
-
-  .hub-card-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-family: var(--font-mono);
-    font-size: 11.5px;
-    color: var(--text-muted);
-  }
-
-  .hub-card h3 {
-    margin: 0;
-    font-size: 17px;
-    font-weight: 500;
-    color: var(--text-primary);
-  }
-
-  .hub-card p {
-    margin: 0;
-    font-size: 13.5px;
-    line-height: 1.55;
-    color: var(--text-secondary);
-  }
-
-  @media (max-width: 640px) {
-    .hub-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-</style>

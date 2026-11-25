@@ -26,11 +26,9 @@ impl<'a> InstallerProcessorContext<'a> {
             installer_artifact,
             install_profile,
             archive,
-            root_directory: absolute_path(&instance.parent.path)?,
+            root_directory: absolute_path(instance.parent_root_path())?,
             libraries_directory: absolute_path(
-                &instance
-                    .parent
-                    .try_get_resource(VersionJsonRootResource::Libraries(None))?,
+                &instance.try_get_parent_resource(VersionJsonRootResource::Libraries(None))?,
             )?,
             state_directory: absolute_path(&instance.try_get_resource(
                 VersionJsonInstanceResource::Elemental(Some(SafeRelativePath::parse(format!(

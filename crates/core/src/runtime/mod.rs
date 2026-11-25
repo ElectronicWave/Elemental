@@ -6,6 +6,7 @@ pub mod providers;
 mod resolver;
 
 pub use error::{Error, Result};
+pub use providers::default_providers;
 pub use resolver::RuntimeResolver;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

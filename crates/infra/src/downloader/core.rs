@@ -1,34 +1,18 @@
-use scc::HashMap;
 use std::sync::{Arc, atomic::AtomicU64};
 use tokio::sync::broadcast;
 
-use super::config::ValidatedDownloaderConfig;
-use super::event::{DownloadEvent, DownloadEventStream};
+use super::config::{DownloadRateLimit, ElementalDownloaderConfig, ValidatedDownloaderConfig};
+use super::event::DownloadEventStream;
 use super::limits::{BandwidthLimiter, ConcurrencyController};
-use super::materializer::Materializer;
-use super::rate::DownloadRateLimit;
-use super::session::{DownloadSessionBuilder, SessionHandler};
-use super::task::SessionId;
+use super::materializer::{HardlinkCacheMaterializer, Materializer, UncachedMaterializer};
+use super::session::{DownloadSessionBuilder, SessionRuntime};
 use crate::error::Result;
-
-mod builder;
-mod sessions;
-
-pub use builder::ElementalDownloaderBuilder;
 
 const EVENT_CHANNEL_CAPACITY: usize = 4096;
 
 #[derive(Debug)]
 pub struct ElementalDownloader {
-    pub(super) client: reqwest::Client,
-    sessions: HashMap<SessionId, Arc<SessionHandler>>,
-    events: broadcast::Sender<DownloadEvent>,
-    pub(super) concurrency: Arc<ConcurrencyController>,
-    pub(super) bandwidth_limiter: Arc<BandwidthLimiter>,
-    pub(super) materializer: Arc<dyn Materializer>,
-    default_session_parallelism: usize,
-    session_queue_capacity: usize,
-    next_session_id: AtomicU64,
+    runtime: Arc<SessionRuntime>,
 }
 
 impl ElementalDownloader {
@@ -57,48 +41,109 @@ impl ElementalDownloader {
         );
         let (events, _) = broadcast::channel(EVENT_CHANNEL_CAPACITY);
         Arc::new(Self {
-            client,
-            sessions: HashMap::new(),
-            events,
-            concurrency,
-            bandwidth_limiter,
-            materializer,
-            default_session_parallelism: config.default_session_parallelism,
-            session_queue_capacity: config.session_queue_capacity,
-            next_session_id: AtomicU64::new(1),
+            runtime: Arc::new(SessionRuntime {
+                client,
+                events,
+                concurrency,
+                bandwidth_limiter,
+                materializer,
+                default_session_parallelism: config.default_session_parallelism,
+                session_queue_capacity: config.session_queue_capacity,
+                next_session_id: AtomicU64::new(1),
+            }),
         })
     }
 
-    pub fn session(self: &Arc<Self>, name: impl Into<String>) -> DownloadSessionBuilder {
-        DownloadSessionBuilder::new(Arc::clone(self), name.into())
+    pub fn session(&self, name: impl Into<String>) -> DownloadSessionBuilder {
+        DownloadSessionBuilder::new(Arc::clone(&self.runtime), name.into())
     }
 
     pub fn subscribe(&self) -> DownloadEventStream {
-        DownloadEventStream::new(self.events.subscribe())
-    }
-
-    pub(crate) fn event_receiver(&self) -> broadcast::Receiver<DownloadEvent> {
-        self.events.subscribe()
+        DownloadEventStream::new(self.runtime.events.subscribe())
     }
 
     pub fn max_concurrent_downloads(&self) -> usize {
-        self.concurrency.max_concurrent_downloads()
+        self.runtime.concurrency.max_concurrent_downloads()
     }
 
     pub fn rate_limit(&self) -> DownloadRateLimit {
-        self.bandwidth_limiter.rate_limit()
+        self.runtime.bandwidth_limiter.rate_limit()
     }
 
     pub async fn set_max_concurrent_downloads(
         &self,
         max_concurrent_downloads: usize,
     ) -> Result<()> {
-        self.concurrency
+        self.runtime
+            .concurrency
             .set_max_concurrent_downloads(max_concurrent_downloads)
             .await
     }
 
     pub async fn set_rate_limit(&self, rate_limit: DownloadRateLimit) -> Result<()> {
-        self.bandwidth_limiter.set_rate_limit(rate_limit).await
+        self.runtime
+            .bandwidth_limiter
+            .set_rate_limit(rate_limit)
+            .await
+    }
+}
+
+#[derive(Debug)]
+pub struct ElementalDownloaderBuilder {
+    config: ElementalDownloaderConfig,
+    materializer: Arc<dyn Materializer>,
+    client: Option<reqwest::Client>,
+}
+
+impl Default for ElementalDownloaderBuilder {
+    fn default() -> Self {
+        Self {
+            config: ElementalDownloaderConfig::default(),
+            materializer: Arc::new(UncachedMaterializer),
+            client: None,
+        }
+    }
+}
+
+impl ElementalDownloaderBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn config(mut self, config: ElementalDownloaderConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    pub fn materializer(mut self, materializer: Arc<dyn Materializer>) -> Self {
+        self.materializer = materializer;
+        self
+    }
+
+    pub fn without_cache(self) -> Self {
+        self.materializer(Arc::new(UncachedMaterializer))
+    }
+
+    pub fn with_hardlink_cache(self, cache_root: impl Into<std::path::PathBuf>) -> Self {
+        self.materializer(Arc::new(HardlinkCacheMaterializer::new(cache_root)))
+    }
+
+    pub fn client(mut self, client: reqwest::Client) -> Self {
+        self.client = Some(client);
+        self
+    }
+
+    pub fn build(self) -> Result<Arc<ElementalDownloader>> {
+        let config = ValidatedDownloaderConfig::try_from(self.config)?;
+        let client = match self.client {
+            Some(client) => client,
+            None => config.client()?,
+        };
+
+        Ok(ElementalDownloader::from_parts(
+            client,
+            self.materializer,
+            config,
+        ))
     }
 }

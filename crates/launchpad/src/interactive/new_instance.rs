@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use anyhow::{Context, Result, bail};
 use elemental::{
     core::minecraft::MinecraftVersionId,
-    core::runtime::RuntimeResolver,
     driver::{
         catalog::{GameVersion, LoaderRelease},
         driver::DriverDescriptor,
@@ -102,7 +101,7 @@ impl DriverContext {
 struct NewInstanceWizard {
     storage_root: PathBuf,
     drivers: DriverRegistry,
-    runtime_resolver: RuntimeResolver,
+    launcher: Launcher,
     driver: Option<DriverContext>,
     game_version: Option<MinecraftVersionId>,
     loader_version: Option<LoaderVersionId>,
@@ -115,7 +114,7 @@ impl NewInstanceWizard {
         Self {
             storage_root,
             drivers: launcher.drivers().clone(),
-            runtime_resolver: launcher.runtime_resolver().clone(),
+            launcher: launcher.clone(),
             driver: None,
             game_version: None,
             loader_version: None,
@@ -282,7 +281,7 @@ impl NewInstanceWizard {
         let defaults = driver.defaults;
         let descriptor = driver.descriptor;
         let Some(runtime) = runtime::prompt(
-            &self.runtime_resolver,
+            &self.launcher,
             defaults.runtime_major_version,
             &mut self.runtime_choice,
         )

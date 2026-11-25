@@ -12,12 +12,27 @@ use elemental_schema::{
 use crate::{error::Result, maven::MavenCoordinate};
 
 use super::{
-    manifest::{LiteLoaderManifestLibrary, LiteLoaderRepositoryStream, LiteLoaderSelectedBuild},
-    source::LiteLoaderEndpoints,
+    manifest::{
+        LiteLoaderManifestLibrary, LiteLoaderRepositoryStream, LiteLoaderSelectedBuild,
+        select_build,
+    },
+    source::{LiteLoaderEndpoints, LiteLoaderSource},
 };
 
 use self::library::{profile_library_with_repository, rewritten_repository};
 use self::manifest::normalize_manifest_library;
+
+impl LiteLoaderSource {
+    pub async fn profile_json(
+        &self,
+        game_version: &str,
+        loader_version: &str,
+    ) -> Result<ProfileJson> {
+        let manifest = self.manifest().await?;
+        let selected = select_build(&manifest, game_version, loader_version)?;
+        build_profile_json(self.http_client()?, self.endpoints(), &selected).await
+    }
+}
 
 pub(super) async fn build_profile_json(
     client: &reqwest::Client,

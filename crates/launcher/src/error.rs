@@ -1,6 +1,6 @@
 use elemental_core::auth::accounts::AccountId;
 
-use crate::{cape::CapeId, skin::SkinId};
+use crate::texture::{CapeId, SkinId};
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]

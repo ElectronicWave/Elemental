@@ -1,10 +1,11 @@
-use elemental_core::storage::layout::Layoutable;
 use elemental_infra::{SafeRelativePath, downloader::DownloadTask};
 use elemental_schema::mojang::piston::{PistonMetaLibraries, PistonMetaLibrariesDownloadsArtifact};
 
 use crate::{
     error::Result,
-    families::version_json::{PistonMetaLibrariesExt, VersionJsonRootResource},
+    families::version_json::{
+        PistonMetaLibrariesExt, VersionJsonPlatform, VersionJsonRootResource,
+    },
 };
 
 use super::VersionJsonInstallPlanner;
@@ -17,7 +18,7 @@ impl VersionJsonInstallPlanner<'_> {
         if !library.is_allowed(&self.rule_context) {
             return Ok(Vec::new());
         }
-        let artifacts = library.version_artifacts(self.rule_context.platform())?;
+        let artifacts = library.version_artifacts(&VersionJsonPlatform::current())?;
         artifacts
             .into_iter()
             .map(|artifact| self.plan_library_artifact_task(artifact))
@@ -32,8 +33,7 @@ impl VersionJsonInstallPlanner<'_> {
             self.remote_resolver
                 .rewrite_upstream(artifact.url.as_str())?,
             self.version
-                .parent
-                .try_get_resource(VersionJsonRootResource::Libraries(Some(
+                .try_get_parent_resource(VersionJsonRootResource::Libraries(Some(
                     SafeRelativePath::parse(artifact.path.as_str())?,
                 )))?,
         );

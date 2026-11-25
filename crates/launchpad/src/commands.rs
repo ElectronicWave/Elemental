@@ -10,8 +10,9 @@ use elemental::{
             accounts::Account, authorizers::Authorizer, authorizers::offline::OfflineAuthorizer,
         },
         launcher::command::LaunchCommand,
-        runtime::provider::{RuntimeProvider, default_providers},
+        runtime::provider::RuntimeProvider,
         runtime::providers::custom::new_custom_provider,
+        runtime::providers::default_providers,
     },
     launcher::{Launcher, PreparedInstance},
 };
@@ -87,8 +88,7 @@ async fn prepare_instance(
         Ok((prepared, started_at.elapsed()))
     } else {
         let session = launcher
-            .downloader()
-            .session(format!("prepare {}", config.instance_name))
+            .download_session(format!("prepare {}", config.instance_name))
             .open()
             .await?;
         let download_progress = progress::download(&session).await?;
@@ -144,7 +144,7 @@ pub(super) async fn finalize_launch(
 ) -> Result<()> {
     let info = prepared.info()?;
     let diagnostics = collect_version_diagnostics(&info);
-    let runtime_executable = command.runtime.executable().to_path_buf();
+    let runtime_executable = command.program();
     let loader_version = config.spec.loader_version().map(|version| version.as_str());
     let install_status = if config.local_only {
         "LoadedPrepared(via facade)"

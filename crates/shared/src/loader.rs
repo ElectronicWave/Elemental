@@ -3,12 +3,18 @@ use std::{marker::PhantomData, sync::Arc};
 use crate::{
     error::{Error, Result},
     migrator::Migrator,
-    profile::Profile,
     version::{Persistor, VersionControlled, Versioned},
 };
 use tokio::sync::RwLock;
 
-#[derive(Clone)]
+struct LoaderState<M, S, V, P> {
+    value: RwLock<V>,
+    migrator: M,
+    persistor: P,
+    target_version: usize,
+    _source: PhantomData<S>,
+}
+
 pub struct Loader<M, S, V, P>
 where
     M: Migrator<S, V>,
@@ -16,11 +22,21 @@ where
     V: VersionControlled,
     P: Persistor<S>,
 {
-    pub inner: Arc<RwLock<V>>,
-    pub migrator: M,
-    pub persistor: P,
-    pub target_version: usize,
-    _source: PhantomData<S>,
+    state: Arc<LoaderState<M, S, V, P>>,
+}
+
+impl<M, S, V, P> Clone for Loader<M, S, V, P>
+where
+    M: Migrator<S, V>,
+    S: Versioned,
+    V: VersionControlled,
+    P: Persistor<S>,
+{
+    fn clone(&self) -> Self {
+        Self {
+            state: Arc::clone(&self.state),
+        }
+    }
 }
 
 impl<M, S, V, P> Loader<M, S, V, P>
@@ -54,11 +70,13 @@ where
         };
 
         Ok(Self {
-            inner: Arc::new(RwLock::new(value)),
-            migrator,
-            persistor,
-            target_version,
-            _source: PhantomData,
+            state: Arc::new(LoaderState {
+                value: RwLock::new(value),
+                migrator,
+                persistor,
+                target_version,
+                _source: PhantomData,
+            }),
         })
     }
 
@@ -66,20 +84,20 @@ where
     where
         V: Clone,
     {
-        let guard = self.inner.read().await;
+        let guard = self.state.value.read().await;
         guard.clone()
     }
 
     pub async fn get<T>(&self, f: impl FnOnce(&V) -> T) -> T {
-        let guard = self.inner.read().await;
+        let guard = self.state.value.read().await;
         f(&*guard)
     }
 
     pub async fn set(&self, f: impl FnOnce(&mut V)) -> Result<()> {
-        let mut guard = self.inner.write().await;
+        let mut guard = self.state.value.write().await;
         f(&mut *guard);
-        let stored = encode_for_storage(&self.migrator, &*guard, self.target_version)?;
-        self.persistor.save(&stored).await?;
+        let stored = encode_for_storage(&self.state.migrator, &*guard, self.state.target_version)?;
+        self.state.persistor.save(&stored).await?;
         Ok(())
     }
 }
@@ -102,5 +120,3 @@ where
 
     Ok(stored)
 }
-
-pub type ProfileLoader<M, S, C, P> = Loader<M, S, Profile<C>, P>;

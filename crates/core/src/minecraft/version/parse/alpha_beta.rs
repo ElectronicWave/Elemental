@@ -1,10 +1,10 @@
 use super::common::parse_numeric_components;
+use crate::minecraft::version::error::MinecraftVersionParseError;
 use crate::minecraft::version::kind::{AlphaBetaVersion, MinecraftVersionKind, VersionStage};
-use crate::minecraft::version::{MinecraftVersion, MinecraftVersionParseError};
 
 pub(crate) fn parse_alpha_beta(
     raw: &str,
-) -> Result<Option<MinecraftVersion>, MinecraftVersionParseError> {
+) -> Result<Option<MinecraftVersionKind>, MinecraftVersionParseError> {
     let stage = match alpha_beta_stage(raw) {
         Some(stage) => stage,
         None => return Ok(None),
@@ -16,9 +16,8 @@ pub(crate) fn parse_alpha_beta(
 
     let numbers = parse_numeric_components(raw, numeric)?;
     let version = alpha_beta_components(raw, stage, &numbers)?;
-    let kind = MinecraftVersionKind::AlphaBeta(version);
 
-    Ok(Some(MinecraftVersion::from_kind(raw, kind)))
+    Ok(Some(MinecraftVersionKind::AlphaBeta(version)))
 }
 
 fn alpha_beta_stage(raw: &str) -> Option<VersionStage> {

@@ -1,4 +1,4 @@
-use crate::catalog::LoaderMetaCatalog;
+use crate::families::version_json::LoaderMetaCatalog;
 
 use self::source::FabricEndpoints;
 

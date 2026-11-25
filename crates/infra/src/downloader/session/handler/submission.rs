@@ -1,10 +1,8 @@
 use std::sync::atomic::Ordering;
 use tokio::sync::mpsc;
 
-use super::SessionHandler;
-use crate::downloader::batch::DownloadBatch;
-use crate::downloader::task::{DownloadTask, TaskId};
-use crate::downloader::worker::QueuedDownloadTask;
+use super::{QueuedDownloadTask, SessionHandler};
+use crate::downloader::task::{DownloadBatch, DownloadTask, TaskId};
 use crate::error::{Error, Result};
 
 impl SessionHandler {

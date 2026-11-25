@@ -47,8 +47,7 @@ impl VersionJsonInstallPlanner<'_> {
                 self.remote_resolver
                     .rewrite_upstream(client.file.url.as_str())?,
                 self.version
-                    .parent
-                    .try_get_resource(VersionJsonRootResource::AssetLogConfigs(Some(
+                    .try_get_parent_resource(VersionJsonRootResource::AssetLogConfigs(Some(
                         SafeRelativePath::parse(client.file.id.as_str())?,
                     )))?,
             )

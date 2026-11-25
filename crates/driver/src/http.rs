@@ -7,24 +7,19 @@ use serde::de::DeserializeOwned;
 use crate::error::{Error, Result};
 
 #[derive(Debug, Clone)]
-pub struct HttpSource<E> {
+pub struct HttpClient {
     client: std::result::Result<reqwest::Client, String>,
-    endpoints: E,
 }
 
-impl<E> HttpSource<E> {
-    pub fn new(endpoints: E, source_name: &str) -> Self {
+impl HttpClient {
+    pub fn new(source_name: &str) -> Self {
         Self {
             client: build_default_client(source_name),
-            endpoints,
         }
     }
 
-    pub fn with_client(endpoints: E, client: reqwest::Client) -> Self {
-        Self {
-            client: Ok(client),
-            endpoints,
-        }
+    pub fn with_client(client: reqwest::Client) -> Self {
+        Self { client: Ok(client) }
     }
 
     pub fn client(&self) -> Result<&reqwest::Client> {
@@ -35,8 +30,15 @@ impl<E> HttpSource<E> {
             })
     }
 
-    pub fn endpoints(&self) -> &E {
-        &self.endpoints
+    pub async fn fetch_json<T>(&self, url: &str, source_name: &str) -> Result<T>
+    where
+        T: DeserializeOwned,
+    {
+        fetch_json(self.client()?, url, source_name).await
+    }
+
+    pub async fn fetch_bytes(&self, url: &str, source_name: &str) -> Result<Vec<u8>> {
+        fetch_bytes(self.client()?, url, source_name).await
     }
 }
 

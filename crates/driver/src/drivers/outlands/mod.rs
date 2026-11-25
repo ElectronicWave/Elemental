@@ -1,9 +1,9 @@
 use crate::{
-    catalog::InstallerMavenCatalog,
     descriptors::OUTLANDS_DRIVER,
+    driver::InstallerFamilyDriver,
     drivers::retrofutura::{RetroFuturaLine, retrofutura_spec},
     families::installer::{
-        InstallerFamilyDriver, InstallerMavenSource, MavenEndpoints, MavenInstallerSpec,
+        InstallerMavenCatalog, InstallerMavenSource, MavenEndpoints, MavenInstallerSpec,
     },
     inspect::{LibraryPrefixSet, ProfileIdPattern, ProfiledDriverIdentity},
     url::Origin,

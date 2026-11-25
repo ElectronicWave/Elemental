@@ -1,4 +1,4 @@
-use std::{env::current_dir, path::PathBuf};
+use std::path::PathBuf;
 
 use elemental_core::storage::layout::Layoutable;
 
@@ -6,6 +6,7 @@ use crate::{
     error::Result,
     families::version_json::{
         InstanceStorage, VersionJsonInstanceResource, VersionJsonRootResource,
+        classpath::resolve_absolute_path,
     },
 };
 
@@ -22,26 +23,14 @@ impl LaunchPaths {
         Ok(Self {
             version_root: resolve_absolute_path(version.path.clone())?,
             assets_root: resolve_absolute_path(
-                version
-                    .parent
-                    .try_get_resource(VersionJsonRootResource::Assets)?,
+                version.try_get_parent_resource(VersionJsonRootResource::Assets)?,
             )?,
             libraries_root: resolve_absolute_path(
-                version
-                    .parent
-                    .try_get_resource(VersionJsonRootResource::Libraries(None))?,
+                version.try_get_parent_resource(VersionJsonRootResource::Libraries(None))?,
             )?,
             natives_directory: resolve_absolute_path(
                 version.try_get_resource(VersionJsonInstanceResource::Natives)?,
             )?,
         })
     }
-}
-
-pub(crate) fn resolve_absolute_path(path: PathBuf) -> Result<PathBuf> {
-    if path.is_absolute() {
-        return Ok(path);
-    }
-
-    Ok(current_dir()?.join(path))
 }

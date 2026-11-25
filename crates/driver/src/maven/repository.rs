@@ -12,7 +12,7 @@ use super::MavenArtifactDownload;
 #[cfg(feature = "maven-xml")]
 use super::MavenCoordinate;
 #[cfg(feature = "maven-xml")]
-use super::snapshot::decode_snapshot_metadata;
+use super::snapshot::{decode_snapshot_metadata, resolve_snapshot_version};
 use super::url::artifact_url;
 
 #[derive(Debug, Clone)]
@@ -61,7 +61,7 @@ impl MavenRepository {
         let raw_metadata =
             fetch_text(client, metadata_url.as_str(), "maven snapshot metadata").await?;
         let metadata = decode_snapshot_metadata(raw_metadata.as_str(), metadata_url)?;
-        let resolved_version = self.resolve_snapshot_version(coordinate, &metadata)?;
+        let resolved_version = resolve_snapshot_version(coordinate, &metadata)?;
         let path = coordinate.safe_artifact_path_for_version(resolved_version.as_str())?;
         let url = artifact_url(&self.base_url, &path)?;
 

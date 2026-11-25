@@ -7,14 +7,16 @@ use elemental_schema::{forge::ForgeInstallerProfile, mojang::piston::PistonMetaL
 
 use crate::{
     catalog::LoaderRelease,
-    driver::DriverDescriptor,
+    descriptors::DriverDescriptor,
     error::{Error, Result},
-    families::installer::{normalize_library_urls, profile_game_and_raw_loader_version},
+    families::installer::profile_game_and_raw_loader_version,
     inspect::ProfiledDriverIdentity,
     loader_version::LoaderVersionId,
     maven::MavenCoordinate,
 };
 
+#[cfg(feature = "maven-xml")]
+pub use client::InstallerMavenCatalog;
 pub use client::InstallerMavenSource;
 pub use endpoints::MavenEndpoints;
 
@@ -101,16 +103,6 @@ impl MavenInstallerSpec {
             self.loader_version_prefix,
         );
         Ok((game_version, LoaderVersionId::from(loader_version)))
-    }
-
-    pub fn normalize_libraries(
-        &self,
-        endpoints: &MavenEndpoints,
-        libraries: Vec<PistonMetaLibraries>,
-    ) -> Result<Vec<PistonMetaLibraries>> {
-        normalize_library_urls(libraries, |artifact_path| {
-            endpoints.artifact_url(artifact_path)
-        })
     }
 
     pub fn merge_libraries(

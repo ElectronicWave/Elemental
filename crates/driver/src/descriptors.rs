@@ -1,4 +1,8 @@
-use crate::driver::DriverDescriptor;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DriverDescriptor {
+    pub id: &'static str,
+    pub name: &'static str,
+}
 
 pub const VANILLA_DRIVER: DriverDescriptor = DriverDescriptor {
     id: "vanilla",

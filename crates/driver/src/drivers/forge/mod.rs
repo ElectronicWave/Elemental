@@ -1,10 +1,11 @@
 use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::{
-    catalog::{InstallerMavenCatalog, LoaderRelease},
+    catalog::LoaderRelease,
     descriptors::FORGE_DRIVER,
+    driver::InstallerFamilyDriver,
     families::installer::{
-        InstallerFamilyDriver, InstallerMavenSource, MavenEndpoints, MavenInstallerSpec,
+        InstallerMavenCatalog, InstallerMavenSource, MavenEndpoints, MavenInstallerSpec,
         merge_libraries_prefer_embedded,
     },
     inspect::{LibraryPrefixSet, ProfileIdPattern, ProfiledDriverIdentity},

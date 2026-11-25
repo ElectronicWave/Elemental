@@ -1,9 +1,9 @@
 use elemental_core::minecraft::MinecraftVersionId;
 use elemental_schema::mojang::piston::PistonMetaData;
 
-use crate::driver::{DriverDescriptor, InstalledDriver};
+use crate::descriptors::DriverDescriptor;
 
-use super::{LibraryPrefixSet, ProfileIdPattern};
+use super::{InstalledDriver, LibraryPrefixSet, ProfileIdPattern};
 
 /// Identity of a driver whose installed loader version can be recovered from
 /// version JSON metadata.

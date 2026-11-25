@@ -5,10 +5,9 @@ use std::{
 
 use super::SessionHandler;
 use crate::downloader::{
-    batch::DownloadBatch,
     report::DownloadFailure,
-    state::{SessionState, SessionTransition},
-    task::{DownloadTask, TaskId},
+    state::{SessionState, SessionTransition, StateCommand},
+    task::{DownloadBatch, DownloadTask, TaskId},
 };
 
 impl SessionHandler {
@@ -29,7 +28,7 @@ impl SessionHandler {
     }
 
     pub(crate) fn mark_batch_accepted(&self, batch: &DownloadBatch) {
-        self.with_state(|state| state.accept_batch(batch, Instant::now()));
+        self.with_state(|state| state.apply(StateCommand::AcceptBatch(batch), Instant::now()));
     }
 
     pub(crate) fn mark_enqueued(
@@ -38,31 +37,53 @@ impl SessionHandler {
         task: &DownloadTask,
         group: Option<String>,
     ) {
-        self.with_state(|state| state.enqueue(task_id, task, group, Instant::now()));
+        self.with_state(|state| {
+            state.apply(
+                StateCommand::Enqueue {
+                    task_id,
+                    task,
+                    group,
+                },
+                Instant::now(),
+            )
+        });
     }
 
     pub(crate) fn mark_downloaded(&self, task_id: &TaskId, bytes: u64, duration: Duration) {
-        self.with_state(|state| state.downloaded(task_id, bytes, duration, Instant::now()));
+        self.with_state(|state| {
+            state.apply(
+                StateCommand::Downloaded {
+                    task_id,
+                    bytes,
+                    duration,
+                },
+                Instant::now(),
+            )
+        });
     }
 
     pub(crate) fn mark_skipped(&self, task_id: &TaskId, bytes: u64) {
-        self.with_state(|state| state.skipped(task_id, bytes, Instant::now()));
+        self.with_state(|state| {
+            state.apply(StateCommand::Skipped { task_id, bytes }, Instant::now())
+        });
     }
 
     pub(crate) fn mark_active(&self, task_id: &TaskId) {
-        self.with_state(|state| state.start(task_id, Instant::now()));
+        self.with_state(|state| state.apply(StateCommand::Start(task_id), Instant::now()));
     }
 
     pub(crate) fn mark_failed(&self, failure: DownloadFailure) {
-        self.with_state(|state| state.failed(failure, Instant::now()));
+        self.with_state(|state| state.apply(StateCommand::Failed(failure), Instant::now()));
     }
 
     pub(crate) fn mark_cancelled(&self, task_id: &TaskId) {
-        self.with_state(|state| state.cancelled(task_id, Instant::now()));
+        self.with_state(|state| state.apply(StateCommand::Cancelled(task_id), Instant::now()));
     }
 
     pub(crate) fn record_received(&self, task_id: &TaskId, bytes: usize) {
-        self.with_state(|state| state.receive(task_id, bytes, Instant::now()));
+        self.with_state(|state| {
+            state.apply(StateCommand::Receive { task_id, bytes }, Instant::now())
+        });
     }
 
     pub(crate) fn mark_retrying(
@@ -73,7 +94,15 @@ impl SessionHandler {
         reason: String,
     ) {
         self.with_state(|state| {
-            state.retrying(task_id, failed_attempt, delay, reason, Instant::now())
+            state.apply(
+                StateCommand::Retrying {
+                    task_id,
+                    failed_attempt,
+                    delay,
+                    reason,
+                },
+                Instant::now(),
+            )
         });
     }
 

@@ -4,15 +4,13 @@ use elemental_schema::fabric::ProfileJson;
 
 use crate::{
     descriptors::RIFT_DRIVER,
-    driver::DriverDescriptor,
+    driver::{DriverDescriptor, ProfiledVersionJsonDriver, ProfiledVersionJsonFamily},
     drivers::{
         rift::source::{RiftEndpoints, RiftSource},
         vanilla::source::VanillaSource,
     },
     error::{Error, Result},
-    families::version_json::{
-        ProfiledVersionJsonDriver, ProfiledVersionJsonFamily, VanillaFallbackRemoteResolver,
-    },
+    families::version_json::VanillaFallbackRemoteResolver,
     inspect::ProfiledDriverIdentity,
     loader_version::LoaderVersionId,
 };

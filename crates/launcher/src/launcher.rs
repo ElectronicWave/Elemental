@@ -13,19 +13,18 @@ use elemental_core::{
     storage::Storage,
 };
 use elemental_driver::{
-    driver::{Driver, DriverDescriptor, PrepareRequest, PrepareStage},
+    driver::{
+        Driver, DriverDescriptor, InstalledInstance, PrepareRequest, PrepareStage,
+        inspect_instances,
+    },
     families::version_json::{
         GameStorage, InstanceStorage, SharedInstanceLayout, SharedRootLayout,
-        VersionJsonGameStorageExt, builder::VersionJsonLaunchBuilder, inspect_instances,
-        variables::LauncherVariables,
+        VersionJsonGameStorageExt,
     },
-    inspect::InstalledInstance,
-    launch::resolve_prepared_version_runtime,
 };
-use elemental_infra::downloader::{DownloadSession, ElementalDownloader};
+use elemental_infra::downloader::{DownloadSession, DownloadSessionBuilder, ElementalDownloader};
 
 use crate::{
-    builder::LauncherBuilder,
     error::{Error, Result},
     origin::DriverOrigins,
     registration::{DriverRegistration, DriverRegistry},
@@ -52,10 +51,6 @@ pub struct Launcher {
 }
 
 impl Launcher {
-    pub fn builder() -> LauncherBuilder {
-        LauncherBuilder::new()
-    }
-
     pub(crate) fn new(
         storage_root: PathBuf,
         downloader: Arc<ElementalDownloader>,
@@ -92,12 +87,12 @@ impl Launcher {
         &self.storage_root
     }
 
-    pub fn downloader(&self) -> &Arc<ElementalDownloader> {
-        &self.downloader
+    pub fn download_session(&self, name: impl Into<String>) -> DownloadSessionBuilder {
+        self.downloader.session(name)
     }
 
-    pub fn runtime_resolver(&self) -> &RuntimeResolver {
-        &self.runtime_resolver
+    pub async fn runtime_distributions(&self) -> Vec<Distribution> {
+        self.runtime_resolver.distributions().await
     }
 
     pub async fn inspect_instances(&self) -> Result<InspectReport> {
@@ -249,12 +244,9 @@ impl Launcher {
         runtime_options: &RuntimeOptions,
         options: &LaunchOptions,
     ) -> Result<LaunchCommand> {
-        let runtime = resolve_prepared_version_runtime(
-            &prepared.launch_version,
-            runtime_options,
-            &self.runtime_resolver,
-        )
-        .await?;
+        let runtime = prepared
+            .resolve_runtime(runtime_options, &self.runtime_resolver)
+            .await?;
         #[cfg(feature = "yggdrasil-auth")]
         let options = {
             let mut options = options.clone();
@@ -264,8 +256,7 @@ impl Launcher {
         };
         #[cfg(not(feature = "yggdrasil-auth"))]
         let options = options.clone();
-        let builder = launch_builder(credential, runtime, prepared, &options);
-        Ok(builder.build_command()?)
+        prepared.build_launch_command(credential, runtime, &options)
     }
 
     #[cfg(feature = "yggdrasil-auth")]
@@ -408,58 +399,12 @@ impl<'a> PrepareInstanceBuilder<'a> {
     }
 }
 
-fn launch_builder(
-    credential: &Credential,
-    runtime: Distribution,
-    prepared: &PreparedInstance,
-    options: &LaunchOptions,
-) -> VersionJsonLaunchBuilder {
-    let mut variables = LauncherVariables::default();
-
-    if let Some(client_id) = &options.client_id {
-        variables.clientid = client_id.clone();
-    }
-
-    if let Some(resolution) = &options.resolution {
-        variables.resolution_width = resolution.width.clone();
-        variables.resolution_height = resolution.height.clone();
-    }
-
-    if let (Some(name), Some(version)) = (&options.launcher_name, &options.launcher_version) {
-        variables.launcher_name = name.clone();
-        variables.launcher_version = version.clone();
-    }
-
-    if let Some(quick_play) = &options.quick_play {
-        variables.quick_play_path = quick_play.path.clone();
-        variables.quick_play_multiplayer = quick_play.multiplayer.clone();
-        variables.quick_play_singleplayer = quick_play.singleplayer.clone();
-        variables.quick_play_realms = quick_play.realms.clone();
-    }
-
-    VersionJsonLaunchBuilder::new(
-        credential.clone(),
-        runtime,
-        prepared.launch_version.version.clone(),
-        variables,
-        options.extra_jvm_arguments.clone(),
-        options.extra_game_arguments.clone(),
-    )
-}
-
 fn driver_refs(drivers: &[Arc<dyn Driver>]) -> Vec<&dyn Driver> {
     drivers.iter().map(Arc::as_ref).collect()
 }
 
 fn summarize_installed_instance(instance: InstalledInstance) -> Instance {
-    let instance_name = instance.storage.name().unwrap_or_else(|| {
-        instance
-            .storage
-            .path
-            .file_name()
-            .map(|name| name.to_string_lossy().to_string())
-            .unwrap_or_else(|| instance.storage.path.display().to_string())
-    });
+    let instance_name = instance.storage.display_name();
 
     Instance {
         instance_name,

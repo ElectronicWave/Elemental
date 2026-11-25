@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fmt, path::PathBuf};
+use std::{collections::HashSet, path::PathBuf};
 
 use elemental_core::auth::accounts::AccountId;
 use elemental_shared::{
@@ -11,26 +11,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     error::{Error, Result},
-    texture::{PNG_SIGNATURE, TextureHash, gc_content, remove_if_present, validate_name},
+    texture::{PNG_SIGNATURE, TextureHash, gc_content, is_valid_name, remove_if_present},
 };
 
+pub use crate::texture::CapeId;
+
 const CAPE_INDEX_VERSION: usize = 1;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct CapeId(TextureHash);
-
-impl fmt::Display for CapeId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(formatter)
-    }
-}
-
-impl CapeId {
-    pub(crate) fn hash(self) -> TextureHash {
-        self.0
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CapeAsset {
@@ -52,6 +38,20 @@ struct CapeIndex {
 }
 
 impl CapeIndex {
+    fn insert(&mut self, asset: CapeAsset) {
+        if !self.capes.iter().any(|existing| existing.id == asset.id) {
+            self.capes.push(asset);
+        }
+    }
+
+    fn asset(&self, cape_id: CapeId) -> Option<CapeAsset> {
+        self.capes.iter().find(|asset| asset.id == cape_id).cloned()
+    }
+
+    fn referenced_hashes(&self) -> HashSet<TextureHash> {
+        self.capes.iter().map(|asset| asset.id.hash()).collect()
+    }
+
     fn remove(&mut self, cape_id: CapeId) {
         self.capes.retain(|asset| asset.id != cape_id);
         self.selections
@@ -124,25 +124,21 @@ impl CapeStore {
     /// Imports PNG bytes into the local library.
     pub async fn import(&self, name: impl Into<String>, bytes: Vec<u8>) -> Result<CapeAsset> {
         let name = name.into();
-        validate_name(&name)?;
+        if !is_valid_name(&name) {
+            return Err(Error::TextureNameEmpty);
+        }
         if !bytes.starts_with(PNG_SIGNATURE) {
             return Err(Error::CapeNotPng { name });
         }
 
         let hash = TextureHash::of(&bytes);
-        let id = CapeId(hash);
+        let id = CapeId::from_hash(hash);
         let path = self.path(id).await?;
         tokio::fs::write(&path, &bytes).await?;
 
         let inserted = CapeAsset { id, name };
 
-        self.index
-            .set(move |index| {
-                if !index.value.capes.iter().any(|asset| asset.id == id) {
-                    index.value.capes.push(inserted);
-                }
-            })
-            .await?;
+        self.index.set(move |index| index.insert(inserted)).await?;
         self.asset(id)
             .await
             .ok_or(Error::CapeNotFound { cape_id: id })
@@ -151,20 +147,20 @@ impl CapeStore {
     /// Renames a local cape without changing its id, PNG file, or selections.
     pub async fn rename(&self, cape_id: CapeId, name: impl Into<String>) -> Result<()> {
         let name = name.into();
-        validate_name(&name)?;
+        if !is_valid_name(&name) {
+            return Err(Error::TextureNameEmpty);
+        }
         if self.asset(cape_id).await.is_none() {
             return Err(Error::CapeNotFound { cape_id });
         }
 
-        self.index
-            .set(|index| index.value.rename(cape_id, name))
-            .await?;
+        self.index.set(|index| index.rename(cape_id, name)).await?;
         Ok(())
     }
 
     /// Lists local capes with their PNG paths without reading the files.
     pub async fn list(&self) -> Result<Vec<CapeEntry>> {
-        let assets = self.index.get(|index| index.value.capes.clone()).await;
+        let assets = self.index.get(|index| index.capes.clone()).await;
         let mut entries = Vec::with_capacity(assets.len());
         for asset in assets {
             let path = self.path(asset.id).await?;
@@ -180,24 +176,17 @@ impl CapeStore {
             .ok_or(Error::CapeNotFound { cape_id })?;
 
         let path = self.path(asset.id).await?;
-        self.index.set(|index| index.value.remove(cape_id)).await?;
-        remove_if_present(&path).await
+        self.index.set(|index| index.remove(cape_id)).await?;
+        remove_if_present(&path).await?;
+        Ok(())
     }
 
     /// Removes unreferenced content files left behind by interrupted imports.
     async fn gc(&self) -> Result<()> {
-        let referenced = self
-            .index
-            .get(|index| {
-                index
-                    .value
-                    .capes
-                    .iter()
-                    .map(|asset| asset.id.hash())
-                    .collect::<HashSet<_>>()
-            })
-            .await;
-        gc_content(&self.scope, "capes", &referenced).await
+        let referenced = self.index.get(CapeIndex::referenced_hashes).await;
+        let root_path = self.scope.get_full_path("capes", None).await?;
+        gc_content(&root_path, &referenced).await?;
+        Ok(())
     }
 
     /// Selects a local cape for an account without uploading it.
@@ -208,7 +197,7 @@ impl CapeStore {
 
         self.index
             .set(|index| {
-                index.value.select(AccountCapeSelection {
+                index.select(AccountCapeSelection {
                     account_id,
                     cape_id,
                 });
@@ -219,7 +208,7 @@ impl CapeStore {
 
     pub async fn clear_selection(&self, account_id: AccountId) -> Result<()> {
         self.index
-            .set(|index| index.value.clear_selection(account_id))
+            .set(|index| index.clear_selection(account_id))
             .await?;
         Ok(())
     }
@@ -234,26 +223,17 @@ impl CapeStore {
     }
 
     async fn asset(&self, cape_id: CapeId) -> Option<CapeAsset> {
-        self.index
-            .get(|index| {
-                index
-                    .value
-                    .capes
-                    .iter()
-                    .find(|asset| asset.id == cape_id)
-                    .cloned()
-            })
-            .await
+        self.index.get(|index| index.asset(cape_id)).await
     }
 
     async fn selection(&self, account_id: AccountId) -> Option<AccountCapeSelection> {
         self.index
-            .get(|index| index.value.selected_by(account_id).cloned())
+            .get(|index| index.selected_by(account_id).cloned())
             .await
     }
 
     async fn path(&self, cape_id: CapeId) -> Result<PathBuf> {
-        let hash = cape_id.0.hex();
+        let hash = cape_id.hash().hex();
         let prefix = &hash[..2];
         Ok(self
             .scope

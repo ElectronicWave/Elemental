@@ -1,7 +1,11 @@
 use crate::{
-    drivers::vanilla::source::{VanillaEndpoints, rewrite_upstream_with_vanilla_fallback},
     error::Result,
-    families::{installer::MavenEndpoints, version_json::VersionJsonRemoteResolver},
+    families::{
+        installer::MavenEndpoints,
+        version_json::{
+            VanillaEndpoints, VersionJsonRemoteResolver, rewrite_upstream_with_vanilla_fallback,
+        },
+    },
 };
 
 #[derive(Debug, Clone)]

@@ -1,16 +1,16 @@
 use std::future::Future;
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
 };
-use tokio::sync::watch;
+use tokio::sync::{broadcast, watch};
 
-use super::batch::DownloadBatch;
-use super::core::ElementalDownloader;
-use super::event::{SessionEventStream, SessionSnapshot};
+use super::event::{DownloadEvent, SessionEventStream, SessionSnapshot};
+use super::limits::{BandwidthLimiter, ConcurrencyController};
+use super::materializer::Materializer;
 use super::report::{DownloadProgress, DownloadReport};
-use super::task::SessionId;
-use crate::error::Result;
+use super::task::{DownloadBatch, SessionId};
+use crate::error::{Error, Result};
 
 mod builder;
 mod handler;
@@ -19,6 +19,18 @@ mod options;
 pub use builder::DownloadSessionBuilder;
 pub(crate) use handler::SessionHandler;
 pub(crate) use options::DownloadSessionOptions;
+
+#[derive(Debug)]
+pub(super) struct SessionRuntime {
+    pub(super) client: reqwest::Client,
+    pub(super) events: broadcast::Sender<DownloadEvent>,
+    pub(super) concurrency: Arc<ConcurrencyController>,
+    pub(super) bandwidth_limiter: Arc<BandwidthLimiter>,
+    pub(super) materializer: Arc<dyn Materializer>,
+    pub(super) default_session_parallelism: usize,
+    pub(super) session_queue_capacity: usize,
+    pub(super) next_session_id: AtomicU64,
+}
 
 #[derive(Debug, Clone)]
 pub struct DownloadSession {
@@ -30,7 +42,7 @@ pub struct DownloadSession {
 #[derive(Debug)]
 struct SessionLease {
     id: SessionId,
-    downloader: Arc<ElementalDownloader>,
+    handler: Arc<SessionHandler>,
     finished: AtomicBool,
 }
 
@@ -40,7 +52,7 @@ impl Drop for SessionLease {
             return;
         }
 
-        self.downloader.abort_session_detached(self.id);
+        self.handler.abort_and_close_detached();
     }
 }
 
@@ -48,13 +60,13 @@ impl DownloadSession {
     pub(super) fn new(
         id: SessionId,
         name: Option<String>,
-        downloader: Arc<ElementalDownloader>,
+        handler: Arc<SessionHandler>,
         progress: watch::Receiver<DownloadProgress>,
     ) -> Self {
         Self {
             lease: Arc::new(SessionLease {
                 id,
-                downloader,
+                handler,
                 finished: AtomicBool::new(false),
             }),
             name,
@@ -71,10 +83,16 @@ impl DownloadSession {
     }
 
     pub async fn submit(&self, batch: impl Into<DownloadBatch>) -> Result<()> {
-        self.lease
-            .downloader
-            .submit(self.lease.id, batch.into())
-            .await
+        let batch = batch.into();
+        if batch.is_empty() {
+            return Ok(());
+        }
+        if self.lease.finished.load(Ordering::Acquire) {
+            return Err(Error::SessionNotFound {
+                session_id: self.lease.id,
+            });
+        }
+        self.lease.handler.submit_batch(batch).await
     }
 
     pub fn progress(&self) -> DownloadProgress {
@@ -86,35 +104,49 @@ impl DownloadSession {
     }
 
     pub fn subscribe(&self) -> SessionEventStream {
-        SessionEventStream::new(self.lease.downloader.event_receiver(), self.lease.id)
+        SessionEventStream::new(self.lease.handler.subscribe_events(), self.lease.id)
     }
 
     pub async fn snapshot(&self) -> Result<SessionSnapshot> {
-        self.lease.downloader.session_snapshot(self.lease.id).await
+        if self.lease.finished.load(Ordering::Acquire) {
+            return Err(Error::SessionNotFound {
+                session_id: self.lease.id,
+            });
+        }
+        Ok(self.lease.handler.snapshot())
     }
 
     pub async fn wait_idle(&self) -> Result<()> {
-        self.lease.downloader.wait_session_idle(self.lease.id).await
+        if self.lease.finished.load(Ordering::Acquire) {
+            return Err(Error::SessionNotFound {
+                session_id: self.lease.id,
+            });
+        }
+        self.lease.handler.wait_idle().await;
+        Ok(())
     }
 
     /// Wait for all submitted tasks and return an error on failure or cancellation.
     ///
     /// The session stays open, so the caller can submit more work afterwards.
     pub async fn success(&self) -> Result<()> {
-        self.lease.downloader.session_success(self.lease.id).await
+        if self.lease.finished.load(Ordering::Acquire) {
+            return Err(Error::SessionNotFound {
+                session_id: self.lease.id,
+            });
+        }
+        self.lease.handler.wait_and_require_success().await
     }
 
     pub async fn finish(self) -> Result<DownloadReport> {
-        let session_id = self.lease.id;
-        let downloader = Arc::clone(&self.lease.downloader);
-        self.complete(downloader.finish_session_report(session_id))
+        let handler = Arc::clone(&self.lease.handler);
+        self.complete(async move { Ok(handler.finish().await) })
             .await
     }
 
     pub async fn cancel(self) -> Result<DownloadReport> {
-        let session_id = self.lease.id;
-        let downloader = Arc::clone(&self.lease.downloader);
-        self.complete(downloader.cancel_session_report(session_id))
+        let handler = Arc::clone(&self.lease.handler);
+        self.complete(async move { Ok(handler.cancel().await) })
             .await
     }
 
@@ -122,12 +154,12 @@ impl DownloadSession {
         self,
         operation: impl Future<Output = Result<DownloadReport>>,
     ) -> Result<DownloadReport> {
+        if self.lease.finished.swap(true, Ordering::AcqRel) {
+            return Err(Error::SessionNotFound {
+                session_id: self.lease.id,
+            });
+        }
         let result = operation.await;
-        self.mark_finished();
         result
-    }
-
-    fn mark_finished(&self) {
-        self.lease.finished.store(true, Ordering::Release);
     }
 }

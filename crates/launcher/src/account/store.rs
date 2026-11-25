@@ -48,7 +48,7 @@ impl AccountStore {
     }
 
     pub async fn index(&self) -> AccountIndex {
-        self.index.cloned().await.value
+        self.index.cloned().await
     }
 
     fn decoder(&self, reference: &AccountRef) -> Result<AccountDecoder> {
@@ -74,9 +74,7 @@ impl AccountStore {
         })?;
         let path = self.account_path(&reference).await?;
         tokio::fs::write(path, data).await?;
-        self.index
-            .set(|index| index.value.upsert(reference))
-            .await?;
+        self.index.set(|index| index.upsert(reference)).await?;
         Ok(())
     }
 
@@ -98,9 +96,7 @@ impl AccountStore {
         let path = self.account_path(&reference).await?;
         tokio::fs::remove_file(path).await?;
 
-        self.index
-            .set(|index| index.value.remove(account_id))
-            .await?;
+        self.index.set(|index| index.remove(account_id)).await?;
         Ok(())
     }
 
@@ -142,7 +138,7 @@ impl AccountStore {
     /// Unsupported entries are kept in the index so they can be loaded again
     /// after the missing authorizer is registered.
     pub async fn try_list(&self) -> Result<AccountListing> {
-        let references = self.index.get(|index| index.value.accounts.clone()).await;
+        let references = self.index.get(|index| index.accounts.clone()).await;
         let mut listing = AccountListing {
             accounts: Vec::with_capacity(references.len()),
             unsupported: Vec::new(),
@@ -166,7 +162,7 @@ impl AccountStore {
     }
 
     pub async fn selected(&self) -> Result<Option<Box<dyn Account>>> {
-        let reference = self.index.get(|index| index.value.selected.clone()).await;
+        let reference = self.index.get(|index| index.selected.clone()).await;
         match reference {
             Some(reference) => match self.load(&reference).await {
                 Ok(account) => Ok(Some(account)),
@@ -186,7 +182,7 @@ impl AccountStore {
         let reference = self.reference(account_id).await?;
 
         self.index
-            .set(|index| index.value.selected = Some(reference))
+            .set(|index| index.selected = Some(reference))
             .await?;
         Ok(())
     }
@@ -218,7 +214,6 @@ impl AccountStore {
         self.index
             .get(|index| {
                 index
-                    .value
                     .accounts
                     .iter()
                     .find(|stored| stored.account_id == account_id)

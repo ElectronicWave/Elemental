@@ -1,6 +1,5 @@
 mod archive;
 mod artifact;
-mod driver;
 mod family;
 mod libraries;
 mod processor;
@@ -12,8 +11,7 @@ pub use artifact::{
     InstallerArtifact, build_installer_artifact, installer_coordinate_file_name,
     installer_coordinate_path,
 };
-pub use driver::InstallerFamilyDriver;
-pub use family::{InstallerFamilyRemoteResolver, ResolvedInstallerFamilyVersion};
+pub use family::InstallerFamilyRemoteResolver;
 pub use libraries::{
     is_retro_futura_runtime_library, merge_libraries_prefer_embedded, merge_retro_futura_libraries,
     normalize_library_urls,
@@ -27,9 +25,11 @@ pub use profile::{
     persist_installer_launch_version, prepare_installer_state,
 };
 pub(crate) use profile::{
-    installer_install_status, profile_game_and_raw_loader_version,
+    installer_install_status, load_persisted_install_profile, profile_game_and_raw_loader_version,
     validate_installer_profile_identity,
 };
+#[cfg(feature = "maven-xml")]
+pub use source::InstallerMavenCatalog;
 pub use source::{
     InstallerMavenArtifactSpec, InstallerMavenSource, MavenEndpoints, MavenInstallerSpec,
 };

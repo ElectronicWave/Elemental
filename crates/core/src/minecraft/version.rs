@@ -27,13 +27,13 @@ pub type MinecraftVersionId = Version<MinecraftVersionTag>;
 pub struct MinecraftVersion {
     id: MinecraftVersionId,
     kind: MinecraftVersionKind,
-    key: MinecraftVersionKey,
 }
 
 impl MinecraftVersion {
     pub fn parse(raw: &str) -> Result<Self, MinecraftVersionParseError> {
         validate_non_empty(raw)?;
-        parse_known_format(raw)
+        let kind = parse_known_format(raw)?;
+        Ok(Self::from_kind(raw, kind))
     }
 
     pub fn parse_id(id: &MinecraftVersionId) -> Result<Self, MinecraftVersionParseError> {
@@ -82,13 +82,12 @@ impl MinecraftVersion {
     }
 
     pub fn key(&self) -> MinecraftVersionKey {
-        self.key
+        self.kind.into()
     }
 
     fn from_kind(raw: &str, kind: MinecraftVersionKind) -> Self {
         Self {
             id: MinecraftVersionId::from(raw),
-            key: kind.into(),
             kind,
         }
     }
@@ -102,13 +101,13 @@ fn validate_non_empty(raw: &str) -> Result<(), MinecraftVersionParseError> {
     }
 }
 
-fn parse_known_format(raw: &str) -> Result<MinecraftVersion, MinecraftVersionParseError> {
-    if let Some(version) = parse_alpha_beta(raw)? {
-        return Ok(version);
+fn parse_known_format(raw: &str) -> Result<MinecraftVersionKind, MinecraftVersionParseError> {
+    if let Some(kind) = parse_alpha_beta(raw)? {
+        return Ok(kind);
     }
 
     match parse_legacy_snapshot(raw)? {
-        Some(version) => Ok(version),
+        Some(kind) => Ok(kind),
         None => parse_release(raw),
     }
 }

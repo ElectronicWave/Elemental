@@ -5,7 +5,8 @@ use tokio::sync::OnceCell;
 use crate::runtime::{
     distribution::Distribution,
     error::{Error, Result},
-    provider::{RuntimeProviderList, default_providers},
+    provider::RuntimeProviderList,
+    providers::default_providers,
 };
 
 #[derive(Clone)]

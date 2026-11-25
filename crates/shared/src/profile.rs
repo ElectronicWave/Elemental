@@ -1,10 +1,12 @@
 use crate::{
     error::Result,
-    loader::ProfileLoader,
+    loader::Loader,
     migrator::Migrator,
     version::{Persistor, VersionControlled, Versioned},
 };
 use serde::{Deserialize, Serialize};
+
+pub type ProfileLoader<M, S, C, P> = Loader<M, S, Profile<C>, P>;
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct Profile<C> {

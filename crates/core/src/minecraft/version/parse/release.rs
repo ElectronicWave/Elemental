@@ -2,11 +2,11 @@ use super::{
     common::{full_year, parse_numeric_components},
     stage::parse_stage,
 };
+use crate::minecraft::version::error::MinecraftVersionParseError;
 use crate::minecraft::version::kind::{
     LegacyReleaseVersion, MinecraftVersionKind, VersionStage, YearReleaseVersion,
     YearSnapshotVersion,
 };
-use crate::minecraft::version::{MinecraftVersion, MinecraftVersionParseError};
 
 struct YearComponents {
     year: u32,
@@ -14,7 +14,7 @@ struct YearComponents {
     patch: u32,
 }
 
-pub(crate) fn parse_release(raw: &str) -> Result<MinecraftVersion, MinecraftVersionParseError> {
+pub(crate) fn parse_release(raw: &str) -> Result<MinecraftVersionKind, MinecraftVersionParseError> {
     let (numbers, stage, stage_number) = release_components(raw)?;
 
     if numbers[0] == 1 {
@@ -57,7 +57,7 @@ fn legacy_release(
     numbers: &[u32],
     stage: VersionStage,
     stage_number: u32,
-) -> Result<MinecraftVersion, MinecraftVersionParseError> {
+) -> Result<MinecraftVersionKind, MinecraftVersionParseError> {
     validate_legacy_stage(raw, stage)?;
 
     let version = LegacyReleaseVersion {
@@ -68,10 +68,7 @@ fn legacy_release(
         stage_number,
     };
 
-    Ok(MinecraftVersion::from_kind(
-        raw,
-        MinecraftVersionKind::LegacyRelease(version),
-    ))
+    Ok(MinecraftVersionKind::LegacyRelease(version))
 }
 
 fn validate_legacy_stage(raw: &str, stage: VersionStage) -> Result<(), MinecraftVersionParseError> {
@@ -90,13 +87,13 @@ fn year_version(
     numbers: &[u32],
     stage: VersionStage,
     stage_number: u32,
-) -> Result<MinecraftVersion, MinecraftVersionParseError> {
+) -> Result<MinecraftVersionKind, MinecraftVersionParseError> {
     let components = year_components(raw, numbers)?;
     if stage == VersionStage::Snapshot {
-        return Ok(year_snapshot(raw, components, stage_number));
+        return Ok(year_snapshot(components, stage_number));
     }
 
-    Ok(year_release(raw, components, stage, stage_number))
+    Ok(year_release(components, stage, stage_number))
 }
 
 fn year_components(
@@ -116,7 +113,7 @@ fn year_components(
     })
 }
 
-fn year_snapshot(raw: &str, components: YearComponents, snapshot: u32) -> MinecraftVersion {
+fn year_snapshot(components: YearComponents, snapshot: u32) -> MinecraftVersionKind {
     let version = YearSnapshotVersion {
         year: components.year,
         release: components.release,
@@ -124,15 +121,14 @@ fn year_snapshot(raw: &str, components: YearComponents, snapshot: u32) -> Minecr
         snapshot,
     };
 
-    MinecraftVersion::from_kind(raw, MinecraftVersionKind::YearSnapshot(version))
+    MinecraftVersionKind::YearSnapshot(version)
 }
 
 fn year_release(
-    raw: &str,
     components: YearComponents,
     stage: VersionStage,
     stage_number: u32,
-) -> MinecraftVersion {
+) -> MinecraftVersionKind {
     let version = YearReleaseVersion {
         year: components.year,
         release: components.release,
@@ -141,5 +137,5 @@ fn year_release(
         stage_number,
     };
 
-    MinecraftVersion::from_kind(raw, MinecraftVersionKind::YearRelease(version))
+    MinecraftVersionKind::YearRelease(version)
 }

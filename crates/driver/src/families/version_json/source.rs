@@ -1,13 +1,14 @@
 use std::fmt::Debug;
 
 use crate::{
-    catalog::{GameVersion, LoaderRelease},
+    catalog::{GameVersion, GameVersionCatalog, LoaderRelease, LoaderVersionCatalog},
     error::Result,
 };
+use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 use serde::de::DeserializeOwned;
 
-use crate::http::{HttpSource, fetch_json};
+use crate::http::HttpClient;
 
 pub trait LoaderMetaEndpoints: Clone + Debug + Send + Sync + 'static {
     type GameVersion: DeserializeOwned;
@@ -36,7 +37,8 @@ pub struct LoaderMetaSource<E>
 where
     E: LoaderMetaEndpoints,
 {
-    inner: HttpSource<E>,
+    client: HttpClient,
+    endpoints: E,
 }
 
 impl<E> Default for LoaderMetaSource<E>
@@ -54,28 +56,30 @@ where
 {
     pub fn new(endpoints: E) -> Self {
         Self {
-            inner: HttpSource::new(endpoints, E::SOURCE_NAME),
+            client: HttpClient::new(E::SOURCE_NAME),
+            endpoints,
         }
     }
 
     pub fn with_client(endpoints: E, client: reqwest::Client) -> Self {
         Self {
-            inner: HttpSource::with_client(endpoints, client),
+            client: HttpClient::with_client(client),
+            endpoints,
         }
     }
 
     pub fn endpoints(&self) -> &E {
-        self.inner.endpoints()
+        &self.endpoints
     }
 
     pub async fn game_versions(&self) -> Result<Vec<E::GameVersion>> {
-        let url = self.endpoints().game_versions_url()?;
-        fetch_json(self.inner.client()?, url.as_str(), E::SOURCE_NAME).await
+        let url = self.endpoints.game_versions_url()?;
+        self.client.fetch_json(url.as_str(), E::SOURCE_NAME).await
     }
 
     pub async fn loader_versions(&self, game_version: &str) -> Result<Vec<E::LoaderGameVersion>> {
-        let url = self.endpoints().loader_versions_url(game_version)?;
-        fetch_json(self.inner.client()?, url.as_str(), E::SOURCE_NAME).await
+        let url = self.endpoints.loader_versions_url(game_version)?;
+        self.client.fetch_json(url.as_str(), E::SOURCE_NAME).await
     }
 
     pub async fn profile_json(
@@ -84,9 +88,9 @@ where
         loader_version: &str,
     ) -> Result<E::ProfileJson> {
         let url = self
-            .endpoints()
+            .endpoints
             .profile_json_url(game_version, loader_version)?;
-        fetch_json(self.inner.client()?, url.as_str(), E::SOURCE_NAME).await
+        self.client.fetch_json(url.as_str(), E::SOURCE_NAME).await
     }
 }
 
@@ -100,8 +104,69 @@ where
         loader_version: &str,
     ) -> Result<E::LoaderProfile> {
         let url = self
-            .endpoints()
+            .endpoints
             .loader_profile_url(game_version, loader_version)?;
-        fetch_json(self.inner.client()?, url.as_str(), E::SOURCE_NAME).await
+        self.client.fetch_json(url.as_str(), E::SOURCE_NAME).await
+    }
+}
+pub struct LoaderMetaCatalog<E>
+where
+    E: LoaderMetaEndpoints,
+{
+    source: LoaderMetaSource<E>,
+}
+
+impl<E> LoaderMetaCatalog<E>
+where
+    E: LoaderMetaEndpoints,
+{
+    pub fn new(source: LoaderMetaSource<E>) -> Self {
+        Self { source }
+    }
+
+    pub fn with_defaults() -> Self
+    where
+        E: Default,
+    {
+        Self::new(LoaderMetaSource::default())
+    }
+
+    pub fn source(&self) -> &LoaderMetaSource<E> {
+        &self.source
+    }
+}
+
+#[async_trait]
+impl<E> GameVersionCatalog for LoaderMetaCatalog<E>
+where
+    E: LoaderMetaEndpoints,
+{
+    async fn game_versions(&self) -> Result<Vec<GameVersion>> {
+        Ok(self
+            .source
+            .game_versions()
+            .await?
+            .into_iter()
+            .map(E::game_version)
+            .collect())
+    }
+}
+
+#[async_trait]
+impl<E> LoaderVersionCatalog for LoaderMetaCatalog<E>
+where
+    E: LoaderMetaEndpoints,
+{
+    async fn loader_versions(
+        &self,
+        game_version: &MinecraftVersionId,
+    ) -> Result<Vec<LoaderRelease>> {
+        Ok(self
+            .source
+            .loader_versions(game_version.as_str())
+            .await?
+            .into_iter()
+            .map(|loader| E::release(game_version.clone(), loader))
+            .collect())
     }
 }

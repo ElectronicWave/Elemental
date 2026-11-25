@@ -4,7 +4,7 @@ use elemental_schema::fabric::ProfileJson;
 use crate::{
     error::{Error, Result},
     families::version_json::UpstreamUrlRewriter,
-    http::{HttpSource, fetch_bytes, fetch_json},
+    http::HttpClient,
 };
 
 use super::endpoints::RiftEndpoints;
@@ -13,7 +13,8 @@ use super::release::{GitHubRelease, RiftRelease, build_rift_release, release_for
 
 #[derive(Debug, Clone)]
 pub struct RiftSource {
-    inner: HttpSource<RiftEndpoints>,
+    client: HttpClient,
+    endpoints: RiftEndpoints,
 }
 
 impl Default for RiftSource {
@@ -25,24 +26,26 @@ impl Default for RiftSource {
 impl RiftSource {
     pub fn new(endpoints: RiftEndpoints) -> Self {
         Self {
-            inner: HttpSource::new(endpoints, "rift source"),
+            client: HttpClient::new("rift source"),
+            endpoints,
         }
     }
 
     pub fn with_client(endpoints: RiftEndpoints, client: reqwest::Client) -> Self {
         Self {
-            inner: HttpSource::with_client(endpoints, client),
+            client: HttpClient::with_client(client),
+            endpoints,
         }
     }
 
     pub fn endpoints(&self) -> &RiftEndpoints {
-        self.inner.endpoints()
+        &self.endpoints
     }
 
     pub async fn releases(&self) -> Result<Vec<RiftRelease>> {
-        let url = self.endpoints().releases_url()?;
+        let url = self.endpoints.releases_url()?;
         let releases: Vec<GitHubRelease> =
-            fetch_json(self.inner.client()?, url.as_str(), "rift source").await?;
+            self.client.fetch_json(url.as_str(), "rift source").await?;
 
         releases
             .into_iter()
@@ -58,14 +61,14 @@ impl RiftSource {
 
     pub async fn profile_json_for_release(&self, release: &RiftRelease) -> Result<ProfileJson> {
         let url = self
-            .endpoints()
+            .endpoints
             .release_asset_url(release.tag_name.as_str(), release.asset_name.as_str())?;
-        let jar_bytes = fetch_bytes(self.inner.client()?, url.as_str(), "rift source").await?;
+        let jar_bytes = self.client.fetch_bytes(url.as_str(), "rift source").await?;
         let raw_profile = read_release_profile_json(release, jar_bytes)?;
         let profile = serde_json::from_slice(raw_profile.as_slice())
             .map_err(|source| Error::DecodeRiftProfile { source })?;
 
-        normalize_profile_json(profile, release, self.endpoints())
+        normalize_profile_json(profile, release, &self.endpoints)
     }
 }
 

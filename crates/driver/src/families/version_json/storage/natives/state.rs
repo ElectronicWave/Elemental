@@ -9,13 +9,12 @@ use elemental_schema::mojang::piston::{PistonMetaData, PistonMetaLibrariesDownlo
 use crate::{
     error::Result,
     families::version_json::{
-        extensions::PistonMetaLibrariesExt,
-        layout::InstanceStorage,
-        resource::VersionJsonInstanceResource,
-        rules::VersionJsonRuleContext,
-        state::{NativesState, natives_state_store},
+        extensions::PistonMetaLibrariesExt, layout::InstanceStorage, platform::VersionJsonPlatform,
+        resource::VersionJsonInstanceResource, rules::VersionJsonRuleContext,
     },
 };
+
+use super::super::state::{NativesState, natives_state_store};
 
 pub(super) struct NativesExpectation {
     pub(super) destination: PathBuf,
@@ -52,7 +51,7 @@ pub(super) async fn record_natives_state(
     natives_state_store(&storage.path)
         .await?
         .set(|state| {
-            state.value = NativesState {
+            *state = NativesState {
                 path: destination.to_string_lossy().to_string(),
                 native_artifacts,
                 extracted_files,
@@ -92,6 +91,7 @@ pub(super) fn native_library_sources(
     metadata: &PistonMetaData,
     rule_context: &VersionJsonRuleContext,
 ) -> Result<Vec<NativeLibrarySource>> {
+    let platform = VersionJsonPlatform::current();
     let mut sources = Vec::new();
     for library in metadata
         .libraries
@@ -105,7 +105,7 @@ pub(super) fn native_library_sources(
             .unwrap_or_default();
         sources.extend(
             library
-                .native_source_artifacts(rule_context.platform())?
+                .native_source_artifacts(&platform)?
                 .into_iter()
                 .map(|artifact| NativeLibrarySource {
                     artifact,

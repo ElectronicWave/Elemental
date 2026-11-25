@@ -13,8 +13,15 @@ use crate::loader_version::LoaderVersionId;
 use crate::{
     descriptors::{BABRIC_DRIVER, FABRIC_DRIVER, LEGACY_FABRIC_DRIVER},
     driver::DriverDescriptor,
-    drivers::fabric::source::FabricFlavor,
 };
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum FabricFlavor {
+    #[default]
+    Fabric,
+    LegacyFabric,
+    Babric,
+}
 
 use self::common::FlavorBehavior;
 use self::version::{

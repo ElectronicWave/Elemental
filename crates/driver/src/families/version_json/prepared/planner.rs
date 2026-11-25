@@ -1,4 +1,3 @@
-use elemental_core::storage::layout::Layoutable;
 use elemental_infra::{
     SafeRelativePath,
     downloader::{DownloadBatch, DownloadTask},
@@ -12,8 +11,6 @@ use crate::{
     },
 };
 
-use super::ResolvedVersionJsonInstance;
-
 mod libraries;
 mod version;
 
@@ -25,15 +22,17 @@ pub struct VersionJsonInstallPlanner<'a> {
     pub(super) rule_context: VersionJsonRuleContext,
 }
 
-impl ResolvedVersionJsonInstance {
-    pub fn planner<'a>(
-        &'a self,
+impl<'a> VersionJsonInstallPlanner<'a> {
+    pub(super) fn new(
+        version: &'a InstanceStorage,
+        metadata: &'a PistonMetaData,
+        asset_index_objects: &'a PistonMetaAssetIndexObjects,
         remote_resolver: &'a dyn VersionJsonRemoteResolver,
-    ) -> VersionJsonInstallPlanner<'a> {
-        VersionJsonInstallPlanner {
-            version: &self.version,
-            metadata: &self.metadata,
-            asset_index_objects: &self.asset_index_objects,
+    ) -> Self {
+        Self {
+            version,
+            metadata,
+            asset_index_objects,
             remote_resolver,
             rule_context: VersionJsonRuleContext::current(),
         }
@@ -63,8 +62,7 @@ impl VersionJsonInstallPlanner<'_> {
                 Ok(DownloadTask::new(
                     self.remote_resolver.object_url(object.hash.as_str())?,
                     self.version
-                        .parent
-                        .try_get_resource(VersionJsonRootResource::AssetObjects(Some(
+                        .try_get_parent_resource(VersionJsonRootResource::AssetObjects(Some(
                             SafeRelativePath::parse(object.hash.as_str())?,
                         )))?,
                 )

@@ -1,4 +1,7 @@
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU8, Ordering},
+};
 
 use super::SessionHandler;
 use crate::downloader::report::DownloadReport;
@@ -94,6 +97,25 @@ impl SessionHandler {
         self.token.cancel();
         self.workers.close();
         self.lock_sender().take();
+    }
+
+    pub(crate) fn abort_and_close_detached(self: &Arc<Self>) {
+        self.abort_detached();
+        let report_handler = Arc::clone(self);
+        let wait_handler = Arc::clone(self);
+        let close = async move {
+            wait_handler.wait_workers().await;
+            report_handler.emit_closed_report();
+        };
+
+        match tokio::runtime::Handle::try_current() {
+            Ok(handle) => {
+                handle.spawn(close);
+            }
+            Err(_) => {
+                self.emit_closed_report();
+            }
+        }
     }
 
     pub(crate) fn is_draining(&self) -> bool {

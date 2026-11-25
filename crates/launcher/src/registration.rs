@@ -12,13 +12,13 @@ use elemental_driver::{
         LITELOADER_DRIVER, NEOFORGE_DRIVER, OUTLANDS_DRIVER, QUILT_DRIVER, RIFT_DRIVER,
         VANILLA_DRIVER,
     },
-    driver::{Driver, DriverDescriptor},
+    driver::{
+        Driver, DriverDescriptor, InstallerFamilyDriver, ProfiledVersionJsonDriver,
+        ProfiledVersionJsonFamily, ProfiledVersionJsonFamilyExt,
+    },
     families::{
-        installer::{InstallerFamilyDriver, InstallerMavenSource, MavenInstallerSpec},
-        version_json::{
-            LoaderMetaSource, ProfiledVersionJsonDriver, ProfiledVersionJsonFamily,
-            ProfiledVersionJsonFamilyExt,
-        },
+        installer::{InstallerMavenSource, MavenInstallerSpec},
+        version_json::LoaderMetaSource,
     },
 };
 

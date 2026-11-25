@@ -11,6 +11,8 @@ use crate::{
     url::{Origin, OriginEndpoints, OriginPolicy},
 };
 
+pub use super::flavors::FabricFlavor;
+
 const KNOWN_FABRIC_ORIGINS: &[&str] = &[
     "https://meta.fabricmc.net",
     "https://maven.fabricmc.net",
@@ -19,14 +21,6 @@ const KNOWN_FABRIC_ORIGINS: &[&str] = &[
     "https://meta.babric.glass-launcher.net",
     "https://maven.glass-launcher.net/babric",
 ];
-
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub enum FabricFlavor {
-    #[default]
-    Fabric,
-    LegacyFabric,
-    Babric,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FabricEndpointOverrides {

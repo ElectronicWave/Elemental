@@ -32,6 +32,10 @@ impl LaunchCommand {
         }
     }
 
+    pub fn runtime_executable(&self) -> PathBuf {
+        self.runtime.executable()
+    }
+
     pub fn program(&self) -> PathBuf {
         self.runtime
             .executablew()

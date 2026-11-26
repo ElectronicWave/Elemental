@@ -1,7 +1,6 @@
 use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use elemental_infra::downloader::{DownloadTask, ElementalDownloader};
@@ -57,7 +56,7 @@ impl AuthlibInjector {
 
 pub(crate) async fn install(
     storage_root: &Path,
-    downloader: &Arc<ElementalDownloader>,
+    downloader: &ElementalDownloader,
 ) -> Result<AuthlibInjector> {
     let path = std::path::absolute(
         storage_root
@@ -82,7 +81,7 @@ pub(crate) async fn install(
 
 async fn install_latest(
     path: &Path,
-    downloader: &Arc<ElementalDownloader>,
+    downloader: &ElementalDownloader,
     artifact: Artifact,
 ) -> Result<AuthlibInjector> {
     if existing_artifact_matches(path, &artifact.checksums.sha256).await? {
@@ -107,7 +106,7 @@ async fn install_latest(
 
 async fn install_remote(
     path: &Path,
-    downloader: &Arc<ElementalDownloader>,
+    downloader: &ElementalDownloader,
     artifact: &Artifact,
 ) -> Result<()> {
     ensure_parent(path).await?;
@@ -146,7 +145,7 @@ async fn install_embedded_fallback(_path: &Path, error: Error) -> Result<Authlib
 
 async fn download_artifact(
     path: &Path,
-    downloader: &Arc<ElementalDownloader>,
+    downloader: &ElementalDownloader,
     artifact: &Artifact,
 ) -> Result<()> {
     let session = downloader

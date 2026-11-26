@@ -17,7 +17,7 @@ pub use libraries::{
     normalize_library_urls,
 };
 pub use processor::{
-    installer_client_processors_ready, installer_has_client_processors,
+    ProcessorObserver, installer_client_processors_ready, installer_has_client_processors,
     run_installer_client_processors, submit_installer_profile_libraries,
 };
 pub use profile::{

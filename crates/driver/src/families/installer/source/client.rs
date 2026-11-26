@@ -18,7 +18,7 @@ use crate::{
         installer::{
             InstallerArtifact, MavenEndpoints, MavenInstallerSpec, build_installer_artifact,
         },
-        version_json::InstanceStorage,
+        version_json::GameStorage,
     },
     http::HttpClient,
     loader_version::LoaderVersionId,
@@ -27,6 +27,7 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct InstallerMavenSource {
+    #[cfg_attr(not(feature = "maven-xml"), allow(dead_code))]
     client: HttpClient,
     endpoints: MavenEndpoints,
 }
@@ -78,7 +79,7 @@ impl InstallerMavenSource {
 
     pub fn installer_artifact(
         &self,
-        instance_storage: &InstanceStorage,
+        game_storage: &GameStorage,
         game_version: &MinecraftVersionId,
         loader_version: &LoaderVersionId,
     ) -> Result<InstallerArtifact> {
@@ -87,7 +88,7 @@ impl InstallerMavenSource {
             .installer_artifact_spec(game_version, loader_version)?;
 
         build_installer_artifact(
-            instance_storage,
+            game_storage,
             spec.coordinate,
             spec.download_url,
             spec.relative_path,

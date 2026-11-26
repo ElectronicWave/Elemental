@@ -409,7 +409,7 @@ use elemental_infra::downloader::{
     ByteRate, DownloadRateLimit, ElementalDownloader, ElementalDownloaderConfig,
 };
 
-fn build_downloader() -> anyhow::Result<std::sync::Arc<ElementalDownloader>> {
+fn build_downloader() -> anyhow::Result<ElementalDownloader> {
     let config = ElementalDownloaderConfig {
         max_concurrent_downloads: 16,
         default_session_parallelism: 4,

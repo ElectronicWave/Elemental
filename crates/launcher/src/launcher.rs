@@ -42,7 +42,7 @@ use crate::authlib_injector::{self, AuthlibInjector};
 #[derive(Debug, Clone)]
 pub struct Launcher {
     storage_root: PathBuf,
-    downloader: Arc<ElementalDownloader>,
+    downloader: ElementalDownloader,
     root_layout: SharedRootLayout,
     instance_layout: SharedInstanceLayout,
     origins: DriverOrigins,
@@ -53,7 +53,7 @@ pub struct Launcher {
 impl Launcher {
     pub(crate) fn new(
         storage_root: PathBuf,
-        downloader: Arc<ElementalDownloader>,
+        downloader: ElementalDownloader,
         root_layout: SharedRootLayout,
         instance_layout: SharedInstanceLayout,
         origins: DriverOrigins,
@@ -87,7 +87,7 @@ impl Launcher {
         &self.storage_root
     }
 
-    pub fn downloader(&self) -> &Arc<ElementalDownloader> {
+    pub fn downloader(&self) -> &ElementalDownloader {
         &self.downloader
     }
 

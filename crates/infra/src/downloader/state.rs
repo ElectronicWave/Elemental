@@ -10,7 +10,7 @@ mod transitions;
 use record::TaskRecord;
 use throughput::ThroughputMeter;
 
-pub(crate) use transitions::{SessionTransition, StateCommand};
+pub(crate) use transitions::StateCommand;
 
 #[derive(Debug)]
 pub(super) struct SessionState {

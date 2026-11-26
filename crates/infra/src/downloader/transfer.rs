@@ -11,9 +11,28 @@ use tokio_util::sync::CancellationToken;
 use super::limits::BandwidthLimiter;
 use super::materializer::{Materializer, StagedDownload};
 use super::report::{DownloadFailure, DownloadPhase};
-use super::task::{DownloadTask, TaskId, merge_headers};
+use super::task::{DownloadTask, TaskId};
 use super::validation::{DownloadValidation, StreamingValidator};
 use crate::error::Error;
+
+fn merge_headers(base: &HeaderMap, overrides: &HeaderMap) -> HeaderMap {
+    if overrides.is_empty() {
+        return base.clone();
+    }
+
+    if base.is_empty() {
+        return overrides.clone();
+    }
+
+    let mut merged = base.clone();
+    for name in overrides.keys() {
+        merged.remove(name);
+    }
+    for (name, value) in overrides {
+        merged.append(name.clone(), value.clone());
+    }
+    merged
+}
 
 pub(super) struct TransferContext<'a> {
     pub(super) client: &'a reqwest::Client,

@@ -3,8 +3,9 @@ use std::{path::PathBuf, time::Duration};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Serializer};
 
+use super::task::SessionId;
 pub use crate::error::{DownloadFailure, DownloadPhase};
-use crate::error::{Error, Result, SessionId, TaskId};
+use crate::error::{Error, Result, TaskId};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize))]

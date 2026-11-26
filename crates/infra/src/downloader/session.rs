@@ -43,12 +43,13 @@ pub struct DownloadSession {
 struct SessionLease {
     id: SessionId,
     handler: Arc<SessionHandler>,
-    finished: AtomicBool,
+    closing: AtomicBool,
+    closed: AtomicBool,
 }
 
 impl Drop for SessionLease {
     fn drop(&mut self) {
-        if self.finished.swap(true, Ordering::AcqRel) {
+        if self.closed.swap(true, Ordering::AcqRel) {
             return;
         }
 
@@ -67,7 +68,8 @@ impl DownloadSession {
             lease: Arc::new(SessionLease {
                 id,
                 handler,
-                finished: AtomicBool::new(false),
+                closing: AtomicBool::new(false),
+                closed: AtomicBool::new(false),
             }),
             name,
             progress,
@@ -87,7 +89,7 @@ impl DownloadSession {
         if batch.is_empty() {
             return Ok(());
         }
-        if self.lease.finished.load(Ordering::Acquire) {
+        if self.lease.closing.load(Ordering::Acquire) {
             return Err(Error::SessionNotFound {
                 session_id: self.lease.id,
             });
@@ -108,7 +110,7 @@ impl DownloadSession {
     }
 
     pub async fn snapshot(&self) -> Result<SessionSnapshot> {
-        if self.lease.finished.load(Ordering::Acquire) {
+        if self.lease.closing.load(Ordering::Acquire) {
             return Err(Error::SessionNotFound {
                 session_id: self.lease.id,
             });
@@ -117,7 +119,7 @@ impl DownloadSession {
     }
 
     pub async fn wait_idle(&self) -> Result<()> {
-        if self.lease.finished.load(Ordering::Acquire) {
+        if self.lease.closing.load(Ordering::Acquire) {
             return Err(Error::SessionNotFound {
                 session_id: self.lease.id,
             });
@@ -130,7 +132,7 @@ impl DownloadSession {
     ///
     /// The session stays open, so the caller can submit more work afterwards.
     pub async fn success(&self) -> Result<()> {
-        if self.lease.finished.load(Ordering::Acquire) {
+        if self.lease.closing.load(Ordering::Acquire) {
             return Err(Error::SessionNotFound {
                 session_id: self.lease.id,
             });
@@ -154,11 +156,13 @@ impl DownloadSession {
         self,
         operation: impl Future<Output = Result<DownloadReport>>,
     ) -> Result<DownloadReport> {
-        if self.lease.finished.swap(true, Ordering::AcqRel) {
+        if self.lease.closing.swap(true, Ordering::AcqRel) {
             return Err(Error::SessionNotFound {
                 session_id: self.lease.id,
             });
         }
-        operation.await
+        let report = operation.await?;
+        self.lease.closed.store(true, Ordering::Release);
+        Ok(report)
     }
 }

@@ -145,7 +145,7 @@ pub(super) async fn finalize_launch(
 ) -> Result<()> {
     let info = prepared.info()?;
     let diagnostics = collect_version_diagnostics(&info);
-    let runtime_executable = command.program();
+    let runtime_executable = command.runtime_executable();
     let loader_version = config.spec.loader_version().map(|version| version.as_str());
     let install_status = if config.local_only {
         "LoadedPrepared(via facade)"

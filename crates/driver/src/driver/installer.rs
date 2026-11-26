@@ -39,7 +39,7 @@ impl ResolvedInstallerFamilyVersion {
         loader_version: LoaderVersionId,
     ) -> Result<Self> {
         let installer_artifact =
-            source.installer_artifact(&instance, &game_version, &loader_version)?;
+            source.installer_artifact(&instance.parent, &game_version, &loader_version)?;
 
         Ok(Self {
             source,
@@ -114,7 +114,7 @@ impl ResolvedInstallerFamilyVersion {
         let install_profile = load_persisted_install_profile(&instance.path, family_name)?;
         let (game_version, loader_version) = spec.profile_identity(&install_profile)?;
         let installer_artifact = source.installer_artifact(
-            instance,
+            &instance.parent,
             &MinecraftVersionId::from(game_version),
             &loader_version,
         )?;

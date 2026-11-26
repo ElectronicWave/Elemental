@@ -1,4 +1,4 @@
-use std::{fmt, path::PathBuf, sync::Arc};
+use std::{fmt, path::PathBuf};
 
 use elemental_core::runtime::{
     RuntimeResolver, provider::RuntimeProviderList, providers::default_providers,
@@ -20,7 +20,7 @@ impl Launcher {
 
 pub struct LauncherBuilder {
     storage_root: PathBuf,
-    downloader: Arc<ElementalDownloader>,
+    downloader: ElementalDownloader,
     root_layout: SharedRootLayout,
     instance_layout: SharedInstanceLayout,
     origins: DriverOrigins,
@@ -63,7 +63,7 @@ impl LauncherBuilder {
         self
     }
 
-    pub fn downloader(mut self, downloader: Arc<ElementalDownloader>) -> Self {
+    pub fn downloader(mut self, downloader: ElementalDownloader) -> Self {
         self.downloader = downloader;
         self
     }

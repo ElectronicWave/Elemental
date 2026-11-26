@@ -120,7 +120,7 @@ pub trait Driver: Send + Sync {
                 if let Some(installer) = &plan.installer {
                     submit_installer_profile_libraries(
                         request.session,
-                        request.instance,
+                        &request.instance.parent,
                         &installer.install_profile,
                         installer.family_name,
                         &|raw_url, artifact_path| resolver.artifact_url(raw_url, artifact_path),

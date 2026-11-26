@@ -1,9 +1,8 @@
 pub use crate::auth::accounts::microsoft::MICROSOFT_AUTHORIZER_ID;
-use crate::auth::accounts::microsoft::{
-    MicrosoftAccount, account_from_microsoft_token, oauth_http_client, token_url,
-};
+use crate::auth::accounts::microsoft::MicrosoftAccount;
 use crate::auth::authorizers::Authorizer;
 use crate::auth::error::{Error, Result};
+use crate::auth::microsoft_protocol::{exchange_microsoft_token, oauth_http_client, token_url};
 use oauth2::basic::BasicClient;
 use oauth2::{
     AuthUrl, ClientId, DeviceAuthorizationUrl, Scope, StandardDeviceAuthorizationResponse,
@@ -74,13 +73,10 @@ impl Authorizer for MicrosoftAuthorizer {
             .secret()
             .to_owned();
 
-        account_from_microsoft_token(
-            &self.client_id,
-            token.access_token().secret(),
-            refresh_token,
-            None,
-        )
-        .await
+        let session =
+            exchange_microsoft_token(token.access_token().secret(), refresh_token, None).await?;
+
+        Ok(MicrosoftAccount::from_session(&self.client_id, session))
     }
 
     fn id() -> &'static str {

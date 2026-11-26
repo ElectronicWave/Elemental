@@ -5,8 +5,10 @@ use std::{
 
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
+pub use crate::error::TaskId;
 use crate::error::{Error, Result};
-pub use crate::error::{SessionId, TaskId};
+
+pub type SessionId = u64;
 
 pub(crate) struct HeaderNames<'a>(pub(crate) &'a HeaderMap);
 
@@ -30,25 +32,6 @@ pub(crate) fn insert_header(headers: &mut HeaderMap, name: &str, value: &str) ->
     })?;
     headers.append(header_name, header_value);
     Ok(())
-}
-
-pub(crate) fn merge_headers(base: &HeaderMap, overrides: &HeaderMap) -> HeaderMap {
-    if overrides.is_empty() {
-        return base.clone();
-    }
-
-    if base.is_empty() {
-        return overrides.clone();
-    }
-
-    let mut merged = base.clone();
-    for name in overrides.keys() {
-        merged.remove(name);
-    }
-    for (name, value) in overrides {
-        merged.append(name.clone(), value.clone());
-    }
-    merged
 }
 
 #[derive(Clone, PartialEq, Eq)]

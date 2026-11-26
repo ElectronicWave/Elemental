@@ -27,6 +27,7 @@ impl InstalledDriver {
         let game_version = metadata
             .inherits_from
             .clone()
+            .or_else(|| metadata.client_version.clone())
             .unwrap_or_else(|| metadata.id.clone());
         Self {
             driver: descriptor,

@@ -9,6 +9,7 @@ use super::{QueuedDownloadTask, SessionHandler};
 use crate::downloader::config::RetryPolicy;
 use crate::downloader::report::{DownloadFailure, DownloadPhase};
 use crate::downloader::session::SessionRuntime;
+use crate::downloader::state::StateCommand;
 use crate::downloader::task::{DownloadTask, TaskId};
 use crate::downloader::transfer::{AttemptError, TransferContext, download_attempt};
 
@@ -99,7 +100,10 @@ impl SessionHandler {
 
         match reuse_existing_task(runtime, &task, &token).await {
             ReuseOutcome::Reused => {
-                self.mark_skipped(&task_id, task.expected_size().unwrap_or(0));
+                self.apply_state(StateCommand::Skipped {
+                    task_id: &task_id,
+                    bytes: task.expected_size().unwrap_or(0),
+                });
                 self.finish_task();
                 return;
             }
@@ -119,7 +123,11 @@ impl SessionHandler {
             .await
         {
             AttemptOutcome::Downloaded { bytes, elapsed } => {
-                self.mark_downloaded(&task_id, bytes, elapsed);
+                self.apply_state(StateCommand::Downloaded {
+                    task_id: &task_id,
+                    bytes,
+                    duration: elapsed,
+                });
                 self.finish_task();
             }
             AttemptOutcome::Cancelled => {
@@ -174,12 +182,12 @@ impl SessionHandler {
             }
 
             if !start_emitted {
-                self.mark_active(task_id);
+                self.apply_state(StateCommand::Start(task_id));
                 start_emitted = true;
             }
             let transfer_context = self.transfer_context(runtime, token);
             let result = download_attempt(transfer_context, task, |bytes| {
-                self.record_received(task_id, bytes);
+                self.apply_state(StateCommand::Receive { task_id, bytes });
             })
             .await;
             drop(permit);
@@ -215,7 +223,12 @@ impl SessionHandler {
         }
 
         let delay = context.retry_policy.backoff(attempt);
-        self.mark_retrying(context.task_id, attempt, delay, error.to_string());
+        self.apply_state(StateCommand::Retrying {
+            task_id: context.task_id,
+            failed_attempt: attempt,
+            delay,
+            reason: error.to_string(),
+        });
         if wait_for_retry(context.token, delay).await {
             return None;
         }

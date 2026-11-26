@@ -106,9 +106,6 @@ pub enum Error {
     #[error("texture name cannot be empty")]
     TextureNameEmpty,
 
-    #[error("invalid texture hash '{value}'")]
-    InvalidTextureHash { value: String },
-
     #[cfg(feature = "yggdrasil-auth")]
     #[error(transparent)]
     AuthlibInjectorDistribution(#[from] nidhogg::error::NidhoggError),

@@ -10,7 +10,7 @@ use crate::error::Result;
 
 const EVENT_CHANNEL_CAPACITY: usize = 4096;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ElementalDownloader {
     runtime: Arc<SessionRuntime>,
 }
@@ -20,7 +20,7 @@ impl ElementalDownloader {
         ElementalDownloaderBuilder::new()
     }
 
-    pub fn new() -> Arc<Self> {
+    pub fn new() -> Self {
         Self::builder()
             .build()
             .expect("default downloader builder must be valid")
@@ -30,7 +30,7 @@ impl ElementalDownloader {
         client: reqwest::Client,
         materializer: Arc<dyn Materializer>,
         config: ValidatedDownloaderConfig,
-    ) -> Arc<Self> {
+    ) -> Self {
         let concurrency = Arc::new(
             ConcurrencyController::new(config.max_concurrent_downloads)
                 .expect("validated downloader max_concurrent_downloads must be valid"),
@@ -40,7 +40,7 @@ impl ElementalDownloader {
                 .expect("validated downloader rate limit must be valid"),
         );
         let (events, _) = broadcast::channel(EVENT_CHANNEL_CAPACITY);
-        Arc::new(Self {
+        Self {
             runtime: Arc::new(SessionRuntime {
                 client,
                 events,
@@ -51,7 +51,7 @@ impl ElementalDownloader {
                 session_queue_capacity: config.session_queue_capacity,
                 next_session_id: AtomicU64::new(1),
             }),
-        })
+        }
     }
 
     pub fn session(&self, name: impl Into<String>) -> DownloadSessionBuilder {
@@ -133,7 +133,7 @@ impl ElementalDownloaderBuilder {
         self
     }
 
-    pub fn build(self) -> Result<Arc<ElementalDownloader>> {
+    pub fn build(self) -> Result<ElementalDownloader> {
         let config = ValidatedDownloaderConfig::try_from(self.config)?;
         let client = match self.client {
             Some(client) => client,

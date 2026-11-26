@@ -3,7 +3,6 @@ use std::{error::Error as StdError, fmt, io, path::PathBuf};
 #[cfg(feature = "serde")]
 use serde::Serialize;
 
-pub type SessionId = u64;
 pub type TaskId = String;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -151,9 +150,6 @@ pub enum Error {
 
     #[error("download session '{session_id}' not found")]
     SessionNotFound { session_id: u64 },
-
-    #[error("download session id '{session_id}' conflicts with an existing session")]
-    SessionIdConflict { session_id: u64 },
 
     #[error(
         "download session '{session_id}' is not accepting new tasks because an earlier task failed"

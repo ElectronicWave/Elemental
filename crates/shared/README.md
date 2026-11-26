@@ -88,14 +88,14 @@ async fn main() -> anyhow::Result<()> {
     .await?;
 
     let player_name = loader
-        .get(|profile| profile.config.player_name.clone())
+        .get(|config| config.player_name.clone())
         .await;
     println!("Welcome, {player_name}!");
 
     loader
-        .set(|profile| {
-            profile.config.level += 1;
-            profile.config.score += 100;
+        .set(|config| {
+            config.level += 1;
+            config.score += 100;
         })
         .await?;
 
@@ -191,7 +191,7 @@ async fn main() -> anyhow::Result<()> {
     .await?;
 
     let display_name = loader
-        .get(|profile| profile.config.display_name.clone())
+        .get(|config| config.display_name.clone())
         .await;
     println!("Welcome back, {display_name}!");
 

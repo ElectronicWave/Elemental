@@ -47,18 +47,12 @@ mod shared_test {
         .await
         .unwrap();
 
-        println!(
-            "{:?}",
-            loader.get(|profile| profile.config.user.clone()).await
-        ); // Player
+        println!("{:?}", loader.get(|config| config.user.clone()).await); // Player
         loader
-            .set(|profile| profile.config.user = "NewPlayer".to_owned())
+            .set(|config| config.user = "NewPlayer".to_owned())
             .await
             .unwrap();
-        println!(
-            "{:?}",
-            loader.get(|profile| profile.config.user.clone()).await
-        ); // NewPlayer
+        println!("{:?}", loader.get(|config| config.user.clone()).await); // NewPlayer
     }
 
     #[tokio::test]
@@ -117,10 +111,7 @@ mod shared_test {
         let saved = persistor.clone();
 
         let loader = Profile::<V3>::load(ProfileMigrator, persistor, 3).await?;
-        assert_eq!(
-            loader.get(|profile| profile.config.name3.clone()).await,
-            "Player"
-        );
+        assert_eq!(loader.get(|config| config.name3.clone()).await, "Player");
         assert!(matches!(
             saved.load().await?,
             Some(Profile {

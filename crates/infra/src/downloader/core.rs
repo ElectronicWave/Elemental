@@ -94,6 +94,12 @@ impl ElementalDownloader {
     }
 }
 
+impl Default for ElementalDownloader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug)]
 pub struct ElementalDownloaderBuilder {
     config: ElementalDownloaderConfig,

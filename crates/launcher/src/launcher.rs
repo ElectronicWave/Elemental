@@ -9,7 +9,7 @@ use std::{
 use elemental_core::{
     auth::credential::Credential,
     launcher::{command::LaunchCommand, process},
-    runtime::{RuntimeResolver, distribution::Distribution},
+    runtime::RuntimeResolver,
     storage::Storage,
 };
 use elemental_driver::{
@@ -22,7 +22,7 @@ use elemental_driver::{
         VersionJsonGameStorageExt,
     },
 };
-use elemental_infra::downloader::{DownloadSession, DownloadSessionBuilder, ElementalDownloader};
+use elemental_infra::downloader::{DownloadSession, ElementalDownloader};
 
 use crate::{
     error::{Error, Result},
@@ -87,12 +87,12 @@ impl Launcher {
         &self.storage_root
     }
 
-    pub fn download_session(&self, name: impl Into<String>) -> DownloadSessionBuilder {
-        self.downloader.session(name)
+    pub fn downloader(&self) -> &Arc<ElementalDownloader> {
+        &self.downloader
     }
 
-    pub async fn runtime_distributions(&self) -> Vec<Distribution> {
-        self.runtime_resolver.distributions().await
+    pub fn runtime_resolver(&self) -> &RuntimeResolver {
+        &self.runtime_resolver
     }
 
     pub async fn inspect_instances(&self) -> Result<InspectReport> {

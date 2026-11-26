@@ -9,7 +9,7 @@ use elemental_schema::mojang::piston::{PistonMetaData, PistonMetaLibrariesDownlo
 use crate::{
     error::Result,
     families::version_json::{
-        extensions::PistonMetaLibrariesExt, layout::InstanceStorage, platform::VersionJsonPlatform,
+        extensions::PistonMetaLibrariesExt, layout::InstanceStorage,
         resource::VersionJsonInstanceResource, rules::VersionJsonRuleContext,
     },
 };
@@ -91,7 +91,6 @@ pub(super) fn native_library_sources(
     metadata: &PistonMetaData,
     rule_context: &VersionJsonRuleContext,
 ) -> Result<Vec<NativeLibrarySource>> {
-    let platform = VersionJsonPlatform::current();
     let mut sources = Vec::new();
     for library in metadata
         .libraries
@@ -105,7 +104,7 @@ pub(super) fn native_library_sources(
             .unwrap_or_default();
         sources.extend(
             library
-                .native_source_artifacts(&platform)?
+                .native_source_artifacts(rule_context.platform())?
                 .into_iter()
                 .map(|artifact| NativeLibrarySource {
                     artifact,

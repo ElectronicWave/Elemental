@@ -3,9 +3,7 @@ use elemental_schema::mojang::piston::{PistonMetaLibraries, PistonMetaLibrariesD
 
 use crate::{
     error::Result,
-    families::version_json::{
-        PistonMetaLibrariesExt, VersionJsonPlatform, VersionJsonRootResource,
-    },
+    families::version_json::{PistonMetaLibrariesExt, VersionJsonRootResource},
 };
 
 use super::VersionJsonInstallPlanner;
@@ -18,7 +16,7 @@ impl VersionJsonInstallPlanner<'_> {
         if !library.is_allowed(&self.rule_context) {
             return Ok(Vec::new());
         }
-        let artifacts = library.version_artifacts(&VersionJsonPlatform::current())?;
+        let artifacts = library.version_artifacts(self.rule_context.platform())?;
         artifacts
             .into_iter()
             .map(|artifact| self.plan_library_artifact_task(artifact))

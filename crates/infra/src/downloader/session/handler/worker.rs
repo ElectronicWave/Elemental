@@ -109,16 +109,7 @@ impl SessionHandler {
                 return;
             }
             ReuseOutcome::Failed(message) => {
-                self.finish_failed(DownloadFailure::new(
-                    task_id,
-                    group,
-                    task.url().to_owned(),
-                    task.path().to_path_buf(),
-                    DownloadPhase::Prepare,
-                    None,
-                    false,
-                    message,
-                ));
+                self.finish_failed(prepare_failure(task_id, group, &task, message));
                 return;
             }
         }
@@ -168,14 +159,10 @@ impl SessionHandler {
                 PermitOutcome::Acquired(permit) => permit,
                 PermitOutcome::Cancelled => return AttemptOutcome::Cancelled,
                 PermitOutcome::Failed(message) => {
-                    return AttemptOutcome::Failed(DownloadFailure::new(
+                    return AttemptOutcome::Failed(prepare_failure(
                         task_id.clone(),
                         group.clone(),
-                        record_task.url().to_owned(),
-                        record_task.path().to_path_buf(),
-                        DownloadPhase::Prepare,
-                        None,
-                        false,
+                        record_task,
                         message,
                     ));
                 }
@@ -190,14 +177,7 @@ impl SessionHandler {
                 self.mark_active(task_id);
                 start_emitted = true;
             }
-            let transfer_context = TransferContext {
-                client: &runtime.client,
-                materializer: &runtime.materializer,
-                global_limiter: &runtime.bandwidth_limiter,
-                session_limiter: &self.bandwidth_limiter,
-                session_headers: &self.headers,
-                token,
-            };
+            let transfer_context = self.transfer_context(runtime, token);
             let result = download_attempt(transfer_context, task, |bytes| {
                 self.record_received(task_id, bytes);
             })
@@ -242,6 +222,37 @@ impl SessionHandler {
 
         Some(AttemptOutcome::Cancelled)
     }
+
+    fn transfer_context<'a>(
+        &'a self,
+        runtime: &'a SessionRuntime,
+        token: &'a CancellationToken,
+    ) -> TransferContext<'a> {
+        TransferContext {
+            client: &runtime.client,
+            materializer: &runtime.materializer,
+            global_limiter: &runtime.bandwidth_limiter,
+            session_limiter: &self.bandwidth_limiter,
+            session_headers: &self.headers,
+            token,
+        }
+    }
+}
+
+fn prepare_failure(
+    task_id: TaskId,
+    group: Option<String>,
+    task: &DownloadTask,
+    message: String,
+) -> DownloadFailure {
+    DownloadFailure::for_task(
+        task_id,
+        group,
+        task.url().to_owned(),
+        task.path().to_path_buf(),
+        DownloadPhase::Prepare,
+        message,
+    )
 }
 
 async fn reuse_existing_task(

@@ -92,6 +92,5 @@ pub(super) fn default_driver() -> DriverDescriptor {
 }
 
 fn parse_driver(value: &str) -> std::result::Result<DriverDescriptor, String> {
-    elemental::driver::descriptors::from_id(value)
-        .ok_or_else(|| format!("unsupported driver '{value}'"))
+    DriverDescriptor::try_from(value).map_err(|error| error.to_string())
 }

@@ -148,25 +148,24 @@ impl PreparedInstance {
         let mut variables = LauncherVariables::default();
 
         if let Some(client_id) = &options.client_id {
-            variables = variables.with_client_id(client_id.clone());
+            variables.clientid = client_id.clone();
         }
 
         if let Some(resolution) = &options.resolution {
-            variables =
-                variables.with_resolution(resolution.width.clone(), resolution.height.clone());
+            variables.resolution_width = resolution.width.clone();
+            variables.resolution_height = resolution.height.clone();
         }
 
         if let (Some(name), Some(version)) = (&options.launcher_name, &options.launcher_version) {
-            variables = variables.with_launcher(name.clone(), version.clone());
+            variables.launcher_name = name.clone();
+            variables.launcher_version = version.clone();
         }
 
         if let Some(quick_play) = &options.quick_play {
-            variables = variables.with_quick_play(
-                quick_play.path.clone(),
-                quick_play.singleplayer.clone(),
-                quick_play.multiplayer.clone(),
-                quick_play.realms.clone(),
-            );
+            variables.quick_play_path = quick_play.path.clone();
+            variables.quick_play_singleplayer = quick_play.singleplayer.clone();
+            variables.quick_play_multiplayer = quick_play.multiplayer.clone();
+            variables.quick_play_realms = quick_play.realms.clone();
         }
 
         let builder = VersionJsonLaunchBuilder::new(

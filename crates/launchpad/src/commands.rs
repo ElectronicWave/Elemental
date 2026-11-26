@@ -88,7 +88,8 @@ async fn prepare_instance(
         Ok((prepared, started_at.elapsed()))
     } else {
         let session = launcher
-            .download_session(format!("prepare {}", config.instance_name))
+            .downloader()
+            .session(format!("prepare {}", config.instance_name))
             .open()
             .await?;
         let download_progress = progress::download(&session).await?;

@@ -31,6 +31,13 @@ mod worker;
 
 use lifecycle::SessionLifecycle;
 
+pub(super) type QueuedTaskReceiver = Arc<AsyncMutex<mpsc::Receiver<QueuedDownloadTask>>>;
+pub(super) type CreatedSessionHandler = (
+    Arc<SessionHandler>,
+    QueuedTaskReceiver,
+    watch::Receiver<DownloadProgress>,
+);
+
 pub(super) struct QueuedDownloadTask {
     pub(super) task_id: TaskId,
     pub(super) task: DownloadTask,
@@ -77,11 +84,7 @@ impl SessionHandler {
         options: DownloadSessionOptions,
         queue_capacity: usize,
         events: broadcast::Sender<DownloadEvent>,
-    ) -> Result<(
-        Arc<Self>,
-        Arc<AsyncMutex<mpsc::Receiver<QueuedDownloadTask>>>,
-        watch::Receiver<DownloadProgress>,
-    )> {
+    ) -> Result<CreatedSessionHandler> {
         let bandwidth_limiter = Arc::new(BandwidthLimiter::new(options.effective_rate_limit())?);
         let headers = options.headers.clone();
         let (sender, receiver) = mpsc::channel(queue_capacity);

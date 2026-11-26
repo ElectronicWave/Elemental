@@ -13,13 +13,15 @@ use super::{
     context::InstallerProcessorContext, processor_applies_to_client, runner::run_processor,
 };
 
+pub type ProcessorObserver<'a> = &'a (dyn Fn(usize, usize, &str) + Send + Sync);
+
 pub async fn run_installer_client_processors(
     runtime: &Distribution,
     instance: &InstanceStorage,
     installer_artifact: &InstallerArtifact,
     install_profile: &ForgeInstallerProfile,
     family_name: &str,
-    on_processor: Option<&(dyn Fn(usize, usize, &str) + Send + Sync)>,
+    on_processor: Option<ProcessorObserver<'_>>,
 ) -> Result<()> {
     let client_processors = install_profile
         .processors

@@ -98,7 +98,7 @@ async fn select_instance(
     loop {
         let defaults = instance_defaults(&instance)?;
         let runtime = runtime::prompt(
-            launcher,
+            launcher.runtime_resolver(),
             defaults.runtime_major_version,
             &mut runtime_choice,
         )

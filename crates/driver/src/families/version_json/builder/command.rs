@@ -1,12 +1,19 @@
 use elemental_core::storage::layout::Layoutable;
-use elemental_core::{auth::credential::Credential, launcher::command::LaunchCommand};
+use elemental_core::{
+    auth::credential::{Credential, CredentialKind},
+    launcher::command::LaunchCommand,
+};
 use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::{
     error::{Error, Result},
     families::version_json::{
-        VersionJsonInstanceResource, extensions::PistonMetaDataExt, rules::VersionJsonRuleContext,
+        VersionJsonInstanceResource,
+        classpath::{classpath_separator, join_classpath, resolve_classpath},
+        extensions::PistonMetaDataExt,
+        rules::VersionJsonRuleContext,
         storage::VersionJsonMetadataStorageExt,
+        variables::UserType,
     },
 };
 
@@ -21,6 +28,12 @@ impl VersionJsonLaunchBuilder {
                 source: Box::new(source),
             })?;
         let rule_context = VersionJsonRuleContext::current();
+        let version_name = self
+            .version
+            .name()
+            .ok_or_else(|| Error::MissingVersionName {
+                path: self.version.path.clone(),
+            })?;
         // The builder is public and can be used without the readiness checks.
         let version_jar = self
             .version
@@ -31,17 +44,23 @@ impl VersionJsonLaunchBuilder {
         let paths = LaunchPaths::resolve(&self.version)?;
 
         let credential = self.credential.clone();
-        self.apply_default_variables(&metadata, &credential, &paths)?;
+        self.apply_default_variables(&metadata, &credential, version_name, &paths);
 
         let raw_jvm_arguments = metadata.jvm_arguments(&rule_context);
         let module_path_entries =
             arguments::collect_module_path_entries(&self.inner, raw_jvm_arguments.as_slice())?;
-        self.inner.populate_classpath(
+        let classpath = resolve_classpath(
             &self.version,
             &metadata,
             &rule_context,
             &module_path_entries,
         )?;
+        self.inner.classpath = join_classpath(
+            classpath
+                .into_iter()
+                .map(|path| path.to_string_lossy().to_string())
+                .collect(),
+        );
 
         let jvm_arguments = arguments::build_jvm_arguments(
             &self.version,
@@ -65,16 +84,33 @@ impl VersionJsonLaunchBuilder {
         &mut self,
         metadata: &PistonMetaData,
         credential: &Credential,
+        version_name: String,
         paths: &LaunchPaths,
-    ) -> Result<()> {
-        self.inner.apply_credential(credential);
-        self.inner.apply_metadata(&self.version, metadata)?;
-        self.inner.apply_paths(
-            &paths.version_root,
-            &paths.assets_root,
-            &paths.libraries_root,
-            &paths.natives_directory,
-        );
-        Ok(())
+    ) {
+        if self.inner.auth_player_name.is_empty() {
+            self.inner.auth_player_name = credential.username.clone();
+        }
+
+        self.inner.version_name = version_name;
+        self.inner.game_directory = paths.version_root.to_string_lossy().to_string();
+        self.inner.assets_root = paths.assets_root.to_string_lossy().to_string();
+        self.inner.assets_index_name = metadata.assets.clone();
+        self.inner.auth_uuid = credential.uuid.clone();
+        self.inner.auth_access_token = credential.access_token.clone();
+        self.inner.user_type = match credential.kind {
+            CredentialKind::Legacy => UserType::Legacy,
+            CredentialKind::Mojang => UserType::Mojang,
+            CredentialKind::Msa => UserType::Msa,
+        };
+        if self.inner.clientid.is_empty() {
+            self.inner.clientid = credential.client_id.clone().unwrap_or_default();
+        }
+        if self.inner.auth_xuid.is_empty() {
+            self.inner.auth_xuid = credential.xuid.clone().unwrap_or_default();
+        }
+        self.inner.version_type = metadata.release_type.clone();
+        self.inner.library_directory = paths.libraries_root.to_string_lossy().to_string();
+        self.inner.classpath_separator = classpath_separator().to_owned();
+        self.inner.natives_directory = paths.natives_directory.to_string_lossy().to_string();
     }
 }

@@ -1,0 +1,29 @@
+# Existing architectural debt suppressed by `deslop-please --allow`.
+# Fixing an entry here never fails CI; new issues not listed here fail.
+tangle elemental_driver::descriptors::ALL_DRIVERS,elemental_driver::descriptors::BABRIC_DRIVER,elemental_driver::descriptors::CLEANROOM_DRIVER,elemental_driver::descriptors::DriverDescriptor,elemental_driver::descriptors::FABRIC_DRIVER,elemental_driver::descriptors::FORGE_DRIVER,elemental_driver::descriptors::LEGACY_FABRIC_DRIVER,elemental_driver::descriptors::LITELOADER_DRIVER,elemental_driver::descriptors::NEOFORGE_DRIVER,elemental_driver::descriptors::OUTLANDS_DRIVER,elemental_driver::descriptors::QUILT_DRIVER,elemental_driver::descriptors::RIFT_DRIVER,elemental_driver::descriptors::VANILLA_DRIVER,elemental_driver::descriptors::from_id
+field-leak elemental_driver::families::version_json::rules::VersionJsonRuleContext::platform
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::assets_index_name
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::assets_root
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::auth_access_token
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::auth_player_name
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::auth_uuid
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::auth_xuid
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::classpath
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::classpath_separator
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::clientid
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::game_directory
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::launcher_name
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::launcher_version
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::library_directory
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::natives_directory
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::quick_play_multiplayer
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::quick_play_path
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::quick_play_realms
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::quick_play_singleplayer
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::resolution_height
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::resolution_width
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::user_type
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::version_name
+field-leak elemental_driver::families::version_json::variables::LauncherVariables::version_type
+field-leak elemental_launcher::launcher::Launcher::downloader
+field-leak elemental_launcher::launcher::Launcher::runtime_resolver

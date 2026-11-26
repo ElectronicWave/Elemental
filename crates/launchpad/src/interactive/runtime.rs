@@ -1,7 +1,6 @@
 use anyhow::Result;
-use elemental::{
-    core::runtime::{RuntimeValidationMode, distribution::Distribution},
-    launcher::Launcher,
+use elemental::core::runtime::{
+    RuntimeResolver, RuntimeValidationMode, distribution::Distribution,
 };
 use inquire::Select;
 
@@ -14,11 +13,11 @@ pub(super) struct RuntimeSelection {
 }
 
 pub(super) async fn prompt(
-    launcher: &Launcher,
+    runtime_resolver: &RuntimeResolver,
     default_major_version: Option<usize>,
     current_runtime: &mut Option<RuntimeChoice>,
 ) -> Result<Option<RuntimeSelection>> {
-    let choices = runtime_choices(launcher).await;
+    let choices = runtime_choices(runtime_resolver).await;
     let starting_cursor = runtime_starting_cursor(current_runtime.as_ref(), &choices);
     let help_message = match default_major_version {
         Some(major) => format!("Auto uses Java {major} from the driver default. Esc goes back"),
@@ -48,8 +47,8 @@ pub(super) async fn prompt(
     }))
 }
 
-async fn runtime_choices(launcher: &Launcher) -> Vec<RuntimeChoice> {
-    let distributions = launcher.runtime_distributions().await;
+async fn runtime_choices(runtime_resolver: &RuntimeResolver) -> Vec<RuntimeChoice> {
+    let distributions = runtime_resolver.distributions().await;
     let mut choices = Vec::with_capacity(distributions.len() + 1);
     choices.push(RuntimeChoice::Auto);
     choices.extend(distributions.into_iter().filter_map(|distribution| {

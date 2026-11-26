@@ -21,6 +21,10 @@ impl VersionJsonRuleContext {
         Self::new(VersionJsonPlatform::current(), HashMap::new())
     }
 
+    pub fn platform(&self) -> &VersionJsonPlatform {
+        &self.platform
+    }
+
     pub fn matches_os(&self, os: &OperatingSystem) -> bool {
         os.matches_platform(&self.platform)
     }

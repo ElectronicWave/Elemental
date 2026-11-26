@@ -46,14 +46,12 @@ pub struct DownloadFailure {
 }
 
 impl DownloadFailure {
-    pub(crate) fn new(
+    pub(crate) fn for_task(
         task_id: TaskId,
         group: Option<String>,
         url: String,
         path: PathBuf,
         phase: DownloadPhase,
-        http_status: Option<u16>,
-        retryable: bool,
         message: String,
     ) -> Self {
         Self {
@@ -62,10 +60,20 @@ impl DownloadFailure {
             url,
             path,
             phase,
-            http_status,
-            retryable,
+            http_status: None,
+            retryable: false,
             message,
         }
+    }
+
+    pub(crate) fn with_http_status(mut self, http_status: Option<u16>) -> Self {
+        self.http_status = http_status;
+        self
+    }
+
+    pub(crate) fn with_retryable(mut self, retryable: bool) -> Self {
+        self.retryable = retryable;
+        self
     }
 
     pub fn summary(&self) -> String {

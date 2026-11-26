@@ -1,46 +1,34 @@
-use std::{
-    collections::{HashMap, HashSet},
-    path::Path,
-};
+use std::collections::HashMap;
 
-use elemental_core::auth::credential::{Credential, CredentialKind};
-use elemental_schema::mojang::piston::PistonMetaData;
-
-use crate::error::{Error, Result};
-
-use super::{
-    classpath::{classpath_separator, join_classpath, resolve_classpath},
-    layout::InstanceStorage,
-    rules::VersionJsonRuleContext,
-};
+use super::classpath::classpath_separator;
 
 #[derive(Clone, Debug)]
 pub struct LauncherVariables {
-    auth_player_name: String,
-    version_name: String,
-    game_directory: String,
-    assets_root: String,
-    assets_index_name: String,
-    auth_uuid: String,
-    auth_access_token: String,
+    pub auth_player_name: String,
+    pub version_name: String,
+    pub game_directory: String,
+    pub assets_root: String,
+    pub assets_index_name: String,
+    pub auth_uuid: String,
+    pub auth_access_token: String,
     // Legacy 1.7-era launchers still expect this placeholder to be a JSON object string.
-    user_properties: String,
-    clientid: String,
-    auth_xuid: String,
-    user_type: UserType,
-    version_type: String,
-    resolution_width: String,
-    resolution_height: String,
-    quick_play_path: Option<String>,
-    quick_play_singleplayer: Option<String>,
-    quick_play_multiplayer: Option<String>,
-    quick_play_realms: Option<String>,
-    natives_directory: String,
-    launcher_name: String,
-    launcher_version: String,
-    library_directory: String,
-    classpath_separator: String,
-    classpath: String,
+    pub user_properties: String,
+    pub clientid: String,
+    pub auth_xuid: String,
+    pub user_type: UserType,
+    pub version_type: String,
+    pub resolution_width: String,
+    pub resolution_height: String,
+    pub quick_play_path: Option<String>,
+    pub quick_play_singleplayer: Option<String>,
+    pub quick_play_multiplayer: Option<String>,
+    pub quick_play_realms: Option<String>,
+    pub natives_directory: String,
+    pub launcher_name: String,
+    pub launcher_version: String,
+    pub library_directory: String,
+    pub classpath_separator: String,
+    pub classpath: String,
 }
 
 impl Default for LauncherVariables {
@@ -92,100 +80,6 @@ impl UserType {
 }
 
 impl LauncherVariables {
-    pub fn with_client_id(mut self, client_id: String) -> Self {
-        self.clientid = client_id;
-        self
-    }
-
-    pub fn with_resolution(mut self, width: String, height: String) -> Self {
-        self.resolution_width = width;
-        self.resolution_height = height;
-        self
-    }
-
-    pub fn with_launcher(mut self, name: String, version: String) -> Self {
-        self.launcher_name = name;
-        self.launcher_version = version;
-        self
-    }
-
-    pub fn with_quick_play(
-        mut self,
-        path: Option<String>,
-        singleplayer: Option<String>,
-        multiplayer: Option<String>,
-        realms: Option<String>,
-    ) -> Self {
-        self.quick_play_path = path;
-        self.quick_play_singleplayer = singleplayer;
-        self.quick_play_multiplayer = multiplayer;
-        self.quick_play_realms = realms;
-        self
-    }
-
-    pub(crate) fn apply_credential(&mut self, credential: &Credential) {
-        if self.auth_player_name.is_empty() {
-            self.auth_player_name = credential.username.clone();
-        }
-        self.auth_uuid = credential.uuid.clone();
-        self.auth_access_token = credential.access_token.clone();
-        self.user_type = match credential.kind {
-            CredentialKind::Legacy => UserType::Legacy,
-            CredentialKind::Mojang => UserType::Mojang,
-            CredentialKind::Msa => UserType::Msa,
-        };
-        if self.clientid.is_empty() {
-            self.clientid = credential.client_id.clone().unwrap_or_default();
-        }
-        if self.auth_xuid.is_empty() {
-            self.auth_xuid = credential.xuid.clone().unwrap_or_default();
-        }
-    }
-
-    pub(crate) fn apply_metadata(
-        &mut self,
-        version: &InstanceStorage,
-        metadata: &PistonMetaData,
-    ) -> Result<()> {
-        self.version_name = version.name().ok_or_else(|| Error::MissingVersionName {
-            path: version.path.clone(),
-        })?;
-        self.assets_index_name = metadata.assets.clone();
-        self.version_type = metadata.release_type.clone();
-        Ok(())
-    }
-
-    pub(crate) fn apply_paths(
-        &mut self,
-        game_directory: &Path,
-        assets_root: &Path,
-        library_directory: &Path,
-        natives_directory: &Path,
-    ) {
-        self.game_directory = game_directory.to_string_lossy().to_string();
-        self.assets_root = assets_root.to_string_lossy().to_string();
-        self.library_directory = library_directory.to_string_lossy().to_string();
-        self.classpath_separator = classpath_separator().to_owned();
-        self.natives_directory = natives_directory.to_string_lossy().to_string();
-    }
-
-    pub(crate) fn populate_classpath(
-        &mut self,
-        version: &InstanceStorage,
-        metadata: &PistonMetaData,
-        rule_context: &VersionJsonRuleContext,
-        module_path_entries: &HashSet<String>,
-    ) -> Result<()> {
-        let classpath = resolve_classpath(version, metadata, rule_context, module_path_entries)?;
-        self.classpath = join_classpath(
-            classpath
-                .into_iter()
-                .map(|path| path.to_string_lossy().to_string())
-                .collect(),
-        );
-        Ok(())
-    }
-
     pub fn get(&self, key: &str) -> Option<&str> {
         Some(match key {
             "auth_player_name" => &self.auth_player_name,

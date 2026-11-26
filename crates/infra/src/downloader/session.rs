@@ -159,7 +159,6 @@ impl DownloadSession {
                 session_id: self.lease.id,
             });
         }
-        let result = operation.await;
-        result
+        operation.await
     }
 }

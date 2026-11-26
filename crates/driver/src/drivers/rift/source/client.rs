@@ -1,5 +1,7 @@
+use elemental_core::http::SwappableClient;
 use elemental_infra::jar::JarBytes;
 use elemental_schema::fabric::ProfileJson;
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
 use crate::{
     error::{Error, Result},
@@ -36,6 +38,23 @@ impl RiftSource {
             client: HttpClient::with_client(client),
             endpoints,
         }
+    }
+
+    pub fn with_http_client(endpoints: RiftEndpoints, client: SwappableClient) -> Self {
+        Self {
+            client: HttpClient::with_http_client(client),
+            endpoints,
+        }
+    }
+
+    pub fn with_headers(mut self, headers: HeaderMap) -> Self {
+        self.client = self.client.with_headers(headers);
+        self
+    }
+
+    pub fn with_header(mut self, name: HeaderName, value: HeaderValue) -> Self {
+        self.client = self.client.with_header(name, value);
+        self
     }
 
     pub fn endpoints(&self) -> &RiftEndpoints {

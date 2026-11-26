@@ -76,8 +76,15 @@ impl DriverCatalog {
         feature = "driver-legacyfabric",
         feature = "driver-babric"
     ))]
-    pub(crate) fn with_loader(driver: DriverDescriptor, flavor: FabricFlavor) -> Result<Self> {
-        let source = LoaderMetaSource::new(FabricEndpoints::for_flavor(flavor)?);
+    pub(crate) fn with_loader(
+        driver: DriverDescriptor,
+        flavor: FabricFlavor,
+        http_client: &elemental_core::http::SwappableClient,
+    ) -> Result<Self> {
+        let source = LoaderMetaSource::with_http_client(
+            FabricEndpoints::for_flavor(flavor)?,
+            http_client.clone(),
+        );
         Ok(Self::loader(driver, FabricCatalog::new(source)))
     }
 

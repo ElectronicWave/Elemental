@@ -30,7 +30,8 @@ impl LiteLoaderSource {
     ) -> Result<ProfileJson> {
         let manifest = self.manifest().await?;
         let selected = select_build(&manifest, game_version, loader_version)?;
-        build_profile_json(self.http_client()?, self.endpoints(), &selected).await
+        let client = self.http_client()?;
+        build_profile_json(&client, self.endpoints(), &selected).await
     }
 }
 

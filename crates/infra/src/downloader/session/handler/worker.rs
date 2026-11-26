@@ -185,7 +185,8 @@ impl SessionHandler {
                 self.apply_state(StateCommand::Start(task_id));
                 start_emitted = true;
             }
-            let transfer_context = self.transfer_context(runtime, token);
+            let client = runtime.client.client();
+            let transfer_context = self.transfer_context(&client, runtime, token);
             let result = download_attempt(transfer_context, task, |bytes| {
                 self.apply_state(StateCommand::Receive { task_id, bytes });
             })
@@ -238,11 +239,12 @@ impl SessionHandler {
 
     fn transfer_context<'a>(
         &'a self,
+        client: &'a reqwest::Client,
         runtime: &'a SessionRuntime,
         token: &'a CancellationToken,
     ) -> TransferContext<'a> {
         TransferContext {
-            client: &runtime.client,
+            client,
             materializer: &runtime.materializer,
             global_limiter: &runtime.bandwidth_limiter,
             session_limiter: &self.bandwidth_limiter,

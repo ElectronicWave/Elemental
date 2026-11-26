@@ -1,14 +1,15 @@
 use std::fmt::Debug;
 
+use async_trait::async_trait;
+use elemental_core::{http::SwappableClient, minecraft::MinecraftVersionId};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use serde::de::DeserializeOwned;
+
 use crate::{
     catalog::{GameVersion, GameVersionCatalog, LoaderRelease, LoaderVersionCatalog},
     error::Result,
+    http::HttpClient,
 };
-use async_trait::async_trait;
-use elemental_core::minecraft::MinecraftVersionId;
-use serde::de::DeserializeOwned;
-
-use crate::http::HttpClient;
 
 pub trait LoaderMetaEndpoints: Clone + Debug + Send + Sync + 'static {
     type GameVersion: DeserializeOwned;
@@ -68,6 +69,23 @@ where
         }
     }
 
+    pub fn with_http_client(endpoints: E, client: SwappableClient) -> Self {
+        Self {
+            client: HttpClient::with_http_client(client),
+            endpoints,
+        }
+    }
+
+    pub fn with_headers(mut self, headers: HeaderMap) -> Self {
+        self.client = self.client.with_headers(headers);
+        self
+    }
+
+    pub fn with_header(mut self, name: HeaderName, value: HeaderValue) -> Self {
+        self.client = self.client.with_header(name, value);
+        self
+    }
+
     pub fn endpoints(&self) -> &E {
         &self.endpoints
     }
@@ -109,6 +127,7 @@ where
         self.client.fetch_json(url.as_str(), E::SOURCE_NAME).await
     }
 }
+
 pub struct LoaderMetaCatalog<E>
 where
     E: LoaderMetaEndpoints,

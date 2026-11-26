@@ -6,13 +6,13 @@ use minecraft_msa_auth::MinecraftAuthorizationFlow;
 use oauth2::basic::BasicClient;
 use oauth2::{ClientId, EndpointNotSet, EndpointSet, RefreshToken, TokenResponse, TokenUrl};
 use oauth2_reqwest::ReqwestClient;
+use reqwest::Client;
 use reqwest::multipart::{Form, Part};
-use reqwest::redirect::Policy;
-use reqwest::{Client, ClientBuilder};
 use serde::Deserialize;
 
 use crate::auth::error::{Error, Result, XuidDecodeError};
 use crate::auth::texture::{Cape, ProfileTextures, Skin, SkinModel, TextureType};
+use crate::http::{HttpClientConfig, HttpClientError};
 
 const MSA_TOKEN_URL: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
 const MINECRAFT_PROFILE_URL: &str = "https://api.minecraftservices.com/minecraft/profile";
@@ -58,12 +58,22 @@ pub(crate) struct ExchangedMinecraftSession {
 type RefreshClient =
     BasicClient<EndpointNotSet, EndpointNotSet, EndpointNotSet, EndpointNotSet, EndpointSet>;
 
-pub(crate) fn oauth_http_client() -> Result<ReqwestClient> {
-    let reqwest_client = ClientBuilder::new()
-        // Following redirects opens the client up to SSRF vulnerabilities.
-        .redirect(Policy::none())
+pub(crate) fn map_http_client_error(error: HttpClientError) -> Error {
+    match error {
+        HttpClientError::Build { source } => Error::HttpClientBuild { source },
+    }
+}
+
+fn default_api_client() -> Result<Client> {
+    HttpClientConfig::default()
         .build()
-        .map_err(|source| Error::HttpClientBuild { source })?;
+        .map_err(map_http_client_error)
+}
+
+fn default_oauth_client() -> Result<ReqwestClient> {
+    let reqwest_client = HttpClientConfig::default()
+        .build_no_redirect()
+        .map_err(map_http_client_error)?;
     Ok(ReqwestClient::from(reqwest_client))
 }
 
@@ -79,7 +89,7 @@ pub(crate) async fn refresh_microsoft_session(
     existing_refresh_token: &str,
     existing_xuid: Option<String>,
 ) -> Result<ExchangedMinecraftSession> {
-    let reqwest_client = oauth_http_client()?;
+    let reqwest_client = default_oauth_client()?;
     let client = refresh_client(client_id)?;
     let token = client
         .exchange_refresh_token(&RefreshToken::new(existing_refresh_token.to_owned()))
@@ -91,7 +101,13 @@ pub(crate) async fn refresh_microsoft_session(
         .map(|token| token.secret().to_owned())
         .unwrap_or_else(|| existing_refresh_token.to_owned());
 
-    exchange_microsoft_token(token.access_token().secret(), refresh_token, existing_xuid).await
+    exchange_microsoft_token(
+        default_api_client()?,
+        token.access_token().secret(),
+        refresh_token,
+        existing_xuid,
+    )
+    .await
 }
 
 fn refresh_client(client_id: &str) -> Result<RefreshClient> {
@@ -99,16 +115,17 @@ fn refresh_client(client_id: &str) -> Result<RefreshClient> {
 }
 
 pub(crate) async fn exchange_microsoft_token(
+    client: Client,
     microsoft_access_token: &str,
     refresh_token: String,
     existing_xuid: Option<String>,
 ) -> Result<ExchangedMinecraftSession> {
-    let mc_flow = MinecraftAuthorizationFlow::new(Client::new());
+    let mc_flow = MinecraftAuthorizationFlow::new(client.clone());
     let mc_token = mc_flow
         .exchange_microsoft_token(microsoft_access_token)
         .await
         .map_err(|source| Error::MinecraftExchange { source })?;
-    let profile = minecraft_profile(mc_token.access_token().as_ref()).await?;
+    let profile = minecraft_profile_with_client(&client, mc_token.access_token().as_ref()).await?;
     let xuid =
         existing_xuid.filter(|xuid| !xuid.is_empty()).or_else(|| {
             match xuid_from_access_token(mc_token.access_token().as_ref()) {
@@ -131,7 +148,15 @@ pub(crate) async fn exchange_microsoft_token(
 }
 
 pub(crate) async fn minecraft_profile(access_token: &str) -> Result<MinecraftProfileResponse> {
-    Client::new()
+    let client = default_api_client()?;
+    minecraft_profile_with_client(&client, access_token).await
+}
+
+async fn minecraft_profile_with_client(
+    client: &Client,
+    access_token: &str,
+) -> Result<MinecraftProfileResponse> {
+    client
         .get(MINECRAFT_PROFILE_URL)
         .bearer_auth(access_token)
         .send()
@@ -162,7 +187,7 @@ pub(crate) async fn upload_skin(
         })?;
     let form = Form::new().text("variant", variant).part("file", file);
     send_texture_request(
-        Client::new()
+        default_api_client()?
             .post(MINECRAFT_SKIN_UPLOAD_URL)
             .bearer_auth(access_token)
             .multipart(form),
@@ -173,7 +198,7 @@ pub(crate) async fn upload_skin(
 
 pub(crate) async fn delete_skin(access_token: &str) -> Result<()> {
     send_texture_request(
-        Client::new()
+        default_api_client()?
             .delete(MINECRAFT_ACTIVE_SKIN_URL)
             .bearer_auth(access_token),
         "delete skin",
@@ -182,11 +207,12 @@ pub(crate) async fn delete_skin(access_token: &str) -> Result<()> {
 }
 
 pub(crate) async fn select_cape(access_token: &str, cape_id: Option<String>) -> Result<()> {
+    let client = default_api_client()?;
     let request = match cape_id {
-        Some(cape_id) => Client::new()
+        Some(cape_id) => client
             .put(MINECRAFT_ACTIVE_CAPE_URL)
             .json(&serde_json::json!({ "capeId": cape_id })),
-        None => Client::new().delete(MINECRAFT_ACTIVE_CAPE_URL),
+        None => client.delete(MINECRAFT_ACTIVE_CAPE_URL),
     };
     send_texture_request(request.bearer_auth(access_token), "select cape").await
 }

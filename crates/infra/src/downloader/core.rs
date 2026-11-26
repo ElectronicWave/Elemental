@@ -1,4 +1,6 @@
 use std::sync::{Arc, atomic::AtomicU64};
+
+use elemental_core::http::SwappableClient;
 use tokio::sync::broadcast;
 
 use super::config::{DownloadRateLimit, ElementalDownloaderConfig, ValidatedDownloaderConfig};
@@ -27,7 +29,7 @@ impl ElementalDownloader {
     }
 
     fn from_parts(
-        client: reqwest::Client,
+        client: SwappableClient,
         materializer: Arc<dyn Materializer>,
         config: ValidatedDownloaderConfig,
     ) -> Self {
@@ -70,6 +72,11 @@ impl ElementalDownloader {
         self.runtime.bandwidth_limiter.rate_limit()
     }
 
+    /// Returns the swappable HTTP client used for download transfers.
+    pub fn http_client(&self) -> &SwappableClient {
+        &self.runtime.client
+    }
+
     pub async fn set_max_concurrent_downloads(
         &self,
         max_concurrent_downloads: usize,
@@ -92,7 +99,7 @@ impl ElementalDownloader {
 pub struct ElementalDownloaderBuilder {
     config: ElementalDownloaderConfig,
     materializer: Arc<dyn Materializer>,
-    client: Option<reqwest::Client>,
+    client: Option<SwappableClient>,
 }
 
 impl Default for ElementalDownloaderBuilder {
@@ -128,7 +135,13 @@ impl ElementalDownloaderBuilder {
         self.materializer(Arc::new(HardlinkCacheMaterializer::new(cache_root)))
     }
 
-    pub fn client(mut self, client: reqwest::Client) -> Self {
+    /// Sets a fixed `reqwest::Client` wrapped in a [`SwappableClient`].
+    pub fn client(self, client: reqwest::Client) -> Self {
+        self.http_client(SwappableClient::from_client(client))
+    }
+
+    /// Sets a shared [`SwappableClient`] used for download transfers.
+    pub fn http_client(mut self, client: SwappableClient) -> Self {
         self.client = Some(client);
         self
     }
@@ -137,7 +150,7 @@ impl ElementalDownloaderBuilder {
         let config = ValidatedDownloaderConfig::try_from(self.config)?;
         let client = match self.client {
             Some(client) => client,
-            None => config.client()?,
+            None => config.http_client()?,
         };
 
         Ok(ElementalDownloader::from_parts(

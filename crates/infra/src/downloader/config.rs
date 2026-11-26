@@ -1,6 +1,6 @@
 use std::{num::NonZeroUsize, time::Duration};
 
-use reqwest::ClientBuilder;
+use elemental_core::http::{HttpClientConfig, HttpClientError, SwappableClient};
 
 use crate::error::{Error, Result};
 
@@ -117,12 +117,13 @@ pub(super) struct ValidatedDownloaderConfig {
 }
 
 impl ValidatedDownloaderConfig {
-    pub(super) fn client(&self) -> Result<reqwest::Client> {
-        ClientBuilder::new()
-            .connect_timeout(self.connect_timeout)
-            .read_timeout(self.read_timeout)
-            .build()
-            .map_err(Error::from)
+    pub(super) fn http_client(&self) -> Result<SwappableClient> {
+        let config = HttpClientConfig::new()
+            .connect_timeout(Some(self.connect_timeout))
+            .read_timeout(Some(self.read_timeout));
+        SwappableClient::new(config).map_err(|error| match error {
+            HttpClientError::Build { source } => Error::from(source),
+        })
     }
 }
 

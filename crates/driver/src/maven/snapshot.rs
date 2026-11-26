@@ -4,7 +4,7 @@ use elemental_schema::maven::{MavenMetadataBody, MavenMetadataVersion, MavenMeta
 use quick_xml::{Reader, escape::unescape, events::Event};
 
 use crate::error::{Error, Result};
-use crate::http::fetch_text;
+use crate::http::HttpClient;
 
 use super::{MavenCoordinate, validate_component};
 
@@ -133,11 +133,11 @@ pub(crate) fn decode_snapshot_metadata(raw: &str, url: String) -> Result<Snapsho
 }
 
 pub async fn fetch_maven_metadata(
-    client: &reqwest::Client,
+    client: &HttpClient,
     url: String,
     source_label: &str,
 ) -> Result<MavenMetadataBody> {
-    let raw = fetch_text(client, url.as_str(), source_label).await?;
+    let raw = client.fetch_text(url.as_str(), source_label).await?;
     decode_maven_metadata(raw.as_str()).map_err(|source| Error::DecodeMavenMetadata {
         source_label: source_label.to_owned(),
         url,

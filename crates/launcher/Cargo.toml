@@ -8,23 +8,6 @@ edition.workspace = true
 repository.workspace = true
 license.workspace = true
 
-[dependencies]
-thiserror = { workspace = true }
-tokio = { workspace = true }
-elemental-core = { path = "../core", version = "0.3.0", default-features = false }
-elemental-driver = { path = "../driver", version = "0.3.0", default-features = false }
-elemental-infra = { path = "../infra", version = "0.3.0", default-features = false }
-elemental-shared = { path = "../shared", version = "0.3.0" }
-erased-serde = { workspace = true }
-hex = { workspace = true }
-nidhogg = { workspace = true, optional = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-sha2 = { workspace = true }
-
-[dev-dependencies]
-async-trait = { workspace = true }
-
 [features]
 default = ["driver-all", "microsoft-auth", "tls-aws-lc"]
 microsoft-auth = ["elemental-core/microsoft-auth"]
@@ -81,3 +64,20 @@ yggdrasil-auth = [
 ]
 authlib-injector-embed = ["yggdrasil-auth", "nidhogg/authlib-injector-embed"]
 offline-server = ["elemental-core/offline-server", "yggdrasil-auth"]
+
+[dependencies]
+elemental-core = { path = "../core", version = "0.3.0", default-features = false, features = ["http"] }
+elemental-driver = { path = "../driver", version = "0.3.0", default-features = false }
+elemental-infra = { path = "../infra", version = "0.3.0", default-features = false }
+elemental-shared = { path = "../shared", version = "0.3.0" }
+erased-serde = { workspace = true }
+hex = { workspace = true }
+nidhogg = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+async-trait = { workspace = true }

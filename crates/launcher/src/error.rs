@@ -106,6 +106,8 @@ pub enum Error {
     #[error("texture name cannot be empty")]
     TextureNameEmpty,
 
+    #[error(transparent)]
+    HttpClient(#[from] elemental_core::http::HttpClientError),
     #[cfg(feature = "yggdrasil-auth")]
     #[error(transparent)]
     AuthlibInjectorDistribution(#[from] nidhogg::error::NidhoggError),

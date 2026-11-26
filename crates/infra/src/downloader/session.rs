@@ -1,3 +1,4 @@
+use elemental_core::http::SwappableClient;
 use std::future::Future;
 use std::sync::{
     Arc,
@@ -22,7 +23,7 @@ pub(crate) use options::DownloadSessionOptions;
 
 #[derive(Debug)]
 pub(super) struct SessionRuntime {
-    pub(super) client: reqwest::Client,
+    pub(super) client: SwappableClient,
     pub(super) events: broadcast::Sender<DownloadEvent>,
     pub(super) concurrency: Arc<ConcurrencyController>,
     pub(super) bandwidth_limiter: Arc<BandwidthLimiter>,

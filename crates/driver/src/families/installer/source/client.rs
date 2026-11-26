@@ -3,10 +3,11 @@ use std::collections::HashSet;
 
 #[cfg(feature = "maven-xml")]
 use async_trait::async_trait;
-use elemental_core::minecraft::MinecraftVersionId;
+use elemental_core::{http::SwappableClient, minecraft::MinecraftVersionId};
 #[cfg(feature = "maven-xml")]
 use elemental_schema::maven::MavenMetadataBody;
 use elemental_schema::mojang::piston::PistonMetaLibraries;
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
 #[cfg(feature = "maven-xml")]
 use crate::catalog::{GameVersion, GameVersionCatalog, LoaderRelease, LoaderVersionCatalog};
@@ -56,6 +57,23 @@ impl InstallerMavenSource {
         }
     }
 
+    pub fn with_http_client(endpoints: MavenEndpoints, client: SwappableClient) -> Self {
+        Self {
+            client: HttpClient::with_http_client(client),
+            endpoints,
+        }
+    }
+
+    pub fn with_headers(mut self, headers: HeaderMap) -> Self {
+        self.client = self.client.with_headers(headers);
+        self
+    }
+
+    pub fn with_header(mut self, name: HeaderName, value: HeaderValue) -> Self {
+        self.client = self.client.with_header(name, value);
+        self
+    }
+
     pub fn spec(&self) -> &'static MavenInstallerSpec {
         self.endpoints.spec()
     }
@@ -74,7 +92,7 @@ impl InstallerMavenSource {
     #[cfg(feature = "maven-xml")]
     pub async fn maven_metadata(&self) -> Result<MavenMetadataBody> {
         let url = self.endpoints.maven_metadata_url()?;
-        fetch_maven_metadata(self.client.client()?, url, self.spec().source_name).await
+        fetch_maven_metadata(&self.client, url, self.spec().source_name).await
     }
 
     pub fn installer_artifact(

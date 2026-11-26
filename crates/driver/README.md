@@ -182,13 +182,10 @@ Override it when the loader changes libraries or arguments.
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;
 use elemental_driver::{
-    driver::DriverDescriptor,
+    driver::{DriverDescriptor, ProfiledVersionJsonFamily, ProfiledVersionJsonFamilyExt},
     drivers::vanilla::source::VanillaSource,
     error::Result,
-    families::version_json::{
-        LoaderMetaSource, ProfiledVersionJsonFamily, ProfiledVersionJsonFamilyExt,
-        VanillaFallbackRemoteResolver,
-    },
+    families::version_json::{LoaderMetaSource, VanillaFallbackRemoteResolver},
     inspect::{LibraryPrefixSet, ProfileIdPattern, ProfiledDriverIdentity},
     loader_version::LoaderVersionId,
 };
@@ -294,12 +291,11 @@ If a loader does not fit any shared family, implement `Driver` directly:
 use async_trait::async_trait;
 use elemental_core::storage::{Storage, layout::Layout};
 use elemental_driver::{
-    driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest},
+    driver::{Driver, DriverDescriptor, InstanceProbe, InstalledDriver, PrepareRequest},
     error::Result,
     families::version_json::{
         PreparedVersionJsonInstance, VersionJsonInstanceLayout, VersionJsonRootLayout,
     },
-    inspect::InstanceProbe,
 };
 
 const MY_DRIVER: DriverDescriptor = DriverDescriptor {
@@ -365,12 +361,12 @@ exposing a custom driver through the high-level launcher requires adding a
 
 | Module | Contents |
 | --- | --- |
-| `catalog` | `GameVersionCatalog`, `LoaderVersionCatalog`, `GameVersion`, `LoaderRelease`, `InstallerMavenCatalog`, and `LoaderMetaCatalog` |
+| `catalog` | `GameVersionCatalog`, `LoaderVersionCatalog`, `GameVersion`, and `LoaderRelease` |
 | `descriptors` | Stable driver identifiers and display names |
-| `driver` | `DriverDescriptor`, `InstalledDriver`, and the `Driver` trait |
+| `driver` | `DriverDescriptor`, `InstalledDriver`, `InstanceProbe`, `InstalledInstance`, shared driver adapters, and the `Driver` trait |
 | `drivers` | Per-loader catalogs, sources, drivers, configs, and prepared state |
-| `families` | Shared version JSON, installer, processor, and RetroFutura implementation families |
-| `inspect` | Instance probes, installed-driver detection, and library markers |
+| `families` | Shared version JSON (`LoaderMetaCatalog`), installer (`InstallerMavenCatalog`), processor, and RetroFutura implementation families |
+| `inspect` | Installed-driver metadata, library markers, and profile identity patterns |
 | `loader_version` | The typed `LoaderVersionId` |
 | `url` | `Origin` and `OriginPolicy` primitives |
 

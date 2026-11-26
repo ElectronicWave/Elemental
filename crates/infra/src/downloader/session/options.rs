@@ -2,9 +2,8 @@ use std::fmt;
 
 use reqwest::header::HeaderMap;
 
-use crate::downloader::header::HeaderNames;
-use crate::downloader::policy::{FailurePolicy, RetryPolicy};
-use crate::downloader::rate::DownloadRateLimit;
+use crate::downloader::config::{DownloadRateLimit, FailurePolicy, RetryPolicy};
+use crate::downloader::task::HeaderNames;
 use crate::error::{Error, Result};
 
 #[derive(Clone, PartialEq, Eq)]

@@ -1,11 +1,12 @@
-use std::str::FromStr;
+mod detect;
+mod installer;
+mod profiled;
 
 use async_trait::async_trait;
 use elemental_core::{minecraft::MinecraftVersionId, runtime::RuntimeResolver};
 use elemental_infra::downloader::DownloadSession;
-use elemental_schema::{forge::ForgeInstallerProfile, mojang::piston::PistonMetaData};
+use elemental_schema::forge::ForgeInstallerProfile;
 
-use crate::descriptors::from_id;
 use crate::error::{Error, Result};
 use crate::families::{
     installer::{
@@ -13,66 +14,20 @@ use crate::families::{
         submit_installer_profile_libraries,
     },
     version_json::{
-        InstanceStorage, PistonMetaDataExt, PreparedVersionJsonInstance,
-        ResolvedVersionJsonInstance, VersionJsonDownloadStatus, VersionJsonRemoteResolver,
+        InstanceStorage, PreparedVersionJsonInstance, ResolvedVersionJsonInstance,
+        VersionJsonDownloadStatus, VersionJsonRemoteResolver,
     },
 };
-use crate::inspect::InstanceProbe;
 use crate::launch::{RuntimeOptions, resolve_prepared_version_runtime};
 use crate::loader_version::LoaderVersionId;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DriverDescriptor {
-    pub id: &'static str,
-    pub name: &'static str,
-}
-
-impl TryFrom<&str> for DriverDescriptor {
-    type Error = Error;
-
-    fn try_from(id: &str) -> Result<Self> {
-        from_id(id).ok_or_else(|| Error::UnsupportedDriver { id: id.to_owned() })
-    }
-}
-
-impl TryFrom<String> for DriverDescriptor {
-    type Error = Error;
-
-    fn try_from(id: String) -> Result<Self> {
-        Self::try_from(id.as_str())
-    }
-}
-
-impl FromStr for DriverDescriptor {
-    type Err = Error;
-
-    fn from_str(id: &str) -> Result<Self> {
-        Self::try_from(id)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InstalledDriver {
-    pub driver: DriverDescriptor,
-    pub driver_version: Option<String>,
-    pub game_version: Option<MinecraftVersionId>,
-    pub description: Option<String>,
-}
-
-impl InstalledDriver {
-    pub fn version_json(
-        descriptor: DriverDescriptor,
-        metadata: &PistonMetaData,
-        driver_version: Option<String>,
-    ) -> Self {
-        Self {
-            driver: descriptor,
-            driver_version,
-            game_version: Some(MinecraftVersionId::from(metadata.game_version())),
-            description: Some(metadata.release_type.clone()),
-        }
-    }
-}
+pub use crate::descriptors::DriverDescriptor;
+pub use crate::inspect::InstalledDriver;
+pub use detect::{InstalledInstance, InstanceDetectionFailure, InstanceProbe, inspect_instances};
+pub use installer::{InstallerFamilyDriver, ResolvedInstallerFamilyVersion};
+pub use profiled::{
+    ProfiledVersionJsonDriver, ProfiledVersionJsonFamily, ProfiledVersionJsonFamilyExt,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PrepareStage {
@@ -192,13 +147,23 @@ pub trait Driver: Send + Sync {
                 request.runtime_resolver,
             )
             .await?;
+            let on_processor = |index: usize, total: usize, jar: &str| {
+                request.emit(PrepareStage::RunningProcessor {
+                    family_name: installer.family_name.to_owned(),
+                    index,
+                    total,
+                    jar: jar.to_owned(),
+                });
+            };
             run_installer_client_processors(
                 &runtime,
                 request.instance,
                 &installer.installer_artifact,
                 &installer.install_profile,
                 installer.family_name,
-                request.on_stage,
+                request
+                    .on_stage
+                    .map(|_| &on_processor as &(dyn Fn(usize, usize, &str) + Send + Sync)),
             )
             .await?;
         }

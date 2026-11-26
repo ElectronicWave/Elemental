@@ -5,14 +5,14 @@ use elemental_schema::{mojang::piston::PistonMetaData, quilt::ProfileJson};
 
 use crate::{
     descriptors::QUILT_DRIVER,
-    driver::{DriverDescriptor, InstalledDriver},
+    driver::{
+        DriverDescriptor, InstalledDriver, ProfiledVersionJsonDriver, ProfiledVersionJsonFamily,
+    },
     drivers::{
         quilt::source::{QuiltEndpoints, QuiltSource},
         vanilla::source::VanillaSource,
     },
-    families::version_json::{
-        ProfiledVersionJsonDriver, ProfiledVersionJsonFamily, VanillaFallbackRemoteResolver,
-    },
+    families::version_json::VanillaFallbackRemoteResolver,
     inspect::LibraryPrefixSet,
     loader_version::LoaderVersionId,
 };

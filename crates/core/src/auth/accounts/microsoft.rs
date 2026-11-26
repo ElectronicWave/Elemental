@@ -1,15 +1,18 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::accounts::{Account, AccountId};
-use crate::auth::authorizers::microsoft::MICROSOFT_AUTHORIZER_ID;
 use crate::auth::credential::{Credential, CredentialKind};
 use crate::auth::error::Result;
-use crate::auth::texture::{Cape, ProfileTextures, Skin, SkinModel, TextureType};
+use crate::auth::microsoft_protocol::{
+    ExchangedMinecraftSession, delete_skin, minecraft_profile, profile_textures,
+    refresh_microsoft_session, select_cape, unix_now, upload_skin,
+};
+use crate::auth::texture::{ProfileTextures, SkinModel};
 
 const REFRESH_SKEW_SECONDS: u64 = 300;
+
+pub const MICROSOFT_AUTHORIZER_ID: &str = "microsoft";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MicrosoftAccount {
@@ -21,6 +24,21 @@ pub struct MicrosoftAccount {
     pub client_id: String,
     pub xuid: Option<String>,
     pub expires_at: u64,
+}
+
+impl MicrosoftAccount {
+    pub(crate) fn from_session(client_id: &str, session: ExchangedMinecraftSession) -> Self {
+        Self {
+            account_id: AccountId::derive(MICROSOFT_AUTHORIZER_ID, &session.uuid),
+            username: session.username,
+            uuid: session.uuid,
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+            client_id: client_id.to_owned(),
+            xuid: session.xuid,
+            expires_at: session.expires_at,
+        }
+    }
 }
 
 #[async_trait]
@@ -55,79 +73,29 @@ impl Account for MicrosoftAccount {
     }
 
     async fn refresh(&self) -> Result<Box<dyn Account>> {
-        Ok(Box::new(
-            crate::auth::authorizers::microsoft::refresh(self).await?,
-        ))
+        let session =
+            refresh_microsoft_session(&self.client_id, &self.refresh_token, self.xuid.clone())
+                .await?;
+        Ok(Box::new(Self::from_session(&self.client_id, session)))
     }
 
     async fn textures(&self) -> Result<ProfileTextures> {
-        profile_textures(
-            crate::auth::authorizers::microsoft::minecraft_profile(&self.access_token).await?,
-        )
+        profile_textures(minecraft_profile(&self.access_token).await?)
     }
 
     async fn upload_skin(&self, image: Vec<u8>, model: SkinModel) -> Result<()> {
-        crate::auth::authorizers::microsoft::upload_skin(&self.access_token, image, model).await
+        upload_skin(&self.access_token, image, model).await
     }
 
     async fn delete_skin(&self) -> Result<()> {
-        crate::auth::authorizers::microsoft::delete_skin(&self.access_token).await
+        delete_skin(&self.access_token).await
     }
 
     async fn delete_cape(&self) -> Result<()> {
-        crate::auth::authorizers::microsoft::select_cape(&self.access_token, None).await
+        select_cape(&self.access_token, None).await
     }
 
     async fn select_cape(&self, cape_id: Option<String>) -> Result<()> {
-        crate::auth::authorizers::microsoft::select_cape(&self.access_token, cape_id).await
-    }
-}
-
-pub(crate) fn unix_now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs())
-        .unwrap_or_default()
-}
-
-fn profile_textures(
-    profile: crate::auth::authorizers::microsoft::MinecraftProfileResponse,
-) -> Result<ProfileTextures> {
-    Ok(ProfileTextures {
-        skin: active_skin(profile.skins)?,
-        capes: profile.capes.into_iter().map(cape_from).collect(),
-        uploadable: vec![TextureType::Skin],
-    })
-}
-
-fn active_skin(
-    skins: Vec<crate::auth::authorizers::microsoft::MinecraftTexture>,
-) -> Result<Option<Skin>> {
-    skins
-        .into_iter()
-        .find(|texture| texture.state.eq_ignore_ascii_case("ACTIVE"))
-        .map(skin_from)
-        .transpose()
-}
-
-fn skin_from(texture: crate::auth::authorizers::microsoft::MinecraftTexture) -> Result<Skin> {
-    let variant = texture.variant.unwrap_or_default();
-    let model = match variant.to_ascii_lowercase().as_str() {
-        "" | "classic" => SkinModel::Classic,
-        "slim" => SkinModel::Slim,
-        _ => return Err(crate::auth::error::Error::TextureModelUnknown { model: variant }),
-    };
-    Ok(Skin {
-        url: texture.url,
-        model,
-    })
-}
-
-fn cape_from(texture: crate::auth::authorizers::microsoft::MinecraftTexture) -> Cape {
-    Cape {
-        id: texture.id,
-        alias: texture.alias,
-        url: texture.url,
-        active: texture.state.eq_ignore_ascii_case("ACTIVE"),
+        select_cape(&self.access_token, cape_id).await
     }
 }

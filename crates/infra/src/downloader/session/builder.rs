@@ -2,24 +2,23 @@ use std::sync::Arc;
 
 use reqwest::header::HeaderMap;
 
-use super::{DownloadSession, DownloadSessionOptions};
-use crate::downloader::core::ElementalDownloader;
-use crate::downloader::header::insert_header;
-use crate::downloader::policy::{FailurePolicy, RetryPolicy};
-use crate::downloader::rate::DownloadRateLimit;
+use super::{DownloadSession, DownloadSessionOptions, SessionHandler, SessionRuntime};
+use crate::downloader::config::{DownloadRateLimit, FailurePolicy, RetryPolicy};
+use crate::downloader::event::DownloadEvent;
+use crate::downloader::task::{SessionId, insert_header};
 use crate::error::Result;
 
 #[derive(Debug)]
 pub struct DownloadSessionBuilder {
-    downloader: Arc<ElementalDownloader>,
+    runtime: Arc<SessionRuntime>,
     name: String,
     options: DownloadSessionOptions,
 }
 
 impl DownloadSessionBuilder {
-    pub(crate) fn new(downloader: Arc<ElementalDownloader>, name: String) -> Self {
+    pub(in crate::downloader) fn new(runtime: Arc<SessionRuntime>, name: String) -> Self {
         Self {
-            downloader,
+            runtime,
             name,
             options: DownloadSessionOptions::default(),
         }
@@ -58,8 +57,25 @@ impl DownloadSessionBuilder {
     }
 
     pub async fn open(self) -> Result<DownloadSession> {
-        self.downloader
-            .create_session(Some(self.name), self.options)
-            .await
+        self.options.validate()?;
+        let session_id = SessionId::new();
+        let name = Some(self.name);
+        let parallelism = self
+            .options
+            .effective_parallelism(self.runtime.default_session_parallelism);
+        let (handler, receiver, progress) = SessionHandler::create(
+            session_id,
+            name.clone(),
+            self.options,
+            self.runtime.session_queue_capacity,
+            self.runtime.events.clone(),
+        )?;
+        handler.spawn_workers(&self.runtime, receiver, parallelism);
+        handler.emit(DownloadEvent::SessionOpened {
+            session_id,
+            session_name: name.clone(),
+        });
+
+        Ok(DownloadSession::new(session_id, name, handler, progress))
     }
 }

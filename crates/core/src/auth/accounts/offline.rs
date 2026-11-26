@@ -3,9 +3,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::auth::accounts::{Account, AccountId};
-use crate::auth::authorizers::offline::OFFLINE_AUTHORIZER_ID;
 use crate::auth::credential::{Credential, CredentialKind};
 use crate::auth::error::Result;
+
+pub const OFFLINE_AUTHORIZER_ID: &str = "offline";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OfflineAccount {

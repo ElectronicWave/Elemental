@@ -20,7 +20,6 @@ impl ResolvedVersionJsonMetadata {
     pub async fn persist(self, instance: &InstanceStorage) -> Result<ResolvedVersionJsonInstance> {
         instance.write_metadata(&self.metadata).await?;
         instance
-            .parent
             .write_asset_index(
                 self.metadata.asset_index.id.clone(),
                 &self.asset_index_objects,

@@ -3,15 +3,25 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use elemental_core::{runtime::distribution::Distribution, storage::layout::Layoutable};
+use elemental_core::{
+    auth::credential::Credential,
+    launcher::command::LaunchCommand,
+    runtime::{RuntimeResolver, distribution::Distribution},
+    storage::layout::Layoutable,
+};
 use elemental_driver::{
     driver::{DriverDescriptor, InstalledDriver},
     families::version_json::{
         InstanceStorage, PreparedVersionJsonInstance, VersionJsonInstanceResource,
+        builder::VersionJsonLaunchBuilder, variables::LauncherVariables,
     },
+    launch::resolve_prepared_version_runtime,
 };
 
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    request::{LaunchOptions, RuntimeOptions},
+};
 
 pub struct LaunchedInstance {
     pub runtime: Distribution,
@@ -114,6 +124,59 @@ impl PreparedInstance {
 
     pub fn version(&self) -> &InstanceStorage {
         &self.launch_version.version
+    }
+
+    pub(crate) async fn resolve_runtime(
+        &self,
+        runtime_options: &RuntimeOptions,
+        runtime_resolver: &RuntimeResolver,
+    ) -> Result<Distribution> {
+        Ok(resolve_prepared_version_runtime(
+            &self.launch_version,
+            runtime_options,
+            runtime_resolver,
+        )
+        .await?)
+    }
+
+    pub(crate) fn build_launch_command(
+        &self,
+        credential: &Credential,
+        runtime: Distribution,
+        options: &LaunchOptions,
+    ) -> Result<LaunchCommand> {
+        let mut variables = LauncherVariables::default();
+
+        if let Some(client_id) = &options.client_id {
+            variables.clientid = client_id.clone();
+        }
+
+        if let Some(resolution) = &options.resolution {
+            variables.resolution_width = resolution.width.clone();
+            variables.resolution_height = resolution.height.clone();
+        }
+
+        if let (Some(name), Some(version)) = (&options.launcher_name, &options.launcher_version) {
+            variables.launcher_name = name.clone();
+            variables.launcher_version = version.clone();
+        }
+
+        if let Some(quick_play) = &options.quick_play {
+            variables.quick_play_path = quick_play.path.clone();
+            variables.quick_play_singleplayer = quick_play.singleplayer.clone();
+            variables.quick_play_multiplayer = quick_play.multiplayer.clone();
+            variables.quick_play_realms = quick_play.realms.clone();
+        }
+
+        let builder = VersionJsonLaunchBuilder::new(
+            credential.clone(),
+            runtime,
+            self.launch_version.version.clone(),
+            variables,
+            options.extra_jvm_arguments.clone(),
+            options.extra_game_arguments.clone(),
+        );
+        Ok(builder.build_command()?)
     }
 
     pub fn info(&self) -> Result<PreparedInstanceInfo> {

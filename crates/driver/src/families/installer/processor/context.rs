@@ -1,12 +1,10 @@
 use std::path::PathBuf;
 
-use elemental_schema::forge::{ForgeInstallerProcessor, ForgeInstallerProfile};
-use tokio::fs::create_dir_all;
-
 use crate::{
     error::Result,
     families::installer::{InstallerArchive, InstallerArtifact, installer_coordinate_path},
 };
+use elemental_schema::forge::{ForgeInstallerProcessor, ForgeInstallerProfile};
 
 pub(super) const CLIENT_PROCESSOR_DATA_KEYS: &[&str] = &[
     "MAPPINGS",
@@ -32,25 +30,6 @@ pub(super) struct InstallerProcessorContext<'a> {
 mod create;
 
 impl<'a> InstallerProcessorContext<'a> {
-    pub(super) async fn ensure_client_directories(&self) -> Result<()> {
-        for path in self.required_client_output_paths().await? {
-            if let Some(parent) = path.parent() {
-                create_dir_all(parent).await?;
-            }
-        }
-
-        Ok(())
-    }
-
-    pub(super) async fn client_outputs_ready(&self) -> Result<bool> {
-        let paths = self.required_client_output_paths().await?;
-        if paths.is_empty() {
-            return Ok(false);
-        }
-
-        Ok(paths.iter().all(|path| path.exists()))
-    }
-
     pub(super) fn processor_jar_path(
         &self,
         processor: &ForgeInstallerProcessor,
@@ -75,16 +54,5 @@ impl<'a> InstallerProcessorContext<'a> {
         }
 
         Ok(entries)
-    }
-
-    async fn required_client_output_paths(&self) -> Result<Vec<PathBuf>> {
-        let mut paths = Vec::new();
-        for key in CLIENT_PROCESSOR_DATA_KEYS {
-            if let Some(value) = self.resolve_data_value(key).await? {
-                paths.push(PathBuf::from(value));
-            }
-        }
-
-        Ok(paths)
     }
 }

@@ -553,7 +553,7 @@ Runtime discovery is a launcher dependency rather than a process-wide setting.
 Pass providers explicitly when the host needs its own set:
 
 ```rust
-use elemental_core::runtime::provider::default_providers;
+use elemental_core::runtime::default_providers;
 
 let launcher = Launcher::builder()
     .runtime_providers(default_providers())

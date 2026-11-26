@@ -297,8 +297,25 @@ impl Distribution {
             .into_iter()
             .filter(|distribution| seen_paths.insert(distribution.path.clone()))
             .collect();
-        unique_distributions.sort_by(ordering::compare_distributions);
+        unique_distributions.sort_by(Self::compare_priority);
         unique_distributions.into_iter().collect()
+    }
+
+    fn compare_priority(&self, other: &Self) -> std::cmp::Ordering {
+        let self_version = self
+            .release
+            .as_ref()
+            .and_then(|release| release.jre_version.as_deref());
+        let other_version = other
+            .release
+            .as_ref()
+            .and_then(|release| release.jre_version.as_deref());
+
+        other
+            .java_major_version()
+            .cmp(&self.java_major_version())
+            .then_with(|| ordering::compare_release_versions(other_version, self_version))
+            .then_with(|| self.path.cmp(&other.path))
     }
 
     pub fn matches_java_major_version(&self, major_version: usize) -> bool {
@@ -377,26 +394,7 @@ impl Distribution {
 mod ordering {
     use std::cmp::Ordering;
 
-    use super::Distribution;
-
-    pub(super) fn compare_distributions(left: &Distribution, right: &Distribution) -> Ordering {
-        let left_version = left
-            .release
-            .as_ref()
-            .and_then(|release| release.jre_version.as_deref());
-        let right_version = right
-            .release
-            .as_ref()
-            .and_then(|release| release.jre_version.as_deref());
-
-        right
-            .java_major_version()
-            .cmp(&left.java_major_version())
-            .then_with(|| compare_release_versions(right_version, left_version))
-            .then_with(|| left.path.cmp(&right.path))
-    }
-
-    fn compare_release_versions(left: Option<&str>, right: Option<&str>) -> Ordering {
+    pub(super) fn compare_release_versions(left: Option<&str>, right: Option<&str>) -> Ordering {
         match (left, right) {
             (Some(left), Some(right)) => {
                 let mut left_components = version_components(left).peekable();
@@ -423,7 +421,7 @@ mod ordering {
 
 #[tokio::test]
 async fn default_providers_return_deduplicated_distributions_sorted_by_major_version() {
-    use super::provider::default_providers;
+    use super::providers::default_providers;
 
     let distributions: Vec<_> = Distribution::from_providers(default_providers()).await;
     let mut paths: Vec<_> = distributions

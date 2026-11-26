@@ -3,13 +3,18 @@ use std::collections::HashMap;
 use elemental_infra::SafeRelativePath;
 use elemental_schema::mojang::piston::PistonMetaData;
 
-use crate::{error::Result, families::version_json::VersionJsonRootResource};
+use crate::{
+    error::Result,
+    families::version_json::{
+        VersionJsonRootResource, layout::InstanceStorage, variables::LauncherVariables,
+    },
+};
 
-use super::super::VersionJsonLaunchBuilder;
 use super::common::resolve_root_resource;
 
 pub(super) fn logging_arguments(
-    builder: &VersionJsonLaunchBuilder,
+    version: &InstanceStorage,
+    variables: &LauncherVariables,
     metadata: &PistonMetaData,
 ) -> Result<Option<Vec<String>>> {
     let Some(client) = metadata
@@ -21,7 +26,7 @@ pub(super) fn logging_arguments(
     };
 
     let log_config_path = resolve_root_resource(
-        builder,
+        version,
         VersionJsonRootResource::AssetLogConfigs(Some(SafeRelativePath::parse(
             client.file.id.as_str(),
         )?)),
@@ -30,7 +35,7 @@ pub(super) fn logging_arguments(
         return Ok(None);
     }
 
-    Ok(Some(builder.inner.apply_with(
+    Ok(Some(variables.apply_with(
         std::slice::from_ref(&client.argument),
         &HashMap::from([(
             "path".to_owned(),

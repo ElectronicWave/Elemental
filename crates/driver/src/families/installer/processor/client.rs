@@ -1,8 +1,10 @@
+use std::path::PathBuf;
+
 use elemental_core::runtime::distribution::Distribution;
 use elemental_schema::forge::{ForgeInstallerProcessor, ForgeInstallerProfile};
+use tokio::fs::create_dir_all;
 
 use crate::{
-    driver::PrepareStage,
     error::{Error, Result},
     families::{
         installer::{InstallerArchive, InstallerArtifact},
@@ -11,8 +13,12 @@ use crate::{
 };
 
 use super::{
-    context::InstallerProcessorContext, processor_applies_to_client, runner::run_processor,
+    context::{CLIENT_PROCESSOR_DATA_KEYS, InstallerProcessorContext},
+    processor_applies_to_client,
+    runner::run_processor,
 };
+
+pub type ProcessorObserver<'a> = &'a (dyn Fn(usize, usize, &str) + Send + Sync);
 
 pub async fn run_installer_client_processors(
     runtime: &Distribution,
@@ -20,7 +26,7 @@ pub async fn run_installer_client_processors(
     installer_artifact: &InstallerArtifact,
     install_profile: &ForgeInstallerProfile,
     family_name: &str,
-    on_stage: Option<&(dyn Fn(PrepareStage) + Send + Sync)>,
+    on_processor: Option<ProcessorObserver<'_>>,
 ) -> Result<()> {
     let client_processors = install_profile
         .processors
@@ -32,25 +38,20 @@ pub async fn run_installer_client_processors(
     }
 
     let context = build_context(instance, installer_artifact, install_profile, family_name)?;
-    if context.client_outputs_ready().await? {
+    if client_outputs_ready(&context).await? {
         return Ok(());
     }
 
-    context.ensure_client_directories().await?;
+    ensure_client_directories(&context).await?;
     let total = client_processors.len();
     for (index, processor) in client_processors.into_iter().enumerate() {
-        if let Some(observer) = on_stage {
-            observer(PrepareStage::RunningProcessor {
-                family_name: family_name.to_owned(),
-                index: index + 1,
-                total,
-                jar: processor.jar.clone(),
-            });
+        if let Some(observer) = on_processor {
+            observer(index + 1, total, processor.jar.as_str());
         }
         run_processor(runtime, &context, processor).await?;
     }
 
-    if !context.client_outputs_ready().await? {
+    if !client_outputs_ready(&context).await? {
         return Err(Error::ProcessorOutputsMissing {
             family_name: family_name.to_owned(),
         });
@@ -69,9 +70,40 @@ pub async fn installer_client_processors_ready(
         return Ok(true);
     }
 
-    build_context(instance, installer_artifact, install_profile, family_name)?
-        .client_outputs_ready()
-        .await
+    let context = build_context(instance, installer_artifact, install_profile, family_name)?;
+    client_outputs_ready(&context).await
+}
+
+async fn ensure_client_directories(context: &InstallerProcessorContext<'_>) -> Result<()> {
+    for path in required_client_output_paths(context).await? {
+        if let Some(parent) = path.parent() {
+            create_dir_all(parent).await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn client_outputs_ready(context: &InstallerProcessorContext<'_>) -> Result<bool> {
+    let paths = required_client_output_paths(context).await?;
+    if paths.is_empty() {
+        return Ok(false);
+    }
+
+    Ok(paths.iter().all(|path| path.exists()))
+}
+
+async fn required_client_output_paths(
+    context: &InstallerProcessorContext<'_>,
+) -> Result<Vec<PathBuf>> {
+    let mut paths = Vec::new();
+    for key in CLIENT_PROCESSOR_DATA_KEYS {
+        if let Some(value) = context.resolve_data_value(key).await? {
+            paths.push(PathBuf::from(value));
+        }
+    }
+
+    Ok(paths)
 }
 
 fn build_context<'a>(

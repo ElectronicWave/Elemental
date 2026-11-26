@@ -6,7 +6,9 @@ mod variables;
 
 use elemental_schema::forge::{ForgeInstallerProcessor, ForgeInstallerProfile};
 
-pub use client::{installer_client_processors_ready, run_installer_client_processors};
+pub use client::{
+    ProcessorObserver, installer_client_processors_ready, run_installer_client_processors,
+};
 pub use libraries::submit_installer_profile_libraries;
 
 pub fn installer_has_client_processors(install_profile: &ForgeInstallerProfile) -> bool {

@@ -1,10 +1,8 @@
-use std::sync::atomic::Ordering;
 use tokio::sync::mpsc;
 
-use super::SessionHandler;
-use crate::downloader::batch::DownloadBatch;
-use crate::downloader::task::{DownloadTask, TaskId};
-use crate::downloader::worker::QueuedDownloadTask;
+use super::{QueuedDownloadTask, SessionHandler};
+use crate::downloader::state::StateCommand;
+use crate::downloader::task::{DownloadBatch, DownloadTask, TaskId};
 use crate::error::{Error, Result};
 
 impl SessionHandler {
@@ -13,7 +11,7 @@ impl SessionHandler {
         let _submission_guard = self.submission.lock().await;
         self.lifecycle.require_accepting_tasks(self.session_id)?;
 
-        self.mark_batch_accepted(&batch);
+        self.apply_state(StateCommand::AcceptBatch(&batch));
         let (group, tasks) = batch.into_parts();
 
         for task in tasks {
@@ -23,27 +21,25 @@ impl SessionHandler {
         Ok(())
     }
 
-    pub(crate) fn allocate_task_id(&self) -> TaskId {
-        let sequence = self.next_task_id.fetch_add(1, Ordering::Relaxed);
-        format!("{}-{}", self.session_id, sequence)
-    }
-
     async fn enqueue_task(&self, task: DownloadTask, group: Option<String>) -> Result<()> {
-        let task_id = self.allocate_task_id();
+        let task_id = TaskId::new();
         let sender = self.clone_sender().ok_or(Error::SessionSenderClosed)?;
 
         self.start_task();
-        self.mark_enqueued(task_id.clone(), &task, group.clone());
+        self.apply_state(StateCommand::Enqueue {
+            task_id,
+            task: &task,
+            group: group.clone(),
+        });
 
         let queued = QueuedDownloadTask {
-            task_id: task_id.clone(),
+            task_id,
             task,
             group,
         };
 
         if let Err(error) = sender.send(queued).await {
-            self.mark_cancelled(&task_id);
-            self.finish_task();
+            self.finish_cancelled(task_id);
             return Err(Error::EnqueueTask {
                 task_id,
                 source: Box::new(error),

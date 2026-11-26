@@ -1,6 +1,6 @@
 use elemental_core::auth::accounts::AccountId;
 
-use crate::{cape::CapeId, skin::SkinId};
+use crate::texture::{CapeId, SkinId};
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -106,12 +106,8 @@ pub enum Error {
     #[error("texture name cannot be empty")]
     TextureNameEmpty,
 
-    #[error("invalid texture hash '{value}'")]
-    InvalidTextureHash { value: String },
-
     #[error(transparent)]
     HttpClient(#[from] elemental_core::http::HttpClientError),
-
     #[cfg(feature = "yggdrasil-auth")]
     #[error(transparent)]
     AuthlibInjectorDistribution(#[from] nidhogg::error::NidhoggError),

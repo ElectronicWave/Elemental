@@ -3,13 +3,34 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use reqwest::header::HeaderMap;
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
-use crate::downloader::header::{HeaderNames, insert_header};
 use crate::error::{Error, Result};
+pub use crate::error::{SessionId, TaskId};
 
-pub type SessionId = u64;
-pub type TaskId = String;
+pub(crate) struct HeaderNames<'a>(pub(crate) &'a HeaderMap);
+
+impl fmt::Debug for HeaderNames<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list()
+            .entries(self.0.keys().map(HeaderName::as_str))
+            .finish()
+    }
+}
+
+pub(crate) fn insert_header(headers: &mut HeaderMap, name: &str, value: &str) -> Result<()> {
+    let header_name =
+        HeaderName::from_bytes(name.as_bytes()).map_err(|error| Error::InvalidHeaderName {
+            name: name.to_owned(),
+            reason: error.to_string(),
+        })?;
+    let header_value = HeaderValue::from_str(value).map_err(|error| Error::InvalidHeaderValue {
+        name: name.to_owned(),
+        reason: error.to_string(),
+    })?;
+    headers.append(header_name, header_value);
+    Ok(())
+}
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct DownloadTask {
@@ -132,4 +153,58 @@ pub(crate) fn validate_sha1(sha1: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DownloadBatch {
+    group: Option<String>,
+    tasks: Vec<DownloadTask>,
+}
+
+impl DownloadBatch {
+    pub fn new(tasks: Vec<DownloadTask>) -> Self {
+        Self { group: None, tasks }
+    }
+
+    pub fn group(mut self, group: impl Into<String>) -> Self {
+        self.group = Some(group.into());
+        self
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.tasks.is_empty()
+    }
+
+    pub(crate) fn task_count(&self) -> usize {
+        self.tasks.len()
+    }
+
+    pub(crate) fn expected_bytes(&self) -> Option<u64> {
+        self.tasks
+            .iter()
+            .map(DownloadTask::expected_size)
+            .try_fold(0_u64, |total, size| {
+                size.map(|size| total.saturating_add(size))
+            })
+    }
+
+    pub(crate) fn into_parts(self) -> (Option<String>, Vec<DownloadTask>) {
+        (self.group, self.tasks)
+    }
+
+    pub(crate) fn validate(&self) -> Result<()> {
+        self.tasks.iter().try_for_each(DownloadTask::validate)
+    }
+}
+
+impl From<DownloadTask> for DownloadBatch {
+    fn from(task: DownloadTask) -> Self {
+        Self::new(vec![task])
+    }
+}
+
+impl From<Vec<DownloadTask>> for DownloadBatch {
+    fn from(tasks: Vec<DownloadTask>) -> Self {
+        Self::new(tasks)
+    }
 }

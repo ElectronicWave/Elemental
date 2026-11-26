@@ -13,7 +13,6 @@ use crate::{
         layout::InstanceStorage,
         resource::{VersionJsonInstanceResource, VersionJsonRootResource},
         rules::VersionJsonRuleContext,
-        state::natives_state_store,
     },
 };
 
@@ -23,6 +22,7 @@ use self::{
         expected_natives, native_library_sources, natives_state_matches, record_natives_state,
     },
 };
+use super::state::natives_state_store;
 
 pub(crate) async fn natives_are_extracted(
     storage: &InstanceStorage,
@@ -34,10 +34,7 @@ pub(crate) async fn natives_are_extracted(
     }
 
     let store = natives_state_store(&storage.path).await?;
-    Ok(natives_state_matches(
-        &store.cloned().await.value,
-        &expected,
-    ))
+    Ok(natives_state_matches(&store.cloned().await, &expected))
 }
 
 pub(crate) async fn ensure_natives_extracted(
@@ -91,9 +88,7 @@ fn extract_native_library(
     exclude: &[String],
 ) -> Result<()> {
     let path = SafeRelativePath::parse(artifact.path.as_str())?;
-    let source = storage
-        .parent
-        .try_get_resource(VersionJsonRootResource::Libraries(Some(path)))?;
+    let source = storage.try_get_parent_resource(VersionJsonRootResource::Libraries(Some(path)))?;
     JarFile::new(source)
         .extract_missing_blocking(destination, |relative_path| {
             NativesDirectory::is_binary(relative_path)

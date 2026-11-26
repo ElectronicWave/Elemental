@@ -7,30 +7,27 @@ use serde::de::DeserializeOwned;
 use crate::error::{Error, Result};
 
 #[derive(Debug, Clone)]
-pub struct HttpSource<E> {
+pub struct HttpClient {
     client: std::result::Result<SwappableClient, String>,
     headers: HeaderMap,
-    endpoints: E,
 }
 
-impl<E> HttpSource<E> {
-    pub fn new(endpoints: E, source_name: &str) -> Self {
+impl HttpClient {
+    pub fn new(source_name: &str) -> Self {
         Self {
             client: build_default_swappable_client(source_name),
             headers: HeaderMap::new(),
-            endpoints,
         }
     }
 
-    pub fn with_client(endpoints: E, client: reqwest::Client) -> Self {
-        Self::with_http_client(endpoints, SwappableClient::from_client(client))
+    pub fn with_client(client: reqwest::Client) -> Self {
+        Self::with_http_client(SwappableClient::from_client(client))
     }
 
-    pub fn with_http_client(endpoints: E, client: SwappableClient) -> Self {
+    pub fn with_http_client(client: SwappableClient) -> Self {
         Self {
             client: Ok(client),
             headers: HeaderMap::new(),
-            endpoints,
         }
     }
 
@@ -55,12 +52,9 @@ impl<E> HttpSource<E> {
             })
     }
 
-    pub fn headers(&self) -> &HeaderMap {
-        &self.headers
-    }
-
-    pub fn endpoints(&self) -> &E {
-        &self.endpoints
+    pub async fn fetch_text(&self, url: &str, source_name: &str) -> Result<String> {
+        let client = self.client()?;
+        fetch_text_with_headers(&client, url, source_name, &self.headers).await
     }
 
     pub async fn fetch_json<T>(&self, url: &str, source_name: &str) -> Result<T>
@@ -88,7 +82,7 @@ pub async fn fetch_text(client: &reqwest::Client, url: &str, source_name: &str) 
     fetch_text_with_headers(client, url, source_name, &HeaderMap::new()).await
 }
 
-pub async fn fetch_text_with_headers(
+async fn fetch_text_with_headers(
     client: &reqwest::Client,
     url: &str,
     source_name: &str,

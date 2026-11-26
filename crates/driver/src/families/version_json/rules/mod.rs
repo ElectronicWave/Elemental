@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use elemental_schema::mojang::piston::PistonMetaRuleArgumentRules;
+use elemental_schema::mojang::piston::{OperatingSystem, PistonMetaRuleArgumentRules};
 
 use super::VersionJsonPlatform;
 
@@ -23,6 +23,10 @@ impl VersionJsonRuleContext {
 
     pub fn platform(&self) -> &VersionJsonPlatform {
         &self.platform
+    }
+
+    pub fn matches_os(&self, os: &OperatingSystem) -> bool {
+        os.matches_platform(&self.platform)
     }
 
     pub fn feature_enabled(&self, key: &str) -> bool {

@@ -1,17 +1,42 @@
 mod identity;
-mod installed;
-mod probe;
 mod profile_id;
 
 pub use identity::ProfiledDriverIdentity;
-pub use installed::{InstalledInstance, InstanceDetectionFailure};
-pub use probe::InstanceProbe;
 pub use profile_id::ProfileIdPattern;
 
+use elemental_core::minecraft::MinecraftVersionId;
 use elemental_schema::mojang::piston::PistonMetaData;
 
-use crate::driver::{DriverDescriptor, InstalledDriver};
+use crate::descriptors::DriverDescriptor;
 use crate::maven::MavenCoordinate;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InstalledDriver {
+    pub driver: DriverDescriptor,
+    pub driver_version: Option<String>,
+    pub game_version: Option<MinecraftVersionId>,
+    pub description: Option<String>,
+}
+
+impl InstalledDriver {
+    pub fn version_json(
+        descriptor: DriverDescriptor,
+        metadata: &PistonMetaData,
+        driver_version: Option<String>,
+    ) -> Self {
+        let game_version = metadata
+            .inherits_from
+            .clone()
+            .or_else(|| metadata.client_version.clone())
+            .unwrap_or_else(|| metadata.id.clone());
+        Self {
+            driver: descriptor,
+            driver_version,
+            game_version: Some(MinecraftVersionId::from(game_version)),
+            description: Some(metadata.release_type.clone()),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LibraryPrefixSet {

@@ -9,13 +9,12 @@ use elemental_schema::mojang::piston::{PistonMetaData, PistonMetaLibrariesDownlo
 use crate::{
     error::Result,
     families::version_json::{
-        extensions::PistonMetaLibrariesExt,
-        layout::InstanceStorage,
-        resource::VersionJsonInstanceResource,
-        rules::VersionJsonRuleContext,
-        state::{NativesState, natives_state_store},
+        extensions::PistonMetaLibrariesExt, layout::InstanceStorage,
+        resource::VersionJsonInstanceResource, rules::VersionJsonRuleContext,
     },
 };
+
+use super::super::state::{NativesState, natives_state_store};
 
 pub(super) struct NativesExpectation {
     pub(super) destination: PathBuf,
@@ -52,7 +51,7 @@ pub(super) async fn record_natives_state(
     natives_state_store(&storage.path)
         .await?
         .set(|state| {
-            state.value = NativesState {
+            *state = NativesState {
                 path: destination.to_string_lossy().to_string(),
                 native_artifacts,
                 extracted_files,

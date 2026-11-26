@@ -39,6 +39,15 @@ impl<L: Layout, P> Storage<L, P> {
             .and_then(|n| n.to_str().map(|s| s.to_string()))
     }
 
+    pub fn display_name(&self) -> String {
+        self.name().unwrap_or_else(|| {
+            self.path
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .unwrap_or_else(|| self.path.display().to_string())
+        })
+    }
+
     pub async fn ensure_root(&self) -> Result<()> {
         create_dir_all(&self.path)
             .await
@@ -56,6 +65,23 @@ impl<L: Layout, P> Storage<L, P> {
         Self: Clone,
     {
         Storage::with_parent(self.path.join(relative), self.clone(), layout)
+    }
+}
+
+impl<L: Layout, PL: Layout, PP> Storage<L, Storage<PL, PP>> {
+    pub fn parent_root_path(&self) -> &Path {
+        &self.parent.path
+    }
+
+    pub fn get_parent_resource(&self, resource: PL::Resource) -> Option<PathBuf> {
+        self.parent.get_resource(resource)
+    }
+
+    pub fn try_get_parent_resource(&self, resource: PL::Resource) -> Result<PathBuf>
+    where
+        PL::Resource: std::fmt::Debug,
+    {
+        self.parent.try_get_resource(resource)
     }
 }
 

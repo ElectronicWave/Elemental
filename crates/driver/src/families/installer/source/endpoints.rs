@@ -1,9 +1,10 @@
 use elemental_core::minecraft::MinecraftVersionId;
 use elemental_infra::SafeRelativePath;
+use elemental_schema::mojang::piston::PistonMetaLibraries;
 
 use crate::{
     error::Result,
-    families::installer::{InstallerMavenArtifactSpec, MavenInstallerSpec},
+    families::installer::{InstallerMavenArtifactSpec, MavenInstallerSpec, normalize_library_urls},
     loader_version::LoaderVersionId,
     url::OriginPolicy,
 };
@@ -42,6 +43,13 @@ impl MavenEndpoints {
 
     pub fn artifact_url(&self, artifact_path: &str) -> Result<String> {
         self.resolve(artifact_path)
+    }
+
+    pub fn normalize_libraries(
+        &self,
+        libraries: Vec<PistonMetaLibraries>,
+    ) -> Result<Vec<PistonMetaLibraries>> {
+        normalize_library_urls(libraries, |artifact_path| self.artifact_url(artifact_path))
     }
 
     pub fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {

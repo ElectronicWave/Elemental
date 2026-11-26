@@ -5,14 +5,12 @@ use elemental_schema::fabric::ProfileJson;
 
 use crate::{
     descriptors::LITELOADER_DRIVER,
-    driver::DriverDescriptor,
+    driver::{DriverDescriptor, ProfiledVersionJsonDriver, ProfiledVersionJsonFamily},
     drivers::{
         liteloader::source::{LiteLoaderEndpoints, LiteLoaderSource},
         vanilla::source::VanillaSource,
     },
-    families::version_json::{
-        ProfiledVersionJsonDriver, ProfiledVersionJsonFamily, VanillaFallbackRemoteResolver,
-    },
+    families::version_json::VanillaFallbackRemoteResolver,
     inspect::{LibraryPrefixSet, ProfileIdPattern, ProfiledDriverIdentity},
     loader_version::LoaderVersionId,
 };

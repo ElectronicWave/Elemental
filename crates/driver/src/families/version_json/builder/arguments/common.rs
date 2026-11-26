@@ -1,10 +1,11 @@
 use std::path::PathBuf;
 
-use elemental_core::storage::layout::Layoutable;
-
-use crate::{error::Result, families::version_json::VersionJsonRootResource};
-
-use super::super::{VersionJsonLaunchBuilder, paths::resolve_absolute_path};
+use crate::{
+    error::Result,
+    families::version_json::{
+        VersionJsonRootResource, classpath::resolve_absolute_path, layout::InstanceStorage,
+    },
+};
 
 pub(super) fn legacy_jvm_arguments() -> Vec<String> {
     vec![
@@ -17,10 +18,10 @@ pub(super) fn legacy_jvm_arguments() -> Vec<String> {
 }
 
 pub(super) fn resolve_root_resource(
-    builder: &VersionJsonLaunchBuilder,
+    version: &InstanceStorage,
     resource: VersionJsonRootResource,
 ) -> Result<PathBuf> {
-    resolve_absolute_path(builder.version.parent.try_get_resource(resource)?)
+    resolve_absolute_path(version.try_get_parent_resource(resource)?)
 }
 
 pub(super) fn normalize_path_string(path: &str) -> String {

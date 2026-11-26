@@ -1,13 +1,16 @@
 use crate::error::Result;
 use crate::{
     descriptors::VANILLA_DRIVER,
-    driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest, ResolvedDriverPlan},
+    driver::{
+        Driver, DriverDescriptor, InstalledDriver, InstanceProbe, PrepareRequest,
+        ResolvedDriverPlan,
+    },
     drivers::vanilla::{
         ResolvedVanillaVersion,
         source::{VanillaSource, resolve_vanilla_metadata},
     },
     families::version_json::InstanceStorage,
-    inspect::{InstanceProbe, LibraryPrefixSet},
+    inspect::LibraryPrefixSet,
 };
 use async_trait::async_trait;
 use elemental_core::minecraft::MinecraftVersionId;

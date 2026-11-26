@@ -2,14 +2,13 @@ use std::collections::HashSet;
 
 use crate::{
     error::{Error, Result},
-    families::version_json::classpath::classpath_separator,
+    families::version_json::{classpath::classpath_separator, variables::LauncherVariables},
 };
 
-use super::super::VersionJsonLaunchBuilder;
 use super::common::normalize_path_string;
 
 pub(crate) fn collect_module_path_entries(
-    builder: &VersionJsonLaunchBuilder,
+    variables: &LauncherVariables,
     jvm_arguments: &[String],
 ) -> Result<HashSet<String>> {
     let mut entries = HashSet::new();
@@ -22,13 +21,13 @@ pub(crate) fn collect_module_path_entries(
             .or_else(|| argument.strip_prefix("-p="));
 
         if let Some(raw_value) = inline_value {
-            entries.extend(resolve_module_path_entries(builder, raw_value)?);
+            entries.extend(resolve_module_path_entries(variables, raw_value)?);
             index += 1;
         } else if argument == "-p" || argument == "--module-path" {
             let raw_value = jvm_arguments
                 .get(index + 1)
                 .ok_or(Error::ModulePathValueMissing)?;
-            entries.extend(resolve_module_path_entries(builder, raw_value)?);
+            entries.extend(resolve_module_path_entries(variables, raw_value)?);
             index += 2;
         } else {
             index += 1;
@@ -39,11 +38,10 @@ pub(crate) fn collect_module_path_entries(
 }
 
 fn resolve_module_path_entries(
-    builder: &VersionJsonLaunchBuilder,
+    variables: &LauncherVariables,
     raw_value: &str,
 ) -> Result<Vec<String>> {
-    let resolved = builder
-        .inner
+    let resolved = variables
         .apply(&[raw_value.to_owned()])
         .into_iter()
         .next()

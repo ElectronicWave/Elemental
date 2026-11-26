@@ -4,7 +4,10 @@ use elemental_core::minecraft::MinecraftVersionId;
 use elemental_schema::{fabric::ProfileJson, mojang::piston::PistonMetaData};
 
 use crate::{
-    driver::{DriverDescriptor, InstalledDriver},
+    driver::{
+        DriverDescriptor, InstalledDriver, ProfiledVersionJsonDriver, ProfiledVersionJsonFamily,
+        ProfiledVersionJsonFamilyExt,
+    },
     drivers::{
         fabric::{
             flavors::flavor_spec,
@@ -12,10 +15,7 @@ use crate::{
         },
         vanilla::source::VanillaSource,
     },
-    families::version_json::{
-        ProfiledVersionJsonDriver, ProfiledVersionJsonFamily, ProfiledVersionJsonFamilyExt,
-        VanillaFallbackRemoteResolver,
-    },
+    families::version_json::VanillaFallbackRemoteResolver,
     loader_version::LoaderVersionId,
 };
 

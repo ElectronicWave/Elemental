@@ -3,7 +3,7 @@ use std::{
     future::Future,
     sync::{
         Arc, MutexGuard as StdMutexGuard,
-        atomic::{AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicUsize, Ordering},
     },
     time::Instant,
 };
@@ -14,22 +14,35 @@ use reqwest::header::HeaderMap;
 
 use crate::downloader::session::DownloadSessionOptions;
 use crate::downloader::{
+    config::{FailurePolicy, RetryPolicy},
     event::DownloadEvent,
     limits::BandwidthLimiter,
-    policy::{FailurePolicy, RetryPolicy},
     report::DownloadProgress,
     state::SessionState,
-    task::SessionId,
-    worker::QueuedDownloadTask,
+    task::{DownloadTask, SessionId, TaskId},
 };
+use crate::error::Result;
 
 mod lifecycle;
 mod reporting;
-mod start;
 mod submission;
 mod tasks;
+mod worker;
 
 use lifecycle::SessionLifecycle;
+
+pub(super) type QueuedTaskReceiver = Arc<AsyncMutex<mpsc::Receiver<QueuedDownloadTask>>>;
+pub(super) type CreatedSessionHandler = (
+    Arc<SessionHandler>,
+    QueuedTaskReceiver,
+    watch::Receiver<DownloadProgress>,
+);
+
+pub(super) struct QueuedDownloadTask {
+    pub(super) task_id: TaskId,
+    pub(super) task: DownloadTask,
+    pub(super) group: Option<String>,
+}
 
 pub(crate) struct SessionHandler {
     session_id: SessionId,
@@ -43,7 +56,6 @@ pub(crate) struct SessionHandler {
     headers: HeaderMap,
     bandwidth_limiter: Arc<BandwidthLimiter>,
     events: broadcast::Sender<DownloadEvent>,
-    next_task_id: AtomicU64,
     pending_tasks: AtomicUsize,
     idle: tokio::sync::Notify,
     lifecycle: SessionLifecycle,
@@ -65,6 +77,29 @@ impl fmt::Debug for SessionHandler {
 }
 
 impl SessionHandler {
+    pub(super) fn create(
+        session_id: SessionId,
+        name: Option<String>,
+        options: DownloadSessionOptions,
+        queue_capacity: usize,
+        events: broadcast::Sender<DownloadEvent>,
+    ) -> Result<CreatedSessionHandler> {
+        let bandwidth_limiter = Arc::new(BandwidthLimiter::new(options.effective_rate_limit())?);
+        let headers = options.headers.clone();
+        let (sender, receiver) = mpsc::channel(queue_capacity);
+        let receiver = Arc::new(AsyncMutex::new(receiver));
+        let (handler, progress) = Self::new(
+            session_id,
+            name,
+            options,
+            sender,
+            headers,
+            bandwidth_limiter,
+            events,
+        );
+        Ok((Arc::new(handler), receiver, progress))
+    }
+
     fn new(
         session_id: SessionId,
         name: Option<String>,
@@ -87,7 +122,6 @@ impl SessionHandler {
             headers,
             bandwidth_limiter,
             events,
-            next_task_id: AtomicU64::new(1),
             pending_tasks: AtomicUsize::new(0),
             idle: tokio::sync::Notify::new(),
             lifecycle: SessionLifecycle::new(),
@@ -104,6 +138,10 @@ impl SessionHandler {
 
     pub(crate) fn emit(&self, event: DownloadEvent) {
         let _ = self.events.send(event);
+    }
+
+    pub(crate) fn subscribe_events(&self) -> broadcast::Receiver<DownloadEvent> {
+        self.events.subscribe()
     }
 
     pub(crate) async fn wait_idle(&self) {
@@ -128,22 +166,6 @@ impl SessionHandler {
         let _submission_guard = self.submission.lock().await;
         self.wait_idle().await;
         self.build_report().success()
-    }
-
-    pub(crate) fn retry_policy(&self) -> RetryPolicy {
-        self.retry_policy
-    }
-
-    pub(crate) fn headers(&self) -> &HeaderMap {
-        &self.headers
-    }
-
-    pub(crate) fn token(&self) -> &CancellationToken {
-        &self.token
-    }
-
-    pub(crate) async fn throttle_session(&self, bytes: usize) {
-        self.bandwidth_limiter.throttle(bytes).await;
     }
 
     fn lock_state(&self) -> StdMutexGuard<'_, SessionState> {

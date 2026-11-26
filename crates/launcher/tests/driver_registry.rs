@@ -7,10 +7,12 @@ use async_trait::async_trait;
 use elemental_driver::descriptors::{ALL_DRIVERS, from_id};
 use elemental_driver::{
     descriptors::VANILLA_DRIVER,
-    driver::{Driver, DriverDescriptor, InstalledDriver, PrepareRequest, ResolvedDriverPlan},
+    driver::{
+        Driver, DriverDescriptor, InstalledDriver, InstanceProbe, PrepareRequest,
+        ResolvedDriverPlan,
+    },
     drivers::vanilla::{catalog::VanillaCatalog, driver::VanillaDriver},
     error::Result,
-    inspect::InstanceProbe,
 };
 use elemental_launcher::{DriverCatalog, DriverRegistration, Launcher};
 

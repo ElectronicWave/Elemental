@@ -27,7 +27,7 @@ impl PistonMetaRuleExt for PistonMetaRuleArgumentRules {
         let mut action = self.action == "allow";
 
         if let Some(os) = &self.os
-            && !os.matches_platform(context.platform())
+            && !context.matches_os(os)
         {
             action = !action;
         }

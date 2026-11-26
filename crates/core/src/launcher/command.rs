@@ -1,5 +1,8 @@
 use std::{collections::HashMap, path::PathBuf};
 
+use tokio::process::{Child, Command};
+
+use super::error::{Error, Result};
 use crate::runtime::distribution::Distribution;
 
 #[derive(Debug, Clone)]
@@ -27,6 +30,10 @@ impl LaunchCommand {
             env: HashMap::new(),
             cwd: None,
         }
+    }
+
+    pub fn runtime_executable(&self) -> PathBuf {
+        self.runtime.executable()
     }
 
     pub fn program(&self) -> PathBuf {
@@ -66,5 +73,27 @@ impl LaunchCommand {
     pub fn with_env(mut self, key: String, value: String) -> Self {
         self.env.insert(key, value);
         self
+    }
+
+    pub fn spawn(&self) -> Result<Child> {
+        let program = self.program();
+        if program.as_os_str().is_empty() {
+            return Err(Error::EmptyExecutable);
+        }
+
+        let mut child = Command::new(&program);
+        child.args(self.arguments());
+
+        if let Some(cwd) = &self.cwd {
+            child.current_dir(cwd);
+        }
+
+        for (key, value) in &self.env {
+            child.env(key, value);
+        }
+
+        child
+            .spawn()
+            .map_err(|source| Error::Spawn { program, source })
     }
 }

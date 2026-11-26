@@ -1,6 +1,3 @@
-mod loader_meta;
-#[cfg(feature = "maven-xml")]
-mod maven;
 mod release;
 
 use async_trait::async_trait;
@@ -8,9 +5,6 @@ use elemental_core::minecraft::MinecraftVersionId;
 
 use crate::error::Result;
 
-pub use loader_meta::LoaderMetaCatalog;
-#[cfg(feature = "maven-xml")]
-pub use maven::InstallerMavenCatalog;
 pub use release::{GameVersion, LoaderRelease};
 
 #[async_trait]

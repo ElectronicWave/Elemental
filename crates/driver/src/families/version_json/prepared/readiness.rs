@@ -1,57 +1,66 @@
 use elemental_core::storage::layout::Layoutable;
 use elemental_infra::SafeRelativePath;
+use elemental_schema::mojang::piston::{PistonMetaAssetIndexObjects, PistonMetaData};
 
 use crate::{
     error::Result,
     families::version_json::{
-        VersionJsonInstanceResource, VersionJsonRootResource, VersionJsonRuleContext,
-        storage::natives_are_extracted,
+        InstanceStorage, VersionJsonInstanceResource, VersionJsonRootResource,
+        VersionJsonRuleContext, storage::natives_are_extracted,
     },
 };
 
-use super::{ResolvedVersionJsonInstance, VersionJsonDownloadStatus, VersionJsonInstallStatus};
+use super::{VersionJsonDownloadStatus, VersionJsonInstallStatus};
 
 mod artifacts;
 
-impl ResolvedVersionJsonInstance {
-    pub fn download_status(&self) -> Result<VersionJsonDownloadStatus> {
-        let rule_context = VersionJsonRuleContext::current();
-        Ok(VersionJsonDownloadStatus {
-            metadata_persisted: self
-                .version
-                .try_get_resource(VersionJsonInstanceResource::Metadata)?
-                .exists(),
-            asset_index_persisted: self
-                .version
-                .parent
-                .try_get_resource(VersionJsonRootResource::AssetIndexes(Some(
-                    SafeRelativePath::parse(self.metadata.asset_index.id.as_str())?,
-                )))?
-                .exists(),
-            version_artifacts_ready: self.version_artifacts_ready(&rule_context)?,
-            assets_ready: self.assets_ready()?,
-        })
-    }
+pub(super) fn download_status(
+    version: &InstanceStorage,
+    metadata: &PistonMetaData,
+    asset_index_objects: &PistonMetaAssetIndexObjects,
+) -> Result<VersionJsonDownloadStatus> {
+    let rule_context = VersionJsonRuleContext::current();
+    Ok(VersionJsonDownloadStatus {
+        metadata_persisted: version
+            .try_get_resource(VersionJsonInstanceResource::Metadata)?
+            .exists(),
+        asset_index_persisted: version
+            .try_get_parent_resource(VersionJsonRootResource::AssetIndexes(Some(
+                SafeRelativePath::parse(metadata.asset_index.id.as_str())?,
+            )))?
+            .exists(),
+        version_artifacts_ready: artifacts::version_artifacts_ready(
+            version,
+            metadata,
+            &rule_context,
+        )?,
+        assets_ready: assets_ready(version, asset_index_objects)?,
+    })
+}
 
-    pub async fn status(&self) -> Result<VersionJsonInstallStatus> {
-        let download_status = self.download_status()?;
-        let natives_extracted = natives_are_extracted(&self.version, &self.metadata).await?;
-        Ok(download_status.with_natives_extracted(natives_extracted))
-    }
+pub(super) async fn status(
+    version: &InstanceStorage,
+    metadata: &PistonMetaData,
+    asset_index_objects: &PistonMetaAssetIndexObjects,
+) -> Result<VersionJsonInstallStatus> {
+    let download_status = download_status(version, metadata, asset_index_objects)?;
+    let natives_extracted = natives_are_extracted(version, metadata).await?;
+    Ok(download_status.with_natives_extracted(natives_extracted))
+}
 
-    fn assets_ready(&self) -> Result<bool> {
-        for object in self.asset_index_objects.objects.values() {
-            if !self
-                .version
-                .parent
-                .try_get_resource(VersionJsonRootResource::AssetObjects(Some(
-                    SafeRelativePath::parse(object.hash.as_str())?,
-                )))?
-                .exists()
-            {
-                return Ok(false);
-            }
+fn assets_ready(
+    version: &InstanceStorage,
+    asset_index_objects: &PistonMetaAssetIndexObjects,
+) -> Result<bool> {
+    for object in asset_index_objects.objects.values() {
+        if !version
+            .try_get_parent_resource(VersionJsonRootResource::AssetObjects(Some(
+                SafeRelativePath::parse(object.hash.as_str())?,
+            )))?
+            .exists()
+        {
+            return Ok(false);
         }
-        Ok(true)
     }
+    Ok(true)
 }

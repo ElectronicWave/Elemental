@@ -35,7 +35,8 @@ pub mod prelude {
         runtime::{
             RuntimeResolver, RuntimeValidationMode,
             distribution::Distribution,
-            provider::{RuntimeProvider, RuntimeProviderList, default_providers},
+            provider::{RuntimeProvider, RuntimeProviderList},
+            providers::default_providers,
         },
     };
 

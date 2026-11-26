@@ -155,7 +155,7 @@ pub struct TaskInfo {
 impl TaskInfo {
     pub(crate) fn outcome(&self, status: TaskStatus) -> TaskOutcome {
         TaskOutcome {
-            task_id: self.task_id.clone(),
+            task_id: self.task_id,
             group: self.group.clone(),
             url: self.url.clone(),
             path: self.path.clone(),

@@ -1,6 +1,153 @@
-use std::{error::Error as StdError, io, path::PathBuf};
+use std::{error::Error as StdError, fmt, io, path::PathBuf};
 
-use crate::downloader::{DownloadFailure, TaskId};
+#[cfg(feature = "serde")]
+use serde::Serialize;
+use uuid::Uuid;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
+pub struct SessionId(Uuid);
+
+impl SessionId {
+    pub fn new() -> Self {
+        Self(Uuid::new_v4())
+    }
+
+    pub fn from_uuid(uuid: Uuid) -> Self {
+        Self(uuid)
+    }
+
+    pub fn as_uuid(self) -> Uuid {
+        self.0
+    }
+}
+
+impl Default for SessionId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl fmt::Display for SessionId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
+pub struct TaskId(Uuid);
+
+impl TaskId {
+    pub fn new() -> Self {
+        Self(Uuid::new_v4())
+    }
+
+    pub fn from_uuid(uuid: Uuid) -> Self {
+        Self(uuid)
+    }
+
+    pub fn as_uuid(self) -> Uuid {
+        self.0
+    }
+}
+
+impl Default for TaskId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl fmt::Display for TaskId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+pub enum DownloadPhase {
+    Prepare,
+    Connect,
+    HttpStatus,
+    Download,
+    Verify,
+    Commit,
+}
+
+impl fmt::Display for DownloadPhase {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let label = match self {
+            Self::Prepare => "prepare",
+            Self::Connect => "connect",
+            Self::HttpStatus => "http_status",
+            Self::Download => "download",
+            Self::Verify => "verify",
+            Self::Commit => "commit",
+        };
+        formatter.write_str(label)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
+pub struct DownloadFailure {
+    pub task_id: TaskId,
+    pub group: Option<String>,
+    pub url: String,
+    pub path: PathBuf,
+    pub phase: DownloadPhase,
+    pub http_status: Option<u16>,
+    pub retryable: bool,
+    pub message: String,
+}
+
+impl DownloadFailure {
+    pub(crate) fn for_task(
+        task_id: TaskId,
+        group: Option<String>,
+        url: String,
+        path: PathBuf,
+        phase: DownloadPhase,
+        message: String,
+    ) -> Self {
+        Self {
+            task_id,
+            group,
+            url,
+            path,
+            phase,
+            http_status: None,
+            retryable: false,
+            message,
+        }
+    }
+
+    pub(crate) fn with_http_status(mut self, http_status: Option<u16>) -> Self {
+        self.http_status = http_status;
+        self
+    }
+
+    pub(crate) fn with_retryable(mut self, retryable: bool) -> Self {
+        self.retryable = retryable;
+        self
+    }
+
+    pub fn summary(&self) -> String {
+        let group = self
+            .group
+            .as_deref()
+            .map(|group| format!("{group}/"))
+            .unwrap_or_default();
+        match self.http_status {
+            Some(status) => format!("[{group}{}] HTTP {status}: {}", self.phase, self.message),
+            None => format!("[{group}{}] {}", self.phase, self.message),
+        }
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -60,25 +207,22 @@ pub enum Error {
     InvalidHeaderValue { name: String, reason: String },
 
     #[error("download session '{session_id}' is closed")]
-    SessionClosed { session_id: u64 },
+    SessionClosed { session_id: SessionId },
 
     #[error("download session '{session_id}' not found")]
-    SessionNotFound { session_id: u64 },
-
-    #[error("download session id '{session_id}' conflicts with an existing session")]
-    SessionIdConflict { session_id: u64 },
+    SessionNotFound { session_id: SessionId },
 
     #[error(
         "download session '{session_id}' is not accepting new tasks because an earlier task failed"
     )]
-    SessionNotAcceptingTasks { session_id: u64 },
+    SessionNotAcceptingTasks { session_id: SessionId },
 
     #[error("download session is closed")]
     SessionSenderClosed,
 
     #[error("failed to enqueue task '{task_id}': {source}")]
     EnqueueTask {
-        task_id: String,
+        task_id: TaskId,
         #[source]
         source: Box<dyn StdError + Send + Sync>,
     },

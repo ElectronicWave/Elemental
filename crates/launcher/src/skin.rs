@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fmt, future::Future, path::PathBuf};
+use std::{collections::HashSet, future::Future, path::PathBuf};
 
 use elemental_core::auth::{
     accounts::{Account, AccountId},
@@ -14,26 +14,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     error::{Error, Result},
-    texture::{PNG_SIGNATURE, TextureHash, gc_content, remove_if_present, validate_name},
+    texture::{PNG_SIGNATURE, TextureHash, gc_content, is_valid_name, remove_if_present},
 };
 
+pub use crate::texture::SkinId;
+
 const SKIN_INDEX_VERSION: usize = 1;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct SkinId(TextureHash);
-
-impl fmt::Display for SkinId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(formatter)
-    }
-}
-
-impl SkinId {
-    pub(crate) fn hash(self) -> TextureHash {
-        self.0
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkinAsset {
@@ -57,6 +43,26 @@ struct SkinIndex {
 }
 
 impl SkinIndex {
+    fn insert(&mut self, asset: SkinAsset) {
+        if !self.skins.iter().any(|existing| existing.id == asset.id) {
+            self.skins.push(asset);
+        }
+    }
+
+    fn set_model(&mut self, skin_id: SkinId, model: SkinModel) {
+        if let Some(asset) = self.skins.iter_mut().find(|asset| asset.id == skin_id) {
+            asset.default_model = model;
+        }
+    }
+
+    fn asset(&self, skin_id: SkinId) -> Option<SkinAsset> {
+        self.skins.iter().find(|asset| asset.id == skin_id).cloned()
+    }
+
+    fn referenced_hashes(&self) -> HashSet<TextureHash> {
+        self.skins.iter().map(|asset| asset.id.hash()).collect()
+    }
+
     fn remove(&mut self, skin_id: SkinId) {
         self.skins.retain(|asset| asset.id != skin_id);
         self.selections
@@ -162,13 +168,15 @@ impl SkinStore {
         default_model: SkinModel,
     ) -> Result<SkinAsset> {
         let name = name.into();
-        validate_name(&name)?;
+        if !is_valid_name(&name) {
+            return Err(Error::TextureNameEmpty);
+        }
         if !bytes.starts_with(PNG_SIGNATURE) {
             return Err(Error::SkinNotPng { name });
         }
 
         let hash = TextureHash::of(&bytes);
-        let id = SkinId(hash);
+        let id = SkinId::from_hash(hash);
         let path = self.path(id).await?;
         tokio::fs::write(&path, &bytes).await?;
 
@@ -178,13 +186,7 @@ impl SkinStore {
             default_model,
         };
 
-        self.index
-            .set(move |index| {
-                if !index.value.skins.iter().any(|asset| asset.id == id) {
-                    index.value.skins.push(inserted);
-                }
-            })
-            .await?;
+        self.index.set(move |index| index.insert(inserted)).await?;
         self.asset(id)
             .await
             .ok_or(Error::SkinNotFound { skin_id: id })
@@ -193,14 +195,14 @@ impl SkinStore {
     /// Renames a local skin without changing its id, PNG file, or selections.
     pub async fn rename(&self, skin_id: SkinId, name: impl Into<String>) -> Result<()> {
         let name = name.into();
-        validate_name(&name)?;
+        if !is_valid_name(&name) {
+            return Err(Error::TextureNameEmpty);
+        }
         if self.asset(skin_id).await.is_none() {
             return Err(Error::SkinNotFound { skin_id });
         }
 
-        self.index
-            .set(|index| index.value.rename(skin_id, name))
-            .await?;
+        self.index.set(|index| index.rename(skin_id, name)).await?;
         Ok(())
     }
 
@@ -211,23 +213,14 @@ impl SkinStore {
         }
 
         self.index
-            .set(|index| {
-                if let Some(asset) = index
-                    .value
-                    .skins
-                    .iter_mut()
-                    .find(|asset| asset.id == skin_id)
-                {
-                    asset.default_model = model;
-                }
-            })
+            .set(|index| index.set_model(skin_id, model))
             .await?;
         Ok(())
     }
 
     /// Lists local skins with their PNG paths without reading the files.
     pub async fn list(&self) -> Result<Vec<SkinEntry>> {
-        let assets = self.index.get(|index| index.value.skins.clone()).await;
+        let assets = self.index.get(|index| index.skins.clone()).await;
         let mut entries = Vec::with_capacity(assets.len());
         for asset in assets {
             let path = self.path(asset.id).await?;
@@ -243,24 +236,17 @@ impl SkinStore {
             .ok_or(Error::SkinNotFound { skin_id })?;
 
         let path = self.path(asset.id).await?;
-        self.index.set(|index| index.value.remove(skin_id)).await?;
-        remove_if_present(&path).await
+        self.index.set(|index| index.remove(skin_id)).await?;
+        remove_if_present(&path).await?;
+        Ok(())
     }
 
     /// Removes unreferenced content files left behind by interrupted imports.
     async fn gc(&self) -> Result<()> {
-        let referenced = self
-            .index
-            .get(|index| {
-                index
-                    .value
-                    .skins
-                    .iter()
-                    .map(|asset| asset.id.hash())
-                    .collect::<HashSet<_>>()
-            })
-            .await;
-        gc_content(&self.scope, "skins", &referenced).await
+        let referenced = self.index.get(SkinIndex::referenced_hashes).await;
+        let root_path = self.scope.get_full_path("skins", None).await?;
+        gc_content(&root_path, &referenced).await?;
+        Ok(())
     }
 
     /// Selects a local skin for an account without uploading it.
@@ -276,7 +262,7 @@ impl SkinStore {
 
         self.index
             .set(|index| {
-                index.value.select(AccountSkinSelection {
+                index.select(AccountSkinSelection {
                     account_id,
                     skin_id,
                     model,
@@ -288,7 +274,7 @@ impl SkinStore {
 
     pub async fn clear_selection(&self, account_id: AccountId) -> Result<()> {
         self.index
-            .set(|index| index.value.clear_selection(account_id))
+            .set(|index| index.clear_selection(account_id))
             .await?;
         Ok(())
     }
@@ -307,26 +293,17 @@ impl SkinStore {
     }
 
     async fn asset(&self, skin_id: SkinId) -> Option<SkinAsset> {
-        self.index
-            .get(|index| {
-                index
-                    .value
-                    .skins
-                    .iter()
-                    .find(|asset| asset.id == skin_id)
-                    .cloned()
-            })
-            .await
+        self.index.get(|index| index.asset(skin_id)).await
     }
 
     async fn selection(&self, account_id: AccountId) -> Option<AccountSkinSelection> {
         self.index
-            .get(|index| index.value.selected_by(account_id).cloned())
+            .get(|index| index.selected_by(account_id).cloned())
             .await
     }
 
     async fn path(&self, skin_id: SkinId) -> Result<PathBuf> {
-        let hash = skin_id.0.hex();
+        let hash = skin_id.hash().hex();
         let prefix = &hash[..2];
         Ok(self
             .scope

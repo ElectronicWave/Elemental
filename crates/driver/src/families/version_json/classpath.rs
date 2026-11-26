@@ -1,5 +1,6 @@
 use std::{
     collections::HashSet,
+    env::current_dir,
     path::{Path, PathBuf},
 };
 
@@ -11,9 +12,17 @@ use crate::{
     error::Result,
     families::version_json::{
         InstanceStorage, VersionJsonInstanceResource, VersionJsonRootResource,
-        VersionJsonRuleContext, builder::resolve_absolute_path, extensions::PistonMetaLibrariesExt,
+        VersionJsonRuleContext, extensions::PistonMetaLibrariesExt,
     },
 };
+
+pub(crate) fn resolve_absolute_path(path: PathBuf) -> Result<PathBuf> {
+    if path.is_absolute() {
+        return Ok(path);
+    }
+
+    Ok(current_dir()?.join(path))
+}
 
 pub fn classpath_separator() -> &'static str {
     if cfg!(windows) { ";" } else { ":" }
@@ -44,8 +53,7 @@ pub fn resolve_classpath(
         let relative_path = SafeRelativePath::parse(artifact.path.as_str())?;
         let path = resolve_absolute_path(
             version
-                .parent
-                .try_get_resource(VersionJsonRootResource::Libraries(Some(relative_path)))?,
+                .try_get_parent_resource(VersionJsonRootResource::Libraries(Some(relative_path)))?,
         )?;
         if module_path_entries.contains(&normalize_path_string(&path)) {
             continue;

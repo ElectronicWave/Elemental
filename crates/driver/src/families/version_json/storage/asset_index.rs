@@ -6,7 +6,10 @@ use tokio::fs::create_dir_all;
 
 use crate::{
     error::{Error, Result},
-    families::version_json::{layout::VersionJsonRootLayout, resource::VersionJsonRootResource},
+    families::version_json::{
+        layout::{VersionJsonInstanceLayout, VersionJsonRootLayout},
+        resource::VersionJsonRootResource,
+    },
 };
 
 #[async_trait]
@@ -32,13 +35,7 @@ where
         let path = self.try_get_resource(VersionJsonRootResource::AssetIndexes(Some(
             SafeRelativePath::parse(id)?,
         )))?;
-        let parent = path.parent().ok_or_else(|| Error::MissingParentDirectory {
-            context: "asset index path has no parent directory".to_owned(),
-            path: path.clone(),
-        })?;
-        create_dir_all(parent).await?;
-        tokio::fs::write(path, serde_json::to_vec(objects)?).await?;
-        Ok(())
+        write_asset_index_file(path, objects).await
     }
 
     fn asset_index_objects(&self, id: impl AsRef<str>) -> Result<PistonMetaAssetIndexObjects> {
@@ -47,4 +44,43 @@ where
         )))?;
         Ok(serde_json::from_slice(&std::fs::read(path)?)?)
     }
+}
+
+#[async_trait]
+impl<L, PL, PP> VersionJsonAssetIndexStorageExt for Storage<L, Storage<PL, PP>>
+where
+    L: VersionJsonInstanceLayout,
+    PL: VersionJsonRootLayout,
+    PP: Send + Sync,
+{
+    async fn write_asset_index(
+        &self,
+        id: String,
+        objects: &PistonMetaAssetIndexObjects,
+    ) -> Result<()> {
+        let path = self.try_get_parent_resource(VersionJsonRootResource::AssetIndexes(Some(
+            SafeRelativePath::parse(id)?,
+        )))?;
+        write_asset_index_file(path, objects).await
+    }
+
+    fn asset_index_objects(&self, id: impl AsRef<str>) -> Result<PistonMetaAssetIndexObjects> {
+        let path = self.try_get_parent_resource(VersionJsonRootResource::AssetIndexes(Some(
+            SafeRelativePath::parse(id.as_ref())?,
+        )))?;
+        Ok(serde_json::from_slice(&std::fs::read(path)?)?)
+    }
+}
+
+async fn write_asset_index_file(
+    path: std::path::PathBuf,
+    objects: &PistonMetaAssetIndexObjects,
+) -> Result<()> {
+    let parent = path.parent().ok_or_else(|| Error::MissingParentDirectory {
+        context: "asset index path has no parent directory".to_owned(),
+        path: path.clone(),
+    })?;
+    create_dir_all(parent).await?;
+    tokio::fs::write(path, serde_json::to_vec(objects)?).await?;
+    Ok(())
 }

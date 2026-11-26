@@ -24,7 +24,7 @@ fn profile_libraries_ready(
             artifact_paths.push(SafeRelativePath::parse(artifact.path.as_str())?);
         }
     }
-    library_artifacts_present(&instance.parent, artifact_paths)
+    library_artifacts_present(instance, artifact_paths)
 }
 
 pub async fn installer_install_status(

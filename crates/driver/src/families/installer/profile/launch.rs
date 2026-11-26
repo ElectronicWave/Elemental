@@ -5,11 +5,13 @@ use elemental_schema::{forge::ForgeInstallerProfile, mojang::piston::PistonMetaL
 use serde_json::value::RawValue;
 
 use crate::{
-    drivers::vanilla::source::{VanillaSource, resolve_vanilla_metadata},
     error::{Error, Result},
     families::{
         installer::InstallerPersistedState,
-        version_json::{InstanceStorage, ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata},
+        version_json::{
+            InstanceStorage, ResolvedVersionJsonInstance, ResolvedVersionJsonMetadata,
+            VanillaSource, resolve_vanilla_metadata,
+        },
     },
 };
 

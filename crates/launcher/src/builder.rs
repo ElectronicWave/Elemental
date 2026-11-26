@@ -1,11 +1,8 @@
-use std::{fmt, path::PathBuf, sync::Arc};
+use std::{fmt, path::PathBuf};
 
 use elemental_core::{
     http::{HttpClientConfig, SwappableClient},
-    runtime::{
-        RuntimeResolver,
-        provider::{RuntimeProviderList, default_providers},
-    },
+    runtime::{RuntimeResolver, provider::RuntimeProviderList, providers::default_providers},
 };
 use elemental_driver::families::version_json::{
     SharedInstanceLayout, SharedRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
@@ -16,10 +13,16 @@ use crate::{
     error::Result, launcher::Launcher, origin::DriverOrigins, registration::DriverRegistration,
 };
 
+impl Launcher {
+    pub fn builder() -> LauncherBuilder {
+        LauncherBuilder::new()
+    }
+}
+
 pub struct LauncherBuilder {
     storage_root: PathBuf,
     http_client: Option<SwappableClient>,
-    downloader: Option<Arc<ElementalDownloader>>,
+    downloader: Option<ElementalDownloader>,
     root_layout: SharedRootLayout,
     instance_layout: SharedInstanceLayout,
     origins: DriverOrigins,
@@ -76,7 +79,7 @@ impl LauncherBuilder {
         Ok(self.http_client(SwappableClient::new(config)?))
     }
 
-    pub fn downloader(mut self, downloader: Arc<ElementalDownloader>) -> Self {
+    pub fn downloader(mut self, downloader: ElementalDownloader) -> Self {
         self.downloader = Some(downloader);
         self
     }

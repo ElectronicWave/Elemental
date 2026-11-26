@@ -10,7 +10,7 @@ mod transitions;
 use record::TaskRecord;
 use throughput::ThroughputMeter;
 
-pub(crate) use transitions::SessionTransition;
+pub(crate) use transitions::StateCommand;
 
 #[derive(Debug)]
 pub(super) struct SessionState {
@@ -39,9 +39,9 @@ impl SessionState {
     }
 
     fn insert_record(&mut self, record: TaskRecord) {
-        let task_id = record.details.task_id.clone();
+        let task_id = record.details.task_id;
         if !self.records.contains_key(&task_id) {
-            self.record_order.push(task_id.clone());
+            self.record_order.push(task_id);
         }
         self.records.insert(task_id, record);
     }

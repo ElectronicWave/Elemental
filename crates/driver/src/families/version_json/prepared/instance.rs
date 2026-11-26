@@ -6,11 +6,13 @@ use crate::{
     error::{Error, Result},
     families::version_json::{
         InstanceStorage, VersionJsonAssetIndexStorageExt, VersionJsonMetadataStorageExt,
-        VersionJsonRuleContext, classpath::resolve_classpath,
+        VersionJsonRemoteResolver, VersionJsonRuleContext, classpath::resolve_classpath,
     },
 };
 
-use super::VersionJsonInstallStatus;
+use super::{
+    VersionJsonDownloadStatus, VersionJsonInstallPlanner, VersionJsonInstallStatus, readiness,
+};
 
 mod metadata;
 mod prepare;
@@ -38,14 +40,32 @@ pub struct PreparedVersionJsonInstance {
 impl ResolvedVersionJsonInstance {
     pub fn load(version: InstanceStorage) -> Result<Self> {
         let metadata = version.metadata()?;
-        let asset_index_objects = version
-            .parent
-            .asset_index_objects(metadata.asset_index.id.as_str())?;
+        let asset_index_objects = version.asset_index_objects(metadata.asset_index.id.as_str())?;
         Ok(Self {
             version,
             metadata,
             asset_index_objects,
         })
+    }
+
+    pub fn planner<'a>(
+        &'a self,
+        remote_resolver: &'a dyn VersionJsonRemoteResolver,
+    ) -> VersionJsonInstallPlanner<'a> {
+        VersionJsonInstallPlanner::new(
+            &self.version,
+            &self.metadata,
+            &self.asset_index_objects,
+            remote_resolver,
+        )
+    }
+
+    pub fn download_status(&self) -> Result<VersionJsonDownloadStatus> {
+        readiness::download_status(&self.version, &self.metadata, &self.asset_index_objects)
+    }
+
+    pub async fn status(&self) -> Result<VersionJsonInstallStatus> {
+        readiness::status(&self.version, &self.metadata, &self.asset_index_objects).await
     }
 
     pub async fn into_prepared(self) -> Result<PreparedVersionJsonInstance> {

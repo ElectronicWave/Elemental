@@ -1,8 +1,7 @@
+pub use crate::auth::accounts::offline::OFFLINE_AUTHORIZER_ID;
 use crate::auth::accounts::offline::OfflineAccount;
 use crate::auth::authorizers::Authorizer;
 use crate::auth::error::Result;
-
-pub const OFFLINE_AUTHORIZER_ID: &str = "offline";
 
 pub struct OfflineAuthorizer {
     pub username: String,

@@ -1,4 +1,12 @@
-use crate::driver::DriverDescriptor;
+use std::str::FromStr;
+
+use crate::error::{Error, Result};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DriverDescriptor {
+    pub id: &'static str,
+    pub name: &'static str,
+}
 
 pub const VANILLA_DRIVER: DriverDescriptor = DriverDescriptor {
     id: "vanilla",
@@ -89,4 +97,28 @@ pub fn from_id(id: &str) -> Option<DriverDescriptor> {
         .iter()
         .copied()
         .find(|descriptor| descriptor.id == id)
+}
+
+impl TryFrom<&str> for DriverDescriptor {
+    type Error = Error;
+
+    fn try_from(id: &str) -> Result<Self> {
+        from_id(id).ok_or_else(|| Error::UnsupportedDriver { id: id.to_owned() })
+    }
+}
+
+impl TryFrom<String> for DriverDescriptor {
+    type Error = Error;
+
+    fn try_from(id: String) -> Result<Self> {
+        Self::try_from(id.as_str())
+    }
+}
+
+impl FromStr for DriverDescriptor {
+    type Err = Error;
+
+    fn from_str(id: &str) -> Result<Self> {
+        Self::try_from(id)
+    }
 }

@@ -56,7 +56,7 @@ impl SessionState {
         }
     }
 
-    pub(crate) fn should_emit_progress(&mut self, now: Instant) -> bool {
+    pub(super) fn should_emit_progress(&mut self, now: Instant) -> bool {
         if now.saturating_duration_since(self.last_progress_event) < PROGRESS_EVENT_INTERVAL {
             return false;
         }

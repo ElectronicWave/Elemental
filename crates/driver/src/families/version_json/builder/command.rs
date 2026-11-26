@@ -8,12 +8,16 @@ use elemental_schema::mojang::piston::PistonMetaData;
 use crate::{
     error::{Error, Result},
     families::version_json::{
-        VersionJsonInstanceResource, classpath::classpath_separator, extensions::PistonMetaDataExt,
-        rules::VersionJsonRuleContext, storage::VersionJsonMetadataStorageExt, variables::UserType,
+        VersionJsonInstanceResource,
+        classpath::{classpath_separator, join_classpath, resolve_classpath},
+        extensions::PistonMetaDataExt,
+        rules::VersionJsonRuleContext,
+        storage::VersionJsonMetadataStorageExt,
+        variables::UserType,
     },
 };
 
-use super::{VersionJsonLaunchBuilder, paths::LaunchPaths};
+use super::{VersionJsonLaunchBuilder, arguments, paths::LaunchPaths};
 
 impl VersionJsonLaunchBuilder {
     pub fn build_command(mut self) -> Result<LaunchCommand> {
@@ -43,11 +47,28 @@ impl VersionJsonLaunchBuilder {
         self.apply_default_variables(&metadata, &credential, version_name, &paths);
 
         let raw_jvm_arguments = metadata.jvm_arguments(&rule_context);
-        let module_path_entries = self.collect_module_path_entries(raw_jvm_arguments.as_slice())?;
-        self.inner.classpath =
-            self.build_classpath(&metadata, &rule_context, &module_path_entries)?;
+        let module_path_entries =
+            arguments::collect_module_path_entries(&self.inner, raw_jvm_arguments.as_slice())?;
+        let classpath = resolve_classpath(
+            &self.version,
+            &metadata,
+            &rule_context,
+            &module_path_entries,
+        )?;
+        self.inner.classpath = join_classpath(
+            classpath
+                .into_iter()
+                .map(|path| path.to_string_lossy().to_string())
+                .collect(),
+        );
 
-        let jvm_arguments = self.build_jvm_arguments(&metadata, raw_jvm_arguments)?;
+        let jvm_arguments = arguments::build_jvm_arguments(
+            &self.version,
+            &self.inner,
+            &self.extra_jvm_arguments,
+            &metadata,
+            raw_jvm_arguments,
+        )?;
         let game_arguments = self.build_game_arguments(&metadata, &rule_context)?;
 
         Ok(LaunchCommand::new(

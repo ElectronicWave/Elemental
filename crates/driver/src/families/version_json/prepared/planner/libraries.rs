@@ -1,4 +1,3 @@
-use elemental_core::storage::layout::Layoutable;
 use elemental_infra::{SafeRelativePath, downloader::DownloadTask};
 use elemental_schema::mojang::piston::{PistonMetaLibraries, PistonMetaLibrariesDownloadsArtifact};
 
@@ -32,8 +31,7 @@ impl VersionJsonInstallPlanner<'_> {
             self.remote_resolver
                 .rewrite_upstream(artifact.url.as_str())?,
             self.version
-                .parent
-                .try_get_resource(VersionJsonRootResource::Libraries(Some(
+                .try_get_parent_resource(VersionJsonRootResource::Libraries(Some(
                     SafeRelativePath::parse(artifact.path.as_str())?,
                 )))?,
         );

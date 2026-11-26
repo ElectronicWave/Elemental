@@ -39,7 +39,7 @@ impl TaskRecord {
 
     pub(super) fn active_task(&self) -> ActiveTask {
         ActiveTask {
-            task_id: self.details.task_id.clone(),
+            task_id: self.details.task_id,
             group: self.details.group.clone(),
             path: self.details.path.clone(),
         }
@@ -47,7 +47,7 @@ impl TaskRecord {
 
     pub(super) fn snapshot(&self) -> TaskSnapshot {
         TaskSnapshot {
-            task_id: self.details.task_id.clone(),
+            task_id: self.details.task_id,
             group: self.details.group.clone(),
             url: self.details.url.clone(),
             path: self.details.path.clone(),

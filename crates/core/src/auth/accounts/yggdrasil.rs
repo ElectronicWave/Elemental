@@ -1,10 +1,11 @@
 use async_trait::async_trait;
 use nidhogg::{
     client::Nidhogg,
-    request::texture::TextureType as NidhoggTextureType,
+    request::{refresh::Refresh, texture::TextureType as NidhoggTextureType},
     types::{
         profile::{Profile, ProfilePropertyError},
         textures::{ModelType, Texture},
+        user::User,
     },
 };
 
@@ -14,12 +15,13 @@ use uuid::Uuid;
 
 use crate::auth::accounts::offline::offline_uuid;
 use crate::auth::accounts::{Account, AccountId};
-use crate::auth::authorizers::yggdrasil::{YGGDRASIL_AUTHORIZER_ID, YggdrasilAuthorizer};
 use crate::auth::credential::{Credential, CredentialKind};
 use crate::auth::error::{Error, Result};
 use crate::auth::texture::{
     Cape, ProfileTextures, Skin, SkinModel, TextureType as AccountTextureType,
 };
+
+pub const YGGDRASIL_AUTHORIZER_ID: &str = "yggdrasil";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct YggdrasilProfile {
@@ -128,6 +130,46 @@ impl YggdrasilAccount {
             .map_err(|source| Error::Yggdrasil { source })
             .map(Some)
     }
+
+    pub async fn refresh_account(&self) -> Result<Self> {
+        let response = self
+            .client()?
+            .refresh(&Refresh::new(
+                self.access_token.clone(),
+                Some(self.client_token.clone()),
+                true,
+                Some(Profile {
+                    id: self.selected_profile.id.clone(),
+                    name: self.selected_profile.name.clone(),
+                    properties: None,
+                }),
+            ))
+            .await
+            .map_err(|source| Error::Yggdrasil { source })?;
+
+        Ok(Self {
+            account_id: self.account_id,
+            base_url: self.base_url.clone(),
+            user_id: user_id(response.user.as_ref()).or_else(|| self.user_id.clone()),
+            preferred_language: preferred_language(response.user.as_ref())
+                .or_else(|| self.preferred_language.clone()),
+            access_token: response.access_token,
+            client_token: response.client_token,
+            selected_profile: response
+                .selected_profile
+                .as_ref()
+                .map(YggdrasilProfile::from)
+                .unwrap_or_else(|| self.selected_profile.clone()),
+        })
+    }
+}
+
+pub(crate) fn user_id(user: Option<&User>) -> Option<String> {
+    user.map(|user| user.id.clone())
+}
+
+pub(crate) fn preferred_language(user: Option<&User>) -> Option<String> {
+    user.and_then(User::get_preferred_language).cloned()
 }
 
 #[async_trait]
@@ -164,7 +206,7 @@ impl Account for YggdrasilAccount {
         if self.base_url.is_none() {
             return Ok(Box::new(self.clone()));
         }
-        Ok(Box::new(YggdrasilAuthorizer::refresh_account(self).await?))
+        Ok(Box::new(self.refresh_account().await?))
     }
 
     async fn metadata(&self) -> Result<Option<Meta>> {

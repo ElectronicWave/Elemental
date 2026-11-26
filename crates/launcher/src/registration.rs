@@ -8,22 +8,21 @@ use std::{fmt, sync::Arc};
 
 use elemental_core::http::SwappableClient;
 use elemental_driver::{
-    catalog::InstallerMavenCatalog,
     descriptors::{
         BABRIC_DRIVER, CLEANROOM_DRIVER, FABRIC_DRIVER, FORGE_DRIVER, LEGACY_FABRIC_DRIVER,
         LITELOADER_DRIVER, NEOFORGE_DRIVER, OUTLANDS_DRIVER, QUILT_DRIVER, RIFT_DRIVER,
         VANILLA_DRIVER,
     },
-    driver::{Driver, DriverDescriptor},
+    driver::{
+        Driver, DriverDescriptor, InstallerFamilyDriver, ProfiledVersionJsonDriver,
+        ProfiledVersionJsonFamily, ProfiledVersionJsonFamilyExt,
+    },
     drivers::vanilla::source::{VanillaEndpoints, VanillaSource},
     families::{
         installer::{
-            InstallerFamilyDriver, InstallerMavenSource, MavenEndpoints, MavenInstallerSpec,
+            InstallerMavenCatalog, InstallerMavenSource, MavenEndpoints, MavenInstallerSpec,
         },
-        version_json::{
-            LoaderMetaSource, ProfiledVersionJsonDriver, ProfiledVersionJsonFamily,
-            ProfiledVersionJsonFamilyExt,
-        },
+        version_json::LoaderMetaSource,
     },
 };
 

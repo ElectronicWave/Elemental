@@ -4,7 +4,7 @@ use elemental_schema::maven::{MavenMetadataBody, MavenMetadataVersion, MavenMeta
 use quick_xml::{Reader, escape::unescape, events::Event};
 
 use crate::error::{Error, Result};
-use crate::http::fetch_text_with_headers;
+use crate::http::HttpClient;
 
 use super::{MavenCoordinate, validate_component};
 
@@ -84,47 +84,44 @@ fn matches_snapshot_artifact(
         && artifact.classifier.as_deref() == coordinate.classifier()
 }
 
-impl super::MavenRepository {
-    pub(crate) fn resolve_snapshot_version(
-        &self,
-        coordinate: &MavenCoordinate,
-        metadata: &SnapshotMavenMetadata,
-    ) -> Result<String> {
-        if let Some(artifact) = metadata
-            .versioning
-            .snapshot_versions
-            .iter()
-            .find(|artifact| matches_snapshot_artifact(coordinate, artifact))
-        {
-            validate_component(
-                artifact.value.as_str(),
-                "maven snapshot version",
-                artifact.value.as_str(),
-            )?;
-            return Ok(artifact.value.clone());
-        }
-
-        if let Some(snapshot) = &metadata.versioning.snapshot
-            && !metadata.version.is_empty()
-        {
-            validate_component(
-                metadata.version.as_str(),
-                "maven snapshot version",
-                metadata.version.as_str(),
-            )?;
-            validate_component(
-                snapshot.timestamp.as_str(),
-                "maven snapshot timestamp",
-                snapshot.timestamp.as_str(),
-            )?;
-            return Ok(format!(
-                "{}-{}-{}",
-                metadata.version, snapshot.timestamp, snapshot.build_number
-            ));
-        }
-
-        Ok(coordinate.version().to_owned())
+pub(crate) fn resolve_snapshot_version(
+    coordinate: &MavenCoordinate,
+    metadata: &SnapshotMavenMetadata,
+) -> Result<String> {
+    if let Some(artifact) = metadata
+        .versioning
+        .snapshot_versions
+        .iter()
+        .find(|artifact| matches_snapshot_artifact(coordinate, artifact))
+    {
+        validate_component(
+            artifact.value.as_str(),
+            "maven snapshot version",
+            artifact.value.as_str(),
+        )?;
+        return Ok(artifact.value.clone());
     }
+
+    if let Some(snapshot) = &metadata.versioning.snapshot
+        && !metadata.version.is_empty()
+    {
+        validate_component(
+            metadata.version.as_str(),
+            "maven snapshot version",
+            metadata.version.as_str(),
+        )?;
+        validate_component(
+            snapshot.timestamp.as_str(),
+            "maven snapshot timestamp",
+            snapshot.timestamp.as_str(),
+        )?;
+        return Ok(format!(
+            "{}-{}-{}",
+            metadata.version, snapshot.timestamp, snapshot.build_number
+        ));
+    }
+
+    Ok(coordinate.version().to_owned())
 }
 
 pub(crate) fn decode_snapshot_metadata(raw: &str, url: String) -> Result<SnapshotMavenMetadata> {
@@ -136,12 +133,11 @@ pub(crate) fn decode_snapshot_metadata(raw: &str, url: String) -> Result<Snapsho
 }
 
 pub async fn fetch_maven_metadata(
-    client: &reqwest::Client,
+    client: &HttpClient,
     url: String,
     source_label: &str,
-    headers: &reqwest::header::HeaderMap,
 ) -> Result<MavenMetadataBody> {
-    let raw = fetch_text_with_headers(client, url.as_str(), source_label, headers).await?;
+    let raw = client.fetch_text(url.as_str(), source_label).await?;
     decode_maven_metadata(raw.as_str()).map_err(|source| Error::DecodeMavenMetadata {
         source_label: source_label.to_owned(),
         url,
@@ -395,7 +391,6 @@ fn walk_xml(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::maven::MavenRepository;
 
     #[test]
     fn decodes_release_maven_metadata() {
@@ -448,13 +443,11 @@ mod tests {
             </metadata>
         "#;
 
-        let repository = MavenRepository::parse("https://example.invalid/repo", "test").unwrap();
         let coord = MavenCoordinate::parse("com.mumfrey:liteloader:1.12.2-SNAPSHOT").unwrap();
         let metadata = decode_snapshot_metadata(xml, "https://example.invalid/meta.xml".to_owned())
             .expect("valid snapshot metadata");
-        let resolved = repository
-            .resolve_snapshot_version(&coord, &metadata)
-            .expect("resolve snapshot version");
+        let resolved =
+            resolve_snapshot_version(&coord, &metadata).expect("resolve snapshot version");
         assert_eq!(resolved, "1.12.2-20180509.180000-4");
     }
 
@@ -472,13 +465,11 @@ mod tests {
             </metadata>
         "#;
 
-        let repository = MavenRepository::parse("https://example.invalid/repo", "test").unwrap();
         let coord = MavenCoordinate::parse("com.mumfrey:liteloader:1.12.2-SNAPSHOT").unwrap();
         let metadata = decode_snapshot_metadata(xml, "https://example.invalid/meta.xml".to_owned())
             .expect("valid fallback snapshot metadata");
-        let resolved = repository
-            .resolve_snapshot_version(&coord, &metadata)
-            .expect("resolve snapshot version");
+        let resolved =
+            resolve_snapshot_version(&coord, &metadata).expect("resolve snapshot version");
         assert_eq!(resolved, "1.12.2-SNAPSHOT-20190101.120000-7");
     }
 

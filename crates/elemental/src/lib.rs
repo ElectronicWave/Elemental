@@ -39,6 +39,9 @@ pub mod prelude {
         },
     };
 
+    #[cfg(all(feature = "core", feature = "http"))]
+    pub use crate::core::http::{HttpClientConfig, HttpClientError, SwappableClient};
+
     #[cfg(all(feature = "core", feature = "microsoft-auth"))]
     pub use crate::core::auth::{
         accounts::microsoft::MicrosoftAccount,

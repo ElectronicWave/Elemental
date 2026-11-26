@@ -2,6 +2,7 @@ use crate::auth::accounts::microsoft::{MicrosoftAccount, unix_now};
 use crate::auth::authorizers::Authorizer;
 use crate::auth::error::{Error, Result, XuidDecodeError};
 use crate::auth::texture::SkinModel;
+use crate::http::{HttpClientConfig, HttpClientError, SwappableClient};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use minecraft_msa_auth::MinecraftAuthorizationFlow;
@@ -12,9 +13,7 @@ use oauth2::{
 };
 use oauth2_reqwest::ReqwestClient;
 use reqwest::Client;
-use reqwest::ClientBuilder;
 use reqwest::multipart::{Form, Part};
-use reqwest::redirect::Policy;
 use serde::Deserialize;
 
 const DEVICE_CODE_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode";
@@ -65,6 +64,7 @@ pub struct MicrosoftAuthorizer {
     /// Receives the verification URI and user code. Returning an error aborts authorization.
     pub verification_handler:
         Box<dyn Fn(String, String) -> VerificationHandlerResult + Send + Sync>,
+    http_client: Option<SwappableClient>,
 }
 
 impl MicrosoftAuthorizer {
@@ -78,24 +78,49 @@ impl MicrosoftAuthorizer {
         Self {
             client_id,
             verification_handler: Box::new(verification_handler),
+            http_client: None,
         }
     }
 
-    fn client() -> Result<ReqwestClient> {
-        let reqwest_client = ClientBuilder::new()
-            // Following redirects opens the client up to SSRF vulnerabilities.
-            .redirect(Policy::none())
-            .build()
-            .map_err(|source| Error::HttpClientBuild { source })?;
-        Ok(ReqwestClient::from(reqwest_client))
+    /// Configures the [`SwappableClient`] used for Microsoft OAuth and Minecraft API calls.
+    pub fn with_http_client(mut self, http_client: SwappableClient) -> Self {
+        self.http_client = Some(http_client);
+        self
     }
+
+    fn resolve_http_client(&self) -> Result<SwappableClient> {
+        match &self.http_client {
+            Some(client) => Ok(client.clone()),
+            None => SwappableClient::try_default().map_err(map_http_client_error),
+        }
+    }
+}
+
+fn map_http_client_error(error: HttpClientError) -> Error {
+    match error {
+        HttpClientError::Build { source } => Error::HttpClientBuild { source },
+    }
+}
+
+fn default_api_client() -> Result<Client> {
+    HttpClientConfig::default()
+        .build()
+        .map_err(map_http_client_error)
+}
+
+fn default_oauth_client() -> Result<ReqwestClient> {
+    let reqwest_client = HttpClientConfig::default()
+        .build_no_redirect()
+        .map_err(map_http_client_error)?;
+    Ok(ReqwestClient::from(reqwest_client))
 }
 
 impl Authorizer for MicrosoftAuthorizer {
     type Account = MicrosoftAccount;
 
     async fn authorize(&self) -> Result<Self::Account> {
-        let reqwest_client = Self::client()?;
+        let http_client = self.resolve_http_client()?;
+        let reqwest_client = ReqwestClient::from(http_client.no_redirect_client());
         let client = BasicClient::new(ClientId::new(self.client_id.clone()))
             .set_auth_uri(auth_url()?)
             .set_token_uri(token_url()?)
@@ -127,6 +152,7 @@ impl Authorizer for MicrosoftAuthorizer {
             .to_owned();
 
         account_from_microsoft_token(
+            http_client.client(),
             &self.client_id,
             token.access_token().secret(),
             refresh_token,
@@ -145,7 +171,7 @@ impl Authorizer for MicrosoftAuthorizer {
 }
 
 pub(crate) async fn refresh(account: &MicrosoftAccount) -> Result<MicrosoftAccount> {
-    let reqwest_client = MicrosoftAuthorizer::client()?;
+    let reqwest_client = default_oauth_client()?;
     let client = refresh_client(&account.client_id)?;
     let token = client
         .exchange_refresh_token(&RefreshToken::new(account.refresh_token.clone()))
@@ -158,6 +184,7 @@ pub(crate) async fn refresh(account: &MicrosoftAccount) -> Result<MicrosoftAccou
         .unwrap_or_else(|| account.refresh_token.clone());
 
     account_from_microsoft_token(
+        default_api_client()?,
         &account.client_id,
         token.access_token().secret(),
         refresh_token,
@@ -192,17 +219,18 @@ fn device_authorization_url() -> Result<DeviceAuthorizationUrl> {
 }
 
 async fn account_from_microsoft_token(
+    client: Client,
     client_id: &str,
     microsoft_access_token: &str,
     refresh_token: String,
     existing_xuid: Option<String>,
 ) -> Result<MicrosoftAccount> {
-    let mc_flow = MinecraftAuthorizationFlow::new(Client::new());
+    let mc_flow = MinecraftAuthorizationFlow::new(client.clone());
     let mc_token = mc_flow
         .exchange_microsoft_token(microsoft_access_token)
         .await
         .map_err(|source| Error::MinecraftExchange { source })?;
-    let profile = minecraft_profile(mc_token.access_token().as_ref()).await?;
+    let profile = minecraft_profile_with_client(&client, mc_token.access_token().as_ref()).await?;
     let xuid =
         existing_xuid.filter(|xuid| !xuid.is_empty()).or_else(|| {
             match xuid_from_access_token(mc_token.access_token().as_ref()) {
@@ -227,7 +255,15 @@ async fn account_from_microsoft_token(
 }
 
 pub(crate) async fn minecraft_profile(access_token: &str) -> Result<MinecraftProfileResponse> {
-    Client::new()
+    let client = default_api_client()?;
+    minecraft_profile_with_client(&client, access_token).await
+}
+
+async fn minecraft_profile_with_client(
+    client: &Client,
+    access_token: &str,
+) -> Result<MinecraftProfileResponse> {
+    client
         .get(MINECRAFT_PROFILE_URL)
         .bearer_auth(access_token)
         .send()
@@ -258,7 +294,7 @@ pub(crate) async fn upload_skin(
         })?;
     let form = Form::new().text("variant", variant).part("file", file);
     send_texture_request(
-        Client::new()
+        default_api_client()?
             .post(MINECRAFT_SKIN_UPLOAD_URL)
             .bearer_auth(access_token)
             .multipart(form),
@@ -269,7 +305,7 @@ pub(crate) async fn upload_skin(
 
 pub(crate) async fn delete_skin(access_token: &str) -> Result<()> {
     send_texture_request(
-        Client::new()
+        default_api_client()?
             .delete(MINECRAFT_ACTIVE_SKIN_URL)
             .bearer_auth(access_token),
         "delete skin",
@@ -278,11 +314,12 @@ pub(crate) async fn delete_skin(access_token: &str) -> Result<()> {
 }
 
 pub(crate) async fn select_cape(access_token: &str, cape_id: Option<String>) -> Result<()> {
+    let client = default_api_client()?;
     let request = match cape_id {
-        Some(cape_id) => Client::new()
+        Some(cape_id) => client
             .put(MINECRAFT_ACTIVE_CAPE_URL)
             .json(&serde_json::json!({ "capeId": cape_id })),
-        None => Client::new().delete(MINECRAFT_ACTIVE_CAPE_URL),
+        None => client.delete(MINECRAFT_ACTIVE_CAPE_URL),
     };
     send_texture_request(request.bearer_auth(access_token), "select cape").await
 }

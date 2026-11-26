@@ -116,8 +116,14 @@ impl DriverOrigins {
         self.for_driver(OUTLANDS_DRIVER)
     }
 
-    pub(crate) fn vanilla_source(&self) -> VanillaSource {
-        VanillaSource::new(VanillaEndpoints::new(self.policy_for(VANILLA_DRIVER)))
+    pub(crate) fn vanilla_source(
+        &self,
+        http_client: &elemental_core::http::SwappableClient,
+    ) -> VanillaSource {
+        VanillaSource::with_http_client(
+            VanillaEndpoints::new(self.policy_for(VANILLA_DRIVER)),
+            http_client.clone(),
+        )
     }
 }
 

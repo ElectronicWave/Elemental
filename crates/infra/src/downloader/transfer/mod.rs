@@ -34,7 +34,7 @@ pub(super) async fn download_attempt(
     };
 
     let staged_path = staged.path.clone();
-    let client = downloader.client.clone();
+    let client = downloader.client.client();
     let materializer = downloader.materializer.clone();
     let materializer_for_execute = materializer.clone();
     let global_bandwidth_limiter = downloader.bandwidth_limiter.clone();

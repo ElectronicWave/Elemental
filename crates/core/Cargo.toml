@@ -9,14 +9,15 @@ repository.workspace = true
 license.workspace = true
 
 [features]
-default = ["microsoft-auth", "tls-aws-lc"]
+default = ["http", "microsoft-auth", "tls-aws-lc"]
+http = ["dep:reqwest"]
 microsoft-auth = [
     "dep:base64",
     "dep:minecraft-msa-auth",
     "dep:oauth2",
     "dep:oauth2-reqwest",
-    "dep:reqwest",
     "dep:serde_json",
+    "http",
     "reqwest/json",
     "reqwest/multipart",
 ]

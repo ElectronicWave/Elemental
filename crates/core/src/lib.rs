@@ -1,5 +1,9 @@
 #[cfg(all(
-    any(feature = "microsoft-auth", feature = "yggdrasil-auth"),
+    any(
+        feature = "http",
+        feature = "microsoft-auth",
+        feature = "yggdrasil-auth"
+    ),
     not(any(
         feature = "tls-aws-lc",
         feature = "tls-rustls-no-provider",
@@ -8,13 +12,15 @@
     ))
 ))]
 compile_error!(
-    "HTTP authentication is enabled without a TLS backend. Enable one of \
+    "HTTP features are enabled without a TLS backend. Enable one of \
      `tls-aws-lc` (default), `tls-rustls-no-provider`, `tls-native`, or \
      `tls-native-vendored`. When using `default-features = false`, add a TLS \
      backend feature explicitly."
 );
 
 pub mod auth;
+#[cfg(feature = "http")]
+pub mod http;
 pub mod launcher;
 pub mod minecraft;
 pub mod runtime;

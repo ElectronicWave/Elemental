@@ -9,24 +9,16 @@ edition.workspace = true
 repository.workspace = true
 license.workspace = true
 
-[dependencies]
-elemental-core = { path = "../core", version = "0.3.0", optional = true, default-features = false }
-elemental-driver = { path = "../driver", version = "0.3.0", optional = true, default-features = false }
-elemental-launcher = { path = "../launcher", version = "0.3.0", optional = true, default-features = false }
-elemental-object = { path = "../object", version = "0.3.0", optional = true, default-features = false }
-elemental-shared = { path = "../shared", version = "0.3.0", optional = true, default-features = false }
-elemental-infra = { path = "../infra", version = "0.3.0", optional = true, default-features = false }
-elemental-schema = { path = "../schema", version = "0.3.0", optional = true, default-features = false }
-
 [features]
 core = ["dep:elemental-core"]
+http = ["core", "elemental-core/http"]
 
 shared = ["dep:elemental-shared"]
 shared-json = ["shared", "elemental-shared/json"]
 shared-toml = ["shared", "elemental-shared/toml"]
 
-driver = ["dep:elemental-driver", "core", "infra", "schema", "shared"]
-launcher = ["dep:elemental-launcher", "core", "driver", "infra"]
+driver = ["dep:elemental-driver", "core", "http", "infra", "schema", "shared"]
+launcher = ["dep:elemental-launcher", "core", "http", "driver", "infra"]
 
 tls-aws-lc = [
     "elemental-core?/tls-aws-lc",
@@ -102,17 +94,23 @@ driver-neoforge = [
 
 microsoft-auth = [
     "core",
+    "http",
     "elemental-core/microsoft-auth",
     "elemental-launcher?/microsoft-auth",
 ]
-yggdrasil-auth = ["core", "launcher", "elemental-core/yggdrasil-auth", "elemental-launcher/yggdrasil-auth"]
+yggdrasil-auth = [
+    "core",
+    "launcher",
+    "elemental-core/yggdrasil-auth",
+    "elemental-launcher/yggdrasil-auth",
+]
 authlib-injector-embed = ["yggdrasil-auth", "elemental-launcher/authlib-injector-embed"]
 offline-server = ["yggdrasil-auth", "elemental-launcher/offline-server"]
 
 object = ["dep:elemental-object"]
 object-notify = ["object", "elemental-object/notify"]
 
-infra = ["dep:elemental-infra"]
+infra = ["dep:elemental-infra", "http"]
 infra-serde = ["infra", "elemental-infra/serde"]
 
 schema = ["dep:elemental-schema"]
@@ -130,3 +128,12 @@ full = [
 ]
 
 default = ["full", "shared-json", "object-notify", "tls-aws-lc"]
+
+[dependencies]
+elemental-core = { path = "../core", version = "0.3.0", optional = true, default-features = false }
+elemental-driver = { path = "../driver", version = "0.3.0", optional = true, default-features = false }
+elemental-infra = { path = "../infra", version = "0.3.0", optional = true, default-features = false }
+elemental-launcher = { path = "../launcher", version = "0.3.0", optional = true, default-features = false }
+elemental-object = { path = "../object", version = "0.3.0", optional = true, default-features = false }
+elemental-schema = { path = "../schema", version = "0.3.0", optional = true, default-features = false }
+elemental-shared = { path = "../shared", version = "0.3.0", optional = true, default-features = false }

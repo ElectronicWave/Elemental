@@ -8,23 +8,24 @@ edition.workspace = true
 repository.workspace = true
 license.workspace = true
 
-[dependencies]
-reqwest = { workspace = true }
-serde = { workspace = true, optional = true }
-tokio = { workspace = true }
-async-trait = { workspace = true }
-futures = { workspace = true }
-scc = { workspace = true }
-tokio-util = { version = "0.7.17", default-features = false, features = ["rt"] }
-sha1 = { workspace = true }
-hex = { workspace = true }
-thiserror = { workspace = true }
-zip = { version = "9.0.0", default-features = false, features = ["deflate"] }
-
 [features]
 default = ["tls-aws-lc"]
-tls-aws-lc = ["reqwest/rustls"]
-tls-rustls-no-provider = ["reqwest/rustls-no-provider"]
-tls-native = ["reqwest/native-tls"]
-tls-native-vendored = ["reqwest/native-tls-vendored"]
+tls-aws-lc = ["elemental-core/tls-aws-lc", "reqwest/rustls"]
+tls-rustls-no-provider = ["elemental-core/tls-rustls-no-provider", "reqwest/rustls-no-provider"]
+tls-native = ["elemental-core/tls-native", "reqwest/native-tls"]
+tls-native-vendored = ["elemental-core/tls-native-vendored", "reqwest/native-tls-vendored"]
 serde = ["dep:serde"]
+
+[dependencies]
+async-trait = { workspace = true }
+elemental-core = { path = "../core", version = "0.3.0", default-features = false, features = ["http"] }
+futures = { workspace = true }
+hex = { workspace = true }
+reqwest = { workspace = true }
+scc = { workspace = true }
+serde = { workspace = true, optional = true }
+sha1 = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { version = "0.7.17", default-features = false, features = ["rt"] }
+zip = { version = "9.0.0", default-features = false, features = ["deflate"] }

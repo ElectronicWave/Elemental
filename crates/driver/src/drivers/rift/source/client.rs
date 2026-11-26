@@ -1,10 +1,12 @@
+use elemental_core::http::SwappableClient;
 use elemental_infra::jar::JarBytes;
 use elemental_schema::fabric::ProfileJson;
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
 use crate::{
     error::{Error, Result},
     families::version_json::UpstreamUrlRewriter,
-    http::{HttpSource, fetch_bytes, fetch_json},
+    http::HttpSource,
 };
 
 use super::endpoints::RiftEndpoints;
@@ -35,6 +37,22 @@ impl RiftSource {
         }
     }
 
+    pub fn with_http_client(endpoints: RiftEndpoints, client: SwappableClient) -> Self {
+        Self {
+            inner: HttpSource::with_http_client(endpoints, client),
+        }
+    }
+
+    pub fn with_headers(mut self, headers: HeaderMap) -> Self {
+        self.inner = self.inner.with_headers(headers);
+        self
+    }
+
+    pub fn with_header(mut self, name: HeaderName, value: HeaderValue) -> Self {
+        self.inner = self.inner.with_header(name, value);
+        self
+    }
+
     pub fn endpoints(&self) -> &RiftEndpoints {
         self.inner.endpoints()
     }
@@ -42,7 +60,7 @@ impl RiftSource {
     pub async fn releases(&self) -> Result<Vec<RiftRelease>> {
         let url = self.endpoints().releases_url()?;
         let releases: Vec<GitHubRelease> =
-            fetch_json(self.inner.client()?, url.as_str(), "rift source").await?;
+            self.inner.fetch_json(url.as_str(), "rift source").await?;
 
         releases
             .into_iter()
@@ -60,7 +78,7 @@ impl RiftSource {
         let url = self
             .endpoints()
             .release_asset_url(release.tag_name.as_str(), release.asset_name.as_str())?;
-        let jar_bytes = fetch_bytes(self.inner.client()?, url.as_str(), "rift source").await?;
+        let jar_bytes = self.inner.fetch_bytes(url.as_str(), "rift source").await?;
         let raw_profile = read_release_profile_json(release, jar_bytes)?;
         let profile = serde_json::from_slice(raw_profile.as_slice())
             .map_err(|source| Error::DecodeRiftProfile { source })?;

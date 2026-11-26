@@ -52,6 +52,7 @@ tokio = { version = "1.54.1", features = [
     "time",
 ] }
 toml = "1.0.0"
+uuid = "1.19.0"
 
 # https://github.com/microsoft/edit/blob/main/Cargo.toml
 # `opt-level = "s"` significantly reduces binary size.

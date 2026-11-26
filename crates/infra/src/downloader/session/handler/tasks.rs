@@ -38,7 +38,7 @@ impl SessionHandler {
         self.finish_task();
     }
 
-    pub(crate) fn finish_cancelled(&self, task_id: &TaskId) {
+    pub(crate) fn finish_cancelled(&self, task_id: TaskId) {
         self.apply_state(StateCommand::Cancelled(task_id));
         self.finish_task();
     }

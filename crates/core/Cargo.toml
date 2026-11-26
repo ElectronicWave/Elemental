@@ -45,7 +45,7 @@ serde_json = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = "0.1.44"
-uuid = { version = "1.19.0", features = ["serde", "v4", "v5"] }
+uuid = { workspace = true, features = ["serde", "v4", "v5"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.56.0"

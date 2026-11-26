@@ -33,7 +33,7 @@ enum PermitOutcome {
 }
 
 struct RetryContext<'a> {
-    task_id: &'a TaskId,
+    task_id: TaskId,
     task: &'a DownloadTask,
     group: Option<&'a String>,
     token: &'a CancellationToken,
@@ -75,7 +75,7 @@ impl SessionHandler {
             };
 
             if self.is_draining() || self.token.is_cancelled() {
-                self.finish_cancelled(&queued_task.task_id);
+                self.finish_cancelled(queued_task.task_id);
                 continue;
             }
 
@@ -94,14 +94,14 @@ impl SessionHandler {
         let token = self.token.child_token();
 
         if token.is_cancelled() {
-            self.finish_cancelled(&task_id);
+            self.finish_cancelled(task_id);
             return;
         }
 
         match reuse_existing_task(runtime, &task, &token).await {
             ReuseOutcome::Reused => {
                 self.apply_state(StateCommand::Skipped {
-                    task_id: &task_id,
+                    task_id,
                     bytes: task.expected_size().unwrap_or(0),
                 });
                 self.finish_task();
@@ -109,7 +109,7 @@ impl SessionHandler {
             }
             ReuseOutcome::Missing => {}
             ReuseOutcome::Cancelled => {
-                self.finish_cancelled(&task_id);
+                self.finish_cancelled(task_id);
                 return;
             }
             ReuseOutcome::Failed(message) => {
@@ -119,19 +119,19 @@ impl SessionHandler {
         }
 
         match self
-            .run_attempts(runtime, &task_id, &task, &record_task, group, &token)
+            .run_attempts(runtime, task_id, &task, &record_task, group, &token)
             .await
         {
             AttemptOutcome::Downloaded { bytes, elapsed } => {
                 self.apply_state(StateCommand::Downloaded {
-                    task_id: &task_id,
+                    task_id,
                     bytes,
                     duration: elapsed,
                 });
                 self.finish_task();
             }
             AttemptOutcome::Cancelled => {
-                self.finish_cancelled(&task_id);
+                self.finish_cancelled(task_id);
             }
             AttemptOutcome::Failed(failure) => {
                 self.finish_failed(failure);
@@ -142,7 +142,7 @@ impl SessionHandler {
     async fn run_attempts(
         &self,
         runtime: &SessionRuntime,
-        task_id: &TaskId,
+        task_id: TaskId,
         task: &DownloadTask,
         record_task: &DownloadTask,
         group: Option<String>,
@@ -168,7 +168,7 @@ impl SessionHandler {
                 PermitOutcome::Cancelled => return AttemptOutcome::Cancelled,
                 PermitOutcome::Failed(message) => {
                     return AttemptOutcome::Failed(prepare_failure(
-                        task_id.clone(),
+                        task_id,
                         group.clone(),
                         record_task,
                         message,

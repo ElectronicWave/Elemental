@@ -67,14 +67,14 @@ impl AttemptError {
 
     pub(crate) fn into_failure(
         self,
-        task_id: &TaskId,
+        task_id: TaskId,
         task: &DownloadTask,
         group: Option<String>,
     ) -> DownloadFailure {
         match self {
             Self::Transfer(error) => error.into_failure(task_id, task, group),
             Self::Cancelled => DownloadFailure::for_task(
-                task_id.clone(),
+                task_id,
                 group,
                 task.url().to_owned(),
                 task.path().to_path_buf(),
@@ -136,13 +136,13 @@ impl TransferError {
 
     fn into_failure(
         self,
-        task_id: &TaskId,
+        task_id: TaskId,
         task: &DownloadTask,
         group: Option<String>,
     ) -> DownloadFailure {
         let retryable = self.is_retryable();
         DownloadFailure::for_task(
-            task_id.clone(),
+            task_id,
             group,
             task.url().to_owned(),
             task.path().to_path_buf(),

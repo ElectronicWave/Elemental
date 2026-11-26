@@ -1,4 +1,3 @@
-use std::sync::atomic::Ordering;
 use tokio::sync::mpsc;
 
 use super::{QueuedDownloadTask, SessionHandler};
@@ -22,30 +21,25 @@ impl SessionHandler {
         Ok(())
     }
 
-    pub(crate) fn allocate_task_id(&self) -> TaskId {
-        let sequence = self.next_task_id.fetch_add(1, Ordering::Relaxed);
-        format!("{}-{}", self.session_id, sequence)
-    }
-
     async fn enqueue_task(&self, task: DownloadTask, group: Option<String>) -> Result<()> {
-        let task_id = self.allocate_task_id();
+        let task_id = TaskId::new();
         let sender = self.clone_sender().ok_or(Error::SessionSenderClosed)?;
 
         self.start_task();
         self.apply_state(StateCommand::Enqueue {
-            task_id: task_id.clone(),
+            task_id,
             task: &task,
             group: group.clone(),
         });
 
         let queued = QueuedDownloadTask {
-            task_id: task_id.clone(),
+            task_id,
             task,
             group,
         };
 
         if let Err(error) = sender.send(queued).await {
-            self.finish_cancelled(&task_id);
+            self.finish_cancelled(task_id);
             return Err(Error::EnqueueTask {
                 task_id,
                 source: Box::new(error),

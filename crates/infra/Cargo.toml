@@ -14,7 +14,7 @@ tls-aws-lc = ["elemental-core/tls-aws-lc", "reqwest/rustls"]
 tls-rustls-no-provider = ["elemental-core/tls-rustls-no-provider", "reqwest/rustls-no-provider"]
 tls-native = ["elemental-core/tls-native", "reqwest/native-tls"]
 tls-native-vendored = ["elemental-core/tls-native-vendored", "reqwest/native-tls-vendored"]
-serde = ["dep:serde"]
+serde = ["dep:serde", "uuid/serde"]
 
 [dependencies]
 async-trait = { workspace = true }
@@ -27,4 +27,5 @@ sha1 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { version = "0.7.17", default-features = false, features = ["rt"] }
+uuid = { workspace = true, features = ["v4"] }
 zip = { version = "9.0.0", default-features = false, features = ["deflate"] }

@@ -14,28 +14,28 @@ pub(crate) enum StateCommand<'a> {
         task: &'a DownloadTask,
         group: Option<String>,
     },
-    Start(&'a TaskId),
+    Start(TaskId),
     Receive {
-        task_id: &'a TaskId,
+        task_id: TaskId,
         bytes: usize,
     },
     Retrying {
-        task_id: &'a TaskId,
+        task_id: TaskId,
         failed_attempt: usize,
         delay: Duration,
         reason: String,
     },
     Downloaded {
-        task_id: &'a TaskId,
+        task_id: TaskId,
         bytes: u64,
         duration: Duration,
     },
     Skipped {
-        task_id: &'a TaskId,
+        task_id: TaskId,
         bytes: u64,
     },
     Failed(DownloadFailure),
-    Cancelled(&'a TaskId),
+    Cancelled(TaskId),
 }
 
 impl SessionState {
@@ -96,8 +96,8 @@ impl SessionState {
         )
     }
 
-    fn start(&mut self, task_id: &TaskId, now: Instant) -> SessionTransition {
-        if let Some(record) = self.records.get_mut(task_id) {
+    fn start(&mut self, task_id: TaskId, now: Instant) -> SessionTransition {
+        if let Some(record) = self.records.get_mut(&task_id) {
             record.status = TaskStatus::Active;
         }
 
@@ -105,18 +105,18 @@ impl SessionState {
             now,
             vec![DownloadEvent::TaskStarted {
                 session_id: self.session_id,
-                task_id: task_id.clone(),
+                task_id,
             }],
         )
     }
 
-    fn receive(&mut self, task_id: &TaskId, bytes: usize, now: Instant) -> SessionTransition {
+    fn receive(&mut self, task_id: TaskId, bytes: usize, now: Instant) -> SessionTransition {
         let received_bytes = u64::try_from(bytes).unwrap_or(u64::MAX);
         self.bytes_received = self.bytes_received.saturating_add(received_bytes);
         self.throughput.record(bytes, now);
 
         let mut events = Vec::new();
-        if let Some(record) = self.records.get_mut(task_id) {
+        if let Some(record) = self.records.get_mut(&task_id) {
             record.received_bytes = record.received_bytes.saturating_add(received_bytes);
             if now.saturating_duration_since(record.last_progress_event)
                 >= TASK_PROGRESS_EVENT_INTERVAL
@@ -124,7 +124,7 @@ impl SessionState {
                 record.last_progress_event = now;
                 events.push(DownloadEvent::TaskProgress {
                     session_id: self.session_id,
-                    task_id: task_id.clone(),
+                    task_id,
                     received_bytes: record.received_bytes,
                     expected_bytes: record.details.expected_bytes,
                 });
@@ -136,13 +136,13 @@ impl SessionState {
 
     fn retrying(
         &mut self,
-        task_id: &TaskId,
+        task_id: TaskId,
         failed_attempt: usize,
         delay: Duration,
         reason: String,
         now: Instant,
     ) -> SessionTransition {
-        if let Some(record) = self.records.get_mut(task_id) {
+        if let Some(record) = self.records.get_mut(&task_id) {
             record.received_bytes = 0;
             record.last_progress_event = now;
         }
@@ -151,7 +151,7 @@ impl SessionState {
             now,
             vec![DownloadEvent::TaskRetrying {
                 session_id: self.session_id,
-                task_id: task_id.clone(),
+                task_id,
                 failed_attempt,
                 delay_ms: u64::try_from(delay.as_millis()).unwrap_or(u64::MAX),
                 reason,
@@ -161,7 +161,7 @@ impl SessionState {
 
     fn downloaded(
         &mut self,
-        task_id: &TaskId,
+        task_id: TaskId,
         bytes: u64,
         duration: Duration,
         now: Instant,
@@ -174,29 +174,29 @@ impl SessionState {
         )
     }
 
-    fn skipped(&mut self, task_id: &TaskId, bytes: u64, now: Instant) -> SessionTransition {
+    fn skipped(&mut self, task_id: TaskId, bytes: u64, now: Instant) -> SessionTransition {
         self.finish_task(task_id, TaskStatus::Skipped { bytes }, None, now)
     }
 
     fn failed(&mut self, failure: DownloadFailure, now: Instant) -> SessionTransition {
-        let task_id = failure.task_id.clone();
+        let task_id = failure.task_id;
 
-        self.finish_task(&task_id, TaskStatus::Failed { failure }, None, now)
+        self.finish_task(task_id, TaskStatus::Failed { failure }, None, now)
     }
 
-    fn cancelled(&mut self, task_id: &TaskId, now: Instant) -> SessionTransition {
+    fn cancelled(&mut self, task_id: TaskId, now: Instant) -> SessionTransition {
         self.finish_task(task_id, TaskStatus::Cancelled, None, now)
     }
 
     fn finish_task(
         &mut self,
-        task_id: &TaskId,
+        task_id: TaskId,
         status: TaskStatus,
         final_received_bytes: Option<u64>,
         now: Instant,
     ) -> SessionTransition {
         let mut events = Vec::new();
-        if let Some(record) = self.records.get_mut(task_id) {
+        if let Some(record) = self.records.get_mut(&task_id) {
             if let Some(received_bytes) = final_received_bytes {
                 record.received_bytes = received_bytes;
             }

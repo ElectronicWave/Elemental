@@ -5,10 +5,8 @@ use std::{
 
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
-pub use crate::error::TaskId;
 use crate::error::{Error, Result};
-
-pub type SessionId = u64;
+pub use crate::error::{SessionId, TaskId};
 
 pub(crate) struct HeaderNames<'a>(pub(crate) &'a HeaderMap);
 

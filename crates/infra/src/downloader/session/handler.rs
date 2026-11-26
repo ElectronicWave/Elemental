@@ -3,7 +3,7 @@ use std::{
     future::Future,
     sync::{
         Arc, MutexGuard as StdMutexGuard,
-        atomic::{AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicUsize, Ordering},
     },
     time::Instant,
 };
@@ -56,7 +56,6 @@ pub(crate) struct SessionHandler {
     headers: HeaderMap,
     bandwidth_limiter: Arc<BandwidthLimiter>,
     events: broadcast::Sender<DownloadEvent>,
-    next_task_id: AtomicU64,
     pending_tasks: AtomicUsize,
     idle: tokio::sync::Notify,
     lifecycle: SessionLifecycle,
@@ -123,7 +122,6 @@ impl SessionHandler {
             headers,
             bandwidth_limiter,
             events,
-            next_task_id: AtomicU64::new(1),
             pending_tasks: AtomicUsize::new(0),
             idle: tokio::sync::Notify::new(),
             lifecycle: SessionLifecycle::new(),

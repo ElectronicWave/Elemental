@@ -2,7 +2,7 @@ use elemental_core::http::SwappableClient;
 use std::future::Future;
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, AtomicU64, Ordering},
+    atomic::{AtomicBool, Ordering},
 };
 use tokio::sync::{broadcast, watch};
 
@@ -30,7 +30,6 @@ pub(super) struct SessionRuntime {
     pub(super) materializer: Arc<dyn Materializer>,
     pub(super) default_session_parallelism: usize,
     pub(super) session_queue_capacity: usize,
-    pub(super) next_session_id: AtomicU64,
 }
 
 #[derive(Debug, Clone)]

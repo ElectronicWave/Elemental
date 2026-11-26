@@ -174,7 +174,7 @@ impl DownloadReport {
             .clone()
             .unwrap_or_else(|| self.session_id.to_string());
         let failures: Vec<DownloadFailure> = self.failures().cloned().collect();
-        let cancelled: Vec<TaskId> = self.cancelled_task_ids().cloned().collect();
+        let cancelled: Vec<TaskId> = self.cancelled_task_ids().copied().collect();
 
         if !failures.is_empty() {
             return Err(Error::SessionFailed { session, failures });

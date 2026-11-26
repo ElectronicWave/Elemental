@@ -1,11 +1,11 @@
-use std::sync::{Arc, atomic::Ordering};
+use std::sync::Arc;
 
 use reqwest::header::HeaderMap;
 
 use super::{DownloadSession, DownloadSessionOptions, SessionHandler, SessionRuntime};
 use crate::downloader::config::{DownloadRateLimit, FailurePolicy, RetryPolicy};
 use crate::downloader::event::DownloadEvent;
-use crate::downloader::task::insert_header;
+use crate::downloader::task::{SessionId, insert_header};
 use crate::error::Result;
 
 #[derive(Debug)]
@@ -58,7 +58,7 @@ impl DownloadSessionBuilder {
 
     pub async fn open(self) -> Result<DownloadSession> {
         self.options.validate()?;
-        let session_id = self.runtime.next_session_id.fetch_add(1, Ordering::Relaxed);
+        let session_id = SessionId::new();
         let name = Some(self.name);
         let parallelism = self
             .options

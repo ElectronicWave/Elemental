@@ -1,4 +1,4 @@
-use std::sync::{Arc, atomic::AtomicU64};
+use std::sync::Arc;
 
 use elemental_core::http::SwappableClient;
 use tokio::sync::broadcast;
@@ -51,7 +51,6 @@ impl ElementalDownloader {
                 materializer,
                 default_session_parallelism: config.default_session_parallelism,
                 session_queue_capacity: config.session_queue_capacity,
-                next_session_id: AtomicU64::new(1),
             }),
         }
     }

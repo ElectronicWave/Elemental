@@ -21,11 +21,14 @@ use crate::{
 /// Identifies an addon type by stable machine ID and human-readable display name.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AddonDescriptor {
+    /// Stable machine-readable identifier (for example, `"liteloader"`).
     pub id: Cow<'static, str>,
+    /// Human-readable display name.
     pub name: Cow<'static, str>,
 }
 
 impl AddonDescriptor {
+    /// Creates a new addon descriptor from a machine ID and display name.
     pub fn new(id: impl Into<Cow<'static, str>>, name: impl Into<Cow<'static, str>>) -> Self {
         Self {
             id: id.into(),
@@ -38,8 +41,11 @@ impl AddonDescriptor {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PatchModeSupport {
+    /// Only supports launch-time virtual overlays (`vpatch`) and/or runtime hooks.
     VirtualOnly,
+    /// Requires physical writes into the instance's `version.json`.
     PhysicalOnly,
+    /// Supports both virtual overlays (`vpatch`) and physical `version.json` patching.
     #[default]
     Both,
 }
@@ -48,9 +54,12 @@ pub enum PatchModeSupport {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AddonPatchMode {
+    /// Follow the instance's [`PatchMode`] policy (default).
     #[default]
     Inherit,
+    /// Force virtual patching (`vpatch`) regardless of a `Physical` instance policy.
     Virtual,
+    /// Request physical patching into `version.json` (rejected if instance policy is `Virtual`).
     Physical,
 }
 
@@ -101,68 +110,100 @@ pub fn resolve_effective_patch_mode(
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AddonOrigin {
+    /// Installed and tracked by Elemental in `.elemental/addons.json`.
     Elemental,
+    /// Detected from an existing instance's metadata or files without an Elemental state record.
     External,
 }
 
 /// Result of checking whether an addon can be applied to a host driver and game version.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AddonCompatibility {
+    /// The addon can be applied to the target host instance.
     Compatible,
-    Incompatible { reason: String },
+    /// The addon cannot be applied to the target host instance.
+    Incompatible {
+        /// Human-readable explanation of why the addon is incompatible.
+        reason: String,
+    },
 }
 
 /// Read-only context passed to [`Addon::check_compatibility`].
 pub struct AddonContext<'a> {
+    /// Host driver installed on the target instance.
     pub driver: DriverDescriptor,
+    /// Target Minecraft version, when known.
     pub game_version: Option<&'a MinecraftVersionId>,
+    /// Storage handle for the target instance directory.
     pub instance: &'a InstanceStorage,
 }
 
 /// Inputs passed to [`Addon::prepare`].
 pub struct AddonPrepareRequest<'a> {
+    /// Active download session used to download addon artifacts.
     pub session: &'a DownloadSession,
+    /// Storage handle for the target instance directory.
     pub instance: &'a InstanceStorage,
+    /// Host driver installed on the target instance.
     pub driver: DriverDescriptor,
+    /// Minecraft version of the target instance.
     pub game_version: &'a MinecraftVersionId,
+    /// Requested addon version, if specified by the caller.
     pub addon_version: Option<&'a str>,
+    /// Runtime options configured for installation/launch preparation.
     pub runtime_options: &'a RuntimeOptions,
+    /// Runtime resolver for locating Java installations when needed.
     pub runtime_resolver: &'a RuntimeResolver,
 }
 
 /// Output produced by [`Addon::prepare`].
 #[derive(Debug, Clone, Default)]
 pub struct AddonPrepareOutput {
+    /// Resolved addon version string to persist in instance state.
     pub version: Option<String>,
+    /// Declarative metadata patch layered onto the instance's `PistonMetaData`.
     pub metadata_patch: Option<MetadataPatch>,
+    /// Additional files created/managed by this addon (tracked for cleanup on removal).
     pub managed_files: Vec<PathBuf>,
 }
 
 /// Launch-time argument injections produced by [`Addon::augment_launch`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AddonLaunchArgs {
+    /// Additional JVM flags appended before the main class.
     pub extra_jvm_arguments: Vec<String>,
+    /// Additional game arguments appended after the host driver's game arguments.
     pub extra_game_arguments: Vec<String>,
 }
 
 /// Context passed to [`Addon::augment_launch`].
 pub struct AddonLaunchContext<'a> {
+    /// Storage handle for the instance being launched.
     pub instance: &'a InstanceStorage,
+    /// Host driver of the instance being launched.
     pub driver: DriverDescriptor,
+    /// Authenticated player credential for this launch.
     pub credential: &'a Credential,
+    /// Persisted state record for this addon on the instance.
     pub record: &'a InstalledAddonRecord,
 }
 
 /// Summary of an addon installed or detected on an instance.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InstalledAddon {
+    /// Machine-readable addon identifier.
     pub id: String,
+    /// Human-readable addon display name.
     pub name: String,
+    /// Installed addon version, when known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    /// Whether this addon is Elemental-managed or externally detected.
     pub origin: AddonOrigin,
+    /// Effective patch mode resolved from instance policy and per-addon preference.
     #[serde(default)]
     pub effective_patch_mode: PatchMode,
+    /// Whether launching requires executing [`Addon::augment_launch`] in code.
     #[serde(default)]
     pub requires_runtime_hook: bool,
 }
@@ -170,14 +211,20 @@ pub struct InstalledAddon {
 /// A catalog entry describing an available version of an [`Addon`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct AddonRelease {
+    /// Target Minecraft version this release applies to.
     pub game_version: MinecraftVersionId,
+    /// Addon release version string.
     pub version: String,
+    /// Optional release channel (for example, `"release"` or `"snapshot"`).
     pub channel: Option<String>,
+    /// Optional publication timestamp string from the upstream source.
     pub published_at: Option<String>,
+    /// Whether the upstream catalog marks this release as a prerelease.
     pub prerelease: Option<bool>,
 }
 
 impl AddonRelease {
+    /// Creates a release entry for `game_version` and addon `version`.
     pub fn new(game_version: MinecraftVersionId, version: impl Into<String>) -> Self {
         Self {
             game_version,
@@ -188,16 +235,19 @@ impl AddonRelease {
         }
     }
 
+    /// Sets the release channel label.
     pub fn with_channel(mut self, channel: Option<String>) -> Self {
         self.channel = channel;
         self
     }
 
+    /// Sets the publication timestamp string.
     pub fn with_published_at(mut self, published_at: Option<String>) -> Self {
         self.published_at = published_at;
         self
     }
 
+    /// Sets whether this release is a prerelease.
     pub fn with_prerelease(mut self, prerelease: Option<bool>) -> Self {
         self.prerelease = prerelease;
         self
@@ -207,13 +257,16 @@ impl AddonRelease {
 /// Host driver and game version context used when querying an addon's version catalog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AddonCatalogQuery<'a> {
+    /// Host driver to query compatible addon releases for.
     pub driver: DriverDescriptor,
+    /// Target Minecraft version to query compatible addon releases for.
     pub game_version: &'a MinecraftVersionId,
 }
 
 /// Composable, host-aware extension layered onto a Minecraft instance.
 #[async_trait]
 pub trait Addon: Send + Sync {
+    /// Returns the addon's unique identifier and display name.
     fn descriptor(&self) -> AddonDescriptor;
 
     /// Declares which patch modes this addon supports.
@@ -241,18 +294,23 @@ pub trait Addon: Send + Sync {
         Ok(None)
     }
 
+    /// Checks whether this addon is compatible with the host driver and game version.
     fn check_compatibility(&self, _ctx: &AddonContext<'_>) -> AddonCompatibility {
         AddonCompatibility::Compatible
     }
 
+    /// Detects whether an unmanaged/external copy of this addon is already present in `probe`.
     async fn inspect(&self, _probe: &InstanceProbe) -> Result<Option<InstalledAddon>> {
         Ok(None)
     }
 
+    /// Downloads any required artifacts and produces the metadata patch and managed files
+    /// to persist for this addon.
     async fn prepare(&self, _request: &AddonPrepareRequest<'_>) -> Result<AddonPrepareOutput> {
         Ok(AddonPrepareOutput::default())
     }
 
+    /// Augments the launch command with dynamic JVM or game arguments before spawning.
     async fn augment_launch(
         &self,
         _args: &mut AddonLaunchArgs,

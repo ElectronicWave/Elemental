@@ -21,24 +21,34 @@ const ADDONS_STATE_FILE: &str = "addons.json";
 /// Persisted state record for a single addon installed on an instance.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstalledAddonRecord {
+    /// Machine-readable addon identifier.
     pub id: String,
+    /// Human-readable addon display name.
     pub name: String,
+    /// Installed addon version, when recorded.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    /// Origin indicating whether Elemental or an external launcher installed the addon.
     pub origin: AddonOrigin,
+    /// Per-addon patch mode preference.
     #[serde(default)]
     pub patch_mode: AddonPatchMode,
+    /// Patch mode capabilities declared by the addon when installed.
     #[serde(default)]
     pub patch_mode_support: PatchModeSupport,
+    /// Whether this addon requires a launch-time hook via [`crate::Addon::augment_launch`].
     #[serde(default)]
     pub requires_runtime_hook: bool,
+    /// Instance-relative paths of files managed by this addon.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub managed_files: Vec<String>,
+    /// Stored metadata patch applied in [`PatchMode::Virtual`] or [`PatchMode::Physical`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata_patch: Option<MetadataPatch>,
 }
 
 impl InstalledAddonRecord {
+    /// Computes the effective [`PatchMode`] constrained by `instance_policy`.
     pub fn effective_patch_mode(&self, instance_policy: PatchMode) -> Result<PatchMode> {
         resolve_effective_patch_mode(
             &self.id,
@@ -48,6 +58,7 @@ impl InstalledAddonRecord {
         )
     }
 
+    /// Converts this persisted record into a public [`InstalledAddon`] summary.
     pub fn to_installed(&self, instance_policy: PatchMode) -> InstalledAddon {
         let effective_patch_mode = self
             .effective_patch_mode(instance_policy)
@@ -66,13 +77,16 @@ impl InstalledAddonRecord {
 /// Persisted addon state stored under `.elemental/addons.json`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AddonState {
+    /// Instance-wide upper-bound patch mode policy (`Virtual` by default).
     #[serde(default)]
     pub patch_mode: PatchMode,
+    /// Ordered list of addons installed on the instance.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub addons: Vec<InstalledAddonRecord>,
 }
 
 impl AddonState {
+    /// Inserts or replaces an addon record in installation order.
     pub fn upsert(&mut self, record: InstalledAddonRecord) {
         if let Some(existing) = self.addons.iter_mut().find(|item| item.id == record.id) {
             *existing = record;
@@ -81,6 +95,7 @@ impl AddonState {
         }
     }
 
+    /// Validates that every Elemental-managed addon's patch mode obeys `self.patch_mode`.
     pub fn validate_modes(&self) -> Result<()> {
         for record in &self.addons {
             if record.origin == AddonOrigin::Elemental {
@@ -90,6 +105,7 @@ impl AddonState {
         Ok(())
     }
 
+    /// Resolves all stored [`NamedMetadataPatch`] entries with their effective patch modes.
     pub fn resolve_named_patches(&self) -> Result<Vec<NamedMetadataPatch>> {
         let mut patches = Vec::new();
         for record in &self.addons {

@@ -29,6 +29,7 @@ use crate::{
 
 use self::{catalog::LiteLoaderCatalog, source::LiteLoaderSource};
 
+/// Machine-readable identifier for the built-in LiteLoader addon.
 pub const LITELOADER_ADDON_ID: &str = "liteloader";
 const LITELOADER_LIBRARY_PREFIX: &str = "com.mumfrey:liteloader:";
 
@@ -45,10 +46,12 @@ impl Default for LiteLoaderAddon {
 }
 
 impl LiteLoaderAddon {
+    /// Creates a `LiteLoaderAddon` backed by the given metadata/version `source`.
     pub fn new(source: LiteLoaderSource) -> Self {
         Self { source }
     }
 
+    /// Replaces the [`SwappableClient`] used by the underlying [`LiteLoaderSource`].
     pub fn with_http_client(mut self, client: SwappableClient) -> Self {
         self.source = self.source.with_http_client(client);
         self

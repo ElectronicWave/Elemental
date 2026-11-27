@@ -18,12 +18,16 @@ use crate::{
 /// Declarative request selecting a registered addon by ID, optional version, and scoped patch mode.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AddonSpec {
+    /// Registered addon ID to look up in [`AddonRegistry`].
     pub id: String,
+    /// Optional addon version passed to [`Addon::prepare`].
     pub version: Option<String>,
+    /// Per-addon patch mode preference (defaults to [`AddonPatchMode::Inherit`]).
     pub patch_mode: AddonPatchMode,
 }
 
 impl AddonSpec {
+    /// Creates a request targeting the registered addon with `id`.
     pub fn new(id: impl Into<String>) -> Self {
         Self {
             id: id.into(),
@@ -32,11 +36,13 @@ impl AddonSpec {
         }
     }
 
+    /// Selects a specific addon release version to install.
     pub fn with_version(mut self, version: impl Into<String>) -> Self {
         self.version = Some(version.into());
         self
     }
 
+    /// Sets the per-addon patch mode preference (`Inherit`, `Virtual`, or `Physical`).
     pub fn with_patch_mode(mut self, patch_mode: AddonPatchMode) -> Self {
         self.patch_mode = patch_mode;
         self
@@ -95,6 +101,7 @@ impl AddonRegistry {
         Ok(())
     }
 
+    /// Returns the registered addon matching `id`, if any.
     pub fn get(&self, id: &str) -> Option<Arc<dyn Addon>> {
         self.addons
             .iter()
@@ -102,14 +109,17 @@ impl AddonRegistry {
             .cloned()
     }
 
+    /// Iterates over descriptors of all registered addons.
     pub fn descriptors(&self) -> impl Iterator<Item = AddonDescriptor> + '_ {
         self.addons.iter().map(|addon| addon.descriptor())
     }
 
+    /// Iterates over all registered addon instances.
     pub fn iter(&self) -> impl Iterator<Item = &Arc<dyn Addon>> {
         self.addons.iter()
     }
 
+    /// Queries the supported Minecraft versions exposed by `addon_id`, if it has a catalog.
     pub async fn supported_game_versions(
         &self,
         addon_id: &str,
@@ -122,6 +132,7 @@ impl AddonRegistry {
         Ok(addon.supported_game_versions().await?)
     }
 
+    /// Queries available releases of `addon_id` for `driver` and `game_version`.
     pub async fn available_versions(
         &self,
         addon_id: &str,

@@ -19,6 +19,7 @@ pub struct CustomPatchAddon {
 }
 
 impl CustomPatchAddon {
+    /// Creates an addon that applies `patch` under the given `id` and `name`.
     pub fn new(
         id: impl Into<std::borrow::Cow<'static, str>>,
         name: impl Into<std::borrow::Cow<'static, str>>,
@@ -32,11 +33,13 @@ impl CustomPatchAddon {
         }
     }
 
+    /// Sets the default version string recorded when the caller omits one.
     pub fn with_version(mut self, version: impl Into<String>) -> Self {
         self.version = Some(version.into());
         self
     }
 
+    /// Restricts compatibility to instances using one of the specified driver IDs.
     pub fn with_allowed_drivers(mut self, drivers: Vec<&'static str>) -> Self {
         self.allowed_drivers = Some(drivers);
         self

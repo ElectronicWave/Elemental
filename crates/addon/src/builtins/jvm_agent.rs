@@ -21,6 +21,7 @@ pub struct JvmAgentAddon {
 }
 
 impl JvmAgentAddon {
+    /// Creates a JVM agent addon injecting `-javaagent:<jar_path>` at launch time.
     pub fn new(
         id: impl Into<std::borrow::Cow<'static, str>>,
         name: impl Into<std::borrow::Cow<'static, str>>,
@@ -35,16 +36,19 @@ impl JvmAgentAddon {
         }
     }
 
+    /// Sets the default version string recorded when the caller omits one.
     pub fn with_version(mut self, version: impl Into<String>) -> Self {
         self.version = Some(version.into());
         self
     }
 
+    /// Attaches an agent option string formatted as `-javaagent:<jar_path>=<option>`.
     pub fn with_agent_option(mut self, option: impl Into<String>) -> Self {
         self.agent_option = Some(option.into());
         self
     }
 
+    /// Appends additional JVM arguments injected alongside `-javaagent`.
     pub fn with_extra_jvm_arguments(mut self, args: Vec<String>) -> Self {
         self.extra_jvm_arguments = args;
         self

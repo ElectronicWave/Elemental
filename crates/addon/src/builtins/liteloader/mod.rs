@@ -73,19 +73,23 @@ impl Addon for LiteLoaderAddon {
         &self,
         query: &AddonCatalogQuery<'_>,
     ) -> Result<Option<Vec<AddonRelease>>> {
-        if query.driver != VANILLA_DRIVER && query.driver != FORGE_DRIVER {
+        if let Some(driver) = query.driver
+            && driver != VANILLA_DRIVER
+            && driver != FORGE_DRIVER
+        {
             return Ok(Some(Vec::new()));
         }
-        let catalog = LiteLoaderCatalog::new(self.source.clone());
-        let releases = catalog.loader_versions(query.game_version).await?;
+        let releases = self.source.releases().await?;
         Ok(Some(
             releases
                 .into_iter()
+                .filter(|release| {
+                    query
+                        .game_version
+                        .is_none_or(|version| release.game_version == version.as_str())
+                })
                 .map(|release| {
-                    AddonRelease::new(release.game_version, release.loader_version.to_string())
-                        .with_channel(release.channel)
-                        .with_published_at(release.published_at)
-                        .with_prerelease(release.prerelease)
+                    AddonRelease::new(release.loader_version).with_channel(Some(release.channel))
                 })
                 .collect(),
         ))

@@ -622,10 +622,9 @@ impl Addon for CatalogStubAddon {
         &self,
         query: &AddonCatalogQuery<'_>,
     ) -> elemental_launcher::addon_kit::Result<Option<Vec<AddonRelease>>> {
-        if query.driver == VANILLA_DRIVER {
+        if query.driver.is_none_or(|driver| driver == VANILLA_DRIVER) {
             Ok(Some(vec![
-                AddonRelease::new(query.game_version.clone(), "1.0.0-vanilla")
-                    .with_channel(Some("release".to_owned())),
+                AddonRelease::new("1.0.0-vanilla").with_channel(Some("release".to_owned())),
             ]))
         } else {
             Ok(Some(Vec::new()))
@@ -647,25 +646,37 @@ async fn addon_registry_exposes_catalog_for_registered_addons() {
 
     let games = launcher
         .addons()
-        .supported_game_versions("catalog-stub")
+        .addon("catalog-stub")
+        .unwrap()
+        .supported_game_versions()
         .await
         .unwrap()
         .expect("catalog-stub exposes game versions");
     assert_eq!(games.len(), 1);
     assert_eq!(games[0].id, mc_1_20_1);
 
+    let vanilla_query = AddonCatalogQuery::new()
+        .with_driver(VANILLA_DRIVER)
+        .with_game_version(&mc_1_20_1);
     let vanilla_releases = launcher
         .addons()
-        .available_versions("catalog-stub", VANILLA_DRIVER, &mc_1_20_1)
+        .addon("catalog-stub")
+        .unwrap()
+        .available_versions(&vanilla_query)
         .await
         .unwrap()
         .expect("catalog-stub exposes vanilla releases");
     assert_eq!(vanilla_releases.len(), 1);
     assert_eq!(vanilla_releases[0].version, "1.0.0-vanilla");
 
+    let forge_query = AddonCatalogQuery::new()
+        .with_driver(FORGE_DRIVER)
+        .with_game_version(&mc_1_20_1);
     let forge_releases = launcher
         .addons()
-        .available_versions("catalog-stub", FORGE_DRIVER, &mc_1_20_1)
+        .addon("catalog-stub")
+        .unwrap()
+        .available_versions(&forge_query)
         .await
         .unwrap()
         .expect("catalog-stub filters by host driver");
@@ -674,7 +685,9 @@ async fn addon_registry_exposes_catalog_for_registered_addons() {
     assert!(
         launcher
             .addons()
-            .available_versions("optifine-mock", VANILLA_DRIVER, &mc_1_20_1)
+            .addon("optifine-mock")
+            .unwrap()
+            .available_versions(&vanilla_query)
             .await
             .unwrap()
             .is_none()
@@ -682,9 +695,9 @@ async fn addon_registry_exposes_catalog_for_registered_addons() {
 
     let err = launcher
         .addons()
-        .available_versions("unknown-addon", VANILLA_DRIVER, &mc_1_20_1)
-        .await
-        .unwrap_err();
+        .addon("unknown-addon")
+        .err()
+        .expect("unknown addon should error");
     assert!(matches!(err, Error::AddonNotRegistered { id } if id == "unknown-addon"));
 
     common::remove(&root);

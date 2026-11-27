@@ -1,14 +1,11 @@
 use std::{fmt, sync::Arc};
 
-use elemental_addon::{
-    Addon, AddonCatalogQuery, AddonDescriptor, AddonPatchMode, AddonRelease, GameVersion,
-};
+use elemental_addon::{Addon, AddonDescriptor, AddonPatchMode};
 #[cfg(feature = "addon-liteloader")]
 use elemental_addon::{
     LITELOADER_ADDON_ID, LiteLoaderAddon, LiteLoaderEndpoints, LiteLoaderSource,
 };
-use elemental_core::{http::SwappableClient, minecraft::MinecraftVersionId};
-use elemental_driver::driver::DriverDescriptor;
+use elemental_core::http::SwappableClient;
 
 use crate::{
     error::{Error, Result},
@@ -109,6 +106,12 @@ impl AddonRegistry {
             .cloned()
     }
 
+    /// Returns the registered addon matching `id`, or [`Error::AddonNotRegistered`] if absent.
+    pub fn addon(&self, id: &str) -> Result<Arc<dyn Addon>> {
+        self.get(id)
+            .ok_or_else(|| Error::AddonNotRegistered { id: id.to_owned() })
+    }
+
     /// Iterates over descriptors of all registered addons.
     pub fn descriptors(&self) -> impl Iterator<Item = AddonDescriptor> + '_ {
         self.addons.iter().map(|addon| addon.descriptor())
@@ -117,38 +120,5 @@ impl AddonRegistry {
     /// Iterates over all registered addon instances.
     pub fn iter(&self) -> impl Iterator<Item = &Arc<dyn Addon>> {
         self.addons.iter()
-    }
-
-    /// Queries the supported Minecraft versions exposed by `addon_id`, if it has a catalog.
-    pub async fn supported_game_versions(
-        &self,
-        addon_id: &str,
-    ) -> Result<Option<Vec<GameVersion>>> {
-        let addon = self
-            .get(addon_id)
-            .ok_or_else(|| Error::AddonNotRegistered {
-                id: addon_id.to_owned(),
-            })?;
-        Ok(addon.supported_game_versions().await?)
-    }
-
-    /// Queries available releases of `addon_id` for `driver` and `game_version`.
-    pub async fn available_versions(
-        &self,
-        addon_id: &str,
-        driver: DriverDescriptor,
-        game_version: &MinecraftVersionId,
-    ) -> Result<Option<Vec<AddonRelease>>> {
-        let addon = self
-            .get(addon_id)
-            .ok_or_else(|| Error::AddonNotRegistered {
-                id: addon_id.to_owned(),
-            })?;
-        Ok(addon
-            .available_versions(&AddonCatalogQuery {
-                driver,
-                game_version,
-            })
-            .await?)
     }
 }

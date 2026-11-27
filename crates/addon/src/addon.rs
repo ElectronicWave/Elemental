@@ -211,8 +211,6 @@ pub struct InstalledAddon {
 /// A catalog entry describing an available version of an [`Addon`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct AddonRelease {
-    /// Target Minecraft version this release applies to.
-    pub game_version: MinecraftVersionId,
     /// Addon release version string.
     pub version: String,
     /// Optional release channel (for example, `"release"` or `"snapshot"`).
@@ -224,10 +222,9 @@ pub struct AddonRelease {
 }
 
 impl AddonRelease {
-    /// Creates a release entry for `game_version` and addon `version`.
-    pub fn new(game_version: MinecraftVersionId, version: impl Into<String>) -> Self {
+    /// Creates a release entry for the given addon `version`.
+    pub fn new(version: impl Into<String>) -> Self {
         Self {
-            game_version,
             version: version.into(),
             channel: None,
             published_at: None,
@@ -254,13 +251,32 @@ impl AddonRelease {
     }
 }
 
-/// Host driver and game version context used when querying an addon's version catalog.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Optional host driver and game version filters for querying an addon's version catalog.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct AddonCatalogQuery<'a> {
-    /// Host driver to query compatible addon releases for.
-    pub driver: DriverDescriptor,
-    /// Target Minecraft version to query compatible addon releases for.
-    pub game_version: &'a MinecraftVersionId,
+    /// Optional host driver filter to query compatible addon releases for.
+    pub driver: Option<DriverDescriptor>,
+    /// Optional Minecraft version filter to query compatible addon releases for.
+    pub game_version: Option<&'a MinecraftVersionId>,
+}
+
+impl<'a> AddonCatalogQuery<'a> {
+    /// Creates an unfiltered catalog query.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Filters releases by host `driver`.
+    pub fn with_driver(mut self, driver: DriverDescriptor) -> Self {
+        self.driver = Some(driver);
+        self
+    }
+
+    /// Filters releases by Minecraft `game_version`.
+    pub fn with_game_version(mut self, game_version: &'a MinecraftVersionId) -> Self {
+        self.game_version = Some(game_version);
+        self
+    }
 }
 
 /// Composable, host-aware extension layered onto a Minecraft instance.

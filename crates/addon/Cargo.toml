@@ -1,0 +1,50 @@
+[package]
+name = "elemental-addon"
+documentation = "https://docs.rs/elemental-addon"
+description = "Composable, host-aware addon system for Elemental Minecraft instances."
+
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[features]
+default = ["liteloader", "tls-aws-lc"]
+tls-aws-lc = [
+    "elemental-core/tls-aws-lc",
+    "elemental-driver/tls-aws-lc",
+    "elemental-infra/tls-aws-lc",
+    "reqwest?/rustls",
+]
+tls-rustls-no-provider = [
+    "elemental-core/tls-rustls-no-provider",
+    "elemental-driver/tls-rustls-no-provider",
+    "elemental-infra/tls-rustls-no-provider",
+    "reqwest?/rustls-no-provider",
+]
+tls-native = [
+    "elemental-core/tls-native",
+    "elemental-driver/tls-native",
+    "elemental-infra/tls-native",
+    "reqwest?/native-tls",
+]
+tls-native-vendored = [
+    "elemental-core/tls-native-vendored",
+    "elemental-driver/tls-native-vendored",
+    "elemental-infra/tls-native-vendored",
+    "reqwest?/native-tls-vendored",
+]
+liteloader = ["elemental-driver/maven-xml", "dep:reqwest"]
+
+[dependencies]
+async-trait = { workspace = true }
+elemental-core = { path = "../core", version = "0.3.0", default-features = false, features = ["http"] }
+elemental-driver = { path = "../driver", version = "0.3.0", default-features = false }
+elemental-infra = { path = "../infra", version = "0.3.0", default-features = false }
+elemental-schema = { path = "../schema", version = "0.3.0" }
+elemental-shared = { path = "../shared", version = "0.3.0" }
+reqwest = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }

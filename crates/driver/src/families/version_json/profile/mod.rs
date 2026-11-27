@@ -12,6 +12,7 @@ use super::parse_argument_string;
 mod library;
 mod maven;
 
+pub use library::profile_library_to_piston;
 use library::{merge_libraries, profile_logging_to_piston};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

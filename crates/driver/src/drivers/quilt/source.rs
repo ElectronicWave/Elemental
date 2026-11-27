@@ -95,7 +95,9 @@ impl QuiltEndpoints {
     }
 
     fn resolve_meta_segments(&self, segments: &[&str]) -> Result<String> {
-        self.endpoints.resolve_segments(QuiltOrigin::Meta, segments)
+        Ok(self
+            .endpoints
+            .resolve_segments(QuiltOrigin::Meta, segments)?)
     }
 }
 
@@ -138,6 +140,6 @@ impl LoaderMetaEndpoints for QuiltEndpoints {
 
 impl UpstreamUrlRewriter for QuiltEndpoints {
     fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
-        self.endpoints.rewrite_known_or_keep(raw_url)
+        Ok(self.endpoints.rewrite_known_or_keep(raw_url)?)
     }
 }

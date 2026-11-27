@@ -145,8 +145,9 @@ impl FabricEndpoints {
     }
 
     fn resolve_meta_segments(&self, segments: &[&str]) -> Result<String> {
-        self.endpoints
-            .resolve_segments(FabricOrigin::Meta, segments)
+        Ok(self
+            .endpoints
+            .resolve_segments(FabricOrigin::Meta, segments)?)
     }
 }
 

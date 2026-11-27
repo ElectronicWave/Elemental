@@ -4,8 +4,6 @@ pub mod cleanroom;
 pub mod fabric;
 #[cfg(feature = "forge")]
 pub mod forge;
-#[cfg(feature = "liteloader")]
-pub mod liteloader;
 #[cfg(feature = "neoforge")]
 pub mod neoforge;
 #[cfg(feature = "outlands")]

@@ -59,14 +59,8 @@ pub enum Error {
         source: Box<dyn StdError + Send + Sync>,
     },
 
-    #[error("URL cannot be used as a path base: {url}")]
-    UrlNotPathBase { url: String },
-
-    #[error("can't map URL to a known origin: {raw_url}")]
-    UnknownOrigin { raw_url: String },
-
-    #[error("URL matches a known origin host but not a configured base path: {raw_url}")]
-    OriginBasePathMismatch { raw_url: String },
+    #[error(transparent)]
+    Origin(#[from] elemental_core::url::OriginError),
 
     #[error("request {source_name} resource failed: {url}")]
     RequestResource {
@@ -97,9 +91,6 @@ pub enum Error {
 
     #[error("maven library '{notation}' has neither downloads nor a repository url")]
     MavenLibraryMissingSource { notation: String },
-
-    #[error("{context} must use http or https: {url}")]
-    UnsupportedUrlScheme { context: String, url: String },
 
     #[error("decode {source_label} maven metadata failed: {url}")]
     DecodeMavenMetadata {
@@ -296,23 +287,6 @@ pub enum Error {
         source: Box<Error>,
     },
 
-    #[error("can't find LiteLoader Minecraft version '{game_version}'")]
-    LiteLoaderMinecraftVersionNotFound { game_version: String },
-
-    #[error(
-        "can't find LiteLoader loader version '{loader_version}' for Minecraft '{game_version}'"
-    )]
-    LiteLoaderLoaderVersionNotFound {
-        loader_version: String,
-        game_version: String,
-    },
-
-    #[error("LiteLoader library '{library}' does not declare a supported repository")]
-    LiteLoaderLibraryRepositoryMissing { library: String },
-
-    #[error("LiteLoader snapshot library '{library}' does not declare a repository")]
-    LiteLoaderSnapshotRepositoryMissing { library: String },
-
     #[error("can't find Rift release asset named '{asset_name}'")]
     RiftReleaseAssetNotFound { asset_name: String },
 
@@ -346,6 +320,19 @@ pub enum Error {
 
     #[error("unterminated quoted argument string with quote {quote}")]
     UnterminatedArgumentQuote { quote: char },
+
+    #[error(
+        "metadata patch '{second_patch}' requests mainClass '{second_main_class}', conflicting with '{first_patch}' ('{first_main_class}')"
+    )]
+    PatchMainClassConflict {
+        first_patch: String,
+        first_main_class: String,
+        second_patch: String,
+        second_main_class: String,
+    },
+
+    #[error("metadata patch ordering contains a cycle involving: {}", cycle.join(", "))]
+    PatchOrderCycle { cycle: Vec<String> },
 }
 
 impl Error {

@@ -21,6 +21,21 @@ pub struct InstanceProbe {
 
 impl InstanceProbe {
     pub async fn collect(storage: &InstanceStorage) -> Result<Self> {
+        let baseline = storage.path.join(".elemental").join("base-version.json");
+        if tokio::fs::metadata(&baseline)
+            .await
+            .is_ok_and(|metadata| metadata.is_file())
+        {
+            let bytes = tokio::fs::read(&baseline).await?;
+            return Ok(Self {
+                metadata: Some(serde_json::from_slice(&bytes)?),
+            });
+        }
+
+        Self::collect_raw(storage).await
+    }
+
+    pub async fn collect_raw(storage: &InstanceStorage) -> Result<Self> {
         let preferred = storage.try_get_resource(VersionJsonInstanceResource::Metadata)?;
         let metadata_path = match tokio::fs::metadata(&preferred).await {
             Ok(metadata) if metadata.is_file() => Some(preferred),

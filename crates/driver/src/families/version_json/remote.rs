@@ -106,15 +106,16 @@ impl VanillaEndpoints {
     }
 
     pub fn version_manifest_url(&self) -> Result<String> {
-        self.origin_policy.resolve(
+        Ok(self.origin_policy.resolve(
             VanillaOrigin::LauncherMeta,
             "/mc/game/version_manifest_v2.json",
-        )
+        )?)
     }
 
     pub fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
-        self.origin_policy
-            .rewrite_origin_url(KNOWN_VANILLA_ORIGINS, raw_url)
+        Ok(self
+            .origin_policy
+            .rewrite_origin_url(KNOWN_VANILLA_ORIGINS, raw_url)?)
     }
 
     pub fn object_url(&self, hash: impl AsRef<str>) -> Result<String> {
@@ -122,8 +123,9 @@ impl VanillaEndpoints {
         let prefix = hash.get(0..2).ok_or_else(|| Error::AssetHashTooShort {
             hash: hash.to_owned(),
         })?;
-        self.origin_policy
-            .resolve(VanillaOrigin::Resources, &format!("{prefix}/{hash}"))
+        Ok(self
+            .origin_policy
+            .resolve(VanillaOrigin::Resources, &format!("{prefix}/{hash}"))?)
     }
 }
 

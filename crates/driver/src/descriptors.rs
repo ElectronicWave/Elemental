@@ -33,11 +33,6 @@ pub const QUILT_DRIVER: DriverDescriptor = DriverDescriptor {
     name: "Quilt",
 };
 
-pub const LITELOADER_DRIVER: DriverDescriptor = DriverDescriptor {
-    id: "liteloader",
-    name: "LiteLoader",
-};
-
 pub const RIFT_DRIVER: DriverDescriptor = DriverDescriptor {
     id: "rift",
     name: "Rift",
@@ -76,8 +71,6 @@ pub const ALL_DRIVERS: &[DriverDescriptor] = &[
     BABRIC_DRIVER,
     #[cfg(feature = "quilt")]
     QUILT_DRIVER,
-    #[cfg(feature = "liteloader")]
-    LITELOADER_DRIVER,
     #[cfg(feature = "rift")]
     RIFT_DRIVER,
     #[cfg(feature = "forge")]

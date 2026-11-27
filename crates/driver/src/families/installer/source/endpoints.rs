@@ -34,7 +34,9 @@ impl MavenEndpoints {
     }
 
     pub fn resolve(&self, path: &str) -> Result<String> {
-        self.origin_policy.resolve(self.spec.canonical_origin, path)
+        Ok(self
+            .origin_policy
+            .resolve(self.spec.canonical_origin, path)?)
     }
 
     pub fn origin_policy(&self) -> &OriginPolicy {
@@ -53,8 +55,9 @@ impl MavenEndpoints {
     }
 
     pub fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
-        self.origin_policy
-            .rewrite_known_origin_url_or_keep(&self.known_origins, raw_url)
+        Ok(self
+            .origin_policy
+            .rewrite_known_origin_url_or_keep(&self.known_origins, raw_url)?)
     }
 
     pub fn maven_metadata_url(&self) -> Result<String> {

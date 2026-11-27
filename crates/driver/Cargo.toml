@@ -32,7 +32,6 @@ driver-all = [
     "legacyfabric",
     "babric",
     "quilt",
-    "liteloader",
     "rift",
     "forge",
     "cleanroom",
@@ -43,7 +42,6 @@ fabric = []
 legacyfabric = ["fabric"]
 babric = ["fabric"]
 quilt = []
-liteloader = ["maven-xml"]
 rift = []
 forge = ["maven-xml"]
 cleanroom = ["retrofutura"]

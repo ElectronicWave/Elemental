@@ -10,8 +10,7 @@ use elemental_core::http::SwappableClient;
 use elemental_driver::{
     descriptors::{
         BABRIC_DRIVER, CLEANROOM_DRIVER, FABRIC_DRIVER, FORGE_DRIVER, LEGACY_FABRIC_DRIVER,
-        LITELOADER_DRIVER, NEOFORGE_DRIVER, OUTLANDS_DRIVER, QUILT_DRIVER, RIFT_DRIVER,
-        VANILLA_DRIVER,
+        NEOFORGE_DRIVER, OUTLANDS_DRIVER, QUILT_DRIVER, RIFT_DRIVER, VANILLA_DRIVER,
     },
     driver::{
         Driver, DriverDescriptor, InstallerFamilyDriver, ProfiledVersionJsonDriver,
@@ -45,12 +44,6 @@ use elemental_driver::drivers::fabric::{
 };
 #[cfg(feature = "driver-forge")]
 use elemental_driver::drivers::forge::FORGE_SPEC;
-#[cfg(feature = "driver-liteloader")]
-use elemental_driver::drivers::liteloader::{
-    catalog::LiteLoaderCatalog,
-    driver::LiteLoaderDriverFamily,
-    source::{LiteLoaderEndpoints, LiteLoaderSource},
-};
 #[cfg(feature = "driver-neoforge")]
 use elemental_driver::drivers::neoforge::NEOFORGE_SPEC;
 #[cfg(feature = "driver-outlands")]
@@ -208,8 +201,6 @@ pub(crate) enum BuiltinDriver {
     Fabric(FabricFlavor),
     #[cfg(feature = "driver-quilt")]
     Quilt,
-    #[cfg(feature = "driver-liteloader")]
-    LiteLoader,
     #[cfg(feature = "driver-rift")]
     Rift,
     #[cfg(feature = "driver-forge")]
@@ -249,14 +240,6 @@ impl BuiltinDriver {
                 descriptor,
                 QuiltCatalog::new(LoaderMetaSource::with_http_client(
                     QuiltEndpoints::default(),
-                    http_client.clone(),
-                )),
-            ),
-            #[cfg(feature = "driver-liteloader")]
-            Self::LiteLoader => DriverCatalog::loader(
-                descriptor,
-                LiteLoaderCatalog::new(LiteLoaderSource::with_http_client(
-                    LiteLoaderEndpoints::default(),
                     http_client.clone(),
                 )),
             ),
@@ -320,16 +303,6 @@ impl BuiltinDriver {
                 QuiltDriverFamily,
                 LoaderMetaSource::with_http_client(
                     QuiltEndpoints::new(policy),
-                    http_client.clone(),
-                ),
-            ))),
-            #[cfg(feature = "driver-liteloader")]
-            Self::LiteLoader => Ok(Box::new(profiled_driver(
-                origins,
-                http_client,
-                LiteLoaderDriverFamily,
-                LiteLoaderSource::with_http_client(
-                    LiteLoaderEndpoints::new(policy),
                     http_client.clone(),
                 ),
             ))),
@@ -426,11 +399,6 @@ pub(crate) const BUILTIN_DRIVERS: &[BuiltinDriverRegistration] = &[
     BuiltinDriverRegistration {
         descriptor: QUILT_DRIVER,
         driver: BuiltinDriver::Quilt,
-    },
-    #[cfg(feature = "driver-liteloader")]
-    BuiltinDriverRegistration {
-        descriptor: LITELOADER_DRIVER,
-        driver: BuiltinDriver::LiteLoader,
     },
     #[cfg(feature = "driver-rift")]
     BuiltinDriverRegistration {

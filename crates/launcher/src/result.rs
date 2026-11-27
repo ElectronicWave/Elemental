@@ -3,6 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use elemental_addon::{InstalledAddon, InstalledAddonRecord, PatchMode};
 use elemental_core::{
     auth::credential::Credential,
     launcher::command::LaunchCommand,
@@ -57,6 +58,7 @@ pub struct Instance {
     pub instance_name: String,
     pub instance_root: PathBuf,
     pub driver: InstalledDriver,
+    pub addons: Vec<InstalledAddon>,
 }
 
 #[derive(Debug)]
@@ -101,21 +103,38 @@ pub struct PreparedInstanceInfo {
 pub struct PreparedInstance {
     pub(crate) driver: DriverDescriptor,
     pub(crate) launch_version: PreparedVersionJsonInstance,
+    pub(crate) patch_mode: PatchMode,
+    pub(crate) addons: Vec<InstalledAddonRecord>,
 }
 
 impl PreparedInstance {
     pub(crate) fn new(
         driver: DriverDescriptor,
         launch_version: PreparedVersionJsonInstance,
+        patch_mode: PatchMode,
+        addons: Vec<InstalledAddonRecord>,
     ) -> Self {
         Self {
             driver,
             launch_version,
+            patch_mode,
+            addons,
         }
     }
 
     pub fn driver(&self) -> &DriverDescriptor {
         &self.driver
+    }
+
+    pub fn patch_mode(&self) -> PatchMode {
+        self.patch_mode
+    }
+
+    pub fn addons(&self) -> Vec<InstalledAddon> {
+        self.addons
+            .iter()
+            .map(|record| record.to_installed(self.patch_mode))
+            .collect()
     }
 
     pub fn instance_root(&self) -> &Path {
@@ -175,7 +194,8 @@ impl PreparedInstance {
             variables,
             options.extra_jvm_arguments.clone(),
             options.extra_game_arguments.clone(),
-        );
+        )
+        .with_metadata(self.launch_version.metadata.clone());
         Ok(builder.build_command()?)
     }
 

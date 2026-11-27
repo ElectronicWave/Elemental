@@ -27,6 +27,18 @@ pub enum Error {
     UnexpectedLoaderVersion { id: String },
 
     #[error(transparent)]
+    Addon(#[from] elemental_addon::Error),
+
+    #[error("addon '{id}' is already registered")]
+    AddonAlreadyRegistered { id: String },
+
+    #[error("addon '{id}' is not registered")]
+    AddonNotRegistered { id: String },
+
+    #[error("addon '{id}' is incompatible with this instance: {reason}")]
+    AddonIncompatible { id: String, reason: String },
+
+    #[error(transparent)]
     Driver(#[from] elemental_driver::error::Error),
 
     #[error(transparent)]

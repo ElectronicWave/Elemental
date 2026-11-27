@@ -1,8 +1,7 @@
 use elemental::driver::{
     descriptors::{
         BABRIC_DRIVER, CLEANROOM_DRIVER, FABRIC_DRIVER, FORGE_DRIVER, LEGACY_FABRIC_DRIVER,
-        LITELOADER_DRIVER, NEOFORGE_DRIVER, OUTLANDS_DRIVER, QUILT_DRIVER, RIFT_DRIVER,
-        VANILLA_DRIVER,
+        NEOFORGE_DRIVER, OUTLANDS_DRIVER, QUILT_DRIVER, RIFT_DRIVER, VANILLA_DRIVER,
     },
     driver::DriverDescriptor,
 };
@@ -23,7 +22,7 @@ struct DriverDefaultEntry {
     defaults: DriverDefaults,
 }
 
-const DRIVER_DEFAULTS: [DriverDefaultEntry; 11] = [
+const DRIVER_DEFAULTS: [DriverDefaultEntry; 10] = [
     DriverDefaultEntry {
         descriptor: VANILLA_DRIVER,
         defaults: DriverDefaults {
@@ -66,15 +65,6 @@ const DRIVER_DEFAULTS: [DriverDefaultEntry; 11] = [
             game_version: "1.20.1",
             loader_version: Some("0.24.0"),
             instance_prefix: "MyQuilt",
-            runtime_major_version: None,
-        },
-    },
-    DriverDefaultEntry {
-        descriptor: LITELOADER_DRIVER,
-        defaults: DriverDefaults {
-            game_version: "1.7.10",
-            loader_version: Some("1.7.10_04"),
-            instance_prefix: "MyLiteLoader",
             runtime_major_version: None,
         },
     },

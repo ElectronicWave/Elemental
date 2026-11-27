@@ -1,7 +1,8 @@
 #![cfg_attr(not(feature = "driver-all"), allow(dead_code))]
 
-use std::collections::HashMap;
-
+#[cfg(feature = "addon-liteloader")]
+use elemental_addon::LITELOADER_ADDON_ID;
+use elemental_core::url::{OriginPolicy, OriginPolicyMap};
 #[cfg(feature = "driver-babric")]
 use elemental_driver::descriptors::BABRIC_DRIVER;
 #[cfg(feature = "driver-cleanroom")]
@@ -12,8 +13,6 @@ use elemental_driver::descriptors::FABRIC_DRIVER;
 use elemental_driver::descriptors::FORGE_DRIVER;
 #[cfg(feature = "driver-legacyfabric")]
 use elemental_driver::descriptors::LEGACY_FABRIC_DRIVER;
-#[cfg(feature = "driver-liteloader")]
-use elemental_driver::descriptors::LITELOADER_DRIVER;
 #[cfg(feature = "driver-neoforge")]
 use elemental_driver::descriptors::NEOFORGE_DRIVER;
 #[cfg(feature = "driver-outlands")]
@@ -26,40 +25,48 @@ use elemental_driver::{
     descriptors::VANILLA_DRIVER,
     driver::DriverDescriptor,
     drivers::vanilla::source::{VanillaEndpoints, VanillaSource},
-    url::OriginPolicy,
 };
 
 /// Mirror and upstream origin overrides, supporting both launcher-wide rules
-/// (`global`) and per-driver overrides (`for_driver`).
-///
-/// Built-in and third-party drivers share the same override mechanism via
-/// [`DriverDescriptor`], while convenience accessors preserve discovery and
-/// IDE autocompletion for built-in drivers.
+/// (`global`) and per-driver / per-addon overrides.
 #[derive(Debug, Clone, Default)]
 pub struct DriverOrigins {
-    global: OriginPolicy,
-    per_driver: HashMap<&'static str, OriginPolicy>,
+    policies: OriginPolicyMap,
 }
 
 impl DriverOrigins {
-    /// Returns the launcher-wide policy applied before any per-driver overrides.
+    /// Returns the launcher-wide policy applied before any per-driver or per-addon overrides.
     pub fn global(&mut self) -> &mut OriginPolicy {
-        &mut self.global
+        self.policies.global()
     }
 
     /// Returns a mutable per-driver policy for any built-in or third-party
     /// driver identified by `descriptor`.
     pub fn for_driver(&mut self, descriptor: DriverDescriptor) -> &mut OriginPolicy {
-        self.per_driver.entry(descriptor.id).or_default()
+        self.policies.scope(format!("driver:{}", descriptor.id))
+    }
+
+    /// Returns a mutable per-addon policy for any built-in or third-party addon ID.
+    pub fn for_addon(&mut self, addon_id: impl Into<String>) -> &mut OriginPolicy {
+        self.policies.scope(format!("addon:{}", addon_id.into()))
     }
 
     /// Resolves the effective policy for `descriptor` by layering per-driver
     /// overrides on top of [`Self::global`].
     pub fn policy_for(&self, descriptor: DriverDescriptor) -> OriginPolicy {
-        match self.per_driver.get(descriptor.id) {
-            Some(overrides) => self.global.merged_with(overrides),
-            None => self.global.clone(),
-        }
+        self.policies
+            .policy_for(&format!("driver:{}", descriptor.id))
+    }
+
+    /// Resolves the effective policy for `addon_id` by layering per-addon
+    /// overrides on top of [`Self::global`].
+    pub fn policy_for_addon(&self, addon_id: &str) -> OriginPolicy {
+        self.policies.policy_for(&format!("addon:{addon_id}"))
+    }
+
+    #[cfg(feature = "addon-liteloader")]
+    pub fn liteloader_addon(&mut self) -> &mut OriginPolicy {
+        self.for_addon(LITELOADER_ADDON_ID)
     }
 
     pub fn vanilla(&mut self) -> &mut OriginPolicy {
@@ -84,11 +91,6 @@ impl DriverOrigins {
     #[cfg(feature = "driver-quilt")]
     pub fn quilt(&mut self) -> &mut OriginPolicy {
         self.for_driver(QUILT_DRIVER)
-    }
-
-    #[cfg(feature = "driver-liteloader")]
-    pub fn liteloader(&mut self) -> &mut OriginPolicy {
-        self.for_driver(LITELOADER_DRIVER)
     }
 
     #[cfg(feature = "driver-rift")]
@@ -198,6 +200,43 @@ mod tests {
         assert_eq!(
             custom_maven,
             "https://mirror.example.org/custom-maven/org/example/loader/1.0.0/loader-1.0.0.pom"
+        );
+    }
+
+    #[test]
+    fn policy_for_addon_layers_per_addon_overrides_over_global() {
+        let mut origins = DriverOrigins::default();
+        origins
+            .global()
+            .override_origin(
+                "https://dl.liteloader.com/versions",
+                "https://mirror.example.org/global-ll".to_owned(),
+            )
+            .expect("valid global liteloader mirror");
+        origins
+            .for_addon("custom-addon")
+            .override_origin(
+                "https://dl.liteloader.com/versions",
+                "https://mirror.example.org/custom-ll".to_owned(),
+            )
+            .expect("valid per-addon mirror");
+
+        let default_addon_url = origins
+            .policy_for_addon("other-addon")
+            .resolve("https://dl.liteloader.com/versions", "versions.json")
+            .unwrap();
+        let custom_addon_url = origins
+            .policy_for_addon("custom-addon")
+            .resolve("https://dl.liteloader.com/versions", "versions.json")
+            .unwrap();
+
+        assert_eq!(
+            default_addon_url,
+            "https://mirror.example.org/global-ll/versions.json"
+        );
+        assert_eq!(
+            custom_addon_url,
+            "https://mirror.example.org/custom-ll/versions.json"
         );
     }
 }

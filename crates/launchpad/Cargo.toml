@@ -10,7 +10,6 @@ driver-all = [
     "driver-legacyfabric",
     "driver-babric",
     "driver-quilt",
-    "driver-liteloader",
     "driver-rift",
     "driver-forge",
     "driver-cleanroom",
@@ -21,7 +20,6 @@ driver-fabric = ["elemental/driver-fabric"]
 driver-legacyfabric = ["elemental/driver-legacyfabric"]
 driver-babric = ["elemental/driver-babric"]
 driver-quilt = ["elemental/driver-quilt"]
-driver-liteloader = ["elemental/driver-liteloader"]
 driver-rift = ["elemental/driver-rift"]
 driver-forge = ["elemental/driver-forge"]
 driver-cleanroom = ["elemental/driver-cleanroom"]

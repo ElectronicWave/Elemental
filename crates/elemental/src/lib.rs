@@ -86,6 +86,9 @@ pub mod prelude {
         MetadataPatch, MetadataPatchStepDiff, PatchMode, PatchModeSupport, PatchTrace,
     };
 
+    #[cfg(feature = "addon-liteloader")]
+    pub use crate::addon::{LITELOADER_ADDON_ID, LiteLoaderAddon};
+
     #[cfg(feature = "launcher")]
     pub use crate::launcher::{
         AccountIndex, AccountListing, AccountRef, AccountRegistry, AccountStore, AddonRegistry,

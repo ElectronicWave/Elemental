@@ -374,6 +374,15 @@ impl Launcher {
         ))
     }
 
+    /// Returns all addons installed or detected on the named instance.
+    pub async fn instance_addons(
+        &self,
+        instance_name: impl Into<String>,
+    ) -> Result<Vec<InstalledAddon>> {
+        let layout = self.instance(instance_name.into())?;
+        self.detect_instance_addons(&layout).await
+    }
+
     pub async fn remove_addon(
         &self,
         instance_name: impl Into<String>,

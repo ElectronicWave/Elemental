@@ -122,10 +122,8 @@ impl DriverOrigins {
         &self,
         http_client: &elemental_core::http::SwappableClient,
     ) -> VanillaSource {
-        VanillaSource::with_http_client(
-            VanillaEndpoints::new(self.policy_for(VANILLA_DRIVER)),
-            http_client.clone(),
-        )
+        VanillaSource::new(VanillaEndpoints::new(self.policy_for(VANILLA_DRIVER)))
+            .with_http_client(http_client.clone())
     }
 }
 

@@ -1,4 +1,4 @@
-use std::{borrow::Cow, path::PathBuf};
+use std::{borrow::Cow, path::PathBuf, sync::Arc};
 
 use async_trait::async_trait;
 use elemental_core::{
@@ -259,5 +259,51 @@ pub trait Addon: Send + Sync {
         _ctx: &AddonLaunchContext<'_>,
     ) -> Result<()> {
         Ok(())
+    }
+}
+
+#[async_trait]
+impl<T: Addon + ?Sized> Addon for Arc<T> {
+    fn descriptor(&self) -> AddonDescriptor {
+        (**self).descriptor()
+    }
+
+    fn patch_mode_support(&self) -> PatchModeSupport {
+        (**self).patch_mode_support()
+    }
+
+    fn requires_runtime_hook(&self) -> bool {
+        (**self).requires_runtime_hook()
+    }
+
+    async fn supported_game_versions(&self) -> Result<Option<Vec<GameVersion>>> {
+        (**self).supported_game_versions().await
+    }
+
+    async fn available_versions(
+        &self,
+        query: &AddonCatalogQuery<'_>,
+    ) -> Result<Option<Vec<AddonRelease>>> {
+        (**self).available_versions(query).await
+    }
+
+    fn check_compatibility(&self, ctx: &AddonContext<'_>) -> AddonCompatibility {
+        (**self).check_compatibility(ctx)
+    }
+
+    async fn inspect(&self, probe: &InstanceProbe) -> Result<Option<InstalledAddon>> {
+        (**self).inspect(probe).await
+    }
+
+    async fn prepare(&self, request: &AddonPrepareRequest<'_>) -> Result<AddonPrepareOutput> {
+        (**self).prepare(request).await
+    }
+
+    async fn augment_launch(
+        &self,
+        args: &mut AddonLaunchArgs,
+        ctx: &AddonLaunchContext<'_>,
+    ) -> Result<()> {
+        (**self).augment_launch(args, ctx).await
     }
 }

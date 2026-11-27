@@ -222,10 +222,10 @@ impl BuiltinDriver {
         Ok(match self {
             Self::Vanilla => DriverCatalog::game_only(
                 descriptor,
-                VanillaCatalog::new(VanillaSource::with_http_client(
-                    VanillaEndpoints::default(),
-                    http_client.clone(),
-                )),
+                VanillaCatalog::new(
+                    VanillaSource::new(VanillaEndpoints::default())
+                        .with_http_client(http_client.clone()),
+                ),
             ),
             #[cfg(any(
                 feature = "driver-fabric",
@@ -238,18 +238,17 @@ impl BuiltinDriver {
             #[cfg(feature = "driver-quilt")]
             Self::Quilt => DriverCatalog::loader(
                 descriptor,
-                QuiltCatalog::new(LoaderMetaSource::with_http_client(
-                    QuiltEndpoints::default(),
-                    http_client.clone(),
-                )),
+                QuiltCatalog::new(
+                    LoaderMetaSource::new(QuiltEndpoints::default())
+                        .with_http_client(http_client.clone()),
+                ),
             ),
             #[cfg(feature = "driver-rift")]
             Self::Rift => DriverCatalog::loader(
                 descriptor,
-                RiftCatalog::new(RiftSource::with_http_client(
-                    RiftEndpoints::default(),
-                    http_client.clone(),
-                )),
+                RiftCatalog::new(
+                    RiftSource::new(RiftEndpoints::default()).with_http_client(http_client.clone()),
+                ),
             ),
             #[cfg(feature = "driver-forge")]
             Self::Forge => {
@@ -293,7 +292,7 @@ impl BuiltinDriver {
                     origins,
                     http_client,
                     FabricDriverFamily::new(flavor.clone()),
-                    LoaderMetaSource::with_http_client(endpoints, http_client.clone()),
+                    LoaderMetaSource::new(endpoints).with_http_client(http_client.clone()),
                 )))
             }
             #[cfg(feature = "driver-quilt")]
@@ -301,17 +300,15 @@ impl BuiltinDriver {
                 origins,
                 http_client,
                 QuiltDriverFamily,
-                LoaderMetaSource::with_http_client(
-                    QuiltEndpoints::new(policy),
-                    http_client.clone(),
-                ),
+                LoaderMetaSource::new(QuiltEndpoints::new(policy))
+                    .with_http_client(http_client.clone()),
             ))),
             #[cfg(feature = "driver-rift")]
             Self::Rift => Ok(Box::new(profiled_driver(
                 origins,
                 http_client,
                 RiftDriverFamily,
-                RiftSource::with_http_client(RiftEndpoints::new(policy), http_client.clone()),
+                RiftSource::new(RiftEndpoints::new(policy)).with_http_client(http_client.clone()),
             ))),
             #[cfg(feature = "driver-forge")]
             Self::Forge => Ok(Box::new(installer_driver(
@@ -346,10 +343,10 @@ fn installer_catalog(
     spec: &'static MavenInstallerSpec,
     http_client: &SwappableClient,
 ) -> InstallerMavenCatalog {
-    InstallerMavenCatalog::new(InstallerMavenSource::with_http_client(
-        MavenEndpoints::official(spec),
-        http_client.clone(),
-    ))
+    InstallerMavenCatalog::new(
+        InstallerMavenSource::new(MavenEndpoints::official(spec))
+            .with_http_client(http_client.clone()),
+    )
 }
 
 fn profiled_driver<F>(
@@ -371,10 +368,13 @@ fn installer_driver(
     http_client: &SwappableClient,
     spec: &'static MavenInstallerSpec,
 ) -> InstallerFamilyDriver {
-    InstallerFamilyDriver::new(InstallerMavenSource::with_http_client(
-        MavenEndpoints::new(spec, origins.policy_for(spec.descriptor())),
-        http_client.clone(),
-    ))
+    InstallerFamilyDriver::new(
+        InstallerMavenSource::new(MavenEndpoints::new(
+            spec,
+            origins.policy_for(spec.descriptor()),
+        ))
+        .with_http_client(http_client.clone()),
+    )
     .with_vanilla_source(origins.vanilla_source(http_client))
 }
 

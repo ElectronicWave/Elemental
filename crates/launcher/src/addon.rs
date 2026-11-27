@@ -65,12 +65,12 @@ impl fmt::Debug for AddonRegistry {
 impl AddonRegistry {
     pub(crate) fn new(http_client: SwappableClient, origins: &DriverOrigins) -> Self {
         #[cfg(feature = "addon-liteloader")]
-        let addons: Vec<Arc<dyn Addon>> = vec![Arc::new(LiteLoaderAddon::new(
-            LiteLoaderSource::with_http_client(
-                LiteLoaderEndpoints::new(origins.policy_for_addon(LITELOADER_ADDON_ID)),
-                http_client,
-            ),
-        ))];
+        let addons: Vec<Arc<dyn Addon>> = vec![Arc::new(
+            LiteLoaderAddon::new(LiteLoaderSource::new(LiteLoaderEndpoints::new(
+                origins.policy_for_addon(LITELOADER_ADDON_ID),
+            )))
+            .with_http_client(http_client),
+        )];
         #[cfg(not(feature = "addon-liteloader"))]
         let addons: Vec<Arc<dyn Addon>> = {
             let _ = (http_client, origins);

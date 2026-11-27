@@ -97,19 +97,9 @@ impl Launcher {
     }
 
     /// Registers a third-party addon on this launcher.
-    pub fn register_addon(mut self, addon: Arc<dyn Addon>) -> Result<Self> {
-        self.addons.register(addon)?;
+    pub fn register_addon(mut self, addon: impl Addon + 'static) -> Result<Self> {
+        self.addons.register(Arc::new(addon))?;
         Ok(self)
-    }
-
-    /// Registers a third-party addon constructed with access to this launcher's
-    /// shared dependencies (such as [`Self::http_client`]).
-    pub fn register_addon_with<F>(self, build: F) -> Result<Self>
-    where
-        F: FnOnce(&Self) -> Arc<dyn Addon>,
-    {
-        let addon = build(&self);
-        self.register_addon(addon)
     }
 
     pub fn drivers(&self) -> &DriverRegistry {
@@ -754,9 +744,9 @@ impl<'a> InstallAddonsBuilder<'a> {
         self
     }
 
-    pub fn with_addon(mut self, addon: Arc<dyn Addon>, version: Option<String>) -> Self {
+    pub fn with_addon(mut self, addon: impl Addon + 'static, version: Option<String>) -> Self {
         self.addons.push(RequestedAddon::Direct {
-            addon,
+            addon: Arc::new(addon),
             version,
             patch_mode: AddonPatchMode::Inherit,
         });
@@ -765,12 +755,12 @@ impl<'a> InstallAddonsBuilder<'a> {
 
     pub fn with_addon_mode(
         mut self,
-        addon: Arc<dyn Addon>,
+        addon: impl Addon + 'static,
         version: Option<String>,
         patch_mode: AddonPatchMode,
     ) -> Self {
         self.addons.push(RequestedAddon::Direct {
-            addon,
+            addon: Arc::new(addon),
             version,
             patch_mode,
         });
@@ -849,9 +839,9 @@ impl<'a> PrepareInstanceBuilder<'a> {
         self
     }
 
-    pub fn with_addon(mut self, addon: Arc<dyn Addon>, version: Option<String>) -> Self {
+    pub fn with_addon(mut self, addon: impl Addon + 'static, version: Option<String>) -> Self {
         self.addons.push(RequestedAddon::Direct {
-            addon,
+            addon: Arc::new(addon),
             version,
             patch_mode: AddonPatchMode::Inherit,
         });
@@ -860,12 +850,12 @@ impl<'a> PrepareInstanceBuilder<'a> {
 
     pub fn with_addon_mode(
         mut self,
-        addon: Arc<dyn Addon>,
+        addon: impl Addon + 'static,
         version: Option<String>,
         patch_mode: AddonPatchMode,
     ) -> Self {
         self.addons.push(RequestedAddon::Direct {
-            addon,
+            addon: Arc::new(addon),
             version,
             patch_mode,
         });

@@ -4,6 +4,7 @@ mod profile;
 pub mod source;
 
 use async_trait::async_trait;
+use elemental_core::http::SwappableClient;
 use elemental_driver::{
     catalog::GameVersion,
     descriptors::{FORGE_DRIVER, VANILLA_DRIVER},
@@ -46,6 +47,11 @@ impl Default for LiteLoaderAddon {
 impl LiteLoaderAddon {
     pub fn new(source: LiteLoaderSource) -> Self {
         Self { source }
+    }
+
+    pub fn with_http_client(mut self, client: SwappableClient) -> Self {
+        self.source = self.source.with_http_client(client);
+        self
     }
 }
 

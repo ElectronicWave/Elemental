@@ -39,8 +39,9 @@ impl RiftSource {
         }
     }
 
-    pub fn with_http_client(endpoints: RiftEndpoints, client: SwappableClient) -> Self {
-        Self { client, endpoints }
+    pub fn with_http_client(mut self, client: SwappableClient) -> Self {
+        self.client = client;
+        self
     }
 
     pub fn with_headers(mut self, headers: HeaderMap) -> Self {

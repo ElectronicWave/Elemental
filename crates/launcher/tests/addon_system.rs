@@ -165,7 +165,7 @@ async fn vpatch_applies_in_memory_without_modifying_version_json() {
     let original_bytes = fs::read(&json_path).unwrap();
 
     let launcher = build_launcher(&root, &java_home)
-        .register_addon(Arc::new(sample_tweaker_addon()))
+        .register_addon(sample_tweaker_addon())
         .unwrap();
 
     let game_version = MinecraftVersionId::try_from("1.20.1").unwrap();
@@ -237,7 +237,7 @@ async fn physical_patch_and_lossless_mode_switching() {
         .join("base-version.json");
 
     let launcher = build_launcher(&root, &java_home)
-        .register_addon(Arc::new(sample_tweaker_addon()))
+        .register_addon(sample_tweaker_addon())
         .unwrap();
 
     let game_version = MinecraftVersionId::try_from("1.20.1").unwrap();
@@ -283,9 +283,9 @@ async fn third_party_runtime_hook_and_data_only_degradation() {
         .with_agent_option("mode=test");
 
     let launcher_with_addons = build_launcher(&root, &java_home)
-        .register_addon(Arc::new(sample_tweaker_addon()))
+        .register_addon(sample_tweaker_addon())
         .unwrap()
-        .register_addon(Arc::new(agent_addon))
+        .register_addon(agent_addon)
         .unwrap();
 
     let game_version = MinecraftVersionId::try_from("1.20.1").unwrap();
@@ -361,7 +361,7 @@ async fn third_party_addon_inspects_external_instance() {
     seed_local_vanilla_instance(&root, "ext-inst");
 
     let launcher = build_launcher(&root, &java_home)
-        .register_addon(Arc::new(ExternalMarkerAddon))
+        .register_addon(ExternalMarkerAddon)
         .unwrap();
 
     let report = launcher.inspect_instances().await.unwrap();
@@ -381,7 +381,7 @@ async fn install_addons_on_existing_instance_without_driver_spec() {
     let original_bytes = fs::read(&json_path).unwrap();
 
     let launcher = build_launcher(&root, &java_home)
-        .register_addon(Arc::new(sample_tweaker_addon()))
+        .register_addon(sample_tweaker_addon())
         .unwrap();
 
     let prepared = launcher
@@ -441,11 +441,11 @@ async fn scoped_patch_modes_enforce_monotonic_rules_and_baseline_probe() {
     );
 
     let launcher = build_launcher(&root, &java_home)
-        .register_addon(Arc::new(tweaker_addon))
+        .register_addon(tweaker_addon)
         .unwrap()
-        .register_addon(Arc::new(debug_addon))
+        .register_addon(debug_addon)
         .unwrap()
-        .register_addon(Arc::new(agent_addon))
+        .register_addon(agent_addon)
         .unwrap();
 
     // Virtual instance policy must reject explicit Physical addon mode.
@@ -550,9 +550,9 @@ async fn reorder_addons_and_trace_instance_patches_step_diffs() {
     );
 
     let launcher = build_launcher(&root, &java_home)
-        .register_addon(Arc::new(addon_a))
+        .register_addon(addon_a)
         .unwrap()
-        .register_addon(Arc::new(addon_b))
+        .register_addon(addon_b)
         .unwrap();
 
     launcher
@@ -638,9 +638,9 @@ async fn addon_registry_exposes_catalog_for_registered_addons() {
     let root = common::temp_root("elemental-addon-catalog");
     let java_home = setup_fake_java_17(&root);
     let launcher = build_launcher(&root, &java_home)
-        .register_addon(Arc::new(CatalogStubAddon))
+        .register_addon(CatalogStubAddon)
         .unwrap()
-        .register_addon(Arc::new(sample_tweaker_addon()))
+        .register_addon(sample_tweaker_addon())
         .unwrap();
 
     let mc_1_20_1 = MinecraftVersionId::try_from("1.20.1").unwrap();

@@ -10,7 +10,7 @@ license.workspace = true
 
 [features]
 default = ["http", "microsoft-auth", "tls-aws-lc"]
-http = ["dep:reqwest"]
+http = ["dep:reqwest", "dep:serde_json"]
 microsoft-auth = [
     "dep:base64",
     "dep:minecraft-msa-auth",

@@ -43,7 +43,9 @@ pub mod prelude {
     };
 
     #[cfg(all(feature = "core", feature = "http"))]
-    pub use crate::core::http::{HttpClientConfig, HttpClientError, SwappableClient};
+    pub use crate::core::http::{
+        HttpClientConfig, HttpClientError, HttpRequestError, RequestBuilderExt, SwappableClient,
+    };
 
     #[cfg(all(feature = "core", feature = "http"))]
     pub use crate::core::url::{

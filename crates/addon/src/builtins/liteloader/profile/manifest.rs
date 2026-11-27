@@ -1,3 +1,4 @@
+use elemental_core::http::SwappableClient;
 use elemental_driver::maven::MavenCoordinate;
 use elemental_schema::fabric::ProfileLibrary;
 
@@ -11,7 +12,7 @@ use super::library::{
 };
 
 pub(super) async fn normalize_manifest_library(
-    client: &reqwest::Client,
+    client: &SwappableClient,
     endpoints: &LiteLoaderEndpoints,
     library: LiteLoaderManifestLibrary,
 ) -> Result<ProfileLibrary> {

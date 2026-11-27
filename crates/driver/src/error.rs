@@ -12,8 +12,8 @@ pub enum Error {
     #[error(transparent)]
     Http(#[from] reqwest::Error),
 
-    #[error("{message}")]
-    HttpClientBuild { message: String },
+    #[error(transparent)]
+    HttpRequest(#[from] elemental_core::http::HttpRequestError),
 
     #[error("unsupported driver id: '{id}'")]
     UnsupportedDriver { id: String },
@@ -61,30 +61,6 @@ pub enum Error {
 
     #[error(transparent)]
     Origin(#[from] elemental_core::url::OriginError),
-
-    #[error("request {source_name} resource failed: {url}")]
-    RequestResource {
-        source_name: String,
-        url: String,
-        #[source]
-        source: reqwest::Error,
-    },
-
-    #[error("{source_name} returned error status: {url}")]
-    HttpStatus {
-        source_name: String,
-        url: String,
-        #[source]
-        source: reqwest::Error,
-    },
-
-    #[error("decode {source_name} resource failed: {url}")]
-    DecodeResource {
-        source_name: String,
-        url: String,
-        #[source]
-        source: Box<dyn StdError + Send + Sync>,
-    },
 
     #[error("invalid {label} notation: {notation}")]
     InvalidNotation { label: String, notation: String },

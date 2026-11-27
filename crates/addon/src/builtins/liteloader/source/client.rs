@@ -1,5 +1,4 @@
-use elemental_core::http::SwappableClient;
-use elemental_driver::http::HttpClient;
+use elemental_core::http::{RequestBuilderExt, SwappableClient};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
 use crate::error::Result;
@@ -10,7 +9,7 @@ use super::endpoints::LiteLoaderEndpoints;
 
 #[derive(Debug, Clone)]
 pub struct LiteLoaderSource {
-    client: HttpClient,
+    client: SwappableClient,
     endpoints: LiteLoaderEndpoints,
 }
 
@@ -23,23 +22,20 @@ impl Default for LiteLoaderSource {
 impl LiteLoaderSource {
     pub fn new(endpoints: LiteLoaderEndpoints) -> Self {
         Self {
-            client: HttpClient::new("liteloader source"),
+            client: SwappableClient::default(),
             endpoints,
         }
     }
 
     pub fn with_client(endpoints: LiteLoaderEndpoints, client: reqwest::Client) -> Self {
         Self {
-            client: HttpClient::with_client(client),
+            client: SwappableClient::from_client(client),
             endpoints,
         }
     }
 
     pub fn with_http_client(endpoints: LiteLoaderEndpoints, client: SwappableClient) -> Self {
-        Self {
-            client: HttpClient::with_http_client(client),
-            endpoints,
-        }
+        Self { client, endpoints }
     }
 
     pub fn with_headers(mut self, headers: HeaderMap) -> Self {
@@ -56,8 +52,8 @@ impl LiteLoaderSource {
         &self.endpoints
     }
 
-    pub(in super::super) fn http_client(&self) -> Result<reqwest::Client> {
-        Ok(self.client.client()?)
+    pub(in super::super) fn http_client(&self) -> &SwappableClient {
+        &self.client
     }
 
     pub async fn releases(&self) -> Result<Vec<LiteLoaderRelease>> {
@@ -67,9 +63,6 @@ impl LiteLoaderSource {
 
     pub(in super::super) async fn manifest(&self) -> Result<LiteLoaderManifest> {
         let url = self.endpoints.versions_manifest_url()?;
-        Ok(self
-            .client
-            .fetch_json(url.as_str(), "liteloader source")
-            .await?)
+        Ok(self.client.get(url.as_str()).send_json().await?)
     }
 }

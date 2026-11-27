@@ -102,6 +102,16 @@ impl Launcher {
         Ok(self)
     }
 
+    /// Registers a third-party addon constructed with access to this launcher's
+    /// shared dependencies (such as [`Self::http_client`]).
+    pub fn register_addon_with<F>(self, build: F) -> Result<Self>
+    where
+        F: FnOnce(&Self) -> Arc<dyn Addon>,
+    {
+        let addon = build(&self);
+        self.register_addon(addon)
+    }
+
     pub fn drivers(&self) -> &DriverRegistry {
         &self.drivers
     }

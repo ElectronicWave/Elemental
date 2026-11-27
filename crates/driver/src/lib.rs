@@ -24,7 +24,6 @@ pub mod driver;
 pub mod drivers;
 pub mod error;
 pub mod families;
-pub mod http;
 pub mod inspect;
 pub mod launch;
 pub mod loader_version;

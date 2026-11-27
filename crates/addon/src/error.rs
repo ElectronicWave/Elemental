@@ -17,6 +17,10 @@ pub enum Error {
     #[error(transparent)]
     Origin(#[from] elemental_core::url::OriginError),
 
+    #[cfg(feature = "liteloader")]
+    #[error(transparent)]
+    HttpRequest(#[from] elemental_core::http::HttpRequestError),
+
     #[error(transparent)]
     Infra(#[from] elemental_infra::error::Error),
 

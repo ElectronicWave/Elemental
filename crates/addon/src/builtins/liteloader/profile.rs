@@ -3,6 +3,7 @@ mod manifest;
 
 use std::collections::HashSet;
 
+use elemental_core::http::SwappableClient;
 use elemental_driver::maven::MavenCoordinate;
 use elemental_infra::SafeRelativePath;
 use elemental_schema::{
@@ -31,13 +32,13 @@ impl LiteLoaderSource {
     ) -> Result<ProfileJson> {
         let manifest = self.manifest().await?;
         let selected = select_build(&manifest, game_version, loader_version)?;
-        let client = self.http_client()?;
-        build_profile_json(&client, self.endpoints(), &selected).await
+        let client = self.http_client();
+        build_profile_json(client, self.endpoints(), &selected).await
     }
 }
 
 pub(super) async fn build_profile_json(
-    client: &reqwest::Client,
+    client: &SwappableClient,
     endpoints: &LiteLoaderEndpoints,
     selected: &LiteLoaderSelectedBuild,
 ) -> Result<ProfileJson> {
@@ -79,7 +80,7 @@ pub(super) async fn build_profile_json(
 }
 
 async fn build_loader_library(
-    client: &reqwest::Client,
+    client: &SwappableClient,
     endpoints: &LiteLoaderEndpoints,
     selected: &LiteLoaderSelectedBuild,
 ) -> Result<ProfileLibrary> {

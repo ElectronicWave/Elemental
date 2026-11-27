@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use elemental_core::storage::layout::Layoutable;
+use elemental_infra::SafeRelativePath;
 use elemental_schema::mojang::piston::PistonMetaData;
 
 use crate::{
@@ -15,14 +16,11 @@ use super::{
     apply_metadata_patches_traced,
 };
 
-const BASE_VERSION_REL_PATH: &[&str] = &[".elemental", "base-version.json"];
+const BASE_VERSION_FILE: &str = "base-version.json";
 
-fn baseline_path(instance_root: &Path) -> PathBuf {
-    BASE_VERSION_REL_PATH
-        .iter()
-        .fold(instance_root.to_path_buf(), |path, segment| {
-            path.join(segment)
-        })
+fn baseline_path(instance: &InstanceStorage) -> Result<PathBuf> {
+    let relative = SafeRelativePath::parse(BASE_VERSION_FILE)?;
+    Ok(instance.try_get_resource(VersionJsonInstanceResource::Elemental(Some(relative)))?)
 }
 
 /// Reads the clean unpatched [`PistonMetaData`] baseline for `instance`.
@@ -30,7 +28,7 @@ fn baseline_path(instance_root: &Path) -> PathBuf {
 /// When physical patching has previously materialized `<instance>.json`, this
 /// reads `.elemental/base-version.json` instead.
 pub fn read_base_metadata(instance: &InstanceStorage) -> Result<PistonMetaData> {
-    let baseline = baseline_path(&instance.path);
+    let baseline = baseline_path(instance)?;
     if baseline.is_file() {
         let bytes = std::fs::read(&baseline)?;
         return Ok(serde_json::from_slice(&bytes)?);
@@ -49,7 +47,7 @@ pub async fn apply_scoped_patches(
     patches: &[NamedMetadataPatch],
 ) -> Result<PatchTrace> {
     let metadata_path = instance.try_get_resource(VersionJsonInstanceResource::Metadata)?;
-    let baseline = baseline_path(&instance.path);
+    let baseline = baseline_path(instance)?;
     let physical_patches = patches
         .iter()
         .filter(|patch| patch.effective_mode == PatchMode::Physical)

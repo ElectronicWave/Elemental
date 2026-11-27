@@ -361,7 +361,7 @@ impl Launcher {
             .resolve_driver(driver_spec)?
             .load_prepared(&layout)
             .await?;
-        let state = load_addon_state(&layout.path).await?;
+        let state = load_addon_state(&layout).await?;
         self.ensure_required_hooks_registered(&state.addons)?;
         if !state.addons.is_empty() || state.patch_mode == PatchMode::Physical {
             prepared.metadata = sync_instance_patches(&layout, &state).await?.metadata;
@@ -534,7 +534,7 @@ impl Launcher {
         requested_addons: Vec<RequestedAddon>,
         patch_mode: Option<PatchMode>,
     ) -> Result<(PatchMode, Vec<InstalledAddonRecord>)> {
-        let mut state = load_addon_state(&instance.path).await?;
+        let mut state = load_addon_state(instance).await?;
         let mode_changed = patch_mode.is_some_and(|mode| mode != state.patch_mode);
         if let Some(mode) = patch_mode {
             state.patch_mode = mode;
@@ -622,7 +622,7 @@ impl Launcher {
 
         state.validate_modes()?;
         let trace = sync_instance_patches(instance, &state).await?;
-        save_addon_state(&instance.path, &state).await?;
+        save_addon_state(instance, &state).await?;
         prepared.metadata = trace.metadata;
         Ok((state.patch_mode, state.addons))
     }
@@ -684,7 +684,7 @@ impl Launcher {
         &self,
         storage: &InstanceStorage,
     ) -> Result<Vec<InstalledAddon>> {
-        let state = load_addon_state(&storage.path).await?;
+        let state = load_addon_state(storage).await?;
         let mut addons = state
             .addons
             .iter()

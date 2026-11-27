@@ -25,4 +25,6 @@ pub mod launcher;
 pub mod minecraft;
 pub mod runtime;
 pub mod storage;
+#[cfg(feature = "http")]
+pub mod url;
 pub mod version;

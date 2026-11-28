@@ -702,3 +702,103 @@ async fn addon_registry_exposes_catalog_for_registered_addons() {
 
     common::remove(&root);
 }
+
+#[tokio::test]
+async fn launch_scoped_addons_apply_metadata_patch_and_runtime_hook_ephemerally() {
+    let root = common::temp_root("elemental-addon-launch-scoped");
+    let java_home = setup_fake_java_17(&root);
+    let json_path = seed_local_vanilla_instance(&root, "launch-scoped-inst");
+    let original_bytes = fs::read(&json_path).unwrap();
+
+    let agent_jar = root.join("launch-agent.jar");
+    fs::write(&agent_jar, b"").unwrap();
+    let agent_addon = JvmAgentAddon::new("ephemeral-agent", "Ephemeral Agent", agent_jar.clone())
+        .with_version("1.0.0")
+        .with_agent_option("scope=launch");
+
+    let launcher = build_launcher(&root, &java_home)
+        .register_addon(sample_tweaker_addon())
+        .unwrap()
+        .register_addon(agent_addon)
+        .unwrap();
+
+    let inspected = launcher
+        .inspect_instance("launch-scoped-inst".to_owned())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(inspected.addons.is_empty());
+
+    let loaded = launcher.load_instance(inspected).await.unwrap();
+    let credential = test_credential().await;
+
+    // Without launch-scoped addons, launch stays baseline vanilla.
+    let plain_command = launcher
+        .build_launch_command(
+            &loaded,
+            &credential,
+            &RuntimeOptions::default(),
+            &LaunchOptions::default(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(plain_command.main_class, "net.minecraft.client.main.Main");
+
+    // With launch-scoped addons, both metadata patch (vpatch) and augment_launch apply ephemerally.
+    let scoped_options = LaunchOptions::new()
+        .addon(AddonSpec::new("optifine-mock"))
+        .addon(AddonSpec::new("ephemeral-agent"));
+    let scoped_command = launcher
+        .build_launch_command(
+            &loaded,
+            &credential,
+            &RuntimeOptions::default(),
+            &scoped_options,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        scoped_command.main_class,
+        "net.minecraft.launchwrapper.Launch"
+    );
+    assert!(
+        scoped_command
+            .game_arguments
+            .windows(2)
+            .any(|pair| pair == ["--tweakClass", "optifine.OptiFineTweaker"])
+    );
+    assert!(
+        scoped_command
+            .jvm_arguments
+            .contains(&format!("-javaagent:{}=scope=launch", agent_jar.display()))
+    );
+
+    // Instance disk state remains untouched.
+    assert_eq!(fs::read(&json_path).unwrap(), original_bytes);
+    assert!(
+        launcher
+            .instance_addons("launch-scoped-inst")
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    // Physical patch mode is rejected for ephemeral launch-scoped addons.
+    let err = launcher
+        .build_launch_command(
+            &loaded,
+            &credential,
+            &RuntimeOptions::default(),
+            &LaunchOptions::new()
+                .addon(AddonSpec::new("optifine-mock").with_patch_mode(AddonPatchMode::Physical)),
+        )
+        .await
+        .err()
+        .expect("physical mode must be rejected for launch-scoped addons");
+    assert!(matches!(
+        err,
+        Error::Addon(elemental_launcher::addon_kit::Error::PatchModeDisallowedByInstance { .. })
+    ));
+
+    common::remove(&root);
+}

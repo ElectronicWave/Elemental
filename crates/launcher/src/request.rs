@@ -1,5 +1,7 @@
 pub use elemental_driver::launch::RuntimeOptions;
 
+use crate::addon::AddonSpec;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LaunchResolution {
     pub width: String,
@@ -23,6 +25,9 @@ pub struct LaunchOptions {
     pub quick_play: Option<QuickPlayOptions>,
     pub extra_jvm_arguments: Vec<String>,
     pub extra_game_arguments: Vec<String>,
+    /// Ephemeral addons applied only for this launch (prepared, overlaid in memory,
+    /// and hooked via `augment_launch` without persisting to `.elemental/addons.json`).
+    pub addons: Vec<AddonSpec>,
 }
 
 impl LaunchResolution {
@@ -59,6 +64,13 @@ impl LaunchOptions {
 
     pub fn set_extra_game_arguments(mut self, extra_game_arguments: Vec<String>) -> Self {
         self.extra_game_arguments = extra_game_arguments;
+        self
+    }
+
+    /// Attaches an ephemeral addon to be prepared, overlaid in memory, and hooked
+    /// for this launch without modifying the instance's persistent addon state.
+    pub fn addon(mut self, spec: AddonSpec) -> Self {
+        self.addons.push(spec);
         self
     }
 }

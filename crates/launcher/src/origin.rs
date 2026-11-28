@@ -1,5 +1,7 @@
 #![cfg_attr(not(feature = "driver-all"), allow(dead_code))]
 
+#[cfg(feature = "yggdrasil-auth")]
+use elemental_addon::AUTHLIB_INJECTOR_ADDON_ID;
 #[cfg(feature = "addon-liteloader")]
 use elemental_addon::LITELOADER_ADDON_ID;
 use elemental_core::url::{OriginPolicy, OriginPolicyMap};
@@ -67,6 +69,11 @@ impl DriverOrigins {
     #[cfg(feature = "addon-liteloader")]
     pub fn liteloader_addon(&mut self) -> &mut OriginPolicy {
         self.for_addon(LITELOADER_ADDON_ID)
+    }
+
+    #[cfg(feature = "yggdrasil-auth")]
+    pub fn authlib_injector_addon(&mut self) -> &mut OriginPolicy {
+        self.for_addon(AUTHLIB_INJECTOR_ADDON_ID)
     }
 
     pub fn vanilla(&mut self) -> &mut OriginPolicy {

@@ -13,8 +13,6 @@ compile_error!(
 
 pub mod account;
 mod addon;
-#[cfg(feature = "yggdrasil-auth")]
-mod authlib_injector;
 mod builder;
 pub mod cape;
 mod catalog;
@@ -32,8 +30,6 @@ mod texture;
 
 pub use account::{AccountIndex, AccountListing, AccountRef, AccountRegistry, AccountStore};
 pub use addon::{AddonRegistry, AddonSpec};
-#[cfg(feature = "yggdrasil-auth")]
-pub use authlib_injector::{AuthlibInjector, AuthlibInjectorSource};
 pub use builder::LauncherBuilder;
 pub use cape::{CapeAsset, CapeEntry, CapeId, CapeStore, SelectedCape};
 pub use catalog::DriverCatalog;
@@ -42,6 +38,11 @@ pub use elemental_addon::{
     AddonLaunchArgs, AddonLaunchContext, AddonOrigin, AddonPatchMode, AddonPrepareOutput,
     AddonPrepareRequest, AddonRelease, CustomPatchAddon, GameVersion, InstalledAddon,
     JvmAgentAddon, MetadataPatch, MetadataPatchStepDiff, PatchMode, PatchModeSupport, PatchTrace,
+};
+#[cfg(feature = "yggdrasil-auth")]
+pub use elemental_addon::{
+    AUTHLIB_INJECTOR_ADDON_ID, AuthlibInjector, AuthlibInjectorAddon, AuthlibInjectorEndpoints,
+    AuthlibInjectorSource,
 };
 #[cfg(feature = "addon-liteloader")]
 pub use elemental_addon::{LITELOADER_ADDON_ID, LiteLoaderAddon};

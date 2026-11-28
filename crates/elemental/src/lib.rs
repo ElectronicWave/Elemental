@@ -89,6 +89,11 @@ pub mod prelude {
     #[cfg(feature = "addon-liteloader")]
     pub use crate::addon::{LITELOADER_ADDON_ID, LiteLoaderAddon};
 
+    #[cfg(all(feature = "addon", feature = "yggdrasil-auth"))]
+    pub use crate::addon::{
+        AUTHLIB_INJECTOR_ADDON_ID, AuthlibInjector, AuthlibInjectorAddon, AuthlibInjectorSource,
+    };
+
     #[cfg(feature = "launcher")]
     pub use crate::launcher::{
         AccountIndex, AccountListing, AccountRef, AccountRegistry, AccountStore, AddonRegistry,

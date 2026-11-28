@@ -1,5 +1,7 @@
-use std::{fmt, sync::Arc};
+use std::{fmt, path::Path, sync::Arc};
 
+#[cfg(feature = "yggdrasil-auth")]
+use elemental_addon::{AUTHLIB_INJECTOR_ADDON_ID, AuthlibInjectorAddon, AuthlibInjectorEndpoints};
 use elemental_addon::{Addon, AddonDescriptor, AddonPatchMode};
 #[cfg(feature = "addon-liteloader")]
 use elemental_addon::{
@@ -66,19 +68,38 @@ impl fmt::Debug for AddonRegistry {
 }
 
 impl AddonRegistry {
-    pub(crate) fn new(http_client: SwappableClient, origins: &DriverOrigins) -> Self {
+    pub(crate) fn new(
+        storage_root: &Path,
+        http_client: SwappableClient,
+        origins: &DriverOrigins,
+    ) -> Self {
+        #[cfg(any(feature = "addon-liteloader", feature = "yggdrasil-auth"))]
+        let mut addons: Vec<Arc<dyn Addon>> = Vec::new();
+        #[cfg(not(any(feature = "addon-liteloader", feature = "yggdrasil-auth")))]
+        let addons: Vec<Arc<dyn Addon>> = {
+            let _ = (storage_root, http_client, origins);
+            Vec::new()
+        };
+
         #[cfg(feature = "addon-liteloader")]
-        let addons: Vec<Arc<dyn Addon>> = vec![Arc::new(
+        addons.push(Arc::new(
             LiteLoaderAddon::new(LiteLoaderSource::new(LiteLoaderEndpoints::new(
                 origins.policy_for_addon(LITELOADER_ADDON_ID),
             )))
-            .with_http_client(http_client),
-        )];
-        #[cfg(not(feature = "addon-liteloader"))]
-        let addons: Vec<Arc<dyn Addon>> = {
-            let _ = (http_client, origins);
-            Vec::new()
-        };
+            .with_http_client(http_client.clone()),
+        ));
+
+        #[cfg(feature = "yggdrasil-auth")]
+        addons.push(Arc::new(
+            AuthlibInjectorAddon::new(storage_root)
+                .with_endpoints(AuthlibInjectorEndpoints::new(
+                    origins.policy_for_addon(AUTHLIB_INJECTOR_ADDON_ID),
+                ))
+                .with_http_client(http_client),
+        ));
+
+        #[cfg(all(feature = "addon-liteloader", not(feature = "yggdrasil-auth")))]
+        let _ = storage_root;
 
         Self { addons }
     }

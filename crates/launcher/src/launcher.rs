@@ -8,10 +8,11 @@ use std::{
 
 use elemental_addon::{
     Addon, AddonCompatibility, AddonContext, AddonLaunchArgs, AddonLaunchContext, AddonOrigin,
-    AddonPatchMode, AddonPrepareRequest, InstalledAddon, InstalledAddonRecord, PatchMode,
-    PatchTrace, load_addon_state, normalize_managed_file_path, remove_addon_from_instance,
-    reorder_instance_addons, resolve_effective_patch_mode, save_addon_state, set_addon_patch_mode,
-    set_instance_patch_mode, sync_instance_patches, trace_instance_patches,
+    AddonPatchMode, AddonPrepareRequest, InstalledAddon, InstalledAddonRecord, NamedMetadataPatch,
+    PatchMode, PatchTrace, PistonMetaData, load_addon_state, normalize_managed_file_path,
+    remove_addon_from_instance, reorder_instance_addons, resolve_effective_patch_mode,
+    save_addon_state, set_addon_patch_mode, set_instance_patch_mode, sync_instance_patches,
+    trace_instance_patches,
 };
 use elemental_core::{
     auth::credential::Credential,
@@ -28,7 +29,7 @@ use elemental_driver::{
     },
     families::version_json::{
         GameStorage, InstanceStorage, SharedInstanceLayout, SharedRootLayout,
-        VersionJsonGameStorageExt, read_base_metadata,
+        VersionJsonGameStorageExt, apply_metadata_patches, read_base_metadata,
     },
 };
 use elemental_infra::downloader::{DownloadSession, ElementalDownloader};
@@ -45,9 +46,6 @@ use crate::{
     },
     spec::DriverSpec,
 };
-
-#[cfg(feature = "yggdrasil-auth")]
-use crate::authlib_injector::{self, AuthlibInjector};
 
 #[derive(Debug, Clone)]
 pub struct Launcher {
@@ -73,7 +71,7 @@ impl Launcher {
         runtime_resolver: RuntimeResolver,
     ) -> Self {
         let drivers = DriverRegistry::new(http_client.clone());
-        let addons = AddonRegistry::new(http_client.clone(), &origins);
+        let addons = AddonRegistry::new(&storage_root, http_client.clone(), &origins);
         Self {
             storage_root,
             http_client,
@@ -296,6 +294,7 @@ impl Launcher {
             .await?;
         Ok(PreparedInstance::new(
             driver.descriptor(),
+            driver.game_version().clone(),
             prepared,
             effective_policy,
             addons,
@@ -322,17 +321,7 @@ impl Launcher {
             .resolve_driver(driver_descriptor)?
             .load_prepared(&layout)
             .await?;
-        let game_version = match inspected.driver.game_version {
-            Some(version) => version,
-            None => {
-                let base = read_base_metadata(&layout)?;
-                let raw = base
-                    .inherits_from
-                    .or(base.client_version)
-                    .unwrap_or(base.id);
-                MinecraftVersionId::from(raw)
-            }
-        };
+        let game_version = resolve_instance_game_version(&layout, inspected.driver.game_version)?;
 
         let (effective_policy, addons) = self
             .apply_requested_addons(
@@ -348,6 +337,7 @@ impl Launcher {
             .await?;
         Ok(PreparedInstance::new(
             driver_descriptor,
+            game_version,
             prepared,
             effective_policy,
             addons,
@@ -357,6 +347,7 @@ impl Launcher {
     pub async fn load_instance(&self, instance: Instance) -> Result<PreparedInstance> {
         let layout = self.instance(instance.instance_name)?;
         let driver_spec = instance.driver.driver;
+        let game_version = resolve_instance_game_version(&layout, instance.driver.game_version)?;
         let mut prepared = self
             .resolve_driver(driver_spec)?
             .load_prepared(&layout)
@@ -368,6 +359,7 @@ impl Launcher {
         }
         Ok(PreparedInstance::new(
             driver_spec,
+            game_version,
             prepared,
             state.patch_mode,
             state.addons,
@@ -438,39 +430,13 @@ impl Launcher {
         let runtime = prepared
             .resolve_runtime(runtime_options, &self.runtime_resolver)
             .await?;
-        #[cfg(feature = "yggdrasil-auth")]
-        let mut options = {
-            let mut options = options.clone();
-            self.inject_authlib_injector(credential, &mut options)
-                .await?;
-            options
-        };
-        #[cfg(not(feature = "yggdrasil-auth"))]
-        let mut options = options.clone();
-        self.apply_launch_addon_hooks(prepared, credential, &mut options)
+        let (launch_records, metadata_override) = self
+            .prepare_launch_addons(prepared, runtime_options, options)
             .await?;
-        prepared.build_launch_command(credential, runtime, &options)
-    }
-
-    #[cfg(feature = "yggdrasil-auth")]
-    pub async fn install_authlib_injector(&self) -> Result<AuthlibInjector> {
-        authlib_injector::install(&self.storage_root, &self.downloader).await
-    }
-
-    #[cfg(feature = "yggdrasil-auth")]
-    async fn inject_authlib_injector(
-        &self,
-        credential: &Credential,
-        options: &mut LaunchOptions,
-    ) -> Result<()> {
-        let Some(auth_server) = &credential.auth_server else {
-            return Ok(());
-        };
-        let injector = self.install_authlib_injector().await?;
-        options
-            .extra_jvm_arguments
-            .extend(injector.jvm_arguments(auth_server));
-        Ok(())
+        let mut options = options.clone();
+        self.apply_launch_addon_hooks(prepared, &launch_records, credential, &mut options)
+            .await?;
+        prepared.build_launch_command(credential, runtime, &options, metadata_override)
     }
 
     pub fn launch(&self, command: LaunchCommand) -> Result<LaunchedInstance> {
@@ -557,76 +523,19 @@ impl Launcher {
             return Ok((PatchMode::Virtual, Vec::new()));
         }
 
-        let context = AddonContext {
-            driver,
-            game_version: Some(game_version),
-            instance,
-        };
-
         for requested in requested_addons {
-            let (addon, version, addon_patch_mode) = match requested {
-                RequestedAddon::BySpec(spec) => {
-                    let addon =
-                        self.addons
-                            .get(&spec.id)
-                            .ok_or_else(|| Error::AddonNotRegistered {
-                                id: spec.id.clone(),
-                            })?;
-                    (addon, spec.version, spec.patch_mode)
-                }
-                RequestedAddon::Direct {
-                    addon,
-                    version,
-                    patch_mode,
-                } => (addon, version, patch_mode),
-            };
-
-            let descriptor = addon.descriptor();
-            let support = addon.patch_mode_support();
-            resolve_effective_patch_mode(
-                &descriptor.id,
-                state.patch_mode,
-                addon_patch_mode,
-                support,
-            )?;
-
-            if let AddonCompatibility::Incompatible { reason } = addon.check_compatibility(&context)
-            {
-                return Err(Error::AddonIncompatible {
-                    id: descriptor.id.into_owned(),
-                    reason,
-                });
-            }
-
-            let output = addon
-                .prepare(&AddonPrepareRequest {
+            let record = self
+                .prepare_addon_record(
                     session,
                     instance,
                     driver,
                     game_version,
-                    addon_version: version.as_deref(),
                     runtime_options,
-                    runtime_resolver: &self.runtime_resolver,
-                })
+                    state.patch_mode,
+                    requested,
+                )
                 .await?;
-
-            let managed_files = output
-                .managed_files
-                .iter()
-                .map(|path| normalize_managed_file_path(&instance.path, path))
-                .collect::<elemental_addon::Result<Vec<String>>>()?;
-
-            state.upsert(InstalledAddonRecord {
-                id: descriptor.id.into_owned(),
-                name: descriptor.name.into_owned(),
-                version: output.version.or(version),
-                origin: AddonOrigin::Elemental,
-                patch_mode: addon_patch_mode,
-                patch_mode_support: support,
-                requires_runtime_hook: addon.requires_runtime_hook(),
-                managed_files,
-                metadata_patch: output.metadata_patch,
-            });
+            state.upsert(record);
         }
 
         state.validate_modes()?;
@@ -634,6 +543,161 @@ impl Launcher {
         save_addon_state(instance, &state).await?;
         prepared.metadata = trace.metadata;
         Ok((state.patch_mode, state.addons))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn prepare_addon_record(
+        &self,
+        session: &DownloadSession,
+        instance: &InstanceStorage,
+        driver: DriverDescriptor,
+        game_version: &MinecraftVersionId,
+        runtime_options: &RuntimeOptions,
+        instance_policy: PatchMode,
+        requested: RequestedAddon,
+    ) -> Result<InstalledAddonRecord> {
+        let context = AddonContext {
+            driver,
+            game_version: Some(game_version),
+            instance,
+        };
+
+        let (addon, version, addon_patch_mode) = match requested {
+            RequestedAddon::BySpec(spec) => {
+                let addon = self.addons.addon(&spec.id)?;
+                (addon, spec.version, spec.patch_mode)
+            }
+            RequestedAddon::Direct {
+                addon,
+                version,
+                patch_mode,
+            } => (addon, version, patch_mode),
+        };
+
+        let descriptor = addon.descriptor();
+        let support = addon.patch_mode_support();
+        resolve_effective_patch_mode(&descriptor.id, instance_policy, addon_patch_mode, support)?;
+
+        if let AddonCompatibility::Incompatible { reason } = addon.check_compatibility(&context) {
+            return Err(Error::AddonIncompatible {
+                id: descriptor.id.into_owned(),
+                reason,
+            });
+        }
+
+        let output = addon
+            .prepare(&AddonPrepareRequest {
+                session,
+                instance,
+                driver,
+                game_version,
+                addon_version: version.as_deref(),
+                runtime_options,
+                runtime_resolver: &self.runtime_resolver,
+            })
+            .await?;
+
+        let managed_files = output
+            .managed_files
+            .iter()
+            .map(|path| normalize_managed_file_path(&instance.path, path))
+            .collect::<elemental_addon::Result<Vec<String>>>()?;
+
+        Ok(InstalledAddonRecord {
+            id: descriptor.id.into_owned(),
+            name: descriptor.name.into_owned(),
+            version: output.version.or(version),
+            origin: AddonOrigin::Elemental,
+            patch_mode: addon_patch_mode,
+            patch_mode_support: support,
+            requires_runtime_hook: addon.requires_runtime_hook(),
+            managed_files,
+            metadata_patch: output.metadata_patch,
+        })
+    }
+
+    async fn prepare_launch_addons(
+        &self,
+        prepared: &PreparedInstance,
+        runtime_options: &RuntimeOptions,
+        options: &LaunchOptions,
+    ) -> Result<(Vec<InstalledAddonRecord>, Option<PistonMetaData>)> {
+        let pending_specs = options
+            .addons
+            .iter()
+            .filter(|spec| {
+                !prepared
+                    .addons
+                    .iter()
+                    .any(|installed| installed.id == spec.id)
+            })
+            .fold(Vec::<AddonSpec>::new(), |mut acc, spec| {
+                if !acc.iter().any(|existing| existing.id == spec.id) {
+                    acc.push(spec.clone());
+                }
+                acc
+            });
+        if pending_specs.is_empty() {
+            return Ok((Vec::new(), None));
+        }
+
+        let session = self
+            .downloader
+            .session(format!(
+                "prepare launch addons {}",
+                prepared.launch_version.metadata.id
+            ))
+            .open()
+            .await?;
+
+        let records_result: Result<Vec<InstalledAddonRecord>> = async {
+            let mut records = Vec::with_capacity(pending_specs.len());
+            for spec in pending_specs {
+                let record = self
+                    .prepare_addon_record(
+                        &session,
+                        &prepared.launch_version.version,
+                        prepared.driver,
+                        &prepared.game_version,
+                        runtime_options,
+                        PatchMode::Virtual,
+                        RequestedAddon::BySpec(spec),
+                    )
+                    .await?;
+                records.push(record);
+            }
+            Ok(records)
+        }
+        .await;
+
+        let report = session.finish().await;
+        let records = records_result?;
+        report?.success()?;
+
+        let patches = records
+            .iter()
+            .filter_map(|record| {
+                record
+                    .metadata_patch
+                    .as_ref()
+                    .map(|patch| NamedMetadataPatch {
+                        id: record.id.clone(),
+                        effective_mode: PatchMode::Virtual,
+                        patch: patch.clone(),
+                    })
+            })
+            .collect::<Vec<_>>();
+
+        let metadata_override = if patches.is_empty() {
+            None
+        } else {
+            Some(apply_metadata_patches(
+                prepared.launch_version.metadata.clone(),
+                &patches,
+            )?)
+        };
+
+        Ok((records, metadata_override))
     }
 
     fn ensure_required_hooks_registered(&self, records: &[InstalledAddonRecord]) -> Result<()> {
@@ -653,10 +717,11 @@ impl Launcher {
     async fn apply_launch_addon_hooks(
         &self,
         prepared: &PreparedInstance,
+        launch_records: &[InstalledAddonRecord],
         credential: &Credential,
         options: &mut LaunchOptions,
     ) -> Result<()> {
-        for record in &prepared.addons {
+        for record in prepared.addons.iter().chain(launch_records.iter()) {
             if record.origin != AddonOrigin::Elemental {
                 continue;
             }
@@ -716,6 +781,21 @@ impl Launcher {
         }
         Ok(addons)
     }
+}
+
+fn resolve_instance_game_version(
+    layout: &InstanceStorage,
+    known: Option<MinecraftVersionId>,
+) -> Result<MinecraftVersionId> {
+    if let Some(version) = known {
+        return Ok(version);
+    }
+    let base = read_base_metadata(layout)?;
+    let raw = base
+        .inherits_from
+        .or(base.client_version)
+        .unwrap_or(base.id);
+    Ok(MinecraftVersionId::from(raw))
 }
 
 pub(crate) enum RequestedAddon {

@@ -120,24 +120,6 @@ pub enum Error {
 
     #[error(transparent)]
     HttpClient(#[from] elemental_core::http::HttpClientError),
-    #[cfg(feature = "yggdrasil-auth")]
-    #[error(transparent)]
-    AuthlibInjectorDistribution(#[from] nidhogg::error::NidhoggError),
-
-    #[cfg(feature = "yggdrasil-auth")]
-    #[error("authlib-injector download completed but '{}' is missing", path.display())]
-    AuthlibInjectorMissing { path: std::path::PathBuf },
-
-    #[cfg(feature = "yggdrasil-auth")]
-    #[error(
-        "authlib-injector checksum mismatch for '{}': expected {expected}, got {actual}",
-        path.display()
-    )]
-    AuthlibInjectorChecksum {
-        path: std::path::PathBuf,
-        expected: String,
-        actual: String,
-    },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

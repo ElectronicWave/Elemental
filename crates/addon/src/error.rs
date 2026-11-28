@@ -17,7 +17,7 @@ pub enum Error {
     #[error(transparent)]
     Origin(#[from] elemental_core::url::OriginError),
 
-    #[cfg(feature = "liteloader")]
+    #[cfg(any(feature = "liteloader", feature = "authlib-injector"))]
     #[error(transparent)]
     HttpRequest(#[from] elemental_core::http::HttpRequestError),
 
@@ -80,6 +80,29 @@ pub enum Error {
     #[cfg(feature = "liteloader")]
     #[error("LiteLoader snapshot library '{library}' does not declare a repository")]
     LiteLoaderSnapshotRepositoryMissing { library: String },
+
+    #[cfg(feature = "authlib-injector")]
+    #[error(transparent)]
+    AuthlibInjectorDistribution(#[from] nidhogg::error::NidhoggError),
+
+    #[cfg(feature = "authlib-injector")]
+    #[error("authlib-injector version '{version}' was not found in distribution manifest")]
+    AuthlibInjectorVersionNotFound { version: String },
+
+    #[cfg(feature = "authlib-injector")]
+    #[error("authlib-injector download completed but '{}' is missing", path.display())]
+    AuthlibInjectorMissing { path: PathBuf },
+
+    #[cfg(feature = "authlib-injector")]
+    #[error(
+        "authlib-injector checksum mismatch for '{}': expected {expected}, got {actual}",
+        path.display()
+    )]
+    AuthlibInjectorChecksum {
+        path: PathBuf,
+        expected: String,
+        actual: String,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

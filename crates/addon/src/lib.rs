@@ -28,7 +28,7 @@ pub use elemental_schema::mojang::piston::{
 };
 pub use error::{Error, Result};
 pub use state::{
-    AddonState, InstalledAddonRecord, load_addon_state, normalize_managed_file_path,
+    AddonModify, AddonState, InstalledAddonRecord, load_addon_state, normalize_managed_file_path,
     remove_addon_from_instance, reorder_instance_addons, save_addon_state, set_addon_patch_mode,
     set_instance_patch_mode, sync_instance_patches, trace_instance_patches,
 };

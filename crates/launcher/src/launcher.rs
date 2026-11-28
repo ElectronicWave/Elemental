@@ -7,9 +7,9 @@ use std::{
 };
 
 use elemental_addon::{
-    Addon, AddonCompatibility, AddonContext, AddonLaunchArgs, AddonLaunchContext, AddonOrigin,
-    AddonPatchMode, AddonPrepareRequest, InstalledAddon, InstalledAddonRecord, NamedMetadataPatch,
-    PatchMode, PatchTrace, PistonMetaData, load_addon_state, normalize_managed_file_path,
+    Addon, AddonCompatibility, AddonContext, AddonLaunchArgs, AddonLaunchContext, AddonModify,
+    AddonOrigin, AddonPatchMode, AddonPrepareRequest, InstalledAddon, InstalledAddonRecord,
+    NamedMetadataPatch, PatchMode, PatchTrace, load_addon_state, normalize_managed_file_path,
     remove_addon_from_instance, reorder_instance_addons, resolve_effective_patch_mode,
     save_addon_state, set_addon_patch_mode, set_instance_patch_mode, sync_instance_patches,
     trace_instance_patches,
@@ -29,7 +29,7 @@ use elemental_driver::{
     },
     families::version_json::{
         GameStorage, InstanceStorage, SharedInstanceLayout, SharedRootLayout,
-        VersionJsonGameStorageExt, apply_metadata_patches, read_base_metadata,
+        VersionJsonGameStorageExt, apply_metadata_patches_traced, read_base_metadata,
     },
 };
 use elemental_infra::downloader::{DownloadSession, ElementalDownloader};
@@ -420,6 +420,33 @@ impl Launcher {
         Ok(trace_instance_patches(&layout).await?)
     }
 
+    /// Loads an in-memory [`AddonModify`] draft for previewing addon order and patch-mode
+    /// changes before committing them to disk.
+    pub async fn modify_instance_addons(
+        &self,
+        instance_name: impl Into<String>,
+    ) -> Result<AddonModify> {
+        let layout = self.instance(instance_name.into())?;
+        Ok(AddonModify::load(layout).await?)
+    }
+
+    /// Starts configuring a launch for a [`PreparedInstance`] and player [`Credential`].
+    pub fn launch_prepared<'a>(
+        &'a self,
+        prepared: &'a PreparedInstance,
+        credential: &'a Credential,
+    ) -> LaunchBuilder<'a> {
+        LaunchBuilder {
+            launcher: self,
+            prepared,
+            credential,
+            runtime_options: None,
+            options: None,
+            session: None,
+            addons: Vec::new(),
+        }
+    }
+
     pub async fn build_launch_command(
         &self,
         prepared: &PreparedInstance,
@@ -427,16 +454,11 @@ impl Launcher {
         runtime_options: &RuntimeOptions,
         options: &LaunchOptions,
     ) -> Result<LaunchCommand> {
-        let runtime = prepared
-            .resolve_runtime(runtime_options, &self.runtime_resolver)
-            .await?;
-        let (launch_records, metadata_override) = self
-            .prepare_launch_addons(prepared, runtime_options, options)
-            .await?;
-        let mut options = options.clone();
-        self.apply_launch_addon_hooks(prepared, &launch_records, credential, &mut options)
-            .await?;
-        prepared.build_launch_command(credential, runtime, &options, metadata_override)
+        self.launch_prepared(prepared, credential)
+            .runtime_options(runtime_options)
+            .options(options)
+            .build_command()
+            .await
     }
 
     pub fn launch(&self, command: LaunchCommand) -> Result<LaunchedInstance> {
@@ -452,10 +474,11 @@ impl Launcher {
         runtime_options: &RuntimeOptions,
         options: &LaunchOptions,
     ) -> Result<LaunchedInstance> {
-        let command = self
-            .build_launch_command(prepared, credential, runtime_options, options)
-            .await?;
-        self.launch(command)
+        self.launch_prepared(prepared, credential)
+            .runtime_options(runtime_options)
+            .options(options)
+            .run()
+            .await
     }
 
     pub async fn launch_instance(
@@ -524,7 +547,7 @@ impl Launcher {
         }
 
         for requested in requested_addons {
-            let record = self
+            let (record, _) = self
                 .prepare_addon_record(
                     session,
                     instance,
@@ -555,7 +578,7 @@ impl Launcher {
         runtime_options: &RuntimeOptions,
         instance_policy: PatchMode,
         requested: RequestedAddon,
-    ) -> Result<InstalledAddonRecord> {
+    ) -> Result<(InstalledAddonRecord, Arc<dyn Addon>)> {
         let context = AddonContext {
             driver,
             game_version: Some(game_version),
@@ -603,7 +626,7 @@ impl Launcher {
             .map(|path| normalize_managed_file_path(&instance.path, path))
             .collect::<elemental_addon::Result<Vec<String>>>()?;
 
-        Ok(InstalledAddonRecord {
+        let record = InstalledAddonRecord {
             id: descriptor.id.into_owned(),
             name: descriptor.name.into_owned(),
             version: output.version.or(version),
@@ -613,47 +636,73 @@ impl Launcher {
             requires_runtime_hook: addon.requires_runtime_hook(),
             managed_files,
             metadata_patch: output.metadata_patch,
-        })
+        };
+        Ok((record, addon))
     }
 
-    async fn prepare_launch_addons(
+    async fn resolve_launch_addons(
         &self,
         prepared: &PreparedInstance,
         runtime_options: &RuntimeOptions,
-        options: &LaunchOptions,
-    ) -> Result<(Vec<InstalledAddonRecord>, Option<PistonMetaData>)> {
-        let pending_specs = options
+        session: Option<DownloadSession>,
+        launch_addons: Vec<RequestedAddon>,
+    ) -> Result<(Vec<LaunchHookEntry>, Option<PatchTrace>)> {
+        let mut persistent_entries = prepared
             .addons
             .iter()
-            .filter(|spec| {
-                !prepared
-                    .addons
-                    .iter()
-                    .any(|installed| installed.id == spec.id)
+            .filter(|record| record.origin == AddonOrigin::Elemental)
+            .map(|record| {
+                let effective_mode = record.effective_patch_mode(prepared.patch_mode)?;
+                let addon = self.addons.get(&record.id);
+                Ok(LaunchHookEntry {
+                    addon,
+                    record: record.clone(),
+                    effective_mode,
+                })
             })
-            .fold(Vec::<AddonSpec>::new(), |mut acc, spec| {
-                if !acc.iter().any(|existing| existing.id == spec.id) {
-                    acc.push(spec.clone());
-                }
-                acc
-            });
-        if pending_specs.is_empty() {
-            return Ok((Vec::new(), None));
+            .collect::<Result<Vec<_>>>()?;
+
+        let mut pending = Vec::with_capacity(launch_addons.len());
+        let mut seen_ids = persistent_entries
+            .iter()
+            .map(|entry| entry.record.id.clone())
+            .collect::<Vec<_>>();
+        for requested in launch_addons {
+            let id = match &requested {
+                RequestedAddon::BySpec(spec) => spec.id.clone(),
+                RequestedAddon::Direct { addon, .. } => addon.descriptor().id.into_owned(),
+            };
+            if seen_ids.iter().any(|seen| seen == &id) {
+                continue;
+            }
+            seen_ids.push(id);
+            pending.push(requested);
         }
 
-        let session = self
-            .downloader
-            .session(format!(
-                "prepare launch addons {}",
-                prepared.launch_version.metadata.id
-            ))
-            .open()
-            .await?;
+        if pending.is_empty() {
+            if let Some(session) = session {
+                session.finish().await?.success()?;
+            }
+            return Ok((persistent_entries, None));
+        }
 
-        let records_result: Result<Vec<InstalledAddonRecord>> = async {
-            let mut records = Vec::with_capacity(pending_specs.len());
-            for spec in pending_specs {
-                let record = self
+        let session = match session {
+            Some(session) => session,
+            None => {
+                self.downloader
+                    .session(format!(
+                        "prepare launch addons {}",
+                        prepared.launch_version.metadata.id
+                    ))
+                    .open()
+                    .await?
+            }
+        };
+
+        let ephemeral_result: Result<Vec<LaunchHookEntry>> = async {
+            let mut entries = Vec::with_capacity(pending.len());
+            for requested in pending {
+                let (record, addon) = self
                     .prepare_addon_record(
                         &session,
                         &prepared.launch_version.version,
@@ -661,43 +710,26 @@ impl Launcher {
                         &prepared.game_version,
                         runtime_options,
                         PatchMode::Virtual,
-                        RequestedAddon::BySpec(spec),
+                        requested,
                     )
                     .await?;
-                records.push(record);
+                entries.push(LaunchHookEntry {
+                    record,
+                    addon: Some(addon),
+                    effective_mode: PatchMode::Virtual,
+                });
             }
-            Ok(records)
+            Ok(entries)
         }
         .await;
 
         let report = session.finish().await;
-        let records = records_result?;
+        let ephemeral_entries = ephemeral_result?;
         report?.success()?;
 
-        let patches = records
-            .iter()
-            .filter_map(|record| {
-                record
-                    .metadata_patch
-                    .as_ref()
-                    .map(|patch| NamedMetadataPatch {
-                        id: record.id.clone(),
-                        effective_mode: PatchMode::Virtual,
-                        patch: patch.clone(),
-                    })
-            })
-            .collect::<Vec<_>>();
-
-        let metadata_override = if patches.is_empty() {
-            None
-        } else {
-            Some(apply_metadata_patches(
-                prepared.launch_version.metadata.clone(),
-                &patches,
-            )?)
-        };
-
-        Ok((records, metadata_override))
+        persistent_entries.extend(ephemeral_entries);
+        let trace = order_and_trace_launch_entries(prepared, &mut persistent_entries)?;
+        Ok((persistent_entries, Some(trace)))
     }
 
     fn ensure_required_hooks_registered(&self, records: &[InstalledAddonRecord]) -> Result<()> {
@@ -717,18 +749,15 @@ impl Launcher {
     async fn apply_launch_addon_hooks(
         &self,
         prepared: &PreparedInstance,
-        launch_records: &[InstalledAddonRecord],
+        entries: &[LaunchHookEntry],
         credential: &Credential,
         options: &mut LaunchOptions,
     ) -> Result<()> {
-        for record in prepared.addons.iter().chain(launch_records.iter()) {
-            if record.origin != AddonOrigin::Elemental {
-                continue;
-            }
-            let Some(addon) = self.addons.get(&record.id) else {
-                if record.requires_runtime_hook {
+        for entry in entries {
+            let Some(addon) = &entry.addon else {
+                if entry.record.requires_runtime_hook {
                     return Err(Error::AddonNotRegistered {
-                        id: record.id.clone(),
+                        id: entry.record.id.clone(),
                     });
                 }
                 continue;
@@ -742,7 +771,7 @@ impl Launcher {
                         instance: &prepared.launch_version.version,
                         driver: prepared.driver,
                         credential,
-                        record,
+                        record: &entry.record,
                     },
                 )
                 .await?;
@@ -986,6 +1015,159 @@ impl<'a> PrepareInstanceBuilder<'a> {
         let report = report?;
         report.success()?;
         Ok(prepared)
+    }
+}
+
+struct LaunchHookEntry {
+    record: InstalledAddonRecord,
+    addon: Option<Arc<dyn Addon>>,
+    effective_mode: PatchMode,
+}
+
+fn order_and_trace_launch_entries(
+    prepared: &PreparedInstance,
+    entries: &mut Vec<LaunchHookEntry>,
+) -> Result<PatchTrace> {
+    let base = read_base_metadata(&prepared.launch_version.version)?;
+    let patches = entries
+        .iter()
+        .map(|entry| NamedMetadataPatch {
+            id: entry.record.id.clone(),
+            effective_mode: entry.effective_mode,
+            patch: entry.record.metadata_patch.clone().unwrap_or_default(),
+        })
+        .collect::<Vec<_>>();
+
+    let mut trace = apply_metadata_patches_traced(base, &patches)?;
+    let mut remaining = std::mem::take(entries);
+    let mut ordered = Vec::with_capacity(remaining.len());
+    for step in &trace.steps {
+        if let Some(pos) = remaining
+            .iter()
+            .position(|entry| entry.record.id == step.id)
+        {
+            ordered.push(remaining.remove(pos));
+        }
+    }
+    ordered.extend(remaining);
+    *entries = ordered;
+
+    trace.steps.retain(|step| {
+        entries
+            .iter()
+            .find(|entry| entry.record.id == step.id)
+            .is_some_and(|entry| entry.record.metadata_patch.is_some())
+    });
+
+    Ok(trace)
+}
+
+/// Fluent builder for configuring and launching a [`PreparedInstance`] with optional launch-scoped addons.
+pub struct LaunchBuilder<'a> {
+    launcher: &'a Launcher,
+    prepared: &'a PreparedInstance,
+    credential: &'a Credential,
+    runtime_options: Option<&'a RuntimeOptions>,
+    options: Option<&'a LaunchOptions>,
+    session: Option<DownloadSession>,
+    addons: Vec<RequestedAddon>,
+}
+
+impl<'a> LaunchBuilder<'a> {
+    pub fn runtime_options(mut self, options: &'a RuntimeOptions) -> Self {
+        self.runtime_options = Some(options);
+        self
+    }
+
+    pub fn options(mut self, options: &'a LaunchOptions) -> Self {
+        self.options = Some(options);
+        self
+    }
+
+    pub fn session(mut self, session: DownloadSession) -> Self {
+        self.session = Some(session);
+        self
+    }
+
+    pub fn addon(mut self, spec: AddonSpec) -> Self {
+        self.addons.push(RequestedAddon::BySpec(spec));
+        self
+    }
+
+    pub fn with_addon(mut self, addon: impl Addon + 'static, version: Option<String>) -> Self {
+        self.addons.push(RequestedAddon::Direct {
+            addon: Arc::new(addon),
+            version,
+            patch_mode: AddonPatchMode::Inherit,
+        });
+        self
+    }
+
+    pub fn with_addon_mode(
+        mut self,
+        addon: impl Addon + 'static,
+        version: Option<String>,
+        patch_mode: AddonPatchMode,
+    ) -> Self {
+        self.addons.push(RequestedAddon::Direct {
+            addon: Arc::new(addon),
+            version,
+            patch_mode,
+        });
+        self
+    }
+
+    /// Resolves all active addons (persistent + launch-scoped) from the clean
+    /// baseline and returns the unified [`PatchTrace`].
+    pub async fn trace(self) -> Result<PatchTrace> {
+        let default_runtime = RuntimeOptions::default();
+        let runtime_options = self.runtime_options.unwrap_or(&default_runtime);
+        let (mut entries, maybe_trace) = self
+            .launcher
+            .resolve_launch_addons(self.prepared, runtime_options, self.session, self.addons)
+            .await?;
+        match maybe_trace {
+            Some(trace) => Ok(trace),
+            None => order_and_trace_launch_entries(self.prepared, &mut entries),
+        }
+    }
+
+    /// Builds the [`LaunchCommand`] with unified persistent and launch-scoped addons applied.
+    pub async fn build_command(self) -> Result<LaunchCommand> {
+        let default_runtime = RuntimeOptions::default();
+        let runtime_options = self.runtime_options.unwrap_or(&default_runtime);
+        let default_options = LaunchOptions::default();
+        let mut launch_options = self.options.unwrap_or(&default_options).clone();
+
+        let runtime = self
+            .prepared
+            .resolve_runtime(runtime_options, &self.launcher.runtime_resolver)
+            .await?;
+        let (entries, trace) = self
+            .launcher
+            .resolve_launch_addons(self.prepared, runtime_options, self.session, self.addons)
+            .await?;
+        self.launcher
+            .apply_launch_addon_hooks(
+                self.prepared,
+                &entries,
+                self.credential,
+                &mut launch_options,
+            )
+            .await?;
+        self.prepared.build_launch_command(
+            self.credential,
+            runtime,
+            &launch_options,
+            trace.map(|t| t.metadata),
+        )
+    }
+
+    /// Builds the launch command and spawns the game process.
+    pub async fn run(self) -> Result<LaunchedInstance> {
+        let launcher = self.launcher;
+        let command = self.build_command().await?;
+        launcher.launch(command)
     }
 }
 

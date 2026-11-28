@@ -35,9 +35,10 @@ pub use cape::{CapeAsset, CapeEntry, CapeId, CapeStore, SelectedCape};
 pub use catalog::DriverCatalog;
 pub use elemental_addon::{
     self as addon_kit, Addon, AddonCatalogQuery, AddonCompatibility, AddonContext, AddonDescriptor,
-    AddonLaunchArgs, AddonLaunchContext, AddonOrigin, AddonPatchMode, AddonPrepareOutput,
-    AddonPrepareRequest, AddonRelease, CustomPatchAddon, GameVersion, InstalledAddon,
-    JvmAgentAddon, MetadataPatch, MetadataPatchStepDiff, PatchMode, PatchModeSupport, PatchTrace,
+    AddonLaunchArgs, AddonLaunchContext, AddonModify, AddonOrigin, AddonPatchMode,
+    AddonPrepareOutput, AddonPrepareRequest, AddonRelease, CustomPatchAddon, GameVersion,
+    InstalledAddon, JvmAgentAddon, MetadataPatch, MetadataPatchStepDiff, PatchMode,
+    PatchModeSupport, PatchTrace,
 };
 #[cfg(feature = "yggdrasil-auth")]
 pub use elemental_addon::{
@@ -55,7 +56,7 @@ pub use elemental_core::launcher::command::LaunchCommand;
 pub use elemental_driver::driver::PrepareStage;
 pub use elemental_infra::downloader::{DownloadProgress, DownloadSession};
 pub use error::{Error, Result};
-pub use launcher::{InstallAddonsBuilder, Launcher, PrepareInstanceBuilder};
+pub use launcher::{InstallAddonsBuilder, LaunchBuilder, Launcher, PrepareInstanceBuilder};
 pub use origin::DriverOrigins;
 pub use registration::{DriverRegistration, DriverRegistry};
 pub use request::{LaunchOptions, LaunchResolution, QuickPlayOptions, RuntimeOptions};

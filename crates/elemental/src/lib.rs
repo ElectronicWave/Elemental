@@ -81,9 +81,10 @@ pub mod prelude {
     #[cfg(feature = "addon")]
     pub use crate::addon::{
         Addon, AddonCatalogQuery, AddonCompatibility, AddonContext, AddonDescriptor,
-        AddonLaunchArgs, AddonLaunchContext, AddonOrigin, AddonPatchMode, AddonPrepareOutput,
-        AddonPrepareRequest, AddonRelease, CustomPatchAddon, InstalledAddon, JvmAgentAddon,
-        MetadataPatch, MetadataPatchStepDiff, PatchMode, PatchModeSupport, PatchTrace,
+        AddonLaunchArgs, AddonLaunchContext, AddonModify, AddonOrigin, AddonPatchMode,
+        AddonPrepareOutput, AddonPrepareRequest, AddonRelease, CustomPatchAddon, InstalledAddon,
+        JvmAgentAddon, MetadataPatch, MetadataPatchStepDiff, PatchMode, PatchModeSupport,
+        PatchTrace,
     };
 
     #[cfg(feature = "addon-liteloader")]
@@ -98,8 +99,9 @@ pub mod prelude {
     pub use crate::launcher::{
         AccountIndex, AccountListing, AccountRef, AccountRegistry, AccountStore, AddonRegistry,
         AddonSpec, DriverCatalog, DriverOrigins, DriverRegistration, DriverRegistry, DriverSpec,
-        InstallAddonsBuilder, Instance, LaunchOptions, LaunchResolution, LaunchedInstance,
-        Launcher, LauncherBuilder, PrepareInstanceBuilder, PrepareStage, PreparedInstance,
-        PreparedInstanceInfo, PreparedInstanceMetadata, QuickPlayOptions, RuntimeOptions,
+        InstallAddonsBuilder, Instance, LaunchBuilder, LaunchOptions, LaunchResolution,
+        LaunchedInstance, Launcher, LauncherBuilder, PrepareInstanceBuilder, PrepareStage,
+        PreparedInstance, PreparedInstanceInfo, PreparedInstanceMetadata, QuickPlayOptions,
+        RuntimeOptions,
     };
 }

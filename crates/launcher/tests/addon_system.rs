@@ -18,7 +18,8 @@ use elemental_driver::{
 use elemental_launcher::{
     Addon, AddonCatalogQuery, AddonDescriptor, AddonOrigin, AddonPatchMode, AddonRelease,
     AddonSpec, CustomPatchAddon, DriverSpec, Error, InstalledAddon, JvmAgentAddon, LaunchOptions,
-    Launcher, MetadataPatch, PatchMode, RuntimeOptions, addon_kit::PistonMetaGenericArgument,
+    Launcher, MetadataPatch, PatchMode, RuntimeOptions,
+    addon_kit::{NamedMetadataPatch, PistonMetaGenericArgument},
 };
 
 mod common;
@@ -734,27 +735,30 @@ async fn launch_scoped_addons_apply_metadata_patch_and_runtime_hook_ephemerally(
 
     // Without launch-scoped addons, launch stays baseline vanilla.
     let plain_command = launcher
-        .build_launch_command(
-            &loaded,
-            &credential,
-            &RuntimeOptions::default(),
-            &LaunchOptions::default(),
-        )
+        .launch_prepared(&loaded, &credential)
+        .build_command()
         .await
         .unwrap();
     assert_eq!(plain_command.main_class, "net.minecraft.client.main.Main");
 
-    // With launch-scoped addons, both metadata patch (vpatch) and augment_launch apply ephemerally.
-    let scoped_options = LaunchOptions::new()
-        .addon(AddonSpec::new("optifine-mock"))
-        .addon(AddonSpec::new("ephemeral-agent"));
+    // With launch-scoped addons via LaunchBuilder (.addon + unregistered .with_addon),
+    // both metadata patch (vpatch) and augment_launch apply ephemerally.
+    let extra_patch_addon = CustomPatchAddon::new(
+        "ephemeral-jvm-flag",
+        "Ephemeral JVM Flag",
+        MetadataPatch {
+            jvm_arguments: vec![PistonMetaGenericArgument::Plain(
+                "-Dephemeral.flag=true".to_owned(),
+            )],
+            ..Default::default()
+        },
+    );
     let scoped_command = launcher
-        .build_launch_command(
-            &loaded,
-            &credential,
-            &RuntimeOptions::default(),
-            &scoped_options,
-        )
+        .launch_prepared(&loaded, &credential)
+        .addon(AddonSpec::new("optifine-mock"))
+        .addon(AddonSpec::new("ephemeral-agent"))
+        .with_addon(extra_patch_addon, None)
+        .build_command()
         .await
         .unwrap();
     assert_eq!(
@@ -766,6 +770,11 @@ async fn launch_scoped_addons_apply_metadata_patch_and_runtime_hook_ephemerally(
             .game_arguments
             .windows(2)
             .any(|pair| pair == ["--tweakClass", "optifine.OptiFineTweaker"])
+    );
+    assert!(
+        scoped_command
+            .jvm_arguments
+            .contains(&"-Dephemeral.flag=true".to_owned())
     );
     assert!(
         scoped_command
@@ -783,15 +792,55 @@ async fn launch_scoped_addons_apply_metadata_patch_and_runtime_hook_ephemerally(
             .is_empty()
     );
 
+    // Unified cross-scope topological sorting: a launch-scoped addon with `before`
+    // is ordered before an existing persistent addon from clean baseline.
+    let persistent_a = CustomPatchAddon::new(
+        "persistent-a",
+        "Persistent A",
+        MetadataPatch {
+            priority: 20,
+            main_class: Some("example.PersistentMain".to_owned()),
+            ..Default::default()
+        },
+    );
+    let launcher_with_persistent = launcher.register_addon(persistent_a).unwrap();
+    let prepared_persistent = launcher_with_persistent
+        .install_addons("launch-scoped-inst")
+        .addon(AddonSpec::new("persistent-a"))
+        .run()
+        .await
+        .unwrap();
+
+    let launch_before = CustomPatchAddon::new(
+        "launch-before",
+        "Launch Before",
+        MetadataPatch {
+            priority: 100,
+            before: vec!["persistent-a".to_owned()],
+            main_class: Some("example.PersistentMain".to_owned()),
+            ..Default::default()
+        },
+    );
+    let trace = launcher_with_persistent
+        .launch_prepared(&prepared_persistent, &credential)
+        .with_addon(launch_before, None)
+        .trace()
+        .await
+        .unwrap();
+    assert_eq!(
+        trace
+            .steps
+            .iter()
+            .map(|step| step.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["launch-before", "persistent-a"]
+    );
+
     // Physical patch mode is rejected for ephemeral launch-scoped addons.
-    let err = launcher
-        .build_launch_command(
-            &loaded,
-            &credential,
-            &RuntimeOptions::default(),
-            &LaunchOptions::new()
-                .addon(AddonSpec::new("optifine-mock").with_patch_mode(AddonPatchMode::Physical)),
-        )
+    let err = launcher_with_persistent
+        .launch_prepared(&prepared_persistent, &credential)
+        .addon(AddonSpec::new("optifine-mock").with_patch_mode(AddonPatchMode::Physical))
+        .build_command()
         .await
         .err()
         .expect("physical mode must be rejected for launch-scoped addons");
@@ -799,6 +848,195 @@ async fn launch_scoped_addons_apply_metadata_patch_and_runtime_hook_ephemerally(
         err,
         Error::Addon(elemental_launcher::addon_kit::Error::PatchModeDisallowedByInstance { .. })
     ));
+
+    common::remove(&root);
+}
+
+#[tokio::test]
+async fn addon_modify_previews_reorders_and_modes_in_memory_before_commit() {
+    let root = common::temp_root("elemental-addon-modify");
+    let java_home = setup_fake_java_17(&root);
+    let json_path = seed_local_vanilla_instance(&root, "modify-inst");
+
+    let addon_a = CustomPatchAddon::new(
+        "addon-a",
+        "Addon A",
+        MetadataPatch {
+            main_class: Some("net.minecraft.launchwrapper.Launch".to_owned()),
+            game_arguments: vec![
+                PistonMetaGenericArgument::Plain("--tweakClass".to_owned()),
+                PistonMetaGenericArgument::Plain("example.TweakerA".to_owned()),
+            ],
+            ..Default::default()
+        },
+    );
+    let addon_b = CustomPatchAddon::new(
+        "addon-b",
+        "Addon B",
+        MetadataPatch {
+            main_class: Some("net.minecraft.launchwrapper.Launch".to_owned()),
+            java_major_version: Some(21),
+            ..Default::default()
+        },
+    );
+
+    let launcher = build_launcher(&root, &java_home)
+        .register_addon(addon_a)
+        .unwrap()
+        .register_addon(addon_b)
+        .unwrap();
+
+    launcher
+        .install_addons("modify-inst")
+        .addon(AddonSpec::new("addon-a"))
+        .addon(AddonSpec::new("addon-b"))
+        .run()
+        .await
+        .unwrap();
+
+    let state_path = root
+        .join("versions")
+        .join("modify-inst")
+        .join(".elemental")
+        .join("addons.json");
+    let original_json = fs::read(&json_path).unwrap();
+    let original_state = fs::read(&state_path).unwrap();
+
+    let mut modify = launcher
+        .modify_instance_addons("modify-inst")
+        .await
+        .unwrap();
+    assert!(!modify.is_dirty());
+    assert_eq!(modify.patch_mode(), PatchMode::Virtual);
+    assert_eq!(
+        modify
+            .trace()
+            .unwrap()
+            .steps
+            .iter()
+            .map(|s| s.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["addon-a", "addon-b"]
+    );
+
+    // Reorder in memory: zero disk writes, immediate updated trace.
+    let reordered_trace = modify.reorder(&["addon-b", "addon-a"]).unwrap();
+    assert!(modify.is_dirty());
+    assert_eq!(
+        reordered_trace
+            .steps
+            .iter()
+            .map(|step| step.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["addon-b", "addon-a"]
+    );
+    assert_eq!(
+        modify
+            .addons()
+            .iter()
+            .map(|addon| addon.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["addon-b", "addon-a"]
+    );
+    assert_eq!(fs::read(&json_path).unwrap(), original_json);
+    assert_eq!(fs::read(&state_path).unwrap(), original_state);
+
+    // Invalid addon mode under Virtual instance policy fails without mutating draft.
+    let err = modify
+        .set_addon_patch_mode("addon-a", AddonPatchMode::Physical)
+        .err()
+        .expect("physical addon mode under virtual instance should fail");
+    assert!(matches!(
+        err,
+        elemental_launcher::addon_kit::Error::PatchModeDisallowedByInstance { .. }
+    ));
+    assert_eq!(
+        modify
+            .addons()
+            .iter()
+            .map(|addon| addon.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["addon-b", "addon-a"]
+    );
+
+    // Switching instance + addon modes updates effective modes purely in memory.
+    modify.set_instance_patch_mode(PatchMode::Physical).unwrap();
+    modify
+        .set_addon_patch_mode("addon-a", AddonPatchMode::Physical)
+        .unwrap();
+    assert_eq!(modify.patch_mode(), PatchMode::Physical);
+    let addon_a_item = modify
+        .addons()
+        .into_iter()
+        .find(|addon| addon.id == "addon-a")
+        .unwrap();
+    assert_eq!(addon_a_item.effective_patch_mode, PatchMode::Physical);
+    assert_eq!(fs::read(&json_path).unwrap(), original_json);
+    assert_eq!(fs::read(&state_path).unwrap(), original_state);
+
+    // trace_with_extra overlays ephemeral patches without mutating draft or disk.
+    let extra_trace = modify
+        .trace_with_extra(&[NamedMetadataPatch {
+            id: "ephemeral-extra".to_owned(),
+            effective_mode: PatchMode::Virtual,
+            patch: MetadataPatch {
+                before: vec!["addon-a".to_owned()],
+                jvm_arguments: vec![PistonMetaGenericArgument::Plain(
+                    "-Dpreview.extra=true".to_owned(),
+                )],
+                ..Default::default()
+            },
+        }])
+        .unwrap();
+    assert_eq!(
+        extra_trace
+            .steps
+            .iter()
+            .map(|step| step.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["addon-b", "ephemeral-extra", "addon-a"]
+    );
+
+    // Discard restores original clean draft without touching disk.
+    let discarded = modify.discard().unwrap();
+    assert!(!modify.is_dirty());
+    assert_eq!(modify.patch_mode(), PatchMode::Virtual);
+    assert_eq!(
+        discarded
+            .steps
+            .iter()
+            .map(|step| step.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["addon-a", "addon-b"]
+    );
+    assert_eq!(fs::read(&json_path).unwrap(), original_json);
+    assert_eq!(fs::read(&state_path).unwrap(), original_state);
+
+    // Reapply and commit persists state & synced patches to disk.
+    modify.reorder(&["addon-b", "addon-a"]).unwrap();
+    let committed = modify.commit().await.unwrap();
+    assert!(!modify.is_dirty());
+    assert_eq!(
+        committed
+            .steps
+            .iter()
+            .map(|step| step.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["addon-b", "addon-a"]
+    );
+
+    let disk_trace = launcher
+        .trace_instance_patches("modify-inst")
+        .await
+        .unwrap();
+    assert_eq!(
+        disk_trace
+            .steps
+            .iter()
+            .map(|step| step.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["addon-b", "addon-a"]
+    );
 
     common::remove(&root);
 }

@@ -1,5 +1,3 @@
-#![cfg_attr(not(feature = "driver-all"), allow(dead_code))]
-
 #[cfg(feature = "yggdrasil-auth")]
 use elemental_addon::AUTHLIB_INJECTOR_ADDON_ID;
 #[cfg(feature = "addon-liteloader")]

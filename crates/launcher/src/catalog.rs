@@ -1,6 +1,3 @@
-#![cfg_attr(not(feature = "driver-all"), allow(dead_code, unreachable_code))]
-#![allow(unreachable_patterns)]
-
 use std::sync::Arc;
 
 use elemental_core::minecraft::MinecraftVersionId;

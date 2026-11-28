@@ -1,3 +1,5 @@
+elemental_core::require_tls_backend!();
+
 pub mod addon;
 pub mod builtins;
 pub mod error;

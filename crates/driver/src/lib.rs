@@ -5,18 +5,7 @@
 //! Drivers never execute the game directly; they produce data consumed by the
 //! launcher layer.
 
-#[cfg(not(any(
-    feature = "tls-aws-lc",
-    feature = "tls-rustls-no-provider",
-    feature = "tls-native",
-    feature = "tls-native-vendored"
-)))]
-compile_error!(
-    "`elemental-driver` requires a TLS backend. Enable one of `tls-aws-lc` \
-     (default), `tls-rustls-no-provider`, `tls-native`, or \
-     `tls-native-vendored`. When using `default-features = false`, add a TLS \
-     backend feature explicitly."
-);
+elemental_core::require_tls_backend!();
 
 pub mod catalog;
 pub mod descriptors;

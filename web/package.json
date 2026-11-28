@@ -7,7 +7,7 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "check": "astro check",
+    "check": "tsc --noEmit --runExternalCode",
     "doctor": "npx react-doctor@latest"
   },
   "dependencies": {
@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.4",
-    "typescript": "^7.0.0"
+    "@astrojs/ts-content-mapper": "^0.2.0",
+    "typescript": "7.1.0-beta"
   }
 }

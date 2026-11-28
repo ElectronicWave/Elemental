@@ -1,13 +1,17 @@
 mod load;
 mod persist;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
+use elemental_core::storage::layout::Layoutable;
 use elemental_infra::SafeRelativePath;
 use elemental_schema::forge::ForgeInstallerProfile;
 use serde_json::value::RawValue;
 
-use crate::error::Result;
+use crate::{
+    error::Result,
+    families::version_json::{InstanceStorage, VersionJsonInstanceResource},
+};
 
 pub(crate) use load::read_embedded_version;
 
@@ -20,34 +24,24 @@ pub struct InstallerPersistedState {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct InstallerStatePaths<'a> {
-    instance_root: &'a Path,
+pub(crate) struct InstallerStatePaths {
+    root: PathBuf,
     family: SafeRelativePath,
 }
 
-impl<'a> InstallerStatePaths<'a> {
-    pub(crate) fn new(instance_root: &'a Path, family_name: &str) -> Result<Self> {
-        Ok(Self {
-            instance_root,
-            family: SafeRelativePath::parse(family_name.to_owned())?,
-        })
+impl InstallerStatePaths {
+    pub(crate) fn new(instance: &InstanceStorage, family_name: &str) -> Result<Self> {
+        let family = SafeRelativePath::parse(family_name.to_owned())?;
+        let root = instance
+            .try_get_resource(VersionJsonInstanceResource::Elemental(Some(family.clone())))?;
+        Ok(Self { root, family })
     }
 
     pub(crate) fn install_profile_path(&self) -> PathBuf {
-        self.relative_path(PathBuf::from(INSTALL_PROFILE_ENTRY))
+        self.root.join(INSTALL_PROFILE_ENTRY)
     }
 
     pub(crate) fn embedded_version_path(&self) -> PathBuf {
-        self.relative_path(PathBuf::from("version.json"))
-    }
-
-    fn root(&self) -> PathBuf {
-        self.instance_root
-            .join(".elemental")
-            .join(self.family.as_path())
-    }
-
-    fn relative_path(&self, relative_path: PathBuf) -> PathBuf {
-        self.root().join(relative_path)
+        self.root.join("version.json")
     }
 }

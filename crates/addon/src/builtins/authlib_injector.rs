@@ -6,7 +6,11 @@ use std::{
 use async_trait::async_trait;
 use elemental_core::{
     http::{RequestBuilderExt, SwappableClient},
+    storage::layout::Layoutable,
     url::{OriginEndpoints, OriginPolicy},
+};
+use elemental_driver::families::version_json::{
+    GameStorage, InstanceStorage, VersionJsonRootResource,
 };
 use elemental_infra::{
     SafeRelativePath,
@@ -32,7 +36,7 @@ pub const AUTHLIB_INJECTOR_ADDON_ID: &str = "authlib-injector";
 /// Canonical upstream base URL for authlib-injector builds.
 pub const AUTHLIB_INJECTOR_OFFICIAL_URL: &str = nidhogg::authlib_injector::OFFICIAL_URL;
 
-const ARTIFACT_DIRECTORY: &str = ".elemental/authlib-injector";
+const ARTIFACT_DIRECTORY: &str = "authlib-injector";
 const KNOWN_ORIGINS: &[&str] = &[AUTHLIB_INJECTOR_OFFICIAL_URL];
 
 /// Endpoint resolver for authlib-injector metadata and artifact downloads.
@@ -161,21 +165,16 @@ enum ResolvedArtifact {
 
 /// Built-in addon that manages versioned authlib-injector artifacts and attaches
 /// `-javaagent` when launching with an external Yggdrasil `auth_server`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AuthlibInjectorAddon {
-    storage_root: PathBuf,
     endpoints: AuthlibInjectorEndpoints,
     client: SwappableClient,
 }
 
 impl AuthlibInjectorAddon {
-    /// Creates an `AuthlibInjectorAddon` caching versioned JARs under `storage_root`.
-    pub fn new(storage_root: impl Into<PathBuf>) -> Self {
-        Self {
-            storage_root: storage_root.into(),
-            endpoints: AuthlibInjectorEndpoints::official(),
-            client: SwappableClient::default(),
-        }
+    /// Creates an `AuthlibInjectorAddon` using official endpoints and default HTTP client.
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Replaces the endpoint policy used to fetch manifests and rewrite download URLs.
@@ -191,30 +190,42 @@ impl AuthlibInjectorAddon {
     }
 
     /// Resolves the absolute cache path for a specific authlib-injector `version`.
-    pub fn jar_path_for_version(&self, version: &str) -> Result<PathBuf> {
-        let file_name = SafeRelativePath::parse(format!("authlib-injector-{version}.jar"))?;
-        Ok(std::path::absolute(
-            self.storage_root
-                .join(ARTIFACT_DIRECTORY)
-                .join(file_name.as_str()),
-        )?)
+    pub fn jar_path_for_version(&self, storage: &GameStorage, version: &str) -> Result<PathBuf> {
+        let relative = artifact_relative_path(version)?;
+        let path = storage.try_get_resource(VersionJsonRootResource::Elemental(Some(relative)))?;
+        Ok(std::path::absolute(path)?)
     }
 
     /// Prepares the requested `version` (or latest when `None`) via `session` and
     /// returns the verified [`AuthlibInjector`] descriptor.
     pub async fn install(
         &self,
+        storage: &GameStorage,
         session: &DownloadSession,
         version: Option<&str>,
     ) -> Result<AuthlibInjector> {
+        self.install_with_resolver(session, version, &|resolved_version| {
+            self.jar_path_for_version(storage, resolved_version)
+        })
+        .await
+    }
+
+    async fn install_with_resolver(
+        &self,
+        session: &DownloadSession,
+        version: Option<&str>,
+        resolve_path: &(dyn Fn(&str) -> Result<PathBuf> + Sync),
+    ) -> Result<AuthlibInjector> {
         match self.resolve_artifact(version).await? {
-            ResolvedArtifact::Remote(artifact) => self.ensure_remote(session, artifact).await,
+            ResolvedArtifact::Remote(artifact) => {
+                self.ensure_remote(session, artifact, resolve_path).await
+            }
             #[cfg(feature = "authlib-injector-embed")]
             ResolvedArtifact::Embedded {
                 embedded,
                 fallback_reason,
             } => {
-                let path = self.jar_path_for_version(&embedded.artifact().version)?;
+                let path = resolve_path(&embedded.artifact().version)?;
                 install_embedded_with_reason(&path, embedded, fallback_reason).await
             }
         }
@@ -283,8 +294,9 @@ impl AuthlibInjectorAddon {
         &self,
         session: &DownloadSession,
         artifact: Artifact,
+        resolve_path: &(dyn Fn(&str) -> Result<PathBuf> + Sync),
     ) -> Result<AuthlibInjector> {
-        let path = self.jar_path_for_version(&artifact.version)?;
+        let path = resolve_path(&artifact.version)?;
         if existing_artifact_matches(&path, &artifact.checksums.sha256).await? {
             return Ok(AuthlibInjector {
                 path,
@@ -304,9 +316,7 @@ impl AuthlibInjectorAddon {
                 source: AuthlibInjectorSource::Remote,
                 fallback_reason: None,
             }),
-            Err(error) => {
-                install_embedded_fallback(&self.storage_root, &artifact.version, error).await
-            }
+            Err(error) => install_embedded_fallback(resolve_path, &artifact.version, error).await,
         }
     }
 }
@@ -339,7 +349,11 @@ impl Addon for AuthlibInjectorAddon {
     }
 
     async fn prepare(&self, request: &AddonPrepareRequest<'_>) -> Result<AddonPrepareOutput> {
-        let injector = self.install(request.session, request.addon_version).await?;
+        let injector = self
+            .install_with_resolver(request.session, request.addon_version, &|version| {
+                jar_path_for_instance(request.instance, version)
+            })
+            .await?;
         Ok(AddonPrepareOutput {
             version: Some(injector.version),
             metadata_patch: None,
@@ -362,7 +376,7 @@ impl Addon for AuthlibInjectorAddon {
             .ok_or_else(|| Error::VersionRequired {
                 id: AUTHLIB_INJECTOR_ADDON_ID.to_owned(),
             })?;
-        let path = self.jar_path_for_version(version)?;
+        let path = jar_path_for_instance(ctx.instance, version)?;
         if !path.is_file() {
             return Err(Error::AuthlibInjectorMissing { path });
         }
@@ -410,9 +424,22 @@ async fn verify_file(path: &Path, expected: &str) -> Result<()> {
     })
 }
 
+fn artifact_relative_path(version: &str) -> Result<SafeRelativePath> {
+    Ok(SafeRelativePath::parse(format!(
+        "{ARTIFACT_DIRECTORY}/authlib-injector-{version}.jar"
+    ))?)
+}
+
+fn jar_path_for_instance(instance: &InstanceStorage, version: &str) -> Result<PathBuf> {
+    let relative = artifact_relative_path(version)?;
+    let path =
+        instance.try_get_parent_resource(VersionJsonRootResource::Elemental(Some(relative)))?;
+    Ok(std::path::absolute(path)?)
+}
+
 #[cfg(feature = "authlib-injector-embed")]
 async fn install_embedded_fallback(
-    storage_root: &Path,
+    resolve_path: &(dyn Fn(&str) -> Result<PathBuf> + Sync),
     requested_version: &str,
     error: Error,
 ) -> Result<AuthlibInjector> {
@@ -420,21 +447,13 @@ async fn install_embedded_fallback(
     if embedded_artifact.artifact().version != requested_version {
         return Err(error);
     }
-    let file_name = SafeRelativePath::parse(format!(
-        "authlib-injector-{}.jar",
-        embedded_artifact.artifact().version
-    ))?;
-    let path = std::path::absolute(
-        storage_root
-            .join(ARTIFACT_DIRECTORY)
-            .join(file_name.as_str()),
-    )?;
+    let path = resolve_path(&embedded_artifact.artifact().version)?;
     install_embedded_with_reason(&path, embedded_artifact, Some(error.to_string())).await
 }
 
 #[cfg(not(feature = "authlib-injector-embed"))]
 async fn install_embedded_fallback(
-    _storage_root: &Path,
+    _resolve_path: &(dyn Fn(&str) -> Result<PathBuf> + Sync),
     _requested_version: &str,
     error: Error,
 ) -> Result<AuthlibInjector> {

@@ -71,7 +71,7 @@ impl Launcher {
         runtime_resolver: RuntimeResolver,
     ) -> Self {
         let drivers = DriverRegistry::new(http_client.clone());
-        let addons = AddonRegistry::new(&storage_root, http_client.clone(), &origins);
+        let addons = AddonRegistry::new(http_client.clone(), &origins);
         Self {
             storage_root,
             http_client,

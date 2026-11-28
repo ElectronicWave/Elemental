@@ -5,7 +5,10 @@ use elemental_schema::forge::ForgeInstallerProfile;
 
 use crate::{
     error::{Error, Result},
-    families::installer::{InstallerArchive, InstallerArtifact},
+    families::{
+        installer::{InstallerArchive, InstallerArtifact},
+        version_json::InstanceStorage,
+    },
 };
 
 use super::{InstallerPersistedState, InstallerStatePaths, state::read_embedded_version};
@@ -13,7 +16,7 @@ use super::{InstallerPersistedState, InstallerStatePaths, state::read_embedded_v
 pub async fn prepare_installer_state(
     session: &DownloadSession,
     installer_artifact: &InstallerArtifact,
-    instance_root: &Path,
+    instance: &InstanceStorage,
     libraries_root: &Path,
     family_name: &str,
     validate_profile: &(dyn Fn(&ForgeInstallerProfile) -> Result<()> + Send + Sync),
@@ -21,7 +24,7 @@ pub async fn prepare_installer_state(
     download_installer(session, installer_artifact, family_name).await?;
 
     let archive = InstallerArchive::new(installer_artifact.path.clone());
-    let state_paths = InstallerStatePaths::new(instance_root, family_name)?;
+    let state_paths = InstallerStatePaths::new(instance, family_name)?;
     let install_profile = read_install_profile(&archive, family_name).await?;
     validate_profile(&install_profile)?;
 
@@ -75,7 +78,7 @@ async fn read_install_profile(
 
 async fn finish_installer_state(
     archive: &InstallerArchive<PathBuf>,
-    state_paths: &InstallerStatePaths<'_>,
+    state_paths: &InstallerStatePaths,
     install_profile: ForgeInstallerProfile,
     libraries_root: &Path,
     family_name: &str,

@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use elemental_core::minecraft::MinecraftVersionId;
 use elemental_schema::{forge::ForgeInstallerProfile, mojang::piston::PistonMetaLibraries};
 use serde_json::value::RawValue;
@@ -50,15 +48,15 @@ pub async fn persist_installer_launch_version(
 }
 
 pub fn load_persisted_installer_state(
-    instance_root: &Path,
+    instance: &InstanceStorage,
     family_name: &str,
 ) -> Result<InstallerPersistedState> {
-    InstallerStatePaths::new(instance_root, family_name)?.load()
+    InstallerStatePaths::new(instance, family_name)?.load()
 }
 
 pub fn load_persisted_install_profile(
-    instance_root: &Path,
+    instance: &InstanceStorage,
     family_name: &str,
 ) -> Result<ForgeInstallerProfile> {
-    InstallerStatePaths::new(instance_root, family_name)?.load_install_profile()
+    InstallerStatePaths::new(instance, family_name)?.load_install_profile()
 }

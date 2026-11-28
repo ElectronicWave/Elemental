@@ -34,7 +34,7 @@ pub async fn installer_install_status(
     launch_version_ready: bool,
     family_name: &str,
 ) -> Result<InstallerInstallStatus> {
-    let state_paths = InstallerStatePaths::new(&instance.path, family_name)?;
+    let state_paths = InstallerStatePaths::new(instance, family_name)?;
 
     Ok(InstallerInstallStatus {
         installer_downloaded: installer_artifact.path.exists(),

@@ -40,6 +40,10 @@ impl Layout for BaseRootLayout {
                 Some(libraries_root.join(path.as_path()))
             }
             VersionJsonRootResource::Libraries(None) => Some(libraries_root),
+            VersionJsonRootResource::Elemental(Some(path)) => {
+                Some(root.join(".elemental").join(path.as_path()))
+            }
+            VersionJsonRootResource::Elemental(None) => Some(root.join(".elemental")),
         }
     }
 

@@ -177,8 +177,8 @@ offer; `ProfileTextures::active_cape()` returns the selected cape.
 
 ### Observing preparation progress
 
-Create and observe the session before passing it to `prepare_with_session()`.
-The launcher finishes and validates the session after preparation:
+Create and observe the session before passing it to `launcher.scope().session(session)`:
+the launcher finishes and validates the session after preparation:
 
 ```rust
 let session = launcher
@@ -189,12 +189,10 @@ let session = launcher
 let progress = session.progress_receiver();
 
 let prepared = launcher
-    .prepare_with_session(
-        session,
-        "Vanilla-1.20.1".to_owned(),
-        DriverSpec::vanilla("1.20.1".into()),
-        &RuntimeOptions::default(),
-    )
+    .scope()
+    .session(session)
+    .runtime_options(&RuntimeOptions::default())
+    .prepare_instance("Vanilla-1.20.1", DriverSpec::vanilla("1.20.1".into()))
     .await?;
 println!("{:?}", progress.borrow().active_tasks);
 ```
@@ -208,9 +206,9 @@ wrap either stream.
 
 ### Custom download sessions
 
-Use `prepare_with_session()` when the host needs custom retry or rate-limit
+Pass a preconfigured session into `launcher.scope().session(session)` when the host needs custom retry or rate-limit
 settings. Build and observe the session first, then pass ownership to the
-launcher for finishing and validation:
+scope for finishing and validation:
 
 ```rust
 let session = launcher
@@ -221,12 +219,10 @@ let session = launcher
     .await?;
 
 let prepared = launcher
-    .prepare_with_session(
-        session,
-        "Vanilla-1.20.1".to_owned(),
-        DriverSpec::vanilla("1.20.1".into()),
-        &RuntimeOptions::default(),
-    )
+    .scope()
+    .session(session)
+    .runtime_options(&RuntimeOptions::default())
+    .prepare_instance("Vanilla-1.20.1", DriverSpec::vanilla("1.20.1".into()))
     .await?;
 ```
 
@@ -281,7 +277,7 @@ before launch.
 | Discover local instances | `inspect_instances()` returning `InspectReport` |
 | Detect one instance and its driver | `inspect_instance(name)` |
 | Install or refresh an instance | `prepare(name, driver, runtime)` |
-| Install with an observed or configured session | `prepare_with_session(session, name, driver, runtime)` |
+| Install with an observed or configured session | `scope().session(session).runtime_options(runtime).prepare_instance(name, driver)` |
 | Reload an existing installation | `load_instance(instance)` |
 | Build a command without spawning | `build_launch_command(...)` |
 | Spawn a customized command | `launch(command)` |

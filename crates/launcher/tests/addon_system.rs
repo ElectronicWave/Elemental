@@ -92,10 +92,10 @@ async fn vpatch_applies_in_memory_without_modifying_version_json() {
 
     let game_version = MinecraftVersionId::from("1.20.1");
     let prepared = launcher
-        .prepare_instance("vpatch-inst", DriverSpec::vanilla(game_version))
+        .scope()
         .patch_mode(PatchMode::Virtual)
         .addon(AddonSpec::new("optifine-mock"))
-        .run()
+        .prepare_instance("vpatch-inst", DriverSpec::vanilla(game_version))
         .await
         .unwrap();
 
@@ -164,10 +164,10 @@ async fn physical_patch_and_lossless_mode_switching() {
 
     let game_version = MinecraftVersionId::from("1.20.1");
     launcher
-        .prepare_instance("ppatch-inst", DriverSpec::vanilla(game_version))
+        .scope()
         .patch_mode(PatchMode::Virtual)
         .addon(AddonSpec::new("optifine-mock"))
-        .run()
+        .prepare_instance("ppatch-inst", DriverSpec::vanilla(game_version))
         .await
         .unwrap();
     assert!(!baseline_path.exists());
@@ -207,10 +207,10 @@ async fn third_party_runtime_hook_and_data_only_degradation() {
 
     let game_version = MinecraftVersionId::from("1.20.1");
     let prepared = launcher
-        .prepare_instance("hook-inst", DriverSpec::vanilla(game_version))
+        .scope()
         .addon(AddonSpec::new("optifine-mock"))
         .addon(AddonSpec::new("acme-agent"))
-        .run()
+        .prepare_instance("hook-inst", DriverSpec::vanilla(game_version))
         .await
         .unwrap();
 
@@ -295,9 +295,9 @@ async fn install_addons_on_existing_instance_without_driver_spec() {
         .unwrap();
 
     let prepared = launcher
-        .install_addons("existing-inst")
+        .scope()
         .addon(AddonSpec::new("optifine-mock"))
-        .run()
+        .install_addons("existing-inst")
         .await
         .unwrap();
 

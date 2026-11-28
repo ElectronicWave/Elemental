@@ -29,10 +29,10 @@ async fn scoped_patch_modes_reject_physical_addon_under_virtual_policy() {
         .unwrap();
 
     let err = launcher
-        .install_addons("scoped-inst")
+        .scope()
         .patch_mode(PatchMode::Virtual)
         .addon(AddonSpec::new("tweaker-pp").with_patch_mode(AddonPatchMode::Physical))
-        .run()
+        .install_addons("scoped-inst")
         .await
         .err()
         .expect("virtual instance must forbid physical addon mode");
@@ -70,12 +70,12 @@ async fn scoped_patch_modes_enforce_monotonic_rules_and_baseline_probe() {
         .unwrap();
 
     let prepared = launcher
-        .install_addons("scoped-inst")
+        .scope()
         .patch_mode(PatchMode::Physical)
         .addon(AddonSpec::new("tweaker-pp"))
         .addon(AddonSpec::new("debug-flag").with_patch_mode(AddonPatchMode::Virtual))
         .addon(AddonSpec::new("acme-agent"))
-        .run()
+        .install_addons("scoped-inst")
         .await
         .unwrap();
 
@@ -148,10 +148,10 @@ async fn reorder_addons_and_trace_instance_patches_step_diffs() {
         .unwrap();
 
     launcher
-        .install_addons("trace-inst")
+        .scope()
         .addon(AddonSpec::new("addon-a"))
         .addon(AddonSpec::new("addon-b"))
-        .run()
+        .install_addons("trace-inst")
         .await
         .unwrap();
 

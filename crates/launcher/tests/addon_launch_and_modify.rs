@@ -1,7 +1,8 @@
 use std::{fs, path::Path};
 
 use elemental_launcher::{
-    AddonPatchMode, AddonSpec, CustomPatchAddon, Error, Launcher, MetadataPatch, PatchMode,
+    AddonPatchMode, AddonSpec, CustomPatchAddon, Error, LaunchOptions, Launcher, MetadataPatch,
+    PatchMode,
     addon_kit::{NamedMetadataPatch, PistonMetaGenericArgument},
 };
 
@@ -33,10 +34,10 @@ fn build_modify_launcher(root: &Path, java_home: &Path) -> Launcher {
 
 async fn setup_modify_instance(launcher: &Launcher, name: &str) {
     launcher
-        .install_addons(name)
+        .scope()
         .addon(AddonSpec::new("addon-a"))
         .addon(AddonSpec::new("addon-b"))
-        .run()
+        .install_addons(name)
         .await
         .unwrap();
 }
@@ -69,19 +70,19 @@ async fn launch_scoped_addons_apply_metadata_patch_and_runtime_hook_ephemerally(
     let loaded = launcher.load_instance(inspected).await.unwrap();
     let credential = test_credential().await;
     let plain = launcher
-        .launch_prepared(&loaded, &credential)
-        .build_command()
+        .scope()
+        .build_launch_command(&loaded, &credential, &LaunchOptions::default())
         .await
         .unwrap();
     assert_eq!(plain.main_class, "net.minecraft.client.main.Main");
 
     let extra = jvm_flag_addon("extra-jvm", "Extra JVM", 0, "-Dephemeral.flag=true");
     let scoped = launcher
-        .launch_prepared(&loaded, &credential)
+        .scope()
         .addon(AddonSpec::new("optifine-mock"))
         .addon(AddonSpec::new("ephemeral-agent"))
         .with_addon(extra, None)
-        .build_command()
+        .build_launch_command(&loaded, &credential, &LaunchOptions::default())
         .await
         .unwrap();
     assert_eq!(scoped.main_class, "net.minecraft.launchwrapper.Launch");
@@ -131,9 +132,9 @@ async fn launch_scoped_addons_sort_across_scopes_and_reject_physical_mode() {
         .unwrap();
 
     let prepared_persistent = launcher
-        .install_addons("launch-order-inst")
+        .scope()
         .addon(AddonSpec::new("persistent-a"))
-        .run()
+        .install_addons("launch-order-inst")
         .await
         .unwrap();
 
@@ -149,21 +150,32 @@ async fn launch_scoped_addons_sort_across_scopes_and_reject_physical_mode() {
     );
     let credential = test_credential().await;
     let trace = launcher
-        .launch_prepared(&prepared_persistent, &credential)
+        .scope()
         .with_addon(launch_before, None)
-        .trace()
+        .trace_launch(&prepared_persistent)
         .await
         .unwrap();
     assert_eq!(step_ids(&trace), vec!["launch-before", "persistent-a"]);
 
     let err = launcher
-        .launch_prepared(&prepared_persistent, &credential)
+        .scope()
         .addon(AddonSpec::new("optifine-mock").with_patch_mode(AddonPatchMode::Physical))
-        .build_command()
+        .build_launch_command(&prepared_persistent, &credential, &LaunchOptions::default())
         .await
         .expect_err("physical mode must be rejected for launch-scoped addons");
     assert!(matches!(
         err,
+        Error::Addon(elemental_launcher::addon_kit::Error::PatchModeDisallowedByInstance { .. })
+    ));
+
+    let scope_err = launcher
+        .scope()
+        .patch_mode(PatchMode::Physical)
+        .trace_launch(&prepared_persistent)
+        .await
+        .expect_err("scope-level physical patch_mode must be rejected on launch");
+    assert!(matches!(
+        scope_err,
         Error::Addon(elemental_launcher::addon_kit::Error::PatchModeDisallowedByInstance { .. })
     ));
 

@@ -5,8 +5,6 @@ create-date: 2026-11-28
 updated-date: 2026-11-28
 ---
 
-# Using Addons
-
 Elemental separates **host drivers** (`Vanilla`, `Forge`, `Fabric`, `NeoForge`, etc.) from **composable addons** (`LiteLoader`, `authlib-injector`, OptiFine/tweaker layers, custom JVM agents, and declarative metadata overlays).
 
 An instance has exactly one host driver, and any number of addons layered on top of it—either persisted in `.elemental/addons.json` or attached ephemerally for a single launch.
@@ -73,29 +71,29 @@ Addons without a version catalog (such as `CustomPatchAddon` or `JvmAgentAddon`)
 
 ### During Instance Preparation
 
-Use `launcher.prepare_instance(...)` to prepare the host driver and install addons in one `DownloadSession`:
+Use `launcher.scope()...prepare_instance(...)` to prepare the host driver and install addons in one `DownloadSession`:
 
 ```rust
 use elemental_launcher::{AddonSpec, DriverSpec, Launcher, PatchMode};
 use elemental_core::minecraft::MinecraftVersionId;
 
 let prepared = launcher
-    .prepare_instance("1.12.2-liteloader", DriverSpec::vanilla(MinecraftVersionId::from("1.12.2")))
+    .scope()
     .patch_mode(PatchMode::Virtual)
     .addon(AddonSpec::new("liteloader").with_version("1.12.2-SNAPSHOT"))
-    .run()
+    .prepare_instance("1.12.2-liteloader", DriverSpec::vanilla(MinecraftVersionId::from("1.12.2")))
     .await?;
 ```
 
 ### Onto an Existing Instance
 
-Use `launcher.install_addons(...)` when the instance already exists on disk—you do not need to re-specify `DriverSpec`:
+Use `launcher.scope()...install_addons(...)` when the instance already exists on disk—you do not need to re-specify `DriverSpec`:
 
 ```rust
 let prepared = launcher
-    .install_addons("1.12.2-vanilla")
+    .scope()
     .addon(AddonSpec::new("liteloader").with_version("1.12.2-SNAPSHOT"))
-    .run()
+    .install_addons("1.12.2-vanilla")
     .await?;
 ```
 
@@ -113,11 +111,11 @@ use elemental_launcher::{AddonPatchMode, AddonSpec, PatchMode};
 
 // Instance policy = Physical; tweaker stays Physical while debug flag stays Virtual.
 let prepared = launcher
-    .install_addons("my-instance")
+    .scope()
     .patch_mode(PatchMode::Physical)
     .addon(AddonSpec::new("my-tweaker"))
     .addon(AddonSpec::new("debug-flag").with_patch_mode(AddonPatchMode::Virtual))
-    .run()
+    .install_addons("my-instance")
     .await?;
 
 // Switch the instance back to Virtual losslessly: restores <instance>.json from
@@ -137,15 +135,18 @@ launcher
 
 ## 4. Launch-Scoped (Ephemeral) Addons
 
-Use `launcher.launch_prepared(&prepared, &credential)` to attach addons for a single launch without writing `.elemental/addons.json` or `<instance>.json`:
+Use `launcher.scope()` with `.trace_launch(&prepared)` or `.launch_prepared(&prepared, &credential, &options)` to attach addons for a single launch without writing `.elemental/addons.json` or `<instance>.json`:
 
 - `.addon(AddonSpec)` resolves a registered addon from `Launcher::addons()`.
 - `.with_addon(addon, version)` or `.with_addon_mode(addon, version, mode)` attaches an unregistered addon instance directly.
-- Launch-scoped addons run under an ephemeral `PatchMode::Virtual` policy (requesting `AddonPatchMode::Physical` is rejected).
+- Launch-scoped addons run under an ephemeral `PatchMode::Virtual` policy (requesting `AddonPatchMode::Physical` or setting `.patch_mode(PatchMode::Physical)` is rejected).
 - Persistent and launch-scoped patches are merged together from the clean baseline using unified topological sorting (`before`, `after`, `priority`).
 
 ```rust
-use elemental_launcher::{AddonSpec, CustomPatchAddon, MetadataPatch, addon_kit::PistonMetaGenericArgument};
+use elemental_launcher::{
+    AddonSpec, CustomPatchAddon, LaunchOptions, MetadataPatch,
+    addon_kit::PistonMetaGenericArgument,
+};
 
 let extra_flag = CustomPatchAddon::new(
     "ephemeral-flag",
@@ -158,18 +159,18 @@ let extra_flag = CustomPatchAddon::new(
 
 // Preview the unified PatchTrace without launching
 let trace = launcher
-    .launch_prepared(&prepared, &credential)
+    .scope()
     .addon(AddonSpec::new("authlib-injector"))
     .with_addon(extra_flag.clone(), None)
-    .trace()
+    .trace_launch(&prepared)
     .await?;
 
 // Or build the LaunchCommand / spawn the JVM directly
 let launched = launcher
-    .launch_prepared(&prepared, &credential)
+    .scope()
     .addon(AddonSpec::new("authlib-injector"))
     .with_addon(extra_flag, None)
-    .run()
+    .launch_prepared(&prepared, &credential, &LaunchOptions::default())
     .await?;
 ```
 

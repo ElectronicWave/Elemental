@@ -282,11 +282,13 @@ impl Launcher {
             .await?;
         let (effective_policy, addons) = self
             .apply_requested_addons(
-                session,
-                &instance,
-                driver.descriptor(),
-                driver.game_version(),
-                runtime_options,
+                &AddonPreparationContext {
+                    session,
+                    instance: &instance,
+                    driver: driver.descriptor(),
+                    game_version: driver.game_version(),
+                    runtime_options,
+                },
                 &mut prepared,
                 requested_addons,
                 patch_mode,
@@ -325,11 +327,13 @@ impl Launcher {
 
         let (effective_policy, addons) = self
             .apply_requested_addons(
-                session,
-                &layout,
-                driver_descriptor,
-                &game_version,
-                runtime_options,
+                &AddonPreparationContext {
+                    session,
+                    instance: &layout,
+                    driver: driver_descriptor,
+                    game_version: &game_version,
+                    runtime_options,
+                },
                 &mut prepared,
                 requested_addons,
                 patch_mode,
@@ -520,19 +524,14 @@ impl Launcher {
             .collect()
     }
 
-    #[allow(clippy::too_many_arguments)]
     async fn apply_requested_addons(
         &self,
-        session: &DownloadSession,
-        instance: &InstanceStorage,
-        driver: DriverDescriptor,
-        game_version: &MinecraftVersionId,
-        runtime_options: &RuntimeOptions,
+        ctx: &AddonPreparationContext<'_>,
         prepared: &mut elemental_driver::families::version_json::PreparedVersionJsonInstance,
         requested_addons: Vec<RequestedAddon>,
         patch_mode: Option<PatchMode>,
     ) -> Result<(PatchMode, Vec<InstalledAddonRecord>)> {
-        let mut state = load_addon_state(instance).await?;
+        let mut state = load_addon_state(ctx.instance).await?;
         let mode_changed = patch_mode.is_some_and(|mode| mode != state.patch_mode);
         if let Some(mode) = patch_mode {
             state.patch_mode = mode;
@@ -548,41 +547,28 @@ impl Launcher {
 
         for requested in requested_addons {
             let (record, _) = self
-                .prepare_addon_record(
-                    session,
-                    instance,
-                    driver,
-                    game_version,
-                    runtime_options,
-                    state.patch_mode,
-                    requested,
-                )
+                .prepare_addon_record(ctx, state.patch_mode, requested)
                 .await?;
             state.upsert(record);
         }
 
         state.validate_modes()?;
-        let trace = sync_instance_patches(instance, &state).await?;
-        save_addon_state(instance, &state).await?;
+        let trace = sync_instance_patches(ctx.instance, &state).await?;
+        save_addon_state(ctx.instance, &state).await?;
         prepared.metadata = trace.metadata;
         Ok((state.patch_mode, state.addons))
     }
 
-    #[allow(clippy::too_many_arguments)]
     async fn prepare_addon_record(
         &self,
-        session: &DownloadSession,
-        instance: &InstanceStorage,
-        driver: DriverDescriptor,
-        game_version: &MinecraftVersionId,
-        runtime_options: &RuntimeOptions,
+        ctx: &AddonPreparationContext<'_>,
         instance_policy: PatchMode,
         requested: RequestedAddon,
     ) -> Result<(InstalledAddonRecord, Arc<dyn Addon>)> {
         let context = AddonContext {
-            driver,
-            game_version: Some(game_version),
-            instance,
+            driver: ctx.driver,
+            game_version: Some(ctx.game_version),
+            instance: ctx.instance,
         };
 
         let (addon, version, addon_patch_mode) = match requested {
@@ -610,12 +596,12 @@ impl Launcher {
 
         let output = addon
             .prepare(&AddonPrepareRequest {
-                session,
-                instance,
-                driver,
-                game_version,
+                session: ctx.session,
+                instance: ctx.instance,
+                driver: ctx.driver,
+                game_version: ctx.game_version,
                 addon_version: version.as_deref(),
-                runtime_options,
+                runtime_options: ctx.runtime_options,
                 runtime_resolver: &self.runtime_resolver,
             })
             .await?;
@@ -623,7 +609,7 @@ impl Launcher {
         let managed_files = output
             .managed_files
             .iter()
-            .map(|path| normalize_managed_file_path(&instance.path, path))
+            .map(|path| normalize_managed_file_path(&ctx.instance.path, path))
             .collect::<elemental_addon::Result<Vec<String>>>()?;
 
         let record = InstalledAddonRecord {
@@ -647,43 +633,14 @@ impl Launcher {
         session: Option<DownloadSession>,
         launch_addons: Vec<RequestedAddon>,
     ) -> Result<(Vec<LaunchHookEntry>, Option<PatchTrace>)> {
-        let mut persistent_entries = prepared
-            .addons
-            .iter()
-            .filter(|record| record.origin == AddonOrigin::Elemental)
-            .map(|record| {
-                let effective_mode = record.effective_patch_mode(prepared.patch_mode)?;
-                let addon = self.addons.get(&record.id);
-                Ok(LaunchHookEntry {
-                    addon,
-                    record: record.clone(),
-                    effective_mode,
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        let mut pending = Vec::with_capacity(launch_addons.len());
-        let mut seen_ids = persistent_entries
-            .iter()
-            .map(|entry| entry.record.id.clone())
-            .collect::<Vec<_>>();
-        for requested in launch_addons {
-            let id = match &requested {
-                RequestedAddon::BySpec(spec) => spec.id.clone(),
-                RequestedAddon::Direct { addon, .. } => addon.descriptor().id.into_owned(),
-            };
-            if seen_ids.iter().any(|seen| seen == &id) {
-                continue;
-            }
-            seen_ids.push(id);
-            pending.push(requested);
-        }
+        let mut entries = self.collect_persistent_launch_entries(prepared)?;
+        let pending = dedup_launch_addons(&entries, launch_addons);
 
         if pending.is_empty() {
             if let Some(session) = session {
                 session.finish().await?.success()?;
             }
-            return Ok((persistent_entries, None));
+            return Ok((entries, None));
         }
 
         let session = match session {
@@ -699,37 +656,60 @@ impl Launcher {
             }
         };
 
-        let ephemeral_result: Result<Vec<LaunchHookEntry>> = async {
-            let mut entries = Vec::with_capacity(pending.len());
-            for requested in pending {
-                let (record, addon) = self
-                    .prepare_addon_record(
-                        &session,
-                        &prepared.launch_version.version,
-                        prepared.driver,
-                        &prepared.game_version,
-                        runtime_options,
-                        PatchMode::Virtual,
-                        requested,
-                    )
-                    .await?;
-                entries.push(LaunchHookEntry {
-                    record,
-                    addon: Some(addon),
-                    effective_mode: PatchMode::Virtual,
-                });
-            }
-            Ok(entries)
-        }
-        .await;
+        let ctx = AddonPreparationContext {
+            session: &session,
+            instance: &prepared.launch_version.version,
+            driver: prepared.driver,
+            game_version: &prepared.game_version,
+            runtime_options,
+        };
+        let ephemeral_result = self.prepare_ephemeral_launch_entries(&ctx, pending).await;
 
         let report = session.finish().await;
         let ephemeral_entries = ephemeral_result?;
         report?.success()?;
 
-        persistent_entries.extend(ephemeral_entries);
-        let trace = order_and_trace_launch_entries(prepared, &mut persistent_entries)?;
-        Ok((persistent_entries, Some(trace)))
+        entries.extend(ephemeral_entries);
+        let trace = order_and_trace_launch_entries(prepared, &mut entries)?;
+        Ok((entries, Some(trace)))
+    }
+
+    fn collect_persistent_launch_entries(
+        &self,
+        prepared: &PreparedInstance,
+    ) -> Result<Vec<LaunchHookEntry>> {
+        prepared
+            .addons
+            .iter()
+            .filter(|record| record.origin == AddonOrigin::Elemental)
+            .map(|record| {
+                let effective_mode = record.effective_patch_mode(prepared.patch_mode)?;
+                Ok(LaunchHookEntry {
+                    addon: self.addons.get(&record.id),
+                    record: record.clone(),
+                    effective_mode,
+                })
+            })
+            .collect()
+    }
+
+    async fn prepare_ephemeral_launch_entries(
+        &self,
+        ctx: &AddonPreparationContext<'_>,
+        pending: Vec<RequestedAddon>,
+    ) -> Result<Vec<LaunchHookEntry>> {
+        let mut entries = Vec::with_capacity(pending.len());
+        for requested in pending {
+            let (record, addon) = self
+                .prepare_addon_record(ctx, PatchMode::Virtual, requested)
+                .await?;
+            entries.push(LaunchHookEntry {
+                record,
+                addon: Some(addon),
+                effective_mode: PatchMode::Virtual,
+            });
+        }
+        Ok(entries)
     }
 
     fn ensure_required_hooks_registered(&self, records: &[InstalledAddonRecord]) -> Result<()> {
@@ -1018,10 +998,41 @@ impl<'a> PrepareInstanceBuilder<'a> {
     }
 }
 
+struct AddonPreparationContext<'a> {
+    session: &'a DownloadSession,
+    instance: &'a InstanceStorage,
+    driver: DriverDescriptor,
+    game_version: &'a MinecraftVersionId,
+    runtime_options: &'a RuntimeOptions,
+}
+
 struct LaunchHookEntry {
     record: InstalledAddonRecord,
     addon: Option<Arc<dyn Addon>>,
     effective_mode: PatchMode,
+}
+
+fn dedup_launch_addons(
+    persistent: &[LaunchHookEntry],
+    launch_addons: Vec<RequestedAddon>,
+) -> Vec<RequestedAddon> {
+    let mut pending = Vec::with_capacity(launch_addons.len());
+    let mut seen_ids = persistent
+        .iter()
+        .map(|entry| entry.record.id.clone())
+        .collect::<Vec<_>>();
+    for requested in launch_addons {
+        let id = match &requested {
+            RequestedAddon::BySpec(spec) => spec.id.clone(),
+            RequestedAddon::Direct { addon, .. } => addon.descriptor().id.into_owned(),
+        };
+        if seen_ids.iter().any(|seen| seen == &id) {
+            continue;
+        }
+        seen_ids.push(id);
+        pending.push(requested);
+    }
+    pending
 }
 
 fn order_and_trace_launch_entries(

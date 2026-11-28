@@ -30,103 +30,138 @@ pub fn apply_metadata_patches_traced(
     let mut main_class_owner: Option<(&str, &str)> = None;
 
     for entry in ordered {
-        let patch = &entry.patch;
-
-        let main_class_diff = if let Some(main_class) = patch.main_class.as_deref() {
-            if let Some((first_patch, first_main_class)) = main_class_owner
-                && first_main_class != main_class
-            {
-                return Err(Error::PatchMainClassConflict {
-                    first_patch: first_patch.to_owned(),
-                    first_main_class: first_main_class.to_owned(),
-                    second_patch: entry.id.clone(),
-                    second_main_class: main_class.to_owned(),
-                });
-            }
-            main_class_owner = Some((entry.id.as_str(), main_class));
-            if metadata.main_class != main_class {
-                let previous = std::mem::replace(&mut metadata.main_class, main_class.to_owned());
-                Some((previous, main_class.to_owned()))
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        let mut removed_libraries = Vec::new();
-        if !patch.remove_library_prefixes.is_empty() {
-            metadata.libraries.retain(|library| {
-                let matched = patch
-                    .remove_library_prefixes
-                    .iter()
-                    .any(|prefix| library.name.starts_with(prefix));
-                if matched {
-                    removed_libraries.push(library.name.clone());
-                }
-                !matched
-            });
-        }
-
-        let mut replaced_libraries = Vec::new();
-        let mut added_libraries = Vec::new();
-        for library in &patch.add_libraries {
-            if upsert_library(&mut metadata.libraries, library.clone()) {
-                replaced_libraries.push(library.name.clone());
-            } else {
-                added_libraries.push(library.name.clone());
-            }
-        }
-
-        if !patch.game_arguments.is_empty() || !patch.jvm_arguments.is_empty() {
-            let overlay = PistonMetaArguments {
-                game: patch.game_arguments.clone(),
-                jvm: patch.jvm_arguments.clone(),
-            };
-            let merged = merge_piston_meta_arguments(
-                metadata.arguments.take(),
-                metadata.minecraft_arguments.take(),
-                Some(overlay),
-            )?;
-            metadata.arguments = merged;
-            metadata.minecraft_arguments = None;
-        }
-
-        let logging_changed = if let Some(logging) = &patch.logging {
-            metadata.logging = Some(logging.clone());
-            true
-        } else {
-            false
-        };
-
-        let java_major_diff = if let Some(java_major_version) = patch.java_major_version {
-            if metadata.java_version.major_version != java_major_version {
-                let previous = metadata.java_version.major_version;
-                metadata.java_version.major_version = java_major_version;
-                Some((previous, java_major_version))
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        steps.push(MetadataPatchStepDiff {
-            id: entry.id.clone(),
-            priority: patch.priority,
-            effective_mode: entry.effective_mode,
-            main_class: main_class_diff,
-            removed_libraries,
-            replaced_libraries,
-            added_libraries,
-            added_game_arguments: patch.game_arguments.clone(),
-            added_jvm_arguments: patch.jvm_arguments.clone(),
-            logging_changed,
-            java_major_version: java_major_diff,
-        });
+        steps.push(apply_single_patch(
+            &mut metadata,
+            entry,
+            &mut main_class_owner,
+        )?);
     }
 
     Ok(PatchTrace { metadata, steps })
+}
+
+fn apply_single_patch<'a>(
+    metadata: &mut PistonMetaData,
+    entry: &'a NamedMetadataPatch,
+    main_class_owner: &mut Option<(&'a str, &'a str)>,
+) -> Result<MetadataPatchStepDiff> {
+    let patch = &entry.patch;
+    let main_class = apply_main_class_patch(metadata, entry, main_class_owner)?;
+    let (removed_libraries, replaced_libraries, added_libraries) =
+        apply_library_patches(&mut metadata.libraries, patch);
+    apply_argument_patches(metadata, patch)?;
+
+    let logging_changed = if let Some(logging) = &patch.logging {
+        metadata.logging = Some(logging.clone());
+        true
+    } else {
+        false
+    };
+    let java_major_version = apply_java_major_patch(metadata, patch.java_major_version);
+
+    Ok(MetadataPatchStepDiff {
+        id: entry.id.clone(),
+        priority: patch.priority,
+        effective_mode: entry.effective_mode,
+        main_class,
+        removed_libraries,
+        replaced_libraries,
+        added_libraries,
+        added_game_arguments: patch.game_arguments.clone(),
+        added_jvm_arguments: patch.jvm_arguments.clone(),
+        logging_changed,
+        java_major_version,
+    })
+}
+
+fn apply_main_class_patch<'a>(
+    metadata: &mut PistonMetaData,
+    entry: &'a NamedMetadataPatch,
+    main_class_owner: &mut Option<(&'a str, &'a str)>,
+) -> Result<Option<(String, String)>> {
+    let Some(main_class) = entry.patch.main_class.as_deref() else {
+        return Ok(None);
+    };
+    if let Some((first_patch, first_main_class)) = *main_class_owner
+        && first_main_class != main_class
+    {
+        return Err(Error::PatchMainClassConflict {
+            first_patch: first_patch.to_owned(),
+            first_main_class: first_main_class.to_owned(),
+            second_patch: entry.id.clone(),
+            second_main_class: main_class.to_owned(),
+        });
+    }
+    *main_class_owner = Some((entry.id.as_str(), main_class));
+    if metadata.main_class == main_class {
+        return Ok(None);
+    }
+    let previous = std::mem::replace(&mut metadata.main_class, main_class.to_owned());
+    Ok(Some((previous, main_class.to_owned())))
+}
+
+fn apply_library_patches(
+    libraries: &mut Vec<PistonMetaLibraries>,
+    patch: &super::MetadataPatch,
+) -> (Vec<String>, Vec<String>, Vec<String>) {
+    let mut removed = Vec::new();
+    if !patch.remove_library_prefixes.is_empty() {
+        libraries.retain(|library| {
+            let matched = patch
+                .remove_library_prefixes
+                .iter()
+                .any(|prefix| library.name.starts_with(prefix));
+            if matched {
+                removed.push(library.name.clone());
+            }
+            !matched
+        });
+    }
+
+    let mut replaced = Vec::new();
+    let mut added = Vec::new();
+    for library in &patch.add_libraries {
+        if upsert_library(libraries, library.clone()) {
+            replaced.push(library.name.clone());
+        } else {
+            added.push(library.name.clone());
+        }
+    }
+    (removed, replaced, added)
+}
+
+fn apply_argument_patches(
+    metadata: &mut PistonMetaData,
+    patch: &super::MetadataPatch,
+) -> Result<()> {
+    if patch.game_arguments.is_empty() && patch.jvm_arguments.is_empty() {
+        return Ok(());
+    }
+    let overlay = PistonMetaArguments {
+        game: patch.game_arguments.clone(),
+        jvm: patch.jvm_arguments.clone(),
+    };
+    let merged = merge_piston_meta_arguments(
+        metadata.arguments.take(),
+        metadata.minecraft_arguments.take(),
+        Some(overlay),
+    )?;
+    metadata.arguments = merged;
+    metadata.minecraft_arguments = None;
+    Ok(())
+}
+
+fn apply_java_major_patch(
+    metadata: &mut PistonMetaData,
+    java_major_version: Option<usize>,
+) -> Option<(usize, usize)> {
+    let target = java_major_version?;
+    if metadata.java_version.major_version == target {
+        return None;
+    }
+    let previous = metadata.java_version.major_version;
+    metadata.java_version.major_version = target;
+    Some((previous, target))
 }
 
 /// Applies an ordered set of [`NamedMetadataPatch`] overlays onto `base`.
@@ -278,49 +313,73 @@ mod tests {
         }
     }
 
+    fn plain_args(values: &[&str]) -> Vec<PistonMetaGenericArgument> {
+        values
+            .iter()
+            .map(|value| PistonMetaGenericArgument::Plain((*value).to_owned()))
+            .collect()
+    }
+
+    fn as_plain_strs(args: &[PistonMetaGenericArgument]) -> Vec<&str> {
+        args.iter()
+            .map(|arg| match arg {
+                PistonMetaGenericArgument::Plain(value) => value.as_str(),
+                PistonMetaGenericArgument::Rule(_) => panic!("unexpected rule argument"),
+            })
+            .collect()
+    }
+
+    fn named_patch(
+        id: &str,
+        effective_mode: PatchMode,
+        priority: i32,
+        main_class: &str,
+        add_libraries: Vec<PistonMetaLibraries>,
+        game_arguments: Vec<PistonMetaGenericArgument>,
+    ) -> NamedMetadataPatch {
+        NamedMetadataPatch {
+            id: id.to_owned(),
+            effective_mode,
+            patch: MetadataPatch {
+                priority,
+                main_class: Some(main_class.to_owned()),
+                add_libraries,
+                game_arguments,
+                ..Default::default()
+            },
+        }
+    }
+
     #[test]
     fn patches_replace_libraries_merge_args_and_record_step_diffs() {
         let base = sample_metadata();
-        let patches = vec![
-            NamedMetadataPatch {
-                id: "optifine".to_owned(),
-                effective_mode: PatchMode::Virtual,
-                patch: MetadataPatch {
-                    priority: 20,
-                    main_class: Some("net.minecraft.launchwrapper.Launch".to_owned()),
-                    add_libraries: vec![
-                        maven_lib("org.lwjgl:lwjgl:3.3.3"),
-                        maven_lib("optifine:OptiFine:1.20.1"),
-                    ],
-                    game_arguments: vec![
-                        PistonMetaGenericArgument::Plain("--tweakClass".to_owned()),
-                        PistonMetaGenericArgument::Plain("optifine.OptiFineTweaker".to_owned()),
-                    ],
-                    ..Default::default()
-                },
-            },
-            NamedMetadataPatch {
-                id: "lwjgl-override".to_owned(),
-                effective_mode: PatchMode::Physical,
-                patch: MetadataPatch {
-                    priority: 10,
-                    main_class: Some("net.minecraft.launchwrapper.Launch".to_owned()),
-                    remove_library_prefixes: vec!["org.lwjgl:lwjgl:".to_owned()],
-                    add_libraries: vec![maven_lib("org.lwjgl:lwjgl:3.3.3")],
-                    game_arguments: vec![
-                        PistonMetaGenericArgument::Plain("--tweakClass".to_owned()),
-                        PistonMetaGenericArgument::Plain(
-                            "com.mumfrey.liteloader.launch.LiteLoaderTweaker".to_owned(),
-                        ),
-                    ],
-                    jvm_arguments: vec![PistonMetaGenericArgument::Plain("-Dtest=1".to_owned())],
-                    java_major_version: Some(21),
-                    ..Default::default()
-                },
-            },
-        ];
+        let optifine = named_patch(
+            "optifine",
+            PatchMode::Virtual,
+            20,
+            "net.minecraft.launchwrapper.Launch",
+            vec![
+                maven_lib("org.lwjgl:lwjgl:3.3.3"),
+                maven_lib("optifine:OptiFine:1.20.1"),
+            ],
+            plain_args(&["--tweakClass", "optifine.OptiFineTweaker"]),
+        );
+        let mut lwjgl = named_patch(
+            "lwjgl-override",
+            PatchMode::Physical,
+            10,
+            "net.minecraft.launchwrapper.Launch",
+            vec![maven_lib("org.lwjgl:lwjgl:3.3.3")],
+            plain_args(&[
+                "--tweakClass",
+                "com.mumfrey.liteloader.launch.LiteLoaderTweaker",
+            ]),
+        );
+        lwjgl.patch.remove_library_prefixes = vec!["org.lwjgl:lwjgl:".to_owned()];
+        lwjgl.patch.jvm_arguments = plain_args(&["-Dtest=1"]);
+        lwjgl.patch.java_major_version = Some(21);
 
-        let trace = apply_metadata_patches_traced(base, &patches).unwrap();
+        let trace = apply_metadata_patches_traced(base, &[optifine, lwjgl]).unwrap();
 
         assert_eq!(
             trace.metadata.main_class,
@@ -351,16 +410,8 @@ mod tests {
         assert_eq!(step1.added_libraries, vec!["optifine:OptiFine:1.20.1"]);
 
         let arguments = trace.metadata.arguments.unwrap();
-        let game_plain = arguments
-            .game
-            .iter()
-            .map(|arg| match arg {
-                PistonMetaGenericArgument::Plain(value) => value.as_str(),
-                PistonMetaGenericArgument::Rule(_) => panic!("unexpected rule argument"),
-            })
-            .collect::<Vec<_>>();
         assert_eq!(
-            game_plain,
+            as_plain_strs(&arguments.game),
             vec![
                 "--username",
                 "--tweakClass",

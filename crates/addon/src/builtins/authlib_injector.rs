@@ -227,42 +227,34 @@ impl AuthlibInjectorAddon {
     }
 
     async fn resolve_artifact(&self, version: Option<&str>) -> Result<ResolvedArtifact> {
-        let Some(requested) = version else {
-            let url = self.endpoints.latest_artifact_url()?;
-            return match self.client.get(url).send_json::<Artifact>().await {
-                Ok(artifact) => Ok(ResolvedArtifact::Remote(artifact)),
-                #[cfg(feature = "authlib-injector-embed")]
-                Err(error) => Ok(ResolvedArtifact::Embedded {
-                    embedded: embedded()?,
-                    fallback_reason: Some(error.to_string()),
-                }),
-                #[cfg(not(feature = "authlib-injector-embed"))]
-                Err(error) => Err(error.into()),
-            };
-        };
-
-        let fetch_result: Result<Artifact> = async {
-            let artifacts = self.fetch_artifacts().await?;
-            let summary = artifacts
-                .into_iter()
-                .find(|item| {
-                    item.version == requested || item.build_number.to_string() == requested
-                })
-                .ok_or_else(|| Error::AuthlibInjectorVersionNotFound {
-                    version: requested.to_owned(),
-                })?;
-            let url = self.endpoints.artifact_url(summary.build_number)?;
-            Ok(self.client.get(url).send_json::<Artifact>().await?)
+        match version {
+            None => self.resolve_latest_artifact().await,
+            Some(requested) => self.resolve_pinned_artifact(requested).await,
         }
-        .await;
+    }
 
-        match fetch_result {
+    async fn resolve_latest_artifact(&self) -> Result<ResolvedArtifact> {
+        let url = self.endpoints.latest_artifact_url()?;
+        match self.client.get(url).send_json::<Artifact>().await {
+            Ok(artifact) => Ok(ResolvedArtifact::Remote(artifact)),
+            #[cfg(feature = "authlib-injector-embed")]
+            Err(error) => Ok(ResolvedArtifact::Embedded {
+                embedded: embedded()?,
+                fallback_reason: Some(error.to_string()),
+            }),
+            #[cfg(not(feature = "authlib-injector-embed"))]
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    async fn resolve_pinned_artifact(&self, requested: &str) -> Result<ResolvedArtifact> {
+        match self.fetch_pinned_artifact(requested).await {
             Ok(artifact) => Ok(ResolvedArtifact::Remote(artifact)),
             #[cfg(feature = "authlib-injector-embed")]
             Err(Error::HttpRequest(http_error)) => {
                 let embedded_artifact = embedded()?;
                 let artifact = embedded_artifact.artifact();
-                if artifact.version == requested || artifact.build_number.to_string() == requested {
+                if matches_requested_version(&artifact.version, artifact.build_number, requested) {
                     Ok(ResolvedArtifact::Embedded {
                         embedded: embedded_artifact,
                         fallback_reason: Some(http_error.to_string()),
@@ -273,6 +265,18 @@ impl AuthlibInjectorAddon {
             }
             Err(error) => Err(error),
         }
+    }
+
+    async fn fetch_pinned_artifact(&self, requested: &str) -> Result<Artifact> {
+        let artifacts = self.fetch_artifacts().await?;
+        let summary = artifacts
+            .into_iter()
+            .find(|item| matches_requested_version(&item.version, item.build_number, requested))
+            .ok_or_else(|| Error::AuthlibInjectorVersionNotFound {
+                version: requested.to_owned(),
+            })?;
+        let url = self.endpoints.artifact_url(summary.build_number)?;
+        Ok(self.client.get(url).send_json::<Artifact>().await?)
     }
 
     async fn ensure_remote(
@@ -455,6 +459,10 @@ async fn install_embedded_with_reason(
         source: AuthlibInjectorSource::Embedded,
         fallback_reason,
     })
+}
+
+fn matches_requested_version(version: &str, build_number: u64, requested: &str) -> bool {
+    version == requested || build_number.to_string() == requested
 }
 
 async fn ensure_parent(path: &Path) -> Result<()> {

@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+pub mod addon;
+
 use std::{
     fs,
     path::{Path, PathBuf},

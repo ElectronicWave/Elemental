@@ -10,7 +10,7 @@ use elemental_driver::{
     descriptors::{FORGE_DRIVER, VANILLA_DRIVER},
     driver::InstanceProbe,
     families::version_json::{
-        MetadataPatch, PatchMode, PistonMetaLibrariesExt, VersionJsonPlatform,
+        InstanceStorage, MetadataPatch, PatchMode, PistonMetaLibrariesExt, VersionJsonPlatform,
         VersionJsonRootResource, profile_library_to_piston,
     },
 };
@@ -18,6 +18,7 @@ use elemental_infra::{
     SafeRelativePath,
     downloader::{DownloadBatch, DownloadTask},
 };
+use elemental_schema::{fabric::ProfileLibrary, mojang::piston::PistonMetaLibraries};
 
 use crate::{
     addon::{
@@ -146,31 +147,8 @@ impl Addon for LiteLoaderAddon {
             .profile_json(request.game_version.as_str(), version)
             .await?;
 
-        let mut libraries = Vec::with_capacity(profile.libraries.len());
-        let platform = VersionJsonPlatform::current();
-        let mut download_tasks = Vec::new();
-
-        for profile_library in profile.libraries {
-            let piston_library = profile_library_to_piston(profile_library)?;
-            for artifact in piston_library.version_artifacts(&platform)? {
-                let target = request.instance.try_get_parent_resource(
-                    VersionJsonRootResource::Libraries(Some(SafeRelativePath::parse(
-                        artifact.path.as_str(),
-                    )?)),
-                )?;
-                if !target.exists() {
-                    let mut task = DownloadTask::new(artifact.url, target);
-                    if let Some(size) = artifact.size {
-                        task = task.size(size as u64);
-                    }
-                    if let Some(sha1) = artifact.sha1 {
-                        task = task.sha1(sha1);
-                    }
-                    download_tasks.push(task);
-                }
-            }
-            libraries.push(piston_library);
-        }
+        let (libraries, download_tasks) =
+            collect_library_downloads(request.instance, profile.libraries)?;
 
         if !download_tasks.is_empty() {
             request
@@ -199,4 +177,36 @@ impl Addon for LiteLoaderAddon {
             managed_files: Vec::new(),
         })
     }
+}
+
+fn collect_library_downloads(
+    instance: &InstanceStorage,
+    profile_libraries: Vec<ProfileLibrary>,
+) -> Result<(Vec<PistonMetaLibraries>, Vec<DownloadTask>)> {
+    let mut libraries = Vec::with_capacity(profile_libraries.len());
+    let platform = VersionJsonPlatform::current();
+    let mut download_tasks = Vec::new();
+
+    for profile_library in profile_libraries {
+        let piston_library = profile_library_to_piston(profile_library)?;
+        for artifact in piston_library.version_artifacts(&platform)? {
+            let target = instance.try_get_parent_resource(VersionJsonRootResource::Libraries(
+                Some(SafeRelativePath::parse(artifact.path.as_str())?),
+            ))?;
+            if target.exists() {
+                continue;
+            }
+            let mut task = DownloadTask::new(artifact.url, target);
+            if let Some(size) = artifact.size {
+                task = task.size(size as u64);
+            }
+            if let Some(sha1) = artifact.sha1 {
+                task = task.sha1(sha1);
+            }
+            download_tasks.push(task);
+        }
+        libraries.push(piston_library);
+    }
+
+    Ok((libraries, download_tasks))
 }

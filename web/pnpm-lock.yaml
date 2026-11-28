@@ -26,13 +26,13 @@ importers:
     devDependencies:
       '@astrojs/check':
         specifier: ^0.9.4
-        version: 0.9.12(prettier@3.10.1)(typescript@7.1.0-beta)
+        version: 0.9.12(prettier@3.10.1)(typescript@7.1.0-dev.20261127.1)
       '@astrojs/ts-content-mapper':
         specifier: ^0.2.0
         version: 0.2.0
       typescript:
-        specifier: 7.1.0-beta
-        version: 7.1.0-beta
+        specifier: 7.1.0-dev.20261127.1
+        version: 7.1.0-dev.20261127.1
 
 packages:
 
@@ -981,128 +981,44 @@ packages:
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
 
-  '@typescript/typescript-aix-ppc64@7.1.0-beta':
-    resolution: {integrity: sha512-DXDG+jIWxBHGdoO70tcHON33rCnSzsEZj9P13oyf/r/KEGIo6awsdSNVNjAw0uMwEpqRu75IrgCcW58YcVkZHg==}
-    engines: {node: '>=16.20.0'}
-    cpu: [ppc64]
-    os: [aix]
-
-  '@typescript/typescript-android-arm64@7.1.0-beta':
-    resolution: {integrity: sha512-UZx6PxoQavuvaVTrSf3aw0Oy/J/uJpRylipA0kzc038jMvZXh0UtE8vnQp20FqtdgD5bhXZ0aJrRJyoTSUO58Q==}
-    engines: {node: '>=16.20.0'}
-    cpu: [arm64]
-    os: [android]
-
-  '@typescript/typescript-darwin-arm64@7.1.0-beta':
-    resolution: {integrity: sha512-q7mxblcyX0E7hXsY4k+Q6KWKK5mGmfVq+BDesdTgRVgjodk27aIxER77Zyj9+TgSTlCje8F7+JM6f6hl2BuNdw==}
+  '@typescript/typescript-darwin-arm64@7.1.0-dev.20261127.1':
+    resolution: {integrity: sha512-6ftgF201D1NdUOnWUlxUmI43p8IcthK08NqH5z3/qY/F58LgJANI7deZR/IRleU5A1PWXXwFCj8FG58Q1iFMwg==}
     engines: {node: '>=16.20.0'}
     cpu: [arm64]
     os: [darwin]
 
-  '@typescript/typescript-darwin-x64@7.1.0-beta':
-    resolution: {integrity: sha512-D5EYqG5Wm/guw9+0j8+Mn1Jbr/gfS/VtFTuoH8PJtFbcqeDaQGMulc7SW8q51QG6Y3wGOGX3nbsTOw6fIKWWAA==}
+  '@typescript/typescript-darwin-x64@7.1.0-dev.20261127.1':
+    resolution: {integrity: sha512-fyKt2+/4o0VOZ77QkvEy25KVOoxX06fjlYVwrivNXdYknv/5bbB30Ov85pESt8G4OjMZDKmzPjS5LExIlWuKPQ==}
     engines: {node: '>=16.20.0'}
     cpu: [x64]
     os: [darwin]
 
-  '@typescript/typescript-freebsd-arm64@7.1.0-beta':
-    resolution: {integrity: sha512-9A0XX0tcnH9qPdolSKKzSjTb93dlB0UEcAJbHYEsrFX2fkFNSum9+dvkQQJ9vLc+7vxHetDPujq9Qe6wx+Xhow==}
-    engines: {node: '>=16.20.0'}
-    cpu: [arm64]
-    os: [freebsd]
-
-  '@typescript/typescript-freebsd-x64@7.1.0-beta':
-    resolution: {integrity: sha512-EDf/dBHfY0TxX3NmUTek0hbffeyZlh3+ls6WQW3ICB8vYxwYLFnzg7wkgEUvl9eRlpiJ/nmc2S8arPMzINJ7rg==}
-    engines: {node: '>=16.20.0'}
-    cpu: [x64]
-    os: [freebsd]
-
-  '@typescript/typescript-linux-arm64@7.1.0-beta':
-    resolution: {integrity: sha512-hNqQBgQ5b5oGqN76QqbAU6CwYhJZ6iOcWc2kPTUs2OentgpxZktETziH6KIyRFJPaiBncognwn2ZLu3DNhHiWw==}
+  '@typescript/typescript-linux-arm64@7.1.0-dev.20261127.1':
+    resolution: {integrity: sha512-DkR7Sw4flsXikLRoR5k73ocZ+1WBcpLHIUW27IFOn0igk23xgeYQt1uT6iKworB7bx6TTXI0SZcnhEvIsUMO0Q==}
     engines: {node: '>=16.20.0'}
     cpu: [arm64]
     os: [linux]
 
-  '@typescript/typescript-linux-arm@7.1.0-beta':
-    resolution: {integrity: sha512-AvN9HmzOQh46G4312ooSgMHhbB7DtnLwg8D9mo324X49B7weMwtJrBG1MxT9IyI8kzDd7YRtW+1hWGun7WG7Qw==}
+  '@typescript/typescript-linux-arm@7.1.0-dev.20261127.1':
+    resolution: {integrity: sha512-rep/IsaMTZbBnWyHX2yl7b+m3QLIQhsAVcLRzHvTm/4DDIv1deCDXwqtKrTkZEgLrgc4aIINn3O0vZFLTOWjIg==}
     engines: {node: '>=16.20.0'}
     cpu: [arm]
     os: [linux]
 
-  '@typescript/typescript-linux-loong64@7.1.0-beta':
-    resolution: {integrity: sha512-xbUustlBrFflt2pNEyG5ye+d4WGPc/rfr2xK29MXeobPSw297JqwuKRrvbKM5o3fE/eUM/c+urVm6jQ3IaMVTw==}
-    engines: {node: '>=16.20.0'}
-    cpu: [loong64]
-    os: [linux]
-
-  '@typescript/typescript-linux-mips64el@7.1.0-beta':
-    resolution: {integrity: sha512-fS4/G7/0bXZ3NSq3nBMAXyg65I3tO4S7j08VNQ2g1aNC/qq79gE7Qne1BNjVsjMFfHBVBFjQYoTQCjmVU2iFlg==}
-    engines: {node: '>=16.20.0'}
-    cpu: [mips64el]
-    os: [linux]
-
-  '@typescript/typescript-linux-ppc64@7.1.0-beta':
-    resolution: {integrity: sha512-0upCCxYPX8X6gOwkvfv+Ee7/ufyy7k97mTrGE0e5BxLlnUEa+w+rtgnv2dsKcxFdwdeZYVlZKCqgN/xCBV08+A==}
-    engines: {node: '>=16.20.0'}
-    cpu: [ppc64]
-    os: [linux]
-
-  '@typescript/typescript-linux-riscv64@7.1.0-beta':
-    resolution: {integrity: sha512-0jKU9YRgOPRgiy5V/UWv37kB53PaTpIbwGCbbOMUPPAkrjVRNOIAJaz7Wa7s3H7mdDebX1LopUEPEJR+7Xa7zg==}
-    engines: {node: '>=16.20.0'}
-    cpu: [riscv64]
-    os: [linux]
-
-  '@typescript/typescript-linux-s390x@7.1.0-beta':
-    resolution: {integrity: sha512-j+d04s2kxaPQh6DLPb01sknAQfzsrdSZy15jBRHyLEZoaaQ19dVjbFRlkNVvYwUG7ZdP8+y5b/7RmPxdtHUKdQ==}
-    engines: {node: '>=16.20.0'}
-    cpu: [s390x]
-    os: [linux]
-
-  '@typescript/typescript-linux-x64@7.1.0-beta':
-    resolution: {integrity: sha512-kcD51ihf+pnI5KT4uQQYG04OpwznaZYBlIQhDhl8fflFd27NktxXsUeguxZyvUMyWfum7IF2bBS6Jv7ox0AgFQ==}
+  '@typescript/typescript-linux-x64@7.1.0-dev.20261127.1':
+    resolution: {integrity: sha512-HK+/NhOor/httPTSZmp2Jf/bBiwRn1Mu6CpFRs3fNTymrWre+OxlgSTJviS/B21Nam5vWKHWGtbNB85V2GKxxQ==}
     engines: {node: '>=16.20.0'}
     cpu: [x64]
     os: [linux]
 
-  '@typescript/typescript-netbsd-arm64@7.1.0-beta':
-    resolution: {integrity: sha512-8W85YyoGK+rgGoSU9jJQUpELbrKcZcbdJk2jPNQ6UKDKI7ryPlPFTrV2jCE5RQuv4Tt96hMDTc33s4YfRrLFBA==}
-    engines: {node: '>=16.20.0'}
-    cpu: [arm64]
-    os: [netbsd]
-
-  '@typescript/typescript-netbsd-x64@7.1.0-beta':
-    resolution: {integrity: sha512-iGsTE0ve2PG0AcyZinwAR0LnGEZhu/y4dceS0hZsYCaKdYETvQtvtlNWlmYKempsBr6C7Il7dMXHVk+VFm9u0g==}
-    engines: {node: '>=16.20.0'}
-    cpu: [x64]
-    os: [netbsd]
-
-  '@typescript/typescript-openbsd-arm64@7.1.0-beta':
-    resolution: {integrity: sha512-Z2FERdHB9fAKI+KGqdWn04O7uNlnB+VYiEm6INE1aZuzzLNd3KBqQ6IpKUJF2ny4GigGU6nVu75XD9tAUODPng==}
-    engines: {node: '>=16.20.0'}
-    cpu: [arm64]
-    os: [openbsd]
-
-  '@typescript/typescript-openbsd-x64@7.1.0-beta':
-    resolution: {integrity: sha512-NVG3qeyCq/rJEOhaRjR3LsWgjrjo5vJW25omVLeHAVnpKIG4pE4cenwwKGR06DiJ1s0QTOymcJeKXMEpsiNBVg==}
-    engines: {node: '>=16.20.0'}
-    cpu: [x64]
-    os: [openbsd]
-
-  '@typescript/typescript-sunos-x64@7.1.0-beta':
-    resolution: {integrity: sha512-ovAdoWXEn2B5/fyWG69pLU3FWmQwPWOjQV5TFbcxtpnOv+R3g8ySGHl1NYRq7Lb/GYdFDvaGcZ+SiU7iKuiMsA==}
-    engines: {node: '>=16.20.0'}
-    cpu: [x64]
-    os: [sunos]
-
-  '@typescript/typescript-win32-arm64@7.1.0-beta':
-    resolution: {integrity: sha512-lJbo71IEOfL7ZZIZnArRaOLqjn9BAfoSzyUQn0aSjfSpDZL4ru0afUsdBfo6PQEjD6ssdmi0n/RwaPADX6bsvQ==}
+  '@typescript/typescript-win32-arm64@7.1.0-dev.20261127.1':
+    resolution: {integrity: sha512-zEBYzt+lxYTfAhne2iiXsuS3tPaOr5c8a5KE7V8RgxCM6iZe9XnBA/CvaZ92IG1/JbgEVW9KG2AdRenjkZJVsw==}
     engines: {node: '>=16.20.0'}
     cpu: [arm64]
     os: [win32]
 
-  '@typescript/typescript-win32-x64@7.1.0-beta':
-    resolution: {integrity: sha512-UKcHvbybY2tDTvFW2b1vwiAvDlIRooo69lh8CXWVhOQejcvpM5+IgbiFW9EIwR5Wi5X/v+BdN7gdWbigBuJ3rw==}
+  '@typescript/typescript-win32-x64@7.1.0-dev.20261127.1':
+    resolution: {integrity: sha512-M8epmR5iVyLz19ydBECvC6TCxrMBDQGQLi9E5Jj5R5W0FAC3oTyQ6YD+SfodFXmNiFE+YfkdhRx0M0itMX+W1g==}
     engines: {node: '>=16.20.0'}
     cpu: [x64]
     os: [win32]
@@ -2064,8 +1980,8 @@ packages:
   typescript-auto-import-cache@0.3.6:
     resolution: {integrity: sha512-RpuHXrknHdVdK7wv/8ug3Fr0WNsNi5l5aB8MYYuXhq2UH5lnEB1htJ1smhtD5VeCsGr2p8mUDtd83LCQDFVgjQ==}
 
-  typescript@7.1.0-beta:
-    resolution: {integrity: sha512-cjWjZAJDsmZzsNC5GwHNlW0YPM65jZa5oR0KyQcYX3KSVIfTvtBq//vewISyatKk4OLi5grZjHhIVE9fdrw1UQ==}
+  typescript@7.1.0-dev.20261127.1:
+    resolution: {integrity: sha512-juWSybCv0hk/FUNAIu7DMLWSeoba2JkNp+ICdhOrXtjoQCiAk7lKu6cVrd8DRTlRbZCgLfzYhwXIIjTWSbKKfA==}
     engines: {node: '>=16.20.0'}
     hasBin: true
 
@@ -2394,12 +2310,12 @@ snapshots:
       '@emnapi/runtime': 1.11.3
       '@napi-rs/wasm-runtime': 1.2.4(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)
 
-  '@astrojs/check@0.9.12(prettier@3.10.1)(typescript@7.1.0-beta)':
+  '@astrojs/check@0.9.12(prettier@3.10.1)(typescript@7.1.0-dev.20261127.1)':
     dependencies:
-      '@astrojs/language-server': 2.17.3(prettier@3.10.1)(typescript@7.1.0-beta)
+      '@astrojs/language-server': 2.17.3(prettier@3.10.1)(typescript@7.1.0-dev.20261127.1)
       chokidar: 5.0.0
       kleur: 4.1.5
-      typescript: 7.1.0-beta
+      typescript: 7.1.0-dev.20261127.1
       yargs: 18.2.0
     transitivePeerDependencies:
       - prettier
@@ -2467,23 +2383,23 @@ snapshots:
       unified: 11.0.5
       yaml: 2.9.1
 
-  '@astrojs/language-server@2.17.3(prettier@3.10.1)(typescript@7.1.0-beta)':
+  '@astrojs/language-server@2.17.3(prettier@3.10.1)(typescript@7.1.0-dev.20261127.1)':
     dependencies:
       '@astrojs/astro2tsx': 0.1.5
       '@astrojs/yaml2ts': 0.2.4
-      '@volar/kit': 2.4.31(typescript@7.1.0-beta)
+      '@volar/kit': 2.4.31(typescript@7.1.0-dev.20261127.1)
       '@volar/language-core': 2.4.31
-      '@volar/language-server': 2.4.31(typescript@7.1.0-beta)
-      '@volar/language-service': 2.4.31(typescript@7.1.0-beta)
+      '@volar/language-server': 2.4.31(typescript@7.1.0-dev.20261127.1)
+      '@volar/language-service': 2.4.31(typescript@7.1.0-dev.20261127.1)
       muggle-string: 0.4.1
       tinyglobby: 0.2.17
-      volar-service-css: 0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-beta))
-      volar-service-emmet: 0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-beta))
-      volar-service-html: 0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-beta))
-      volar-service-prettier: 0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-beta))(prettier@3.10.1)
-      volar-service-typescript: 0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-beta))(typescript@7.1.0-beta)
-      volar-service-typescript-twoslash-queries: 0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-beta))(typescript@7.1.0-beta)
-      volar-service-yaml: 0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-beta))
+      volar-service-css: 0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-dev.20261127.1))
+      volar-service-emmet: 0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-dev.20261127.1))
+      volar-service-html: 0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-dev.20261127.1))
+      volar-service-prettier: 0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-dev.20261127.1))(prettier@3.10.1)
+      volar-service-typescript: 0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-dev.20261127.1))(typescript@7.1.0-dev.20261127.1)
+      volar-service-typescript-twoslash-queries: 0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-dev.20261127.1))(typescript@7.1.0-dev.20261127.1)
+      volar-service-yaml: 0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-dev.20261127.1))
       vscode-html-languageservice: 5.6.2
       vscode-uri: 3.2.0
     optionalDependencies:
@@ -3217,67 +3133,25 @@ snapshots:
 
   '@types/unist@3.0.3': {}
 
-  '@typescript/typescript-aix-ppc64@7.1.0-beta':
+  '@typescript/typescript-darwin-arm64@7.1.0-dev.20261127.1':
     optional: true
 
-  '@typescript/typescript-android-arm64@7.1.0-beta':
+  '@typescript/typescript-darwin-x64@7.1.0-dev.20261127.1':
     optional: true
 
-  '@typescript/typescript-darwin-arm64@7.1.0-beta':
+  '@typescript/typescript-linux-arm64@7.1.0-dev.20261127.1':
     optional: true
 
-  '@typescript/typescript-darwin-x64@7.1.0-beta':
+  '@typescript/typescript-linux-arm@7.1.0-dev.20261127.1':
     optional: true
 
-  '@typescript/typescript-freebsd-arm64@7.1.0-beta':
+  '@typescript/typescript-linux-x64@7.1.0-dev.20261127.1':
     optional: true
 
-  '@typescript/typescript-freebsd-x64@7.1.0-beta':
+  '@typescript/typescript-win32-arm64@7.1.0-dev.20261127.1':
     optional: true
 
-  '@typescript/typescript-linux-arm64@7.1.0-beta':
-    optional: true
-
-  '@typescript/typescript-linux-arm@7.1.0-beta':
-    optional: true
-
-  '@typescript/typescript-linux-loong64@7.1.0-beta':
-    optional: true
-
-  '@typescript/typescript-linux-mips64el@7.1.0-beta':
-    optional: true
-
-  '@typescript/typescript-linux-ppc64@7.1.0-beta':
-    optional: true
-
-  '@typescript/typescript-linux-riscv64@7.1.0-beta':
-    optional: true
-
-  '@typescript/typescript-linux-s390x@7.1.0-beta':
-    optional: true
-
-  '@typescript/typescript-linux-x64@7.1.0-beta':
-    optional: true
-
-  '@typescript/typescript-netbsd-arm64@7.1.0-beta':
-    optional: true
-
-  '@typescript/typescript-netbsd-x64@7.1.0-beta':
-    optional: true
-
-  '@typescript/typescript-openbsd-arm64@7.1.0-beta':
-    optional: true
-
-  '@typescript/typescript-openbsd-x64@7.1.0-beta':
-    optional: true
-
-  '@typescript/typescript-sunos-x64@7.1.0-beta':
-    optional: true
-
-  '@typescript/typescript-win32-arm64@7.1.0-beta':
-    optional: true
-
-  '@typescript/typescript-win32-x64@7.1.0-beta':
+  '@typescript/typescript-win32-x64@7.1.0-dev.20261127.1':
     optional: true
 
   '@ungap/structured-clone@1.4.0': {}
@@ -3287,12 +3161,12 @@ snapshots:
       d3-selection: 3.0.1
       d3-transition: 3.0.2(d3-selection@3.0.1)
 
-  '@volar/kit@2.4.31(typescript@7.1.0-beta)':
+  '@volar/kit@2.4.31(typescript@7.1.0-dev.20261127.1)':
     dependencies:
-      '@volar/language-service': 2.4.31(typescript@7.1.0-beta)
-      '@volar/typescript': 2.4.31(typescript@7.1.0-beta)
+      '@volar/language-service': 2.4.31(typescript@7.1.0-dev.20261127.1)
+      '@volar/typescript': 2.4.31(typescript@7.1.0-dev.20261127.1)
       typesafe-path: 0.2.2
-      typescript: 7.1.0-beta
+      typescript: 7.1.0-dev.20261127.1
       vscode-languageserver-textdocument: 1.0.16
       vscode-uri: 3.2.0
 
@@ -3300,11 +3174,11 @@ snapshots:
     dependencies:
       '@volar/source-map': 2.4.31
 
-  '@volar/language-server@2.4.31(typescript@7.1.0-beta)':
+  '@volar/language-server@2.4.31(typescript@7.1.0-dev.20261127.1)':
     dependencies:
       '@volar/language-core': 2.4.31
-      '@volar/language-service': 2.4.31(typescript@7.1.0-beta)
-      '@volar/typescript': 2.4.31(typescript@7.1.0-beta)
+      '@volar/language-service': 2.4.31(typescript@7.1.0-dev.20261127.1)
+      '@volar/typescript': 2.4.31(typescript@7.1.0-dev.20261127.1)
       path-browserify: 1.0.1
       request-light: 0.7.0
       vscode-languageserver: 9.0.1
@@ -3312,27 +3186,27 @@ snapshots:
       vscode-languageserver-textdocument: 1.0.16
       vscode-uri: 3.2.0
     optionalDependencies:
-      typescript: 7.1.0-beta
+      typescript: 7.1.0-dev.20261127.1
 
-  '@volar/language-service@2.4.31(typescript@7.1.0-beta)':
+  '@volar/language-service@2.4.31(typescript@7.1.0-dev.20261127.1)':
     dependencies:
       '@volar/language-core': 2.4.31
       vscode-languageserver-protocol: 3.18.7
       vscode-languageserver-textdocument: 1.0.16
       vscode-uri: 3.2.0
     optionalDependencies:
-      typescript: 7.1.0-beta
+      typescript: 7.1.0-dev.20261127.1
 
   '@volar/source-map@2.4.31': {}
 
-  '@volar/typescript@2.4.31(typescript@7.1.0-beta)':
+  '@volar/typescript@2.4.31(typescript@7.1.0-dev.20261127.1)':
     dependencies:
       '@volar/language-core': 2.4.31
-      '@volar/language-service': 2.4.31(typescript@7.1.0-beta)
+      '@volar/language-service': 2.4.31(typescript@7.1.0-dev.20261127.1)
       path-browserify: 1.0.1
       vscode-uri: 3.2.0
     optionalDependencies:
-      typescript: 7.1.0-beta
+      typescript: 7.1.0-dev.20261127.1
 
   '@vscode/emmet-helper@2.11.0':
     dependencies:
@@ -4353,29 +4227,15 @@ snapshots:
     dependencies:
       semver: 7.8.6
 
-  typescript@7.1.0-beta:
+  typescript@7.1.0-dev.20261127.1:
     optionalDependencies:
-      '@typescript/typescript-aix-ppc64': 7.1.0-beta
-      '@typescript/typescript-android-arm64': 7.1.0-beta
-      '@typescript/typescript-darwin-arm64': 7.1.0-beta
-      '@typescript/typescript-darwin-x64': 7.1.0-beta
-      '@typescript/typescript-freebsd-arm64': 7.1.0-beta
-      '@typescript/typescript-freebsd-x64': 7.1.0-beta
-      '@typescript/typescript-linux-arm': 7.1.0-beta
-      '@typescript/typescript-linux-arm64': 7.1.0-beta
-      '@typescript/typescript-linux-loong64': 7.1.0-beta
-      '@typescript/typescript-linux-mips64el': 7.1.0-beta
-      '@typescript/typescript-linux-ppc64': 7.1.0-beta
-      '@typescript/typescript-linux-riscv64': 7.1.0-beta
-      '@typescript/typescript-linux-s390x': 7.1.0-beta
-      '@typescript/typescript-linux-x64': 7.1.0-beta
-      '@typescript/typescript-netbsd-arm64': 7.1.0-beta
-      '@typescript/typescript-netbsd-x64': 7.1.0-beta
-      '@typescript/typescript-openbsd-arm64': 7.1.0-beta
-      '@typescript/typescript-openbsd-x64': 7.1.0-beta
-      '@typescript/typescript-sunos-x64': 7.1.0-beta
-      '@typescript/typescript-win32-arm64': 7.1.0-beta
-      '@typescript/typescript-win32-x64': 7.1.0-beta
+      '@typescript/typescript-darwin-arm64': 7.1.0-dev.20261127.1
+      '@typescript/typescript-darwin-x64': 7.1.0-dev.20261127.1
+      '@typescript/typescript-linux-arm': 7.1.0-dev.20261127.1
+      '@typescript/typescript-linux-arm64': 7.1.0-dev.20261127.1
+      '@typescript/typescript-linux-x64': 7.1.0-dev.20261127.1
+      '@typescript/typescript-win32-arm64': 7.1.0-dev.20261127.1
+      '@typescript/typescript-win32-x64': 7.1.0-dev.20261127.1
 
   ufo@1.6.4: {}
 
@@ -4465,46 +4325,46 @@ snapshots:
     optionalDependencies:
       vite: 8.4.0(jiti@2.7.0)(yaml@2.9.1)
 
-  volar-service-css@0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-beta)):
+  volar-service-css@0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-dev.20261127.1)):
     dependencies:
       vscode-css-languageservice: 6.3.10
       vscode-languageserver-textdocument: 1.0.16
       vscode-uri: 3.2.0
     optionalDependencies:
-      '@volar/language-service': 2.4.31(typescript@7.1.0-beta)
+      '@volar/language-service': 2.4.31(typescript@7.1.0-dev.20261127.1)
 
-  volar-service-emmet@0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-beta)):
+  volar-service-emmet@0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-dev.20261127.1)):
     dependencies:
       '@emmetio/css-parser': 0.4.1
       '@emmetio/html-matcher': 1.3.0
       '@vscode/emmet-helper': 2.11.0
       vscode-uri: 3.2.0
     optionalDependencies:
-      '@volar/language-service': 2.4.31(typescript@7.1.0-beta)
+      '@volar/language-service': 2.4.31(typescript@7.1.0-dev.20261127.1)
 
-  volar-service-html@0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-beta)):
+  volar-service-html@0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-dev.20261127.1)):
     dependencies:
       vscode-html-languageservice: 5.6.2
       vscode-languageserver-textdocument: 1.0.16
       vscode-uri: 3.2.0
     optionalDependencies:
-      '@volar/language-service': 2.4.31(typescript@7.1.0-beta)
+      '@volar/language-service': 2.4.31(typescript@7.1.0-dev.20261127.1)
 
-  volar-service-prettier@0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-beta))(prettier@3.10.1):
+  volar-service-prettier@0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-dev.20261127.1))(prettier@3.10.1):
     dependencies:
       vscode-uri: 3.2.0
     optionalDependencies:
-      '@volar/language-service': 2.4.31(typescript@7.1.0-beta)
+      '@volar/language-service': 2.4.31(typescript@7.1.0-dev.20261127.1)
       prettier: 3.10.1
 
-  volar-service-typescript-twoslash-queries@0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-beta))(typescript@7.1.0-beta):
+  volar-service-typescript-twoslash-queries@0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-dev.20261127.1))(typescript@7.1.0-dev.20261127.1):
     dependencies:
       vscode-uri: 3.2.0
     optionalDependencies:
-      '@volar/language-service': 2.4.31(typescript@7.1.0-beta)
-      typescript: 7.1.0-beta
+      '@volar/language-service': 2.4.31(typescript@7.1.0-dev.20261127.1)
+      typescript: 7.1.0-dev.20261127.1
 
-  volar-service-typescript@0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-beta))(typescript@7.1.0-beta):
+  volar-service-typescript@0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-dev.20261127.1))(typescript@7.1.0-dev.20261127.1):
     dependencies:
       path-browserify: 1.0.1
       semver: 7.8.6
@@ -4513,15 +4373,15 @@ snapshots:
       vscode-nls: 5.2.0
       vscode-uri: 3.2.0
     optionalDependencies:
-      '@volar/language-service': 2.4.31(typescript@7.1.0-beta)
-      typescript: 7.1.0-beta
+      '@volar/language-service': 2.4.31(typescript@7.1.0-dev.20261127.1)
+      typescript: 7.1.0-dev.20261127.1
 
-  volar-service-yaml@0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-beta)):
+  volar-service-yaml@0.0.71(@volar/language-service@2.4.31(typescript@7.1.0-dev.20261127.1)):
     dependencies:
       vscode-uri: 3.2.0
       yaml-language-server: 1.23.0
     optionalDependencies:
-      '@volar/language-service': 2.4.31(typescript@7.1.0-beta)
+      '@volar/language-service': 2.4.31(typescript@7.1.0-dev.20261127.1)
 
   vscode-css-languageservice@6.3.10:
     dependencies:

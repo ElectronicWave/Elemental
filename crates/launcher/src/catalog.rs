@@ -1,6 +1,3 @@
-#![cfg_attr(not(feature = "driver-all"), allow(dead_code, unreachable_code))]
-#![allow(unreachable_patterns)]
-
 use std::sync::Arc;
 
 use elemental_core::minecraft::MinecraftVersionId;
@@ -81,10 +78,8 @@ impl DriverCatalog {
         flavor: FabricFlavor,
         http_client: &elemental_core::http::SwappableClient,
     ) -> Result<Self> {
-        let source = LoaderMetaSource::with_http_client(
-            FabricEndpoints::for_flavor(flavor)?,
-            http_client.clone(),
-        );
+        let source = LoaderMetaSource::new(FabricEndpoints::for_flavor(flavor)?)
+            .with_http_client(http_client.clone());
         Ok(Self::loader(driver, FabricCatalog::new(source)))
     }
 

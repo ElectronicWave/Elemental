@@ -590,6 +590,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
+name = "elemental-addon"
+version = "0.3.0"
+dependencies = [
+ "async-trait",
+ "elemental-core",
+ "elemental-driver",
+ "elemental-infra",
+ "elemental-schema",
+ "elemental-shared",
+ "hex",
+ "nidhogg",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.11.2",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
 name = "elemental-core"
 version = "0.3.0"
 dependencies = [
@@ -653,6 +673,7 @@ dependencies = [
 name = "elemental-kit"
 version = "0.3.0"
 dependencies = [
+ "elemental-addon",
  "elemental-core",
  "elemental-driver",
  "elemental-infra",
@@ -667,13 +688,13 @@ name = "elemental-launcher"
 version = "0.3.0"
 dependencies = [
  "async-trait",
+ "elemental-addon",
  "elemental-core",
  "elemental-driver",
  "elemental-infra",
  "elemental-shared",
  "erased-serde",
  "hex",
- "nidhogg",
  "serde",
  "serde_json",
  "sha2 0.11.2",

@@ -1,14 +1,16 @@
 use std::fmt::Debug;
 
 use async_trait::async_trait;
-use elemental_core::{http::SwappableClient, minecraft::MinecraftVersionId};
+use elemental_core::{
+    http::{RequestBuilderExt, SwappableClient},
+    minecraft::MinecraftVersionId,
+};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde::de::DeserializeOwned;
 
 use crate::{
     catalog::{GameVersion, GameVersionCatalog, LoaderRelease, LoaderVersionCatalog},
     error::Result,
-    http::HttpClient,
 };
 
 pub trait LoaderMetaEndpoints: Clone + Debug + Send + Sync + 'static {
@@ -38,7 +40,7 @@ pub struct LoaderMetaSource<E>
 where
     E: LoaderMetaEndpoints,
 {
-    client: HttpClient,
+    client: SwappableClient,
     endpoints: E,
 }
 
@@ -57,23 +59,21 @@ where
 {
     pub fn new(endpoints: E) -> Self {
         Self {
-            client: HttpClient::new(E::SOURCE_NAME),
+            client: SwappableClient::default(),
             endpoints,
         }
     }
 
     pub fn with_client(endpoints: E, client: reqwest::Client) -> Self {
         Self {
-            client: HttpClient::with_client(client),
+            client: SwappableClient::from_client(client),
             endpoints,
         }
     }
 
-    pub fn with_http_client(endpoints: E, client: SwappableClient) -> Self {
-        Self {
-            client: HttpClient::with_http_client(client),
-            endpoints,
-        }
+    pub fn with_http_client(mut self, client: SwappableClient) -> Self {
+        self.client = client;
+        self
     }
 
     pub fn with_headers(mut self, headers: HeaderMap) -> Self {
@@ -92,12 +92,12 @@ where
 
     pub async fn game_versions(&self) -> Result<Vec<E::GameVersion>> {
         let url = self.endpoints.game_versions_url()?;
-        self.client.fetch_json(url.as_str(), E::SOURCE_NAME).await
+        Ok(self.client.get(url.as_str()).send_json().await?)
     }
 
     pub async fn loader_versions(&self, game_version: &str) -> Result<Vec<E::LoaderGameVersion>> {
         let url = self.endpoints.loader_versions_url(game_version)?;
-        self.client.fetch_json(url.as_str(), E::SOURCE_NAME).await
+        Ok(self.client.get(url.as_str()).send_json().await?)
     }
 
     pub async fn profile_json(
@@ -108,7 +108,7 @@ where
         let url = self
             .endpoints
             .profile_json_url(game_version, loader_version)?;
-        self.client.fetch_json(url.as_str(), E::SOURCE_NAME).await
+        Ok(self.client.get(url.as_str()).send_json().await?)
     }
 }
 
@@ -124,7 +124,7 @@ where
         let url = self
             .endpoints
             .loader_profile_url(game_version, loader_version)?;
-        self.client.fetch_json(url.as_str(), E::SOURCE_NAME).await
+        Ok(self.client.get(url.as_str()).send_json().await?)
     }
 }
 

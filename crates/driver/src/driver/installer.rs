@@ -64,7 +64,7 @@ impl ResolvedInstallerFamilyVersion {
         let installer_state = prepare_installer_state(
             session,
             &self.installer_artifact,
-            &self.instance.path,
+            &self.instance,
             &libraries_root,
             family_name,
             &|install_profile| {
@@ -111,7 +111,7 @@ impl ResolvedInstallerFamilyVersion {
     ) -> Result<()> {
         let spec = source.spec();
         let family_name = spec.family_name;
-        let install_profile = load_persisted_install_profile(&instance.path, family_name)?;
+        let install_profile = load_persisted_install_profile(instance, family_name)?;
         let (game_version, loader_version) = spec.profile_identity(&install_profile)?;
         let installer_artifact = source.installer_artifact(
             &instance.parent,

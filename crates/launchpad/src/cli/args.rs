@@ -30,7 +30,7 @@ pub(super) enum LaunchpadCliCommand {
 
 #[derive(Debug, Args)]
 pub(super) struct LaunchArgs {
-    /// Driver id: vanilla, fabric, legacyfabric, babric, quilt, liteloader,
+    /// Driver id: vanilla, fabric, legacyfabric, babric, quilt,
     /// rift, forge, cleanroom, outlands, or neoforge. Defaults to fabric.
     #[arg(value_parser = parse_driver)]
     pub(super) driver: Option<DriverDescriptor>,

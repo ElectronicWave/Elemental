@@ -1,8 +1,8 @@
-mod arguments;
 pub mod builder;
 pub mod classpath;
 pub mod extensions;
 pub mod layout;
+pub mod patch;
 pub mod platform;
 pub mod prepared;
 pub mod profile;
@@ -13,11 +13,15 @@ mod source;
 pub mod storage;
 pub mod variables;
 
-pub use arguments::parse_argument_string;
-pub use extensions::{PistonMetaDataExt, PistonMetaLibrariesExt};
+pub use extensions::{PistonMetaDataExt, PistonMetaLibrariesExt, parse_argument_string};
 pub use layout::{
     BaseInstanceLayout, BaseRootLayout, GameStorage, InstanceStorage, SharedInstanceLayout,
     SharedRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,
+};
+pub use patch::{
+    MetadataPatch, MetadataPatchStepDiff, NamedMetadataPatch, PatchMode, PatchTrace,
+    apply_metadata_patches, apply_metadata_patches_traced, apply_patches_with_mode,
+    apply_scoped_patches, read_base_metadata,
 };
 pub use platform::VersionJsonPlatform;
 pub use prepared::{
@@ -27,7 +31,7 @@ pub use prepared::{
 pub use profile::{
     LibraryReplacementFamily, PASSTHROUGH_PROFILE_BEHAVIOR, PassthroughProfileBehavior,
     ProfileMergeBehavior, merge_piston_meta_arguments, merge_profile_with_behavior,
-    metadata_has_replaced_library_conflicts,
+    metadata_has_replaced_library_conflicts, profile_library_to_piston,
 };
 pub use remote::{
     UpstreamUrlRewriter, VanillaEndpoints, VanillaFallbackRemoteResolver, VanillaOrigin,

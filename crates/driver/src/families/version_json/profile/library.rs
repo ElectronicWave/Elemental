@@ -50,7 +50,7 @@ pub(super) fn merge_libraries(
     Ok(merged)
 }
 
-fn profile_library_to_piston(profile_library: ProfileLibrary) -> Result<PistonMetaLibraries> {
+pub fn profile_library_to_piston(profile_library: ProfileLibrary) -> Result<PistonMetaLibraries> {
     let ProfileLibrary {
         name,
         url,

@@ -1,10 +1,10 @@
 #![cfg_attr(not(feature = "driver-all"), allow(dead_code))]
 
+use elemental_core::http::{RequestBuilderExt, SwappableClient};
 use elemental_schema::maven::{MavenMetadataBody, MavenMetadataVersion, MavenMetadataVersioning};
 use quick_xml::{Reader, escape::unescape, events::Event};
 
 use crate::error::{Error, Result};
-use crate::http::HttpClient;
 
 use super::{MavenCoordinate, validate_component};
 
@@ -133,11 +133,11 @@ pub(crate) fn decode_snapshot_metadata(raw: &str, url: String) -> Result<Snapsho
 }
 
 pub async fn fetch_maven_metadata(
-    client: &HttpClient,
+    client: &SwappableClient,
     url: String,
     source_label: &str,
 ) -> Result<MavenMetadataBody> {
-    let raw = client.fetch_text(url.as_str(), source_label).await?;
+    let raw = client.get(url.as_str()).send_text().await?;
     decode_maven_metadata(raw.as_str()).map_err(|source| Error::DecodeMavenMetadata {
         source_label: source_label.to_owned(),
         url,

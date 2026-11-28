@@ -19,6 +19,7 @@ pub struct VersionJsonLaunchBuilder {
     inner: LauncherVariables,
     extra_jvm_arguments: Vec<String>,
     extra_game_arguments: Vec<String>,
+    metadata_override: Option<PistonMetaData>,
 }
 
 impl VersionJsonLaunchBuilder {
@@ -37,7 +38,13 @@ impl VersionJsonLaunchBuilder {
             inner,
             extra_jvm_arguments,
             extra_game_arguments,
+            metadata_override: None,
         }
+    }
+
+    pub fn with_metadata(mut self, metadata: PistonMetaData) -> Self {
+        self.metadata_override = Some(metadata);
+        self
     }
 
     pub(super) fn build_game_arguments(

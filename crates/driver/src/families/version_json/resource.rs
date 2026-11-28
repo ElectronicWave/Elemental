@@ -8,6 +8,7 @@ pub enum VersionJsonRootResource {
     AssetLogConfigs(Option<SafeRelativePath>),
     Versions(Option<SafeRelativePath>),
     Libraries(Option<SafeRelativePath>),
+    Elemental(Option<SafeRelativePath>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

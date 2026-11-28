@@ -3,9 +3,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use elemental_addon::{InstalledAddon, InstalledAddonRecord, PatchMode, PistonMetaData};
 use elemental_core::{
     auth::credential::Credential,
     launcher::command::LaunchCommand,
+    minecraft::MinecraftVersionId,
     runtime::{RuntimeResolver, distribution::Distribution},
     storage::layout::Layoutable,
 };
@@ -57,6 +59,7 @@ pub struct Instance {
     pub instance_name: String,
     pub instance_root: PathBuf,
     pub driver: InstalledDriver,
+    pub addons: Vec<InstalledAddon>,
 }
 
 #[derive(Debug)]
@@ -100,22 +103,46 @@ pub struct PreparedInstanceInfo {
 
 pub struct PreparedInstance {
     pub(crate) driver: DriverDescriptor,
+    pub(crate) game_version: MinecraftVersionId,
     pub(crate) launch_version: PreparedVersionJsonInstance,
+    pub(crate) patch_mode: PatchMode,
+    pub(crate) addons: Vec<InstalledAddonRecord>,
 }
 
 impl PreparedInstance {
     pub(crate) fn new(
         driver: DriverDescriptor,
+        game_version: MinecraftVersionId,
         launch_version: PreparedVersionJsonInstance,
+        patch_mode: PatchMode,
+        addons: Vec<InstalledAddonRecord>,
     ) -> Self {
         Self {
             driver,
+            game_version,
             launch_version,
+            patch_mode,
+            addons,
         }
     }
 
     pub fn driver(&self) -> &DriverDescriptor {
         &self.driver
+    }
+
+    pub fn game_version(&self) -> &MinecraftVersionId {
+        &self.game_version
+    }
+
+    pub fn patch_mode(&self) -> PatchMode {
+        self.patch_mode
+    }
+
+    pub fn addons(&self) -> Vec<InstalledAddon> {
+        self.addons
+            .iter()
+            .map(|record| record.to_installed(self.patch_mode))
+            .collect()
     }
 
     pub fn instance_root(&self) -> &Path {
@@ -144,6 +171,7 @@ impl PreparedInstance {
         credential: &Credential,
         runtime: Distribution,
         options: &LaunchOptions,
+        metadata_override: Option<PistonMetaData>,
     ) -> Result<LaunchCommand> {
         let mut variables = LauncherVariables::default();
 
@@ -175,7 +203,8 @@ impl PreparedInstance {
             variables,
             options.extra_jvm_arguments.clone(),
             options.extra_game_arguments.clone(),
-        );
+        )
+        .with_metadata(metadata_override.unwrap_or_else(|| self.launch_version.metadata.clone()));
         Ok(builder.build_command()?)
     }
 

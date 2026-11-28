@@ -18,27 +18,32 @@ shared-json = ["shared", "elemental-shared/json"]
 shared-toml = ["shared", "elemental-shared/toml"]
 
 driver = ["dep:elemental-driver", "core", "http", "infra", "schema", "shared"]
-launcher = ["dep:elemental-launcher", "core", "http", "driver", "infra"]
+addon = ["dep:elemental-addon", "core", "http", "driver", "infra", "schema", "shared"]
+launcher = ["dep:elemental-launcher", "addon", "core", "http", "driver", "infra"]
 
 tls-aws-lc = [
+    "elemental-addon?/tls-aws-lc",
     "elemental-core?/tls-aws-lc",
     "elemental-driver?/tls-aws-lc",
     "elemental-infra?/tls-aws-lc",
     "elemental-launcher?/tls-aws-lc",
 ]
 tls-rustls-no-provider = [
+    "elemental-addon?/tls-rustls-no-provider",
     "elemental-core?/tls-rustls-no-provider",
     "elemental-driver?/tls-rustls-no-provider",
     "elemental-infra?/tls-rustls-no-provider",
     "elemental-launcher?/tls-rustls-no-provider",
 ]
 tls-native = [
+    "elemental-addon?/tls-native",
     "elemental-core?/tls-native",
     "elemental-driver?/tls-native",
     "elemental-infra?/tls-native",
     "elemental-launcher?/tls-native",
 ]
 tls-native-vendored = [
+    "elemental-addon?/tls-native-vendored",
     "elemental-core?/tls-native-vendored",
     "elemental-driver?/tls-native-vendored",
     "elemental-infra?/tls-native-vendored",
@@ -50,7 +55,6 @@ driver-all = [
     "driver-legacyfabric",
     "driver-babric",
     "driver-quilt",
-    "driver-liteloader",
     "driver-rift",
     "driver-forge",
     "driver-cleanroom",
@@ -69,12 +73,13 @@ driver-babric = [
     "elemental-driver/babric",
 ]
 driver-quilt = ["launcher", "elemental-launcher/driver-quilt", "elemental-driver/quilt"]
-driver-liteloader = [
-    "launcher",
-    "elemental-launcher/driver-liteloader",
-    "elemental-driver/liteloader",
-]
 driver-rift = ["launcher", "elemental-launcher/driver-rift", "elemental-driver/rift"]
+addon-all = ["addon-liteloader"]
+addon-liteloader = [
+    "addon",
+    "elemental-addon/liteloader",
+    "elemental-launcher?/addon-liteloader",
+]
 driver-forge = ["launcher", "elemental-launcher/driver-forge", "elemental-driver/forge"]
 driver-cleanroom = [
     "launcher",
@@ -116,6 +121,8 @@ infra-serde = ["infra", "elemental-infra/serde"]
 schema = ["dep:elemental-schema"]
 
 full = [
+    "addon",
+    "addon-all",
     "driver",
     "launcher",
     "driver-all",
@@ -130,6 +137,7 @@ full = [
 default = ["full", "shared-json", "object-notify", "tls-aws-lc"]
 
 [dependencies]
+elemental-addon = { path = "../addon", version = "0.3.0", optional = true, default-features = false }
 elemental-core = { path = "../core", version = "0.3.0", optional = true, default-features = false }
 elemental-driver = { path = "../driver", version = "0.3.0", optional = true, default-features = false }
 elemental-infra = { path = "../infra", version = "0.3.0", optional = true, default-features = false }

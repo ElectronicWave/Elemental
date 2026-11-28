@@ -3,6 +3,8 @@
 //! Each module re-exports one workspace crate. The [`prelude`] module collects
 //! the types used by a typical launcher integration.
 
+#[cfg(feature = "addon")]
+pub use elemental_addon as addon;
 #[cfg(feature = "core")]
 pub use elemental_core as core;
 #[cfg(feature = "driver")]
@@ -41,7 +43,14 @@ pub mod prelude {
     };
 
     #[cfg(all(feature = "core", feature = "http"))]
-    pub use crate::core::http::{HttpClientConfig, HttpClientError, SwappableClient};
+    pub use crate::core::http::{
+        HttpClientConfig, HttpClientError, HttpRequestError, RequestBuilderExt, SwappableClient,
+    };
+
+    #[cfg(all(feature = "core", feature = "http"))]
+    pub use crate::core::url::{
+        Origin, OriginEndpoints, OriginError, OriginPolicy, OriginPolicyMap,
+    };
 
     #[cfg(all(feature = "core", feature = "microsoft-auth"))]
     pub use crate::core::auth::{
@@ -69,12 +78,29 @@ pub mod prelude {
     #[cfg(feature = "infra")]
     pub use crate::infra::downloader::{DownloadProgress, DownloadSession, ElementalDownloader};
 
+    #[cfg(feature = "addon")]
+    pub use crate::addon::{
+        Addon, AddonCatalogQuery, AddonCompatibility, AddonContext, AddonDescriptor,
+        AddonLaunchArgs, AddonLaunchContext, AddonModify, AddonOrigin, AddonPatchMode,
+        AddonPrepareOutput, AddonPrepareRequest, AddonRelease, CustomPatchAddon, InstalledAddon,
+        JvmAgentAddon, MetadataPatch, MetadataPatchStepDiff, PatchMode, PatchModeSupport,
+        PatchTrace,
+    };
+
+    #[cfg(feature = "addon-liteloader")]
+    pub use crate::addon::{LITELOADER_ADDON_ID, LiteLoaderAddon};
+
+    #[cfg(all(feature = "addon", feature = "yggdrasil-auth"))]
+    pub use crate::addon::{
+        AUTHLIB_INJECTOR_ADDON_ID, AuthlibInjector, AuthlibInjectorAddon, AuthlibInjectorSource,
+    };
+
     #[cfg(feature = "launcher")]
     pub use crate::launcher::{
-        AccountIndex, AccountListing, AccountRef, AccountRegistry, AccountStore, DriverCatalog,
-        DriverOrigins, DriverRegistration, DriverRegistry, DriverSpec, Instance, LaunchOptions,
-        LaunchResolution, LaunchedInstance, Launcher, LauncherBuilder, PrepareInstanceBuilder,
-        PrepareStage, PreparedInstance, PreparedInstanceInfo, PreparedInstanceMetadata,
-        QuickPlayOptions, RuntimeOptions,
+        AccountIndex, AccountListing, AccountRef, AccountRegistry, AccountStore, ActionScope,
+        AddonRegistry, AddonSpec, DriverCatalog, DriverOrigins, DriverRegistration, DriverRegistry,
+        DriverSpec, Instance, LaunchOptions, LaunchResolution, LaunchedInstance, Launcher,
+        LauncherBuilder, PrepareStage, PreparedInstance, PreparedInstanceInfo,
+        PreparedInstanceMetadata, QuickPlayOptions, RuntimeOptions,
     };
 }

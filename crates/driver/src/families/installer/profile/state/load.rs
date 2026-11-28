@@ -10,7 +10,7 @@ use crate::{
 
 use super::{InstallerPersistedState, InstallerStatePaths};
 
-impl InstallerStatePaths<'_> {
+impl InstallerStatePaths {
     pub(crate) fn load_install_profile(&self) -> Result<ForgeInstallerProfile> {
         let install_profile_path = self.install_profile_path();
         let install_profile_bytes = std::fs::read(&install_profile_path)?;

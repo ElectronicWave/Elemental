@@ -13,7 +13,7 @@ use super::InstallerStatePaths;
 
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-impl InstallerStatePaths<'_> {
+impl InstallerStatePaths {
     pub(crate) async fn persist_install_profile(
         &self,
         install_profile: &ForgeInstallerProfile,

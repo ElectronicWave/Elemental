@@ -21,12 +21,15 @@ use super::{VersionJsonLaunchBuilder, arguments, paths::LaunchPaths};
 
 impl VersionJsonLaunchBuilder {
     pub fn build_command(mut self) -> Result<LaunchCommand> {
-        let metadata = self
-            .version
-            .metadata()
-            .map_err(|source| Error::ReadVersionMetadata {
-                source: Box::new(source),
-            })?;
+        let metadata = match self.metadata_override.take() {
+            Some(metadata) => metadata,
+            None => self
+                .version
+                .metadata()
+                .map_err(|source| Error::ReadVersionMetadata {
+                    source: Box::new(source),
+                })?,
+        };
         let rule_context = VersionJsonRuleContext::current();
         let version_name = self
             .version

@@ -7,3 +7,12 @@ exclude_paths:
   - "target/**"
   - "Cargo.lock"
   - "skills-lock.json"
+engines:
+  duplication:
+    exclude_paths:
+      - "crates/**/tests/**"
+      - "**/tests.rs"
+  metrics:
+    exclude_paths:
+      - "crates/**/tests/**"
+      - "**/tests.rs"

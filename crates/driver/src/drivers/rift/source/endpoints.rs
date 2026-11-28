@@ -66,14 +66,14 @@ impl RiftEndpoints {
     }
 
     pub fn releases_url(&self) -> Result<String> {
-        self.origin_policy.resolve_segments(
+        Ok(self.origin_policy.resolve_segments(
             RiftOrigin::GitHubApi,
             &["repos", "DimensionalDevelopment", "Rift", "releases"],
-        )
+        )?)
     }
 
     pub fn release_asset_url(&self, tag_name: &str, asset_name: &str) -> Result<String> {
-        self.origin_policy.resolve_segments(
+        Ok(self.origin_policy.resolve_segments(
             RiftOrigin::GitHubReleases,
             &[
                 "DimensionalDevelopment",
@@ -83,19 +83,20 @@ impl RiftEndpoints {
                 tag_name,
                 asset_name,
             ],
-        )
+        )?)
     }
 
     pub fn rewrite_upstream(&self, raw_url: &str) -> Result<String> {
-        self.origin_policy
-            .rewrite_known_origin_url_or_keep(KNOWN_RIFT_ORIGINS, raw_url)
+        Ok(self
+            .origin_policy
+            .rewrite_known_origin_url_or_keep(KNOWN_RIFT_ORIGINS, raw_url)?)
     }
 
     pub fn sponge_maven_url(&self) -> Result<String> {
-        self.origin_policy.resolve(RiftOrigin::SpongeMaven, "")
+        Ok(self.origin_policy.resolve(RiftOrigin::SpongeMaven, "")?)
     }
 
     pub fn maven_central_url(&self) -> Result<String> {
-        self.origin_policy.resolve(RiftOrigin::MavenCentral, "")
+        Ok(self.origin_policy.resolve(RiftOrigin::MavenCentral, "")?)
     }
 }

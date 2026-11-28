@@ -32,17 +32,13 @@ where
         id: String,
         objects: &PistonMetaAssetIndexObjects,
     ) -> Result<()> {
-        let path = self.try_get_resource(VersionJsonRootResource::AssetIndexes(Some(
-            SafeRelativePath::parse(id)?,
-        )))?;
+        let path = self.try_get_resource(asset_index_resource(&id)?)?;
         write_asset_index_file(path, objects).await
     }
 
     fn asset_index_objects(&self, id: impl AsRef<str>) -> Result<PistonMetaAssetIndexObjects> {
-        let path = self.try_get_resource(VersionJsonRootResource::AssetIndexes(Some(
-            SafeRelativePath::parse(id.as_ref())?,
-        )))?;
-        Ok(serde_json::from_slice(&std::fs::read(path)?)?)
+        let path = self.try_get_resource(asset_index_resource(id.as_ref())?)?;
+        read_asset_index_file(path)
     }
 }
 
@@ -58,18 +54,24 @@ where
         id: String,
         objects: &PistonMetaAssetIndexObjects,
     ) -> Result<()> {
-        let path = self.try_get_parent_resource(VersionJsonRootResource::AssetIndexes(Some(
-            SafeRelativePath::parse(id)?,
-        )))?;
+        let path = self.try_get_parent_resource(asset_index_resource(&id)?)?;
         write_asset_index_file(path, objects).await
     }
 
     fn asset_index_objects(&self, id: impl AsRef<str>) -> Result<PistonMetaAssetIndexObjects> {
-        let path = self.try_get_parent_resource(VersionJsonRootResource::AssetIndexes(Some(
-            SafeRelativePath::parse(id.as_ref())?,
-        )))?;
-        Ok(serde_json::from_slice(&std::fs::read(path)?)?)
+        let path = self.try_get_parent_resource(asset_index_resource(id.as_ref())?)?;
+        read_asset_index_file(path)
     }
+}
+
+fn asset_index_resource(id: &str) -> Result<VersionJsonRootResource> {
+    Ok(VersionJsonRootResource::AssetIndexes(Some(
+        SafeRelativePath::parse(id)?,
+    )))
+}
+
+fn read_asset_index_file(path: std::path::PathBuf) -> Result<PistonMetaAssetIndexObjects> {
+    Ok(serde_json::from_slice(&std::fs::read(path)?)?)
 }
 
 async fn write_asset_index_file(

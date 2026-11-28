@@ -21,7 +21,6 @@ use crate::{
         },
         version_json::GameStorage,
     },
-    http::HttpClient,
     loader_version::LoaderVersionId,
     url::OriginPolicy,
 };
@@ -29,15 +28,14 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct InstallerMavenSource {
     #[cfg_attr(not(feature = "maven-xml"), allow(dead_code))]
-    client: HttpClient,
+    client: SwappableClient,
     endpoints: MavenEndpoints,
 }
 
 impl InstallerMavenSource {
     pub fn new(endpoints: MavenEndpoints) -> Self {
-        let source_name = endpoints.spec().source_name;
         Self {
-            client: HttpClient::new(source_name),
+            client: SwappableClient::default(),
             endpoints,
         }
     }
@@ -52,16 +50,14 @@ impl InstallerMavenSource {
 
     pub fn with_client(endpoints: MavenEndpoints, client: reqwest::Client) -> Self {
         Self {
-            client: HttpClient::with_client(client),
+            client: SwappableClient::from_client(client),
             endpoints,
         }
     }
 
-    pub fn with_http_client(endpoints: MavenEndpoints, client: SwappableClient) -> Self {
-        Self {
-            client: HttpClient::with_http_client(client),
-            endpoints,
-        }
+    pub fn with_http_client(mut self, client: SwappableClient) -> Self {
+        self.client = client;
+        self
     }
 
     pub fn with_headers(mut self, headers: HeaderMap) -> Self {

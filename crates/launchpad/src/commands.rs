@@ -95,11 +95,14 @@ async fn prepare_instance(
         let download_progress = progress::download(&session).await?;
         let started_at = Instant::now();
         let prepared = launcher
-            .prepare_instance(config.instance_name.clone(), config.spec.clone())
+            .scope()
             .session(session)
             .runtime_options(&config.runtime)
-            .on_stage(download_progress.stage_observer())
-            .run()
+            .prepare_instance_with_stage(
+                config.instance_name.clone(),
+                config.spec.clone(),
+                download_progress.stage_observer(),
+            )
             .await?;
         Ok((prepared, started_at.elapsed()))
     }

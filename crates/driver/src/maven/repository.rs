@@ -1,11 +1,11 @@
 #![cfg_attr(not(feature = "driver-all"), allow(dead_code))]
 
+#[cfg(feature = "maven-xml")]
+use elemental_core::http::{RequestBuilderExt, SwappableClient};
 use elemental_infra::SafeRelativePath;
 use reqwest::Url;
 
 use crate::error::{Error, Result};
-#[cfg(feature = "maven-xml")]
-use crate::http::fetch_text;
 use crate::url::{require_http_scheme, with_directory_path};
 
 use super::MavenArtifactDownload;
@@ -53,13 +53,12 @@ impl MavenRepository {
     #[cfg(feature = "maven-xml")]
     pub async fn resolve_snapshot_artifact(
         &self,
-        client: &reqwest::Client,
+        client: &SwappableClient,
         coordinate: &MavenCoordinate,
     ) -> Result<MavenArtifactDownload> {
         let metadata_path = coordinate.safe_metadata_path()?;
         let metadata_url = artifact_url(&self.base_url, &metadata_path)?;
-        let raw_metadata =
-            fetch_text(client, metadata_url.as_str(), "maven snapshot metadata").await?;
+        let raw_metadata = client.get(metadata_url.as_str()).send_text().await?;
         let metadata = decode_snapshot_metadata(raw_metadata.as_str(), metadata_url)?;
         let resolved_version = resolve_snapshot_version(coordinate, &metadata)?;
         let path = coordinate.safe_artifact_path_for_version(resolved_version.as_str())?;

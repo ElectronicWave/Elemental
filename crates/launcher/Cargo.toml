@@ -9,38 +9,39 @@ repository.workspace = true
 license.workspace = true
 
 [features]
-default = ["driver-all", "microsoft-auth", "tls-aws-lc"]
+default = ["driver-all", "addon-all", "microsoft-auth", "tls-aws-lc"]
 microsoft-auth = ["elemental-core/microsoft-auth"]
 tls-aws-lc = [
+    "elemental-addon/tls-aws-lc",
     "elemental-core/tls-aws-lc",
     "elemental-driver/tls-aws-lc",
     "elemental-infra/tls-aws-lc",
-    "nidhogg?/tls-aws-lc",
 ]
 tls-rustls-no-provider = [
+    "elemental-addon/tls-rustls-no-provider",
     "elemental-core/tls-rustls-no-provider",
     "elemental-driver/tls-rustls-no-provider",
     "elemental-infra/tls-rustls-no-provider",
-    "nidhogg?/tls-rustls-no-provider",
 ]
 tls-native = [
+    "elemental-addon/tls-native",
     "elemental-core/tls-native",
     "elemental-driver/tls-native",
     "elemental-infra/tls-native",
-    "nidhogg?/tls-native",
 ]
 tls-native-vendored = [
+    "elemental-addon/tls-native-vendored",
     "elemental-core/tls-native-vendored",
     "elemental-driver/tls-native-vendored",
     "elemental-infra/tls-native-vendored",
-    "nidhogg?/tls-native-vendored",
 ]
+addon-all = ["addon-liteloader"]
+addon-liteloader = ["elemental-addon/liteloader"]
 driver-all = [
     "driver-fabric",
     "driver-legacyfabric",
     "driver-babric",
     "driver-quilt",
-    "driver-liteloader",
     "driver-rift",
     "driver-forge",
     "driver-cleanroom",
@@ -51,7 +52,6 @@ driver-fabric = ["elemental-driver/fabric"]
 driver-legacyfabric = ["driver-fabric", "elemental-driver/legacyfabric"]
 driver-babric = ["driver-fabric", "elemental-driver/babric"]
 driver-quilt = ["elemental-driver/quilt"]
-driver-liteloader = ["elemental-driver/liteloader"]
 driver-rift = ["elemental-driver/rift"]
 driver-forge = ["elemental-driver/forge"]
 driver-cleanroom = ["elemental-driver/cleanroom"]
@@ -59,20 +59,19 @@ driver-outlands = ["elemental-driver/outlands"]
 driver-neoforge = ["elemental-driver/neoforge"]
 yggdrasil-auth = [
     "elemental-core/yggdrasil-auth",
-    "dep:nidhogg",
-    "nidhogg/authlib-injector",
+    "elemental-addon/authlib-injector",
 ]
-authlib-injector-embed = ["yggdrasil-auth", "nidhogg/authlib-injector-embed"]
+authlib-injector-embed = ["yggdrasil-auth", "elemental-addon/authlib-injector-embed"]
 offline-server = ["elemental-core/offline-server", "yggdrasil-auth"]
 
 [dependencies]
+elemental-addon = { path = "../addon", version = "0.3.0", default-features = false }
 elemental-core = { path = "../core", version = "0.3.0", default-features = false, features = ["http"] }
 elemental-driver = { path = "../driver", version = "0.3.0", default-features = false }
 elemental-infra = { path = "../infra", version = "0.3.0", default-features = false }
 elemental-shared = { path = "../shared", version = "0.3.0" }
 erased-serde = { workspace = true }
 hex = { workspace = true }
-nidhogg = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

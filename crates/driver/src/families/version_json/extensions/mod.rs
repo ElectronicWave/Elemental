@@ -4,10 +4,12 @@ use elemental_schema::mojang::piston::{
 
 use crate::error::Result;
 
-use super::{PistonMetaRulesExt, VersionJsonRuleContext, parse_argument_string};
+use super::{PistonMetaRulesExt, VersionJsonRuleContext};
 
+mod arguments;
 mod libraries;
 
+pub use arguments::parse_argument_string;
 pub use libraries::PistonMetaLibrariesExt;
 
 pub trait PistonMetaDataExt {

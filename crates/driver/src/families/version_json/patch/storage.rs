@@ -18,7 +18,7 @@ use super::{
 
 const BASE_VERSION_FILE: &str = "base-version.json";
 
-fn baseline_path(instance: &InstanceStorage) -> Result<PathBuf> {
+pub(crate) fn baseline_path(instance: &InstanceStorage) -> Result<PathBuf> {
     let relative = SafeRelativePath::parse(BASE_VERSION_FILE)?;
     Ok(instance.try_get_resource(VersionJsonInstanceResource::Elemental(Some(relative)))?)
 }

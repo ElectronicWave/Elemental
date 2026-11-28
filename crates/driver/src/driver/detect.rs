@@ -7,7 +7,7 @@ use crate::{
     error::Result,
     families::version_json::{
         GameStorage, InstanceStorage, SharedInstanceLayout, VersionJsonGameStorageExt,
-        VersionJsonInstanceResource,
+        VersionJsonInstanceResource, patch::baseline_path,
     },
     inspect::InstalledDriver,
 };
@@ -21,7 +21,7 @@ pub struct InstanceProbe {
 
 impl InstanceProbe {
     pub async fn collect(storage: &InstanceStorage) -> Result<Self> {
-        let baseline = storage.path.join(".elemental").join("base-version.json");
+        let baseline = baseline_path(storage)?;
         if tokio::fs::metadata(&baseline)
             .await
             .is_ok_and(|metadata| metadata.is_file())
@@ -39,9 +39,9 @@ impl InstanceProbe {
         let preferred = storage.try_get_resource(VersionJsonInstanceResource::Metadata)?;
         let metadata_path = match tokio::fs::metadata(&preferred).await {
             Ok(metadata) if metadata.is_file() => Some(preferred),
-            Ok(_) => Self::single_json_metadata(&storage.path).await?,
+            Ok(_) => Self::single_json_metadata(storage.root_path()).await?,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                Self::single_json_metadata(&storage.path).await?
+                Self::single_json_metadata(storage.root_path()).await?
             }
             Err(error) => return Err(error.into()),
         };

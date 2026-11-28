@@ -53,6 +53,17 @@ impl JvmAgentAddon {
         self.extra_jvm_arguments = args;
         self
     }
+
+    fn launch_jvm_arguments(&self) -> Vec<String> {
+        let javaagent_arg = match &self.agent_option {
+            Some(option) => format!("-javaagent:{}={option}", self.jar_path.display()),
+            None => format!("-javaagent:{}", self.jar_path.display()),
+        };
+        let mut args = Vec::with_capacity(1 + self.extra_jvm_arguments.len());
+        args.push(javaagent_arg);
+        args.extend(self.extra_jvm_arguments.iter().cloned());
+        args
+    }
 }
 
 #[async_trait]
@@ -85,13 +96,7 @@ impl Addon for JvmAgentAddon {
         args: &mut AddonLaunchArgs,
         _ctx: &AddonLaunchContext<'_>,
     ) -> Result<()> {
-        let javaagent_arg = match &self.agent_option {
-            Some(option) => format!("-javaagent:{}={option}", self.jar_path.display()),
-            None => format!("-javaagent:{}", self.jar_path.display()),
-        };
-        args.extra_jvm_arguments.push(javaagent_arg);
-        args.extra_jvm_arguments
-            .extend(self.extra_jvm_arguments.iter().cloned());
+        args.extra_jvm_arguments.extend(self.launch_jvm_arguments());
         Ok(())
     }
 }

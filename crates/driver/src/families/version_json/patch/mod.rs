@@ -7,6 +7,7 @@ use elemental_schema::mojang::piston::{
 use serde::{Deserialize, Serialize};
 
 pub use apply::{apply_metadata_patches, apply_metadata_patches_traced};
+pub(crate) use storage::baseline_path;
 pub use storage::{apply_patches_with_mode, apply_scoped_patches, read_base_metadata};
 
 /// How metadata patches are applied to a version JSON instance.

@@ -2,78 +2,20 @@ use std::path::{Component, Path, PathBuf};
 
 use elemental_core::storage::layout::Layoutable;
 use elemental_driver::families::version_json::{
-    InstanceStorage, MetadataPatch, NamedMetadataPatch, PatchMode, PatchTrace,
-    VersionJsonInstanceResource, apply_metadata_patches_traced, apply_scoped_patches,
-    read_base_metadata,
+    InstanceStorage, NamedMetadataPatch, PatchMode, PatchTrace, VersionJsonInstanceResource,
+    apply_metadata_patches_traced, apply_scoped_patches, read_base_metadata,
 };
 use elemental_infra::SafeRelativePath;
 use elemental_schema::mojang::piston::PistonMetaData;
 use serde::{Deserialize, Serialize};
 
+pub use crate::addon::InstalledAddonRecord;
 use crate::{
-    addon::{
-        AddonOrigin, AddonPatchMode, InstalledAddon, PatchModeSupport, resolve_effective_patch_mode,
-    },
+    addon::{AddonOrigin, AddonPatchMode, InstalledAddon},
     error::{Error, Result},
 };
 
 const ADDONS_STATE_FILE: &str = "addons.json";
-
-/// Persisted state record for a single addon installed on an instance.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InstalledAddonRecord {
-    /// Machine-readable addon identifier.
-    pub id: String,
-    /// Human-readable addon display name.
-    pub name: String,
-    /// Installed addon version, when recorded.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub version: Option<String>,
-    /// Origin indicating whether Elemental or an external launcher installed the addon.
-    pub origin: AddonOrigin,
-    /// Per-addon patch mode preference.
-    #[serde(default)]
-    pub patch_mode: AddonPatchMode,
-    /// Patch mode capabilities declared by the addon when installed.
-    #[serde(default)]
-    pub patch_mode_support: PatchModeSupport,
-    /// Whether this addon requires a launch-time hook via [`crate::Addon::augment_launch`].
-    #[serde(default)]
-    pub requires_runtime_hook: bool,
-    /// Instance-relative paths of files managed by this addon.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub managed_files: Vec<String>,
-    /// Stored metadata patch applied in [`PatchMode::Virtual`] or [`PatchMode::Physical`].
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub metadata_patch: Option<MetadataPatch>,
-}
-
-impl InstalledAddonRecord {
-    /// Computes the effective [`PatchMode`] constrained by `instance_policy`.
-    pub fn effective_patch_mode(&self, instance_policy: PatchMode) -> Result<PatchMode> {
-        resolve_effective_patch_mode(
-            &self.id,
-            instance_policy,
-            self.patch_mode,
-            self.patch_mode_support,
-        )
-    }
-
-    /// Converts this persisted record into a public [`InstalledAddon`] summary.
-    pub fn to_installed(&self, instance_policy: PatchMode) -> InstalledAddon {
-        let effective_patch_mode = self
-            .effective_patch_mode(instance_policy)
-            .unwrap_or(PatchMode::Virtual);
-        InstalledAddon {
-            id: self.id.clone(),
-            name: self.name.clone(),
-            version: self.version.clone(),
-            origin: self.origin,
-            effective_patch_mode,
-            requires_runtime_hook: self.requires_runtime_hook,
-        }
-    }
-}
 
 /// Persisted addon state stored under `.elemental/addons.json`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

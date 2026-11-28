@@ -1,4 +1,3 @@
-mod arguments;
 pub mod builder;
 pub mod classpath;
 pub mod extensions;
@@ -14,8 +13,7 @@ mod source;
 pub mod storage;
 pub mod variables;
 
-pub use arguments::parse_argument_string;
-pub use extensions::{PistonMetaDataExt, PistonMetaLibrariesExt};
+pub use extensions::{PistonMetaDataExt, PistonMetaLibrariesExt, parse_argument_string};
 pub use layout::{
     BaseInstanceLayout, BaseRootLayout, GameStorage, InstanceStorage, SharedInstanceLayout,
     SharedRootLayout, VersionJsonInstanceLayout, VersionJsonRootLayout,

@@ -44,7 +44,10 @@ jobs:
 
       - name: Install dependencies
         run: pnpm --dir web install --frozen-lockfile
-
+      
+      - name: Sync Astro types
+        run: pnpm --dir web astro sync
+      
       - name: Check Astro site
         run: pnpm --dir web check
 

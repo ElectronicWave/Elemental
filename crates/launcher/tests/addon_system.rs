@@ -60,7 +60,7 @@ impl Addon for CatalogStubAddon {
         &self,
     ) -> elemental_launcher::addon_kit::Result<Option<Vec<GameVersion>>> {
         Ok(Some(vec![GameVersion {
-            id: MinecraftVersionId::try_from("1.20.1").unwrap(),
+            id: MinecraftVersionId::from("1.20.1"),
             channel: Some("release".to_owned()),
         }]))
     }
@@ -90,7 +90,7 @@ async fn vpatch_applies_in_memory_without_modifying_version_json() {
         .register_addon(sample_tweaker_addon())
         .unwrap();
 
-    let game_version = MinecraftVersionId::try_from("1.20.1").unwrap();
+    let game_version = MinecraftVersionId::from("1.20.1");
     let prepared = launcher
         .prepare_instance("vpatch-inst", DriverSpec::vanilla(game_version))
         .patch_mode(PatchMode::Virtual)
@@ -162,7 +162,7 @@ async fn physical_patch_and_lossless_mode_switching() {
         .register_addon(sample_tweaker_addon())
         .unwrap();
 
-    let game_version = MinecraftVersionId::try_from("1.20.1").unwrap();
+    let game_version = MinecraftVersionId::from("1.20.1");
     launcher
         .prepare_instance("ppatch-inst", DriverSpec::vanilla(game_version))
         .patch_mode(PatchMode::Virtual)
@@ -205,7 +205,7 @@ async fn third_party_runtime_hook_and_data_only_degradation() {
         .register_addon(agent_addon)
         .unwrap();
 
-    let game_version = MinecraftVersionId::try_from("1.20.1").unwrap();
+    let game_version = MinecraftVersionId::from("1.20.1");
     let prepared = launcher
         .prepare_instance("hook-inst", DriverSpec::vanilla(game_version))
         .addon(AddonSpec::new("optifine-mock"))
@@ -323,7 +323,7 @@ async fn addon_registry_exposes_catalog_for_registered_addons() {
         .register_addon(sample_tweaker_addon())
         .unwrap();
 
-    let mc_1_20_1 = MinecraftVersionId::try_from("1.20.1").unwrap();
+    let mc_1_20_1 = MinecraftVersionId::from("1.20.1");
 
     let games = launcher
         .addons()

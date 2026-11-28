@@ -161,8 +161,7 @@ async fn launch_scoped_addons_sort_across_scopes_and_reject_physical_mode() {
         .addon(AddonSpec::new("optifine-mock").with_patch_mode(AddonPatchMode::Physical))
         .build_command()
         .await
-        .err()
-        .expect("physical mode must be rejected for launch-scoped addons");
+        .expect_err("physical mode must be rejected for launch-scoped addons");
     assert!(matches!(
         err,
         Error::Addon(elemental_launcher::addon_kit::Error::PatchModeDisallowedByInstance { .. })
@@ -206,8 +205,7 @@ async fn addon_modify_previews_reorders_and_modes_in_memory() {
 
     let err = modify
         .set_addon_patch_mode("addon-a", AddonPatchMode::Physical)
-        .err()
-        .expect("physical addon mode under virtual instance should fail");
+        .expect_err("physical addon mode under virtual instance should fail");
     assert!(matches!(
         err,
         elemental_launcher::addon_kit::Error::PatchModeDisallowedByInstance { .. }
